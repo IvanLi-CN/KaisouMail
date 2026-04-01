@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "email-receiver-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cf-mail-db",
+      "database_id": "460e9fd5-002f-4d45-82be-6d1d6c7abf3a",
+      "preview_database_id": "3584c425-b4df-485f-b863-2db411db8c8e",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MAIL_BUCKET",
+      "bucket_name": "cf-mail-bucket",
+      "preview_bucket_name": "cf-mail-bucket-preview"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "production",
+    "MAIL_DOMAIN": "707979.xyz",
+    "DEFAULT_MAILBOX_TTL_MINUTES": "60",
+    "CLEANUP_BATCH_SIZE": "3",
+    "EMAIL_ROUTING_MANAGEMENT_ENABLED": "false"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

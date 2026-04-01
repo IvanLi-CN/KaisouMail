@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "sh -c 'wrangler dev --test-scheduled --port ${WORKER_PORT:-8787}'",
-    "check": "biome check src drizzle.config.ts wrangler.jsonc",
+    "check": "biome check src drizzle.config.ts wrangler.jsonc wrangler.email.jsonc",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "build": "wrangler deploy --dry-run",
+    "build": "wrangler deploy --dry-run --config wrangler.jsonc && wrangler deploy --dry-run --config wrangler.email.jsonc",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply cf-mail-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply cf-mail-db --remote"

@@ -42,6 +42,9 @@ jobs:
       - name: Deploy Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc
 
+      - name: Deploy Email receiver Worker
+        run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc
+
       - name: Build web app
         run: bun run --cwd apps/web build
 

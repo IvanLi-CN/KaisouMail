@@ -50,7 +50,7 @@ cp apps/web/.env.example apps/web/.env
 
 ### Worker
 
-`apps/api-worker/wrangler.jsonc` is checked in with the production topology for `707979.xyz`.
+`apps/api-worker/wrangler.jsonc` and `apps/api-worker/wrangler.email.jsonc` are checked in with the production topology for `707979.xyz`.
 Copy `.dev.vars.example` to `.dev.vars` to override those values safely for local development.
 
 ```bash
@@ -164,6 +164,15 @@ To use the deploy workflow, configure:
 5. Set GitHub secret `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=https://api.cfm.707979.xyz`
 7. Push to `main` to trigger the deploy workflow
+
+## Worker topology
+
+- `cf-mail-api`
+  - serves `https://api.cfm.707979.xyz`
+  - owns the REST API and scheduled cleanup trigger
+- `email-receiver-worker`
+  - receives Email Routing `email()` events
+  - uses the same source code as `cf-mail-api`, but is deployed with the dedicated `wrangler.email.jsonc` config and the same D1/R2 bindings
 
 ## Domain topology example
 
