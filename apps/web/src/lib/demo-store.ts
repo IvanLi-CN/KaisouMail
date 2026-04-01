@@ -22,6 +22,7 @@ import {
 const clone = <T>(value: T): T => structuredClone(value);
 const randomId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+const demoMailDomain = "707979.xyz";
 
 interface DemoState {
   session: SessionResponse | null;
@@ -91,7 +92,7 @@ export const demoApi = {
       userId: demoSessionUser.id,
       localPart,
       subdomain,
-      address: `${localPart}@${subdomain}.example.com`,
+      address: `${localPart}@${subdomain}.${demoMailDomain}`,
       status: "active",
       createdAt,
       expiresAt: new Date(

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "../consts";
 import {
   apiKeySchema,
   mailboxSchema,
@@ -9,8 +10,6 @@ import {
   userRoleSchema,
   userSchema,
 } from "./common";
-
-const mailboxLabelRegex = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export const createSessionRequestSchema = z.object({
   apiKey: z.string().min(16),
@@ -32,8 +31,8 @@ export const createApiKeyResponseSchema = z.object({
 });
 
 export const createMailboxRequestSchema = z.object({
-  localPart: z.string().regex(mailboxLabelRegex).optional(),
-  subdomain: z.string().regex(mailboxLabelRegex).optional(),
+  localPart: z.string().regex(mailboxLocalPartRegex).optional(),
+  subdomain: z.string().regex(mailboxSubdomainRegex).optional(),
   expiresInMinutes: z
     .number()
     .int()

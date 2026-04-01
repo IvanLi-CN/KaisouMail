@@ -8,8 +8,12 @@ describe("demoApi", () => {
   });
 
   it("creates and destroys a mailbox lifecycle", async () => {
-    const created = await demoApi.createMailbox({ expiresInMinutes: 60 });
+    const created = await demoApi.createMailbox({
+      subdomain: "ops.alpha",
+      expiresInMinutes: 60,
+    });
     expect(created.status).toBe("active");
+    expect(created.address).toContain("@ops.alpha.707979.xyz");
 
     const listed = await demoApi.listMailboxes();
     expect(listed.some((mailbox) => mailbox.id === created.id)).toBe(true);

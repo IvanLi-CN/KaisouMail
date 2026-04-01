@@ -6,3 +6,8 @@ export const attachmentDispositions = [
   "inline",
   "unknown",
 ] as const;
+
+export const mailboxLocalPartRegex = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
+
+export const mailboxSubdomainRegex =
+  /^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$/;

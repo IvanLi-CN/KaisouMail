@@ -6,6 +6,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 - Multi-user temporary mailbox management with per-user API keys
 - Random or custom mailbox creation with TTL-based cleanup
+- Multi-level mailbox subdomains such as `alpha.<mail-root>` and `ops.alpha.<mail-root>`
 - Incoming mail storage in R2 with parsed metadata in D1
 - Message list filtering by multiple mailbox addresses
 - Message detail view with headers, text/html bodies, recipients, attachments, and raw `.eml` download
@@ -49,8 +50,8 @@ cp apps/web/.env.example apps/web/.env
 
 ### Worker
 
-Update `apps/api-worker/wrangler.jsonc` with your real D1/R2 identifiers before remote deploys.
-The checked-in database IDs are placeholders for local scaffolding.
+`apps/api-worker/wrangler.jsonc` is checked in with the production topology for `707979.xyz`.
+Copy `.dev.vars.example` to `.dev.vars` to override those values safely for local development.
 
 ```bash
 WORKER_PORT=8787 bun run --cwd apps/api-worker dev
@@ -154,11 +155,21 @@ To use the deploy workflow, configure:
 
 ## Deployment checklist
 
-1. Replace placeholder D1/R2 identifiers in `apps/api-worker/wrangler.jsonc`
-2. Create the Pages project once in Cloudflare
-3. Set Worker secrets with `wrangler secret put`
-4. Enable Email Routing for the target root domain and any managed subdomains
-5. Push to `main` to trigger the deploy workflow
+1. Create the Pages project `cf-mail` once in Cloudflare
+2. Bind `cfm.707979.xyz` to Pages
+3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, `CLOUDFLARE_API_TOKEN`)
+4. Set GitHub secret `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+5. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=https://api.cfm.707979.xyz`
+6. Push to `main` to trigger the deploy workflow
+
+## Domain topology example
+
+- Web UI: `https://cfm.707979.xyz`
+- Worker API: `https://api.cfm.707979.xyz`
+- Mail root domain: `707979.xyz`
+- Mailboxes can use nested subdomains like:
+  - `build@alpha.707979.xyz`
+  - `spec@ops.alpha.707979.xyz`
 
 ## Notes on Cloudflare limits
 

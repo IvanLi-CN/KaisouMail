@@ -21,13 +21,13 @@ export const Default: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByLabelText("用户名"), "nightly");
-    await userEvent.type(canvas.getByLabelText("子域名"), "alpha");
+    await userEvent.type(canvas.getByLabelText("子域名"), "ops.alpha");
     await userEvent.clear(canvas.getByLabelText("生命周期（分钟）"));
     await userEvent.type(canvas.getByLabelText("生命周期（分钟）"), "90");
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
       localPart: "nightly",
-      subdomain: "alpha",
+      subdomain: "ops.alpha",
       expiresInMinutes: 90,
     });
   },

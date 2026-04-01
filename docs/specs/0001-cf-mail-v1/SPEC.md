@@ -37,7 +37,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Visual Evidence
 
-Evidence reflects implementation commit `845be4fe9e382e4d3af7f05bca2b826d3c00ccd8` and is persisted with this spec.
+Evidence is persisted with this spec and refreshed whenever the rendered control-plane surfaces change.
 
 ### Login
 
@@ -46,6 +46,10 @@ Evidence reflects implementation commit `845be4fe9e382e4d3af7f05bca2b826d3c00ccd
 ### Mailboxes
 
 ![Mailboxes page](./assets/mailboxes.png)
+
+### Mailbox Create Card
+
+![Mailbox create card](./assets/mailbox-create-card.png)
 
 ### Mailbox Detail
 

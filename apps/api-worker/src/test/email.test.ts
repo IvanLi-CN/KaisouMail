@@ -1,3 +1,4 @@
+import { createMailboxRequestSchema } from "@cf-mail/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,6 +14,36 @@ describe("email helpers", () => {
       subdomain: "box",
       address: "mail@box.example.com",
     });
+  });
+
+  it("builds multi-level mailbox addresses", () => {
+    expect(buildMailboxAddress("mail", "ops.alpha", "707979.xyz")).toEqual({
+      localPart: "mail",
+      subdomain: "ops.alpha",
+      address: "mail@ops.alpha.707979.xyz",
+    });
+  });
+
+  it("accepts dotted subdomains in mailbox creation payloads", () => {
+    expect(
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops.alpha",
+        expiresInMinutes: 60,
+      }),
+    ).toMatchObject({
+      subdomain: "ops.alpha",
+    });
+  });
+
+  it("rejects malformed dotted subdomains", () => {
+    expect(() =>
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops..alpha",
+        expiresInMinutes: 60,
+      }),
+    ).toThrow();
   });
 
   it("extracts preview text from plain text first", () => {

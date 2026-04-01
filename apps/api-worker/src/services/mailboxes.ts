@@ -78,6 +78,11 @@ export const createMailboxForUser = async (
     subdomain,
     config.MAIL_DOMAIN,
   );
+  const knownSubdomain = await db
+    .select()
+    .from(subdomains)
+    .where(eq(subdomains.name, subdomain))
+    .limit(1);
   const existing = await db
     .select()
     .from(mailboxes)
@@ -90,14 +95,10 @@ export const createMailboxForUser = async (
   const expiresAt = new Date(
     Date.now() + expiresInMinutes * 60_000,
   ).toISOString();
-  await ensureSubdomainEnabled(config, subdomain);
+  if (!knownSubdomain[0]) {
+    await ensureSubdomainEnabled(config, subdomain);
+  }
   const routingRuleId = await createRoutingRule(config, mailboxAddress.address);
-
-  const knownSubdomain = await db
-    .select()
-    .from(subdomains)
-    .where(eq(subdomains.name, subdomain))
-    .limit(1);
   if (knownSubdomain[0]) {
     await db
       .update(subdomains)
