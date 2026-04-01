@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      run: bun run check
+
+pre-push:
+  parallel: true
+  commands:
+    typecheck:
+      run: bun run typecheck
+    test:
+      run: bun run test
+    build:
+      run: bun run build

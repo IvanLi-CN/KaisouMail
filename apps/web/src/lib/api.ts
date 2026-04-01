@@ -1,0 +1,171 @@
+import {
+  createApiKeyResponseSchema,
+  createUserResponseSchema,
+  listApiKeysResponseSchema,
+  listMailboxesResponseSchema,
+  listMessagesResponseSchema,
+  listUsersResponseSchema,
+  mailboxSchema,
+  messageDetailResponseSchema,
+  sessionResponseSchema,
+  versionResponseSchema,
+} from "@cf-mail/shared";
+
+import { demoApi } from "@/lib/demo-store";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
+const requestJson = async <T>(
+  path: string,
+  init: RequestInit,
+  parser: (value: unknown) => T,
+) => {
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    ...init,
+  });
+  if (response.status === 204) return parser({});
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? "Request failed");
+  return parser(payload);
+};
+
+export const apiClient = {
+  async getSession() {
+    if (DEMO_MODE) return demoApi.getSession();
+    return requestJson("/api/auth/session", { method: "GET" }, (value) =>
+      sessionResponseSchema.parse(value),
+    );
+  },
+  async login(apiKey: string) {
+    if (DEMO_MODE) return demoApi.login(apiKey);
+    return requestJson(
+      "/api/auth/session",
+      { method: "POST", body: JSON.stringify({ apiKey }) },
+      (value) => sessionResponseSchema.parse(value),
+    );
+  },
+  async logout() {
+    if (DEMO_MODE) return demoApi.logout();
+    const response = await fetch(`${API_BASE}/api/auth/session`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 204)
+      throw new Error("Logout failed");
+  },
+  async getVersion() {
+    if (DEMO_MODE) return demoApi.getVersion();
+    return requestJson("/api/version", { method: "GET" }, (value) =>
+      versionResponseSchema.parse(value),
+    );
+  },
+  async listMailboxes() {
+    if (DEMO_MODE) return demoApi.listMailboxes();
+    const payload = await requestJson(
+      "/api/mailboxes",
+      { method: "GET" },
+      (value) => listMailboxesResponseSchema.parse(value),
+    );
+    return payload.mailboxes;
+  },
+  async getMailbox(id: string) {
+    if (DEMO_MODE) return demoApi.getMailbox(id);
+    return requestJson(`/api/mailboxes/${id}`, { method: "GET" }, (value) =>
+      mailboxSchema.parse(value),
+    );
+  },
+  async createMailbox(input: {
+    localPart?: string;
+    subdomain?: string;
+    expiresInMinutes: number;
+  }) {
+    if (DEMO_MODE) return demoApi.createMailbox(input);
+    return requestJson(
+      "/api/mailboxes",
+      { method: "POST", body: JSON.stringify(input) },
+      (value) => mailboxSchema.parse(value),
+    );
+  },
+  async destroyMailbox(id: string) {
+    if (DEMO_MODE) return demoApi.destroyMailbox(id);
+    return requestJson(`/api/mailboxes/${id}`, { method: "DELETE" }, (value) =>
+      mailboxSchema.parse(value),
+    );
+  },
+  async listMessages(mailboxes: string[] = []) {
+    if (DEMO_MODE) return demoApi.listMessages(mailboxes);
+    const params = new URLSearchParams();
+    for (const mailbox of mailboxes) params.append("mailbox", mailbox);
+    const payload = await requestJson(
+      `/api/messages${params.size > 0 ? `?${params.toString()}` : ""}`,
+      { method: "GET" },
+      (value) => listMessagesResponseSchema.parse(value),
+    );
+    return payload.messages;
+  },
+  async getMessage(id: string) {
+    if (DEMO_MODE) return demoApi.getMessage(id);
+    const payload = await requestJson(
+      `/api/messages/${id}`,
+      { method: "GET" },
+      (value) => messageDetailResponseSchema.parse(value),
+    );
+    return payload.message;
+  },
+  getRawMessageUrl(id: string) {
+    return `${API_BASE}/api/messages/${id}/raw`;
+  },
+  async listApiKeys() {
+    if (DEMO_MODE) return demoApi.listApiKeys();
+    const payload = await requestJson(
+      "/api/api-keys",
+      { method: "GET" },
+      (value) => listApiKeysResponseSchema.parse(value),
+    );
+    return payload.apiKeys;
+  },
+  async createApiKey(input: { name: string; scopes: string[] }) {
+    if (DEMO_MODE) return demoApi.createApiKey(input);
+    return requestJson(
+      "/api/api-keys",
+      { method: "POST", body: JSON.stringify(input) },
+      (value) => createApiKeyResponseSchema.parse(value),
+    );
+  },
+  async revokeApiKey(id: string) {
+    if (DEMO_MODE) return demoApi.revokeApiKey(id);
+    const response = await fetch(`${API_BASE}/api/api-keys/${id}/revoke`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 204)
+      throw new Error("Failed to revoke API key");
+  },
+  async listUsers() {
+    if (DEMO_MODE) return demoApi.listUsers();
+    const payload = await requestJson(
+      "/api/users",
+      { method: "GET" },
+      (value) => listUsersResponseSchema.parse(value),
+    );
+    return payload.users;
+  },
+  async createUser(input: {
+    email: string;
+    name: string;
+    role: "admin" | "member";
+  }) {
+    if (DEMO_MODE) return demoApi.createUser(input);
+    return requestJson(
+      "/api/users",
+      { method: "POST", body: JSON.stringify(input) },
+      (value) => createUserResponseSchema.parse(value),
+    );
+  },
+};

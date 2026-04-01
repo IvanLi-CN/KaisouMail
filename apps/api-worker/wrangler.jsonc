@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-mail-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cf-mail-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "preview_database_id": "00000000-0000-0000-0000-000000000002",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MAIL_BUCKET",
+      "bucket_name": "cf-mail-bucket",
+      "preview_bucket_name": "cf-mail-bucket-preview"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "development",
+    "MAIL_DOMAIN": "example.com",
+    "DEFAULT_MAILBOX_TTL_MINUTES": "60",
+    "CLEANUP_BATCH_SIZE": "3",
+    "EMAIL_ROUTING_MANAGEMENT_ENABLED": "false",
+    "BOOTSTRAP_ADMIN_EMAIL": "owner@example.com",
+    "BOOTSTRAP_ADMIN_NAME": "Owner",
+    "CF_ROUTE_RULESET_TAG": "cf-mail"
+  },
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

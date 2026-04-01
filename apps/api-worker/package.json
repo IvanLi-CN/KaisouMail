@@ -1,0 +1,31 @@
+{
+  "name": "@cf-mail/api-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "sh -c 'wrangler dev --test-scheduled --port ${WORKER_PORT:-8787}'",
+    "check": "biome check src drizzle.config.ts wrangler.jsonc",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "wrangler deploy --dry-run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply cf-mail-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cf-mail-db --remote"
+  },
+  "dependencies": {
+    "@cf-mail/shared": "workspace:*",
+    "@hono/zod-validator": "^0.7.4",
+    "drizzle-orm": "^0.44.7",
+    "hono": "^4.10.2",
+    "postal-mime": "^2.4.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260325.0",
+    "drizzle-kit": "^0.31.5",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.5",
+    "wrangler": "^4.11.1"
+  }
+}

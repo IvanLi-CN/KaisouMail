@@ -1,0 +1,23 @@
+import type {
+  apiKeySchema,
+  createApiKeyResponseSchema,
+  createUserResponseSchema,
+  mailboxSchema,
+  messageDetailSchema,
+  messageSummarySchema,
+  sessionResponseSchema,
+  userSchema,
+  versionResponseSchema,
+} from "@cf-mail/shared";
+import type { z } from "zod";
+
+export type SessionResponse = z.infer<typeof sessionResponseSchema>;
+export type SessionUser = SessionResponse["user"];
+export type Mailbox = z.infer<typeof mailboxSchema>;
+export type MessageSummary = z.infer<typeof messageSummarySchema>;
+export type MessageDetail = z.infer<typeof messageDetailSchema>;
+export type ApiKeyRecord = z.infer<typeof apiKeySchema>;
+export type UserRecord = z.infer<typeof userSchema>;
+export type VersionInfo = z.infer<typeof versionResponseSchema>;
+export type CreateApiKeyResult = z.infer<typeof createApiKeyResponseSchema>;
+export type CreateUserResult = z.infer<typeof createUserResponseSchema>;

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "required_checks": [
+    "Lint & Format Check",
+    "Typecheck",
+    "Unit Tests",
+    "Storybook Build",
+    "Worker Build",
+    "Web Build",
+    "Playwright Smoke"
+  ],
+  "informational_checks": ["Deploy Worker", "Deploy Pages"]
+}

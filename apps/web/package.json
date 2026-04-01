@@ -1,0 +1,53 @@
+{
+  "name": "@cf-mail/web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "sh -c 'vite --host 0.0.0.0 --port ${PORT:-4173}'",
+    "check": "biome check src .storybook vite.config.ts tailwind.config.ts components.json playwright.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "vite build",
+    "storybook": "sh -c 'storybook dev -p ${STORYBOOK_PORT:-6006} --host 0.0.0.0'",
+    "build-storybook": "storybook build",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@cf-mail/shared": "workspace:*",
+    "@hookform/resolvers": "^5.2.2",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@tanstack/react-query": "^5.90.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.544.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-hook-form": "^7.62.0",
+    "react-router-dom": "^7.9.4",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@storybook/addon-a11y": "^9.1.10",
+    "@storybook/addon-docs": "^9.1.10",
+    "@storybook/addon-onboarding": "^9.1.10",
+    "@storybook/addon-vitest": "^9.1.10",
+    "@storybook/react-vite": "^9.1.10",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "biome": "latest",
+    "jsdom": "^27.0.0",
+    "playwright": "^1.55.0",
+    "storybook": "^9.1.10",
+    "tailwindcss": "^4.1.13",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "vitest": "^4.0.5"
+  }
+}
