@@ -1,5 +1,6 @@
 import type { Preview } from "@storybook/react-vite";
 import { MemoryRouter } from "react-router-dom";
+import { themes } from "storybook/theming";
 
 import "../src/index.css";
 
@@ -17,6 +18,9 @@ const preview: Preview = {
     layout: "fullscreen",
     controls: {
       expanded: true,
+    },
+    docs: {
+      theme: themes.dark,
     },
     backgrounds: {
       default: "dark",
