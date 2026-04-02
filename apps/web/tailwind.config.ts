@@ -21,6 +21,8 @@ export default {
         "muted-foreground": "hsl(var(--muted-foreground))",
         accent: "hsl(var(--accent))",
         "accent-foreground": "hsl(var(--accent-foreground))",
+        tooltip: "hsl(var(--tooltip))",
+        "tooltip-foreground": "hsl(var(--tooltip-foreground))",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

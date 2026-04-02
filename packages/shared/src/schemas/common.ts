@@ -64,6 +64,7 @@ export const mailboxSchema = z.object({
   address: z.string().email(),
   status: mailboxStatusSchema,
   createdAt: isoDateSchema,
+  lastReceivedAt: isoDateSchema.nullable(),
   expiresAt: isoDateSchema,
   destroyedAt: isoDateSchema.nullable(),
   routingRuleId: z.string().nullable(),

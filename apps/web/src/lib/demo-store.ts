@@ -69,7 +69,9 @@ export const demoApi = {
   },
   async listMailboxes() {
     return clone(
-      state.mailboxes.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+      [...state.mailboxes].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      ),
     );
   },
   async getMailbox(id: string) {
@@ -95,6 +97,7 @@ export const demoApi = {
       address: `${localPart}@${subdomain}.${demoMailDomain}`,
       status: "active",
       createdAt,
+      lastReceivedAt: null,
       expiresAt: new Date(
         Date.now() + input.expiresInMinutes * 60_000,
       ).toISOString(),

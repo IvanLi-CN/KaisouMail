@@ -7,6 +7,7 @@ import { MailboxDetailPage } from "@/pages/mailbox-detail-page";
 import { MailboxesPage } from "@/pages/mailboxes-page";
 import { MessageDetailPage } from "@/pages/message-detail-page";
 import { UsersPage } from "@/pages/users-page";
+import { WorkspacePage } from "@/pages/workspace-page";
 
 export const router = createBrowserRouter([
   {
@@ -17,7 +18,8 @@ export const router = createBrowserRouter([
     path: "/",
     element: <RootLayout />,
     children: [
-      { index: true, element: <Navigate to="/mailboxes" replace /> },
+      { index: true, element: <Navigate to="/workspace" replace /> },
+      { path: "workspace", element: <WorkspacePage /> },
       { path: "mailboxes", element: <MailboxesPage /> },
       { path: "mailboxes/:mailboxId", element: <MailboxDetailPage /> },
       { path: "messages/:messageId", element: <MessageDetailPage /> },

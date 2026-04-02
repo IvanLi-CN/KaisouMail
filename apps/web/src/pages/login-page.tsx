@@ -1,16 +1,23 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { LoginCard } from "@/components/auth/login-card";
 import { useLoginMutation, useSessionQuery } from "@/hooks/use-session";
 
 export const LoginPage = () => {
+  const location = useLocation();
   const sessionQuery = useSessionQuery();
   const loginMutation = useLoginMutation();
   const [error, setError] = useState<string | null>(null);
+  const redirectTarget =
+    typeof location.state?.from === "string" &&
+    location.state.from.startsWith("/") &&
+    location.state.from !== "/login"
+      ? location.state.from
+      : "/workspace";
 
   if (sessionQuery.data?.user) {
-    return <Navigate to="/mailboxes" replace />;
+    return <Navigate to={redirectTarget} replace />;
   }
 
   return (

@@ -1,5 +1,6 @@
+import { Download } from "lucide-react";
+import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -196,11 +197,19 @@ export const MessageDetailCard = ({
               )}
             </div>
           </div>
-          <Button asChild variant="outline" className="w-full">
+          <ActionButton
+            asChild
+            className="w-full"
+            density="default"
+            icon={Download}
+            label="下载 Raw EML"
+            priority="secondary"
+            variant="outline"
+          >
             <a href={rawUrl} target="_blank" rel="noreferrer">
               下载 Raw EML
             </a>
-          </Button>
+          </ActionButton>
         </CardContent>
       </Card>
     </div>

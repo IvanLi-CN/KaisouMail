@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 describe("Button", () => {
@@ -28,5 +29,19 @@ describe("Button", () => {
       "type",
       "submit",
     );
+  });
+
+  it("keeps button and badge labels on a single line", () => {
+    render(
+      <div>
+        <Button>打开邮件工作台</Button>
+        <Badge>高密度</Badge>
+      </div>,
+    );
+
+    expect(screen.getByRole("button", { name: "打开邮件工作台" })).toHaveClass(
+      "whitespace-nowrap",
+    );
+    expect(screen.getByText("高密度")).toHaveClass("whitespace-nowrap");
   });
 });

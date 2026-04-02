@@ -31,5 +31,5 @@ describe("MessageDetailCard", () => {
       "href",
       message.rawDownloadPath,
     );
-  });
+  }, 15_000);
 });

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/shared/page-header";
@@ -23,7 +24,7 @@ const meta = {
         <PageHeader
           eyebrow="Overview"
           title="Cloudflare 临时邮箱台"
-          description="Worker + D1 + R2 + Pages 的默认控制台布局。"
+          description="顶部横向导航 + 三栏邮件工作台的默认壳层。"
         />
         <StatGrid
           stats={[
@@ -41,4 +42,17 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("link", { name: /工作台/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: /邮箱管理/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
+  },
+};

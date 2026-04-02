@@ -13,6 +13,8 @@
   --muted-foreground: 215 20% 72%;
   --accent: 206 100% 74%;
   --accent-foreground: 222 44% 7%;
+  --tooltip: 210 40% 98%;
+  --tooltip-foreground: 222 47% 11%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --success: 160 84% 39%;

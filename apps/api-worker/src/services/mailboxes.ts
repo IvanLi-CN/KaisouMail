@@ -20,7 +20,10 @@ import {
   ensureSubdomainEnabled,
 } from "./emailRouting";
 
-const toMailboxDto = (row: typeof mailboxes.$inferSelect) =>
+const toMailboxDto = (
+  row: typeof mailboxes.$inferSelect,
+  lastReceivedAt: string | null = null,
+) =>
   mailboxSchema.parse({
     id: row.id,
     userId: row.userId,
@@ -29,19 +32,57 @@ const toMailboxDto = (row: typeof mailboxes.$inferSelect) =>
     address: row.address,
     status: row.status,
     createdAt: row.createdAt,
+    lastReceivedAt,
     expiresAt: row.expiresAt,
     destroyedAt: row.destroyedAt,
     routingRuleId: row.routingRuleId,
   });
 
+const attachLastReceivedAt = async (
+  env: WorkerEnv,
+  rows: Array<typeof mailboxes.$inferSelect>,
+) => {
+  if (rows.length === 0) return [];
+
+  const db = getDb(env);
+  const recentMap = new Map<string, string | null>(
+    rows.map((row) => [row.id, null]),
+  );
+  const recentRows = await db
+    .select({
+      mailboxId: messages.mailboxId,
+      receivedAt: messages.receivedAt,
+    })
+    .from(messages)
+    .where(
+      inArray(
+        messages.mailboxId,
+        rows.map((row) => row.id),
+      ),
+    )
+    .orderBy(desc(messages.receivedAt));
+
+  for (const recentRow of recentRows) {
+    if (!recentMap.has(recentRow.mailboxId)) continue;
+    if (!recentMap.get(recentRow.mailboxId)) {
+      recentMap.set(recentRow.mailboxId, recentRow.receivedAt);
+    }
+  }
+
+  return rows.map((row) => toMailboxDto(row, recentMap.get(row.id) ?? null));
+};
+
 export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
   const db = getDb(env);
-  const query = db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt));
   const rows =
     user.role === "admin"
-      ? await query
-      : await query.where(eq(mailboxes.userId, user.id));
-  return rows.map(toMailboxDto);
+      ? await db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt))
+      : await db
+          .select()
+          .from(mailboxes)
+          .where(eq(mailboxes.userId, user.id))
+          .orderBy(desc(mailboxes.createdAt));
+  return attachLastReceivedAt(env, rows);
 };
 
 export const getMailboxForUser = async (
@@ -59,7 +100,15 @@ export const getMailboxForUser = async (
   if (!row) throw new ApiError(404, "Mailbox not found");
   if (row.userId !== user.id && user.role !== "admin")
     throw new ApiError(403, "Forbidden");
-  return toMailboxDto(row);
+
+  const recentRows = await db
+    .select({ receivedAt: messages.receivedAt })
+    .from(messages)
+    .where(eq(messages.mailboxId, row.id))
+    .orderBy(desc(messages.receivedAt))
+    .limit(1);
+
+  return toMailboxDto(row, recentRows[0]?.receivedAt ?? null);
 };
 
 export const createMailboxForUser = async (
@@ -130,7 +179,7 @@ export const createMailboxForUser = async (
     destroyedAt: null,
   } as const;
   await db.insert(mailboxes).values(created);
-  return toMailboxDto(created);
+  return toMailboxDto(created, null);
 };
 
 export const destroyMailbox = async (
@@ -149,7 +198,7 @@ export const destroyMailbox = async (
   if (!mailbox) throw new ApiError(404, "Mailbox not found");
   if (actor && actor.role !== "admin" && actor.id !== mailbox.userId)
     throw new ApiError(403, "Forbidden");
-  if (mailbox.status === "destroyed") return toMailboxDto(mailbox);
+  if (mailbox.status === "destroyed") return toMailboxDto(mailbox, null);
 
   await db
     .update(mailboxes)
@@ -181,12 +230,15 @@ export const destroyMailbox = async (
     .update(mailboxes)
     .set({ status: "destroyed", destroyedAt, routingRuleId: null })
     .where(eq(mailboxes.id, mailbox.id));
-  return toMailboxDto({
-    ...mailbox,
-    status: "destroyed",
-    destroyedAt,
-    routingRuleId: null,
-  });
+  return toMailboxDto(
+    {
+      ...mailbox,
+      status: "destroyed",
+      destroyedAt,
+      routingRuleId: null,
+    },
+    null,
+  );
 };
 
 export const listExpiredMailboxIds = async (
