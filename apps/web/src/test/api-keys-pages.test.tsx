@@ -1,9 +1,11 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { appRoutes, latestApiKeySecretStorageKey } from "@/lib/routes";
+import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 import { demoApiKeys, demoSessionUser, demoVersion } from "@/mocks/data";
 import { ApiKeysDocsPage } from "@/pages/api-keys-docs-page";
 import { ApiKeysPage, ApiKeysPageView } from "@/pages/api-keys-page";
@@ -30,11 +32,22 @@ vi.mock("@/hooks/use-session", () => ({
 
 afterEach(() => {
   sessionHookState.user = demoSessionUser;
-  window.sessionStorage.clear();
 });
 
-const renderApiKeysRoutes = () =>
-  render(
+const createQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+const renderWithQueryClient = (ui: ReactNode, queryClient: QueryClient) =>
+  render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+
+const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
+  renderWithQueryClient(
     <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
       <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
         <Routes>
@@ -57,6 +70,7 @@ const renderApiKeysRoutes = () =>
         </Routes>
       </AppShell>
     </MemoryRouter>,
+    queryClient,
   );
 
 describe("api key integration docs", () => {
@@ -78,28 +92,28 @@ describe("api key integration docs", () => {
   });
 
   it("documents the implemented auth and message contracts", () => {
-    render(
+    renderWithQueryClient(
       <MemoryRouter>
         <ApiKeysDocsPage />
       </MemoryRouter>,
+      createQueryClient(),
     );
 
     expect(screen.getByText("Automation / Agent")).toBeInTheDocument();
     expect(screen.getByText("Browser Session")).toBeInTheDocument();
     expect(screen.getByText("/api/messages/:id/raw")).toBeInTheDocument();
-    expect(screen.getByText("Error Envelope")).toBeInTheDocument();
+    expect(screen.getByText("ApiError Envelope")).toBeInTheDocument();
+    expect(screen.getByText("Auth Failure")).toBeInTheDocument();
   });
 
   it("restores the one-time secret after navigating away and back", async () => {
-    window.sessionStorage.setItem(
-      latestApiKeySecretStorageKey,
-      JSON.stringify({
-        userId: demoSessionUser.id,
-        secret: "cfm_full_secret_returned_once",
-      }),
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      latestApiKeySecretQueryKey,
+      "cfm_full_secret_returned_once",
     );
 
-    render(
+    renderWithQueryClient(
       <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
         <AppShell
           user={demoSessionUser}
@@ -116,6 +130,7 @@ describe("api key integration docs", () => {
           </Routes>
         </AppShell>
       </MemoryRouter>,
+      queryClient,
     );
 
     expect(
@@ -138,43 +153,5 @@ describe("api key integration docs", () => {
     expect(
       screen.getByText("cfm_full_secret_returned_once"),
     ).toBeInTheDocument();
-  });
-
-  it("does not restore a secret stored for a different user", async () => {
-    window.sessionStorage.setItem(
-      latestApiKeySecretStorageKey,
-      JSON.stringify({
-        userId: "usr_other_user",
-        secret: "cfm_should_not_leak",
-      }),
-    );
-
-    render(
-      <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
-        <AppShell
-          user={demoSessionUser}
-          version={demoVersion}
-          onLogout={vi.fn()}
-        >
-          <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={appRoutes.apiKeys} replace />}
-            />
-            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
-          </Routes>
-        </AppShell>
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "API Keys", level: 1 }),
-      ).toBeInTheDocument();
-    });
-    expect(screen.queryByText("cfm_should_not_leak")).not.toBeInTheDocument();
-    expect(
-      window.sessionStorage.getItem(latestApiKeySecretStorageKey),
-    ).toBeNull();
   });
 });

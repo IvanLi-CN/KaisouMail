@@ -3,4 +3,4 @@ export const appRoutes = {
   apiKeysDocs: "/api-keys/docs",
 } as const;
 
-export const latestApiKeySecretStorageKey = "cf-mail.latest-api-key-secret";
+export const latestApiKeySecretQueryKey = ["latest-api-key-secret"] as const;

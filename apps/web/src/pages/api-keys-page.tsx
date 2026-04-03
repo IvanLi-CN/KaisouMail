@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { BookOpenText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -10,8 +11,7 @@ import {
   useCreateApiKeyMutation,
   useRevokeApiKeyMutation,
 } from "@/hooks/use-api-keys";
-import { useSessionQuery } from "@/hooks/use-session";
-import { appRoutes, latestApiKeySecretStorageKey } from "@/lib/routes";
+import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 
 type ApiKeysPageViewProps = {
   apiKeys: Parameters<typeof ApiKeyTable>[0]["apiKeys"];
@@ -51,56 +51,26 @@ export const ApiKeysPageView = ({
   );
 };
 
-const readStoredLatestSecret = (currentUserId?: string) => {
-  if (typeof window === "undefined" || !currentUserId) return null;
-
-  const rawValue = window.sessionStorage.getItem(latestApiKeySecretStorageKey);
-  if (!rawValue) return null;
-
-  try {
-    const parsed = JSON.parse(rawValue) as {
-      secret?: unknown;
-      userId?: unknown;
-    };
-    if (
-      typeof parsed.secret === "string" &&
-      typeof parsed.userId === "string" &&
-      parsed.userId === currentUserId
-    ) {
-      return parsed.secret;
-    }
-  } catch {
-    // Ignore legacy or malformed storage values and replace them on next write.
-  }
-
-  return null;
-};
-
 export const ApiKeysPage = () => {
   const apiKeysQuery = useApiKeysQuery();
   const createApiKeyMutation = useCreateApiKeyMutation();
   const revokeApiKeyMutation = useRevokeApiKeyMutation();
-  const sessionQuery = useSessionQuery();
-  const currentUserId = sessionQuery.data?.user.id;
-  const [latestSecret, setLatestSecret] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [latestSecret, setLatestSecret] = useState<string | null>(
+    () => queryClient.getQueryData<string>(latestApiKeySecretQueryKey) ?? null,
+  );
 
   useEffect(() => {
-    setLatestSecret(readStoredLatestSecret(currentUserId));
-  }, [currentUserId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (latestSecret && currentUserId) {
-      window.sessionStorage.setItem(
-        latestApiKeySecretStorageKey,
-        JSON.stringify({ userId: currentUserId, secret: latestSecret }),
-      );
+    if (latestSecret) {
+      queryClient.setQueryData(latestApiKeySecretQueryKey, latestSecret);
       return;
     }
 
-    window.sessionStorage.removeItem(latestApiKeySecretStorageKey);
-  }, [currentUserId, latestSecret]);
+    void queryClient.removeQueries({
+      queryKey: latestApiKeySecretQueryKey,
+      exact: true,
+    });
+  }, [latestSecret, queryClient]);
 
   return (
     <ApiKeysPageView

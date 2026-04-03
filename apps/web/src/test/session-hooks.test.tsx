@@ -5,40 +5,33 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useLogoutMutation } from "@/hooks/use-session";
 import { apiClient } from "@/lib/api";
-import { latestApiKeySecretStorageKey } from "@/lib/routes";
-
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
-
-  return ({ children }: PropsWithChildren) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-};
+import { latestApiKeySecretQueryKey } from "@/lib/routes";
 
 afterEach(() => {
   vi.restoreAllMocks();
-  window.sessionStorage.clear();
 });
 
 describe("useLogoutMutation", () => {
   it("clears the persisted api key secret after logout succeeds", async () => {
     vi.spyOn(apiClient, "logout").mockResolvedValue(undefined);
-    window.sessionStorage.setItem(
-      latestApiKeySecretStorageKey,
-      JSON.stringify({
-        userId: "usr_demo_admin",
-        secret: "cfm_full_secret_returned_once",
-      }),
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+    queryClient.setQueryData(
+      latestApiKeySecretQueryKey,
+      "cfm_full_secret_returned_once",
     );
 
     const { result } = renderHook(() => useLogoutMutation(), {
-      wrapper: createWrapper(),
+      wrapper: ({ children }: PropsWithChildren) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      ),
     });
 
     result.current.mutate();
@@ -47,7 +40,7 @@ describe("useLogoutMutation", () => {
       expect(result.current.isSuccess).toBe(true);
     });
     expect(
-      window.sessionStorage.getItem(latestApiKeySecretStorageKey),
-    ).toBeNull();
+      queryClient.getQueryData(latestApiKeySecretQueryKey),
+    ).toBeUndefined();
   });
 });

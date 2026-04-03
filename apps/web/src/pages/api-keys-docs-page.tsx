@@ -344,6 +344,10 @@ const errorContract = `{
   "details": null
 }`;
 
+const authFailureContract = `{
+  "error": "Invalid API key"
+}`;
+
 const curlExample = `curl -X POST "$API_BASE/api/auth/session" \\
   -H "Content-Type: application/json" \\
   -d '{"apiKey":"cfm_your_secret_here"}'`;
@@ -478,11 +482,18 @@ export const ApiKeysDocsPage = () => {
           <CardContent className="space-y-4">
             <CodeBlock code={curlExample} label="Exchange Session" />
             <CodeBlock code={bearerExample} label="Bearer Auth" />
-            <CodeBlock code={errorContract} label="Error Envelope" />
+            <CodeBlock code={errorContract} label="ApiError Envelope" />
+            <CodeBlock code={authFailureContract} label="Auth Failure" />
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
               <p>
-                当前仓库能稳定承诺的是：<code>ApiError</code> 场景返回{" "}
+                大多数由 <code>ApiError</code> 抛出的失败响应会返回{" "}
                 <code>error</code> 与 <code>details</code> 字段。
+              </p>
+              <p className="mt-2">
+                <code>POST /api/auth/session</code> 的 API Key
+                校验失败是当前实现里的特例，返回{" "}
+                <code>{`{"error":"Invalid API key"}`}</code>，没有{" "}
+                <code>details</code>。
               </p>
               <p className="mt-2">
                 未知异常统一回 <code>500</code> 与{" "}

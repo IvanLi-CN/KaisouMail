@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiClient } from "@/lib/api";
-import { latestApiKeySecretStorageKey } from "@/lib/routes";
+import { latestApiKeySecretQueryKey } from "@/lib/routes";
 
 export const sessionKeys = {
   all: ["session"] as const,
@@ -36,9 +36,10 @@ export const useLogoutMutation = () => {
   return useMutation({
     mutationFn: () => apiClient.logout(),
     onSuccess: () => {
-      if (typeof window !== "undefined") {
-        window.sessionStorage.removeItem(latestApiKeySecretStorageKey);
-      }
+      void queryClient.removeQueries({
+        queryKey: latestApiKeySecretQueryKey,
+        exact: true,
+      });
       queryClient.setQueryData(sessionKeys.all, null);
     },
   });
