@@ -23,6 +23,24 @@ describe("demoApi", () => {
     expect(destroyed.routingRuleId).toBeNull();
   });
 
+  it("reuses active mailboxes through ensure and exposes meta", async () => {
+    const meta = await demoApi.getMeta();
+    expect(meta.rootDomain).toBe("707979.xyz");
+
+    const reused = await demoApi.ensureMailbox({
+      address: "build@alpha.707979.xyz",
+    });
+    expect(reused.id).toBe("mbx_alpha");
+  });
+
+  it("filters messages by after/since cursor aliases", async () => {
+    const filtered = await demoApi.listMessages([], {
+      after: "2026-04-01T08:31:00.000Z",
+      since: "2026-04-01T08:35:00.000Z",
+    });
+    expect(filtered.map((message) => message.id)).toEqual(["msg_beta"]);
+  });
+
   it("creates api keys and users with an initial key", async () => {
     const apiKey = await demoApi.createApiKey({
       name: "CI Bot",

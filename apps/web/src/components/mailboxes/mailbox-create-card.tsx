@@ -1,5 +1,6 @@
 import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "@cf-mail/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -39,6 +40,11 @@ type CreateMailboxValues = z.infer<typeof createMailboxSchema>;
 export const MailboxCreateCard = ({
   onSubmit,
   isPending,
+  rootDomain,
+  defaultTtlMinutes,
+  maxTtlMinutes,
+  isMetaLoading = false,
+  metaError = null,
 }: {
   onSubmit: (values: {
     localPart?: string;
@@ -46,25 +52,64 @@ export const MailboxCreateCard = ({
     expiresInMinutes: number;
   }) => Promise<void> | void;
   isPending?: boolean;
+  rootDomain?: string;
+  defaultTtlMinutes?: number;
+  maxTtlMinutes?: number;
+  isMetaLoading?: boolean;
+  metaError?: string | null;
 }) => {
+  const effectiveDefaultTtlMinutes = defaultTtlMinutes ?? 60;
+  const effectiveMaxTtlMinutes = maxTtlMinutes ?? 24 * 60;
+  const isMetaReady =
+    !isMetaLoading &&
+    !metaError &&
+    Boolean(rootDomain && defaultTtlMinutes && maxTtlMinutes);
+  const isFormDisabled = Boolean(isPending || isMetaLoading);
   const form = useForm<CreateMailboxValues>({
     resolver: zodResolver(createMailboxSchema),
     defaultValues: {
       localPart: "",
       subdomain: "",
-      expiresInMinutes: 60,
+      expiresInMinutes: effectiveDefaultTtlMinutes,
     },
   });
+
+  useEffect(() => {
+    if (defaultTtlMinutes === undefined) return;
+    form.setValue("expiresInMinutes", defaultTtlMinutes, {
+      shouldDirty: false,
+    });
+  }, [defaultTtlMinutes, form]);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>创建邮箱</CardTitle>
         <CardDescription>
-          随机或指定用户名 / 子域。支持多级子域，例如
-          <span className="ml-1 font-medium text-foreground">alpha</span>或
-          <span className="ml-1 font-medium text-foreground">ops.alpha</span>
-          ，默认 60 分钟后自动回收。
+          {metaError ? (
+            <span className="text-destructive">
+              邮箱规则加载失败：{metaError}
+              。仍可继续创建邮箱，但地址示例将暂时隐藏。
+            </span>
+          ) : isMetaLoading ? (
+            "正在读取邮箱规则…"
+          ) : isMetaReady ? (
+            <>
+              随机或指定用户名 / 子域。支持多级子域，例如
+              <span className="ml-1 font-medium text-foreground">alpha</span>或
+              <span className="ml-1 font-medium text-foreground">
+                ops.alpha
+              </span>
+              ，地址格式为
+              <span className="ml-1 font-medium text-foreground">
+                nightly@ops.alpha.{rootDomain}
+              </span>
+              ，默认 {defaultTtlMinutes} 分钟后自动回收，最长 {maxTtlMinutes}{" "}
+              分钟。
+            </>
+          ) : (
+            "正在准备邮箱规则…"
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -84,6 +129,7 @@ export const MailboxCreateCard = ({
               <Input
                 id="localPart"
                 placeholder="留空则随机"
+                disabled={isFormDisabled}
                 {...form.register("localPart")}
               />
             </div>
@@ -92,6 +138,7 @@ export const MailboxCreateCard = ({
               <Input
                 id="subdomain"
                 placeholder="留空则随机，例如 ops.alpha"
+                disabled={isFormDisabled}
                 {...form.register("subdomain")}
               />
             </div>
@@ -103,16 +150,23 @@ export const MailboxCreateCard = ({
                 id="ttl"
                 type="number"
                 min={5}
-                max={1440}
+                max={effectiveMaxTtlMinutes}
+                disabled={isFormDisabled}
                 {...form.register("expiresInMinutes", { valueAsNumber: true })}
               />
             </div>
             <Button
               className="w-full md:w-auto"
               type="submit"
-              disabled={isPending}
+              disabled={isFormDisabled}
             >
-              {isPending ? "创建中…" : "创建邮箱"}
+              {metaError
+                ? "创建邮箱"
+                : isMetaLoading
+                  ? "读取规则中…"
+                  : isPending
+                    ? "创建中…"
+                    : "创建邮箱"}
             </Button>
           </div>
         </form>

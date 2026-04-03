@@ -4,11 +4,12 @@ import { Hono } from "hono";
 import { getDb } from "./db/client";
 import { parseRuntimeConfig } from "./env";
 import { applyCorsHeaders, resolveAllowedCorsOrigin } from "./lib/cors";
-import { ApiError } from "./lib/errors";
+import { ApiError, buildApiErrorPayload } from "./lib/errors";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
 import { mailboxRoutes } from "./routes/mailboxes";
 import { messageRoutes } from "./routes/messages";
+import { metaRoutes } from "./routes/meta";
 import { userRoutes } from "./routes/users";
 import { ensureBootstrapAdmin } from "./services/bootstrap";
 import type { AppBindings } from "./types";
@@ -52,6 +53,7 @@ export const createApp = () => {
   );
   app.route("/api/auth", authRoutes);
   app.route("/api/api-keys", apiKeyRoutes);
+  app.route("/api/meta", metaRoutes);
   app.route("/api/mailboxes", mailboxRoutes);
   app.route("/api/messages", messageRoutes);
   app.route("/api/users", userRoutes);
@@ -74,10 +76,9 @@ export const createApp = () => {
       });
       applyCorsHeaders(headers, allowedOrigin, allowHeaders);
       return new Response(
-        JSON.stringify({
-          error: error.message,
-          details: error.details ?? null,
-        }),
+        JSON.stringify(
+          buildApiErrorPayload(error.message, error.details ?? null),
+        ),
         {
           status: error.status,
           headers,
@@ -89,10 +90,13 @@ export const createApp = () => {
       "content-type": "application/json",
     });
     applyCorsHeaders(headers, allowedOrigin, allowHeaders);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers,
-    });
+    return new Response(
+      JSON.stringify(buildApiErrorPayload("Internal server error", null)),
+      {
+        status: 500,
+        headers,
+      },
+    );
   });
 
   return app;

@@ -32,6 +32,17 @@ export const useCreateMailboxMutation = () => {
   });
 };
 
+export const useEnsureMailboxMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: apiClient.ensureMailbox,
+    onSuccess: (mailbox) => {
+      queryClient.setQueryData(mailboxKeys.detail(mailbox.id), mailbox);
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
+    },
+  });
+};
+
 export const useDestroyMailboxMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,3 +1,5 @@
+import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "@cf-mail/shared";
+
 export interface ParsedMailboxAddress {
   localPart: string;
   subdomain: string;
@@ -18,6 +20,36 @@ export const randomLabel = (prefix: string) =>
   `${prefix}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase();
 
 export const normalizeLabel = (value: string) => value.toLowerCase().trim();
+
+export const normalizeMailboxAddress = (value: string) =>
+  value.trim().toLowerCase();
+
+export const parseMailboxAddress = (
+  value: string,
+  rootDomain: string,
+): ParsedMailboxAddress | null => {
+  const address = normalizeMailboxAddress(value);
+  const [localPart, domain] = address.split("@");
+  const suffix = `.${rootDomain.toLowerCase().trim()}`;
+
+  if (!localPart || !domain || domain.length <= suffix.length) return null;
+  if (!domain.endsWith(suffix)) return null;
+
+  const subdomain = domain.slice(0, -suffix.length);
+  if (!subdomain) return null;
+  if (
+    !mailboxLocalPartRegex.test(localPart) ||
+    !mailboxSubdomainRegex.test(subdomain)
+  ) {
+    return null;
+  }
+
+  return {
+    localPart,
+    subdomain,
+    address: `${localPart}@${subdomain}${suffix}`,
+  };
+};
 
 export const extractPreviewText = (
   text: string | null | undefined,

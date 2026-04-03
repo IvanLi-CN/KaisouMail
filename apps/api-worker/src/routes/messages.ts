@@ -1,24 +1,38 @@
 import {
+  listMessagesQuerySchema,
   listMessagesResponseSchema,
   messageDetailResponseSchema,
 } from "@cf-mail/shared";
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import { apiValidationHook } from "../lib/validation";
 import { requireAuth } from "../services/auth";
 import {
   getMessageDetailForUser,
   getRawMessageResponseForUser,
   listMessagesForUser,
+  resolveReceivedAfter,
 } from "../services/messages";
 import type { AppBindings } from "../types";
 
 export const messageRoutes = new Hono<AppBindings>()
   .use("*", requireAuth())
-  .get("/", async (c) => {
-    const user = c.get("authUser");
-    const mailboxAddresses = c.req.queries("mailbox") ?? [];
-    const messages = await listMessagesForUser(c.env, user, mailboxAddresses);
-    return c.json(listMessagesResponseSchema.parse({ messages }));
-  })
+  .get(
+    "/",
+    zValidator("query", listMessagesQuerySchema, apiValidationHook),
+    async (c) => {
+      const user = c.get("authUser");
+      const mailboxAddresses = c.req.queries("mailbox") ?? [];
+      const query = c.req.valid("query");
+      const messages = await listMessagesForUser(
+        c.env,
+        user,
+        mailboxAddresses,
+        resolveReceivedAfter(query),
+      );
+      return c.json(listMessagesResponseSchema.parse({ messages }));
+    },
+  )
   .get("/:id", async (c) => {
     const message = await getMessageDetailForUser(
       c.env,

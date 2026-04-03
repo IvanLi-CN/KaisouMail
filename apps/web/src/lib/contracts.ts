@@ -1,5 +1,7 @@
 import type {
+  apiErrorSchema,
   apiKeySchema,
+  apiMetaResponseSchema,
   createApiKeyResponseSchema,
   createUserResponseSchema,
   mailboxSchema,
@@ -13,6 +15,8 @@ import type { z } from "zod";
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export type SessionUser = SessionResponse["user"];
+export type ApiErrorPayload = z.infer<typeof apiErrorSchema>;
+export type ApiMeta = z.infer<typeof apiMetaResponseSchema>;
 export type Mailbox = z.infer<typeof mailboxSchema>;
 export type MessageSummary = z.infer<typeof messageSummarySchema>;
 export type MessageDetail = z.infer<typeof messageDetailSchema>;

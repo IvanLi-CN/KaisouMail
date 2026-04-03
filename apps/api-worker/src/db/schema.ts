@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -69,7 +70,9 @@ export const mailboxes = sqliteTable(
     destroyedAt: text("destroyed_at"),
   },
   (table) => [
-    uniqueIndex("mailboxes_address_unique").on(table.address),
+    uniqueIndex("mailboxes_address_active_unique")
+      .on(table.address)
+      .where(sql`${table.status} <> 'destroyed'`),
     index("mailboxes_user_idx").on(table.userId),
     index("mailboxes_status_expires_idx").on(table.status, table.expiresAt),
   ],

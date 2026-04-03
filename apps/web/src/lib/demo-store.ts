@@ -1,5 +1,6 @@
 import type {
   ApiKeyRecord,
+  ApiMeta,
   CreateApiKeyResult,
   CreateUserResult,
   Mailbox,
@@ -14,6 +15,7 @@ import {
   demoMailboxes,
   demoMessageDetails,
   demoMessages,
+  demoMeta,
   demoSessionUser,
   demoUsers,
   demoVersion,
@@ -22,7 +24,19 @@ import {
 const clone = <T>(value: T): T => structuredClone(value);
 const randomId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-const demoMailDomain = "707979.xyz";
+const normalizeAddress = (value: string) => value.trim().toLowerCase();
+const parseAddress = (address: string) => {
+  const [localPart, domain] = normalizeAddress(address).split("@");
+  const suffix = `.${demoMeta.rootDomain}`;
+  if (!localPart || !domain?.endsWith(suffix)) return null;
+  const subdomain = domain.slice(0, -suffix.length);
+  if (!subdomain) return null;
+  return {
+    localPart,
+    subdomain,
+    address: `${localPart}@${subdomain}${suffix}`,
+  };
+};
 
 interface DemoState {
   session: SessionResponse | null;
@@ -31,6 +45,7 @@ interface DemoState {
   mailboxes: Mailbox[];
   messages: MessageSummary[];
   messageDetails: Record<string, MessageDetail>;
+  meta: ApiMeta;
   version: VersionInfo;
 }
 
@@ -41,6 +56,7 @@ const createState = (): DemoState => ({
   mailboxes: clone(demoMailboxes),
   messages: clone(demoMessages),
   messageDetails: clone(demoMessageDetails),
+  meta: clone(demoMeta),
   version: clone(demoVersion),
 });
 
@@ -66,6 +82,9 @@ export const demoApi = {
   },
   async getVersion() {
     return clone(state.version);
+  },
+  async getMeta() {
+    return clone(state.meta);
   },
   async listMailboxes() {
     return clone(
@@ -94,7 +113,7 @@ export const demoApi = {
       userId: demoSessionUser.id,
       localPart,
       subdomain,
-      address: `${localPart}@${subdomain}.${demoMailDomain}`,
+      address: `${localPart}@${subdomain}.${state.meta.rootDomain}`,
       status: "active",
       createdAt,
       lastReceivedAt: null,
@@ -105,6 +124,45 @@ export const demoApi = {
       routingRuleId: randomId("rule"),
     };
     state.mailboxes.unshift(mailbox);
+    return clone(mailbox);
+  },
+  async ensureMailbox(
+    input:
+      | { address: string; expiresInMinutes?: number }
+      | {
+          localPart: string;
+          subdomain: string;
+          expiresInMinutes?: number;
+        },
+  ) {
+    const address =
+      "address" in input
+        ? parseAddress(input.address)?.address
+        : `${input.localPart.trim().toLowerCase()}@${input.subdomain.trim().toLowerCase()}.${state.meta.rootDomain}`;
+    if (!address) throw new Error("Invalid mailbox address");
+
+    const existing = state.mailboxes.find(
+      (mailbox) => mailbox.address === address && mailbox.status === "active",
+    );
+    if (existing) return clone(existing);
+
+    const parsed = parseAddress(address);
+    if (!parsed) throw new Error("Invalid mailbox address");
+
+    return this.createMailbox({
+      localPart: parsed.localPart,
+      subdomain: parsed.subdomain,
+      expiresInMinutes:
+        input.expiresInMinutes ?? state.meta.defaultMailboxTtlMinutes,
+    });
+  },
+  async resolveMailbox(address: string) {
+    const mailbox = state.mailboxes.find(
+      (entry) =>
+        entry.address === normalizeAddress(address) &&
+        entry.status === "active",
+    );
+    if (!mailbox) throw new Error("Mailbox not found");
     return clone(mailbox);
   },
   async destroyMailbox(id: string) {
@@ -121,7 +179,19 @@ export const demoApi = {
     }
     return clone(mailbox);
   },
-  async listMessages(mailboxAddresses: string[]) {
+  async listMessages(
+    mailboxAddresses: string[],
+    filters?: { after?: string; since?: string },
+  ) {
+    const receivedAfter = [filters?.after, filters?.since]
+      .map((value) => {
+        if (!value) return null;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      })
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => left.localeCompare(right))
+      .at(-1);
     const messages =
       mailboxAddresses.length > 0
         ? state.messages.filter((message) =>
@@ -129,7 +199,11 @@ export const demoApi = {
           )
         : state.messages;
     return clone(
-      messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)),
+      messages
+        .filter((message) =>
+          receivedAfter ? message.receivedAt > receivedAfter : true,
+        )
+        .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)),
     );
   },
   async getMessage(id: string) {

@@ -75,7 +75,7 @@ const endpointGroups: EndpointGroup[] = [
         notes: [
           "`apiKey` 必填，shared schema 只约束最少 16 个字符。",
           "成功时会额外返回 `Set-Cookie: cf_mail_session=...; HttpOnly; Path=/; SameSite=Lax`。",
-          "失败时当前实现返回 `401`，body 里带 `error` 字段。",
+          "失败时返回统一错误包：`{ error, details }`。",
         ],
       },
       {
@@ -182,6 +182,25 @@ const endpointGroups: EndpointGroup[] = [
     endpoints: [
       {
         method: "GET",
+        path: "/api/meta",
+        summary: "读取邮箱根域、默认 TTL 与地址规则元数据。",
+        auth: "公开接口",
+        responseBody: `{
+  "rootDomain": "707979.xyz",
+  "defaultMailboxTtlMinutes": 60,
+  "minMailboxTtlMinutes": 5,
+  "maxMailboxTtlMinutes": 1440,
+  "addressRules": {
+    "format": "localPart@subdomain.rootDomain",
+    "localPartPattern": "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",
+    "subdomainPattern": "^(?=.{1,190}$)...$",
+    "examples": ["build@alpha.707979.xyz", "spec@ops.alpha.707979.xyz"]
+  }
+}`,
+        notes: ["客户端可用它消除对根域、默认 TTL 和地址格式提示的硬编码。"],
+      },
+      {
+        method: "GET",
         path: "/api/mailboxes",
         summary: "列出当前用户可访问的邮箱。",
         auth: "Bearer 或 `cf_mail_session` cookie",
@@ -236,6 +255,40 @@ const endpointGroups: EndpointGroup[] = [
         ],
       },
       {
+        method: "POST",
+        path: "/api/mailboxes/ensure",
+        summary:
+          "按 address 或 localPart+subdomain 幂等返回现有 active 邮箱，不存在则创建。",
+        auth: "Bearer 或 `cf_mail_session` cookie",
+        requestBody: `{
+  "address": "build@alpha.example.com"
+}`,
+        responseBody: `{
+  "id": "mbx_alpha",
+  "userId": "usr_xxx",
+  "localPart": "build",
+  "subdomain": "alpha",
+  "address": "build@alpha.example.com",
+  "status": "active",
+  "createdAt": "2026-04-03T12:00:00.000Z",
+  "lastReceivedAt": null,
+  "expiresAt": "2026-04-03T13:00:00.000Z",
+  "destroyedAt": null,
+  "routingRuleId": "rule_alpha"
+}`,
+        notes: [
+          "支持两种 locator：`address`，或 `localPart + subdomain`。",
+          "命中现有 active 邮箱时返回 `200`；创建新邮箱时返回 `201`。",
+        ],
+      },
+      {
+        method: "GET",
+        path: "/api/mailboxes/resolve?address=<email>",
+        summary: "按完整邮箱地址直接解析 active mailbox。",
+        auth: "Bearer 或 `cf_mail_session` cookie",
+        notes: ["客户端不必先全量列出再本地筛选。"],
+      },
+      {
         method: "GET",
         path: "/api/mailboxes/:id",
         summary: "读取单个邮箱详情。",
@@ -260,8 +313,9 @@ const endpointGroups: EndpointGroup[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/api/messages?mailbox=<address>",
-        summary: "按邮箱地址过滤消息列表；`mailbox` 查询参数可重复出现。",
+        path: "/api/messages?mailbox=<address>&after=<iso>&since=<iso>",
+        summary:
+          "按邮箱地址和时间 cursor 过滤消息列表；`mailbox` 查询参数可重复出现。",
         auth: "Bearer 或 `cf_mail_session` cookie",
         responseBody: `{
   "messages": [
@@ -282,6 +336,7 @@ const endpointGroups: EndpointGroup[] = [
 }`,
         notes: [
           "不过滤时返回当前用户可见的全部消息摘要。",
+          "`after` 与 `since` 都接受 ISO datetime；若同时传入，服务端会取较晚的那个作为严格下界。",
           "摘要字段由 `messageSummarySchema` 定义。",
         ],
       },
@@ -345,7 +400,8 @@ const errorContract = `{
 }`;
 
 const authFailureContract = `{
-  "error": "Invalid API key"
+  "error": "Invalid API key",
+  "details": null
 }`;
 
 const curlExample = `curl -X POST "$API_BASE/api/auth/session" \\
@@ -490,15 +546,14 @@ export const ApiKeysDocsPage = () => {
                 <code>error</code> 与 <code>details</code> 字段。
               </p>
               <p className="mt-2">
-                <code>POST /api/auth/session</code> 的 API Key
-                校验失败是当前实现里的特例，返回{" "}
-                <code>{`{"error":"Invalid API key"}`}</code>，没有{" "}
-                <code>details</code>。
+                <code>POST /api/auth/session</code> 的 API Key 校验失败也遵循
+                统一结构，返回{" "}
+                <code>{`{"error":"Invalid API key","details":null}`}</code>。
               </p>
               <p className="mt-2">
                 未知异常统一回 <code>500</code> 与{" "}
-                <code>{`{"error":"Internal server error"}`}</code>
-                。完整错误码表目前没有单独契约。
+                <code>{`{"error":"Internal server error","details":null}`}</code>
+                。
               </p>
             </div>
           </CardContent>

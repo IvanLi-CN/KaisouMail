@@ -6,6 +6,8 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";
+import { buildApiErrorPayload } from "../lib/errors";
+import { apiValidationHook } from "../lib/validation";
 import {
   authenticateApiKey,
   issueSessionCookie,
@@ -27,12 +29,14 @@ export const authRoutes = new Hono<AppBindings>()
   })
   .post(
     "/session",
-    zValidator("json", createSessionRequestSchema),
+    zValidator("json", createSessionRequestSchema, apiValidationHook),
     async (c) => {
       const config = parseRuntimeConfig(c.env);
       const body = c.req.valid("json");
       const user = await authenticateApiKey(c.env, config, body.apiKey);
-      if (!user) return c.json({ error: "Invalid API key" }, 401);
+      if (!user) {
+        return c.json(buildApiErrorPayload("Invalid API key", null), 401);
+      }
       const token = await issueSessionCookie(config, user);
       c.header(
         "Set-Cookie",
