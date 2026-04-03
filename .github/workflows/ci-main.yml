@@ -38,6 +38,7 @@ jobs:
 
       - name: Release helper self-tests
         run: |
+          bash .github/scripts/test-write-version.sh
           bash .github/scripts/test-metadata-gate.sh
           bash .github/scripts/test-release-snapshot.sh
 

@@ -147,7 +147,7 @@ bun run --cwd apps/api-worker db:migrate:remote
 - `label-gate.yml`: validates that PRs targeting `main` carry exactly one `type:*` label and one `channel:*` label
 - `ci-pr.yml`: PR/feature-branch quality gates for lint, typecheck, tests, builds, Storybook, and Playwright smoke
 - `ci-main.yml`: main-branch quality gates plus immutable release snapshot generation in `refs/notes/release-snapshots`
-- `deploy-main.yml`: D1 migrations, Worker deploy, Pages direct upload on `main`
+- `deploy-main.yml`: D1 migrations, Worker deploy, and Pages direct upload after a GitHub Release is published
 - `release.yml`: queued GitHub Release publishing driven by merged PR labels and CI Main snapshots
 
 ### Release labels
@@ -170,6 +170,7 @@ The first release baseline comes from the root `package.json` version when no st
 - `ci-main.yml` writes an immutable release snapshot to git notes at `refs/notes/release-snapshots`
 - `release.yml` publishes the oldest pending releasable snapshot on the first-parent `main` history, so consecutive merges are released in order
 - after a GitHub Release is created, the workflow upserts a marker-based comment back onto the source PR
+- a published GitHub Release automatically triggers `deploy-main.yml`, which builds the app with the release version metadata before deploying
 - all GitHub API operations use the default `secrets.GITHUB_TOKEN`; no extra PAT or custom GitHub credential is required
 
 ### Manual backfill
@@ -195,7 +196,7 @@ To use the deploy workflow, configure:
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail (for `707979.xyz`, this is `email-receiver-worker`)
 5. Set GitHub secret `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=https://api.cfm.707979.xyz`
-7. Push to `main` to trigger the deploy workflow
+7. Publish a GitHub Release to trigger the deploy workflow automatically, or run `deploy-main.yml` manually when needed
 
 ## Worker topology
 

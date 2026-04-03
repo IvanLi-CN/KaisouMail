@@ -19,10 +19,40 @@ const safe = (command, fallback) => {
   }
 };
 
+const firstNonEmpty = (...values) => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+};
+
+const exactReleaseTag = safe(
+  "git tag --points-at HEAD --list 'v*' | sort -V | tail -n 1",
+  "",
+);
+const exactReleaseVersion = exactReleaseTag.startsWith("v")
+  ? exactReleaseTag.slice(1)
+  : "";
+const releaseBranch = firstNonEmpty(
+  process.env.CF_MAIL_RELEASE_BRANCH,
+  safe("git branch --show-current", ""),
+  safe("git rev-parse --abbrev-ref HEAD", ""),
+  "detached",
+);
+
 const versionInfo = {
-  version: pkg.version,
-  commitSha: safe("git rev-parse --short HEAD", "dev"),
-  branch: safe("git branch --show-current", "detached"),
+  version: firstNonEmpty(
+    process.env.CF_MAIL_RELEASE_VERSION,
+    exactReleaseVersion,
+    pkg.version,
+  ),
+  commitSha: firstNonEmpty(
+    process.env.CF_MAIL_RELEASE_SHA,
+    safe("git rev-parse --short HEAD", "dev"),
+  ),
+  branch: releaseBranch,
   builtAt: new Date().toISOString(),
 };
 

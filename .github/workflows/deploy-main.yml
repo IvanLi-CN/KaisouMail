@@ -1,13 +1,15 @@
 name: Deploy
 
 on:
-  push:
-    branches:
-      - main
+  release:
+    types:
+      - published
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.action == 'published') }}
     permissions:
       contents: read
     env:
@@ -19,6 +21,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || 'main' }}
+
+      - name: Fetch release tags
+        run: git fetch --tags origin
+
+      - name: Resolve deployed release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            release_tag="${{ github.event.release.tag_name }}"
+            release_version="${release_tag#v}"
+            release_branch="${{ github.event.release.target_commitish || 'main' }}"
+          else
+            release_tag="$(git tag --points-at HEAD --list 'v*' | sort -V | tail -n 1)"
+            release_version="${release_tag#v}"
+            release_branch="main"
+          fi
+
+          echo "CF_MAIL_RELEASE_VERSION=${release_version}" >> "${GITHUB_ENV}"
+          echo "CF_MAIL_RELEASE_SHA=$(git rev-parse --short HEAD)" >> "${GITHUB_ENV}"
+          echo "CF_MAIL_RELEASE_BRANCH=${release_branch}" >> "${GITHUB_ENV}"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -49,4 +75,18 @@ jobs:
         run: bun run --cwd apps/web build
 
       - name: Deploy Pages
-        run: bunx wrangler pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-cf-mail}" --branch main
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if bunx wrangler pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-cf-mail}" --branch main; then
+              exit 0
+            fi
+
+            if [ "${attempt}" -eq 3 ]; then
+              echo "Cloudflare Pages deploy failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+
+            sleep "$((attempt * 15))"
+          done
