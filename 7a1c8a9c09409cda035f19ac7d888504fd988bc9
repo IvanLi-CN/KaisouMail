@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.3.0",
+  "base_stable_version": "0.2.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-03T14:52:43Z",
+  "next_stable_version": "0.3.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "238d6864d45acd2c23d7049efe6101e1737f4bd7",
+  "pr_number": 5,
+  "pr_title": "Add mailbox convenience endpoints and runtime metadata",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.3.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.3.0",
+  "target_sha": "7a1c8a9c09409cda035f19ac7d888504fd988bc9",
+  "type_label": "type:minor"
+}
