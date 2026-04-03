@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.5.1",
+  "base_stable_version": "0.5.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-03T19:48:42Z",
+  "next_stable_version": "0.5.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "c4bf25f7a3137cbe45b9c1c938897c75b0aa13d9",
+  "pr_number": 9,
+  "pr_title": "fix(api): restore production web origin",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.5.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.5.1",
+  "target_sha": "beb980b044c0ab81ba0f18d15cedfc392518dc4a",
+  "type_label": "type:patch"
+}
