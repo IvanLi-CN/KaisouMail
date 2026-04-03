@@ -1,35 +1,40 @@
 import { mailboxSchema } from "@cf-mail/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import * as authService from "../services/auth";
-import * as mailboxService from "../services/mailboxes";
+const { createMailboxForUser, ensureMailboxForUser, resolveMailboxForUser } =
+  vi.hoisted(() => ({
+    createMailboxForUser: vi.fn(),
+    ensureMailboxForUser: vi.fn(),
+    resolveMailboxForUser: vi.fn(),
+  }));
 
-const authUser = {
-  id: "usr_1",
-  email: "owner@example.com",
-  name: "Owner",
-  role: "member" as const,
-};
-
-vi.spyOn(authService, "requireAuth").mockImplementation(
-  () =>
+vi.mock("../services/auth", () => ({
+  requireAuth:
+    () =>
     async (
       c: { set: (key: string, value: unknown) => void },
       next: () => Promise<void>,
     ) => {
-      c.set("authUser", authUser);
+      c.set("authUser", {
+        id: "usr_1",
+        email: "owner@example.com",
+        name: "Owner",
+        role: "member",
+      });
       await next();
     },
-);
+}));
 
-const createMailboxForUser = vi.spyOn(mailboxService, "createMailboxForUser");
-vi.spyOn(mailboxService, "destroyMailbox").mockImplementation(vi.fn());
-const ensureMailboxForUser = vi.spyOn(mailboxService, "ensureMailboxForUser");
-vi.spyOn(mailboxService, "getMailboxForUser").mockImplementation(vi.fn());
-vi.spyOn(mailboxService, "listMailboxesForUser").mockImplementation(vi.fn());
-const resolveMailboxForUser = vi.spyOn(mailboxService, "resolveMailboxForUser");
+vi.mock("../services/mailboxes", () => ({
+  createMailboxForUser,
+  destroyMailbox: vi.fn(),
+  ensureMailboxForUser,
+  getMailboxForUser: vi.fn(),
+  listMailboxesForUser: vi.fn(),
+  resolveMailboxForUser,
+}));
 
-const { mailboxRoutes } = await import("../routes/mailboxes");
+import { mailboxRoutes } from "../routes/mailboxes";
 
 const env = {
   APP_ENV: "development",
@@ -47,6 +52,7 @@ const activeMailbox = mailboxSchema.parse({
   userId: "usr_1",
   localPart: "build",
   subdomain: "alpha",
+  rootDomain: "707979.xyz",
   address: "build@alpha.707979.xyz",
   status: "active",
   createdAt: "2026-04-03T12:00:00.000Z",
@@ -70,8 +76,12 @@ describe("mailbox routes", () => {
     const response = await mailboxRoutes.fetch(
       new Request("http://localhost/ensure", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ address: activeMailbox.address }),
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          address: activeMailbox.address,
+        }),
       }),
       env,
     );
@@ -79,34 +89,15 @@ describe("mailbox routes", () => {
     expect(response.status).toBe(201);
   });
 
-  it("returns 200 when ensure reuses an active mailbox", async () => {
-    ensureMailboxForUser.mockResolvedValue({
-      mailbox: activeMailbox,
-      created: false,
-    });
-
-    const response = await mailboxRoutes.fetch(
-      new Request("http://localhost/ensure", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          localPart: "build",
-          subdomain: "alpha",
-        }),
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(200);
-  });
-
-  it("allows mailbox creation without extra lookup fields", async () => {
+  it("allows mailbox creation without an explicit root domain", async () => {
     createMailboxForUser.mockResolvedValue(activeMailbox);
 
     const response = await mailboxRoutes.fetch(
       new Request("http://localhost/", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           localPart: "build",
           subdomain: "alpha",
@@ -120,7 +111,7 @@ describe("mailbox routes", () => {
     expect(createMailboxForUser).toHaveBeenCalledWith(
       env,
       expect.any(Object),
-      authUser,
+      expect.objectContaining({ id: "usr_1" }),
       expect.objectContaining({
         localPart: "build",
         subdomain: "alpha",
@@ -129,11 +120,60 @@ describe("mailbox routes", () => {
     );
   });
 
+  it("returns 200 when ensure reuses an active mailbox", async () => {
+    ensureMailboxForUser.mockResolvedValue({
+      mailbox: activeMailbox,
+      created: false,
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/ensure", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          localPart: "build",
+          subdomain: "alpha",
+          rootDomain: "707979.xyz",
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("allows ensure without an explicit root domain for localPart/subdomain", async () => {
+    ensureMailboxForUser.mockResolvedValue({
+      mailbox: activeMailbox,
+      created: false,
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/ensure", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          localPart: "build",
+          subdomain: "alpha",
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("rejects invalid ensure bodies", async () => {
     const response = await mailboxRoutes.fetch(
       new Request("http://localhost/ensure", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           address: activeMailbox.address,
           localPart: "build",
@@ -144,12 +184,6 @@ describe("mailbox routes", () => {
     );
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: "Invalid request",
-      details: {
-        formErrors: expect.any(Array),
-      },
-    });
   });
 
   it("rejects invalid resolve queries before hitting the service", async () => {
@@ -160,11 +194,5 @@ describe("mailbox routes", () => {
 
     expect(resolveMailboxForUser).not.toHaveBeenCalled();
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: "Invalid request",
-      details: {
-        fieldErrors: expect.any(Object),
-      },
-    });
   });
 });

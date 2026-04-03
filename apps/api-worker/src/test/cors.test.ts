@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { applyCorsHeaders, resolveAllowedCorsOrigin } from "../lib/cors";
 
 describe("cors helpers", () => {
-  it("allows the production Pages origin", () => {
+  it("allows the configured production web origin", () => {
     expect(
       resolveAllowedCorsOrigin("https://cfm.707979.xyz", {
         APP_ENV: "production",
-        MAIL_DOMAIN: "707979.xyz",
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz",
         DEFAULT_MAILBOX_TTL_MINUTES: 60,
         CLEANUP_BATCH_SIZE: 3,
         EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
@@ -22,7 +22,6 @@ describe("cors helpers", () => {
     expect(
       resolveAllowedCorsOrigin("http://localhost:4173", {
         APP_ENV: "development",
-        MAIL_DOMAIN: "707979.xyz",
         DEFAULT_MAILBOX_TTL_MINUTES: 60,
         CLEANUP_BATCH_SIZE: 3,
         EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
@@ -37,7 +36,7 @@ describe("cors helpers", () => {
     expect(
       resolveAllowedCorsOrigin("https://evil.example.com", {
         APP_ENV: "production",
-        MAIL_DOMAIN: "707979.xyz",
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz",
         DEFAULT_MAILBOX_TTL_MINUTES: 60,
         CLEANUP_BATCH_SIZE: 3,
         EMAIL_ROUTING_MANAGEMENT_ENABLED: true,

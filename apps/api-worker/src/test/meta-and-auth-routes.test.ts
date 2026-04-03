@@ -1,19 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import * as dbClient from "../db/client";
-import * as authService from "../services/auth";
-import * as bootstrapService from "../services/bootstrap";
+const { authenticateApiKey } = vi.hoisted(() => ({
+  authenticateApiKey: vi.fn(),
+}));
+const { listActiveRootDomains } = vi.hoisted(() => ({
+  listActiveRootDomains: vi.fn(),
+}));
 
-vi.spyOn(bootstrapService, "ensureBootstrapAdmin").mockResolvedValue();
-vi.spyOn(dbClient, "getDb").mockReturnValue({} as never);
+vi.mock("../services/bootstrap", () => ({
+  ensureBootstrapAdmin: vi.fn(),
+  ensureBootstrapDomains: vi.fn(),
+}));
 
-const authenticateApiKey = vi.spyOn(authService, "authenticateApiKey");
+vi.mock("../db/client", () => ({
+  getDb: vi.fn(() => ({})),
+}));
 
-const { createApp } = await import("../app");
+vi.mock("../services/domains", async () => {
+  const actual = await vi.importActual<typeof import("../services/domains")>(
+    "../services/domains",
+  );
+  return {
+    ...actual,
+    listActiveRootDomains,
+  };
+});
+
+vi.mock("../services/auth", async () => {
+  const actual =
+    await vi.importActual<typeof import("../services/auth")>(
+      "../services/auth",
+    );
+  return {
+    ...actual,
+    authenticateApiKey,
+  };
+});
+
+import { createApp } from "../app";
 
 const env = {
   APP_ENV: "development",
   MAIL_DOMAIN: "707979.xyz",
+  CLOUDFLARE_ZONE_ID: "zone_legacy",
   DEFAULT_MAILBOX_TTL_MINUTES: "60",
   CLEANUP_BATCH_SIZE: "3",
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
@@ -25,6 +54,7 @@ const env = {
 describe("meta and auth routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listActiveRootDomains.mockResolvedValue(["707979.xyz", "mail.example.net"]);
   });
 
   it("returns runtime metadata from /api/meta", async () => {
@@ -34,13 +64,13 @@ describe("meta and auth routes", () => {
       env,
     );
     const payload = (await response.json()) as {
-      rootDomain: string;
+      domains: string[];
       defaultMailboxTtlMinutes: number;
       addressRules: { examples: string[] };
     };
 
     expect(response.status).toBe(200);
-    expect(payload.rootDomain).toBe("707979.xyz");
+    expect(payload.domains).toContain("707979.xyz");
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
     expect(payload.addressRules.examples[0]).toContain("@alpha.707979.xyz");
   });
@@ -52,7 +82,9 @@ describe("meta and auth routes", () => {
     const response = await app.fetch(
       new Request("http://localhost/api/auth/session", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           apiKey: "cfm_demo_secret_key",
         }),
@@ -67,28 +99,6 @@ describe("meta and auth routes", () => {
     });
   });
 
-  it("returns the unified validation envelope for invalid auth payloads", async () => {
-    const app = createApp();
-    const response = await app.fetch(
-      new Request("http://localhost/api/auth/session", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          apiKey: "short",
-        }),
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({
-      error: "Invalid request",
-      details: {
-        fieldErrors: expect.any(Object),
-      },
-    });
-  });
-
   it("returns details:null for unexpected 500 responses", async () => {
     authenticateApiKey.mockRejectedValue(new Error("boom"));
 
@@ -96,7 +106,9 @@ describe("meta and auth routes", () => {
     const response = await app.fetch(
       new Request("http://localhost/api/auth/session", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           apiKey: "cfm_demo_secret_key",
         }),

@@ -8,6 +8,8 @@ describe("MailboxCreateCard", () => {
     render(
       <MailboxCreateCard
         onSubmit={vi.fn()}
+        defaultTtlMinutes={60}
+        maxTtlMinutes={1440}
         metaError="Failed to load mailbox rules"
       />,
     );

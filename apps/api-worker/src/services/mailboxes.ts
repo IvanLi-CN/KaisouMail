@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, lte } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
+  domains,
   mailboxes,
   messageAttachments,
   messageRecipients,
@@ -13,13 +14,21 @@ import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
 import {
   buildMailboxAddress,
+  extractRootDomainFromAddress,
   normalizeLabel,
   normalizeMailboxAddress,
-  parseMailboxAddress,
+  normalizeRootDomain,
+  parseMailboxAddressAgainstDomains,
   randomLabel,
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
+import {
+  listActiveRootDomains,
+  pickRandomActiveDomain,
+  requireActiveDomainByRootDomain,
+  resolveMailboxDomain,
+} from "./domains";
 import {
   createRoutingRule,
   deleteRoutingRule,
@@ -27,20 +36,28 @@ import {
 } from "./emailRouting";
 
 type MailboxRow = typeof mailboxes.$inferSelect;
-type EnsureMailboxInput =
-  | { address: string; expiresInMinutes?: number }
-  | {
-      localPart: string;
-      subdomain: string;
-      expiresInMinutes?: number;
-    };
+type MailboxLookupRow = MailboxRow;
+type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 
-const toMailboxDto = (row: MailboxRow, lastReceivedAt: string | null = null) =>
+const getFallbackRootDomain = (row: MailboxRow) => {
+  const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
+  if (extracted) return extracted;
+  throw new ApiError(500, "Mailbox root domain could not be resolved", {
+    mailboxId: row.id,
+    address: row.address,
+  });
+};
+
+const toMailboxDto = (
+  row: MailboxRowWithRootDomain,
+  lastReceivedAt: string | null = null,
+) =>
   mailboxSchema.parse({
     id: row.id,
     userId: row.userId,
     localPart: row.localPart,
     subdomain: row.subdomain,
+    rootDomain: row.rootDomain,
     address: row.address,
     status: row.status,
     createdAt: row.createdAt,
@@ -50,54 +67,20 @@ const toMailboxDto = (row: MailboxRow, lastReceivedAt: string | null = null) =>
     routingRuleId: row.routingRuleId,
   });
 
-const attachLastReceivedAt = async (
-  env: WorkerEnv,
-  rows: Array<typeof mailboxes.$inferSelect>,
-) => {
-  if (rows.length === 0) return [];
-
-  const db = getDb(env);
-  const recentMap = new Map<string, string | null>(
-    rows.map((row) => [row.id, null]),
-  );
-  const recentRows = await db
-    .select({
-      mailboxId: messages.mailboxId,
-      receivedAt: messages.receivedAt,
-    })
-    .from(messages)
-    .where(
-      inArray(
-        messages.mailboxId,
-        rows.map((row) => row.id),
-      ),
-    )
-    .orderBy(desc(messages.receivedAt));
-
-  for (const recentRow of recentRows) {
-    if (!recentMap.has(recentRow.mailboxId)) continue;
-    if (!recentMap.get(recentRow.mailboxId)) {
-      recentMap.set(recentRow.mailboxId, recentRow.receivedAt);
-    }
-  }
-
-  return rows.map((row) => toMailboxDto(row, recentMap.get(row.id) ?? null));
-};
-
-const isReusableMailbox = (row: MailboxRow, user: AuthUser) =>
-  row.userId === user.id;
+const isVisibleMailbox = (row: MailboxLookupRow, user: AuthUser) =>
+  user.role === "admin" || row.userId === user.id;
 
 export const classifyMailboxAddressState = (
-  rows: MailboxRow[],
+  rows: MailboxLookupRow[],
   user: AuthUser,
 ) => {
-  const reusableActive = rows.find(
-    (row) => row.status === "active" && isReusableMailbox(row, user),
+  const visibleActive = rows.find(
+    (row) => row.status === "active" && isVisibleMailbox(row, user),
   );
-  if (reusableActive) {
+  if (visibleActive) {
     return {
       kind: "reuse" as const,
-      row: reusableActive,
+      row: visibleActive,
     };
   }
 
@@ -123,25 +106,121 @@ const listMailboxesByAddress = async (env: WorkerEnv, address: string) => {
     .orderBy(desc(mailboxes.createdAt));
 };
 
+const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
+  const rows = await listMailboxesByAddress(env, address);
+  if (rows.some((row) => row.status !== "destroyed")) {
+    throw new ApiError(409, "Mailbox already exists");
+  }
+};
+
 export const resolveRequestedMailboxAddress = (
-  input: EnsureMailboxInput,
-  rootDomain: string,
+  input:
+    | { address: string; expiresInMinutes?: number }
+    | {
+        localPart: string;
+        subdomain: string;
+        rootDomain?: string;
+        expiresInMinutes?: number;
+      },
+  activeRootDomains: string[],
 ) => {
   if ("address" in input) {
-    const parsed = parseMailboxAddress(input.address, rootDomain);
+    const parsed = parseMailboxAddressAgainstDomains(
+      input.address,
+      activeRootDomains,
+    );
     if (!parsed) {
       throw new ApiError(400, "Invalid mailbox address", {
         address: input.address,
-        rootDomain,
+        activeRootDomains,
       });
     }
     return parsed;
+  }
+
+  const rootDomain = input.rootDomain
+    ? normalizeRootDomain(input.rootDomain)
+    : activeRootDomains[Math.floor(Math.random() * activeRootDomains.length)];
+  if (!rootDomain) {
+    throw new ApiError(400, "No mailbox domains are enabled");
   }
 
   return buildMailboxAddress(
     normalizeLabel(input.localPart),
     normalizeLabel(input.subdomain),
     rootDomain,
+  );
+};
+
+const attachRootDomains = async (
+  env: WorkerEnv,
+  rows: MailboxRow[],
+): Promise<MailboxRowWithRootDomain[]> => {
+  if (rows.length === 0) return [];
+
+  const db = getDb(env);
+  const domainIds = [
+    ...new Set(
+      rows
+        .map((row) => row.domainId)
+        .filter((domainId): domainId is string => Boolean(domainId)),
+    ),
+  ];
+  const domainMap = new Map<string, string>();
+
+  if (domainIds.length > 0) {
+    const domainRows = await db
+      .select({
+        id: domains.id,
+        rootDomain: domains.rootDomain,
+      })
+      .from(domains)
+      .where(inArray(domains.id, domainIds));
+
+    for (const domainRow of domainRows) {
+      domainMap.set(domainRow.id, domainRow.rootDomain);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    rootDomain:
+      (row.domainId ? domainMap.get(row.domainId) : null) ??
+      getFallbackRootDomain(row),
+  }));
+};
+
+const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
+  if (rows.length === 0) return [];
+
+  const db = getDb(env);
+  const hydratedRows = await attachRootDomains(env, rows);
+  const recentMap = new Map<string, string | null>(
+    hydratedRows.map((row) => [row.id, null]),
+  );
+  const recentRows = await db
+    .select({
+      mailboxId: messages.mailboxId,
+      receivedAt: messages.receivedAt,
+    })
+    .from(messages)
+    .where(
+      inArray(
+        messages.mailboxId,
+        hydratedRows.map((row) => row.id),
+      ),
+    )
+    .orderBy(desc(messages.receivedAt));
+
+  for (const recentRow of recentRows) {
+    if (!recentMap.has(recentRow.mailboxId)) continue;
+    if (!recentMap.get(recentRow.mailboxId)) {
+      recentMap.set(recentRow.mailboxId, recentRow.receivedAt);
+    }
+  }
+
+  return hydratedRows.map((row) =>
+    toMailboxDto(row, recentMap.get(row.id) ?? null),
   );
 };
 
@@ -155,6 +234,7 @@ export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
           .from(mailboxes)
           .where(eq(mailboxes.userId, user.id))
           .orderBy(desc(mailboxes.createdAt));
+
   return attachLastReceivedAt(env, rows);
 };
 
@@ -171,9 +251,11 @@ export const getMailboxForUser = async (
     .limit(1);
   const row = rows[0];
   if (!row) throw new ApiError(404, "Mailbox not found");
-  if (row.userId !== user.id && user.role !== "admin")
+  if (row.userId !== user.id && user.role !== "admin") {
     throw new ApiError(403, "Forbidden");
+  }
 
+  const [hydrated] = await attachRootDomains(env, [row]);
   const recentRows = await db
     .select({ receivedAt: messages.receivedAt })
     .from(messages)
@@ -181,16 +263,24 @@ export const getMailboxForUser = async (
     .orderBy(desc(messages.receivedAt))
     .limit(1);
 
-  return toMailboxDto(row, recentRows[0]?.receivedAt ?? null);
+  return toMailboxDto(hydrated, recentRows[0]?.receivedAt ?? null);
 };
 
 export const createMailboxForUser = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   user: AuthUser,
-  input: { localPart?: string; subdomain?: string; expiresInMinutes?: number },
+  input: {
+    localPart?: string;
+    subdomain?: string;
+    rootDomain?: string;
+    expiresInMinutes?: number;
+  },
 ) => {
   const db = getDb(env);
+  const domain = input.rootDomain
+    ? await requireActiveDomainByRootDomain(env, input.rootDomain)
+    : await pickRandomActiveDomain(env);
   const localPart = normalizeLabel(input.localPart ?? randomLabel("mail"));
   const subdomain = normalizeLabel(input.subdomain ?? randomLabel("box"));
   const expiresInMinutes =
@@ -198,28 +288,33 @@ export const createMailboxForUser = async (
   const mailboxAddress = buildMailboxAddress(
     localPart,
     subdomain,
-    config.MAIL_DOMAIN,
+    domain.rootDomain,
   );
+
   const knownSubdomain = await db
     .select()
     .from(subdomains)
-    .where(eq(subdomains.name, subdomain))
+    .where(
+      and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
+    )
     .limit(1);
-  const existing = await db
-    .select()
-    .from(mailboxes)
-    .where(eq(mailboxes.address, mailboxAddress.address));
-  if (existing.some((row) => row.status !== "destroyed"))
-    throw new ApiError(409, "Mailbox already exists");
+
+  await ensureAddressAvailable(env, mailboxAddress.address);
 
   const now = nowIso();
   const expiresAt = new Date(
     Date.now() + expiresInMinutes * 60_000,
   ).toISOString();
+
   if (!knownSubdomain[0]) {
-    await ensureSubdomainEnabled(config, subdomain);
+    await ensureSubdomainEnabled(config, domain, subdomain);
   }
-  const routingRuleId = await createRoutingRule(config, mailboxAddress.address);
+  const routingRuleId = await createRoutingRule(
+    config,
+    domain,
+    mailboxAddress.address,
+  );
+
   if (knownSubdomain[0]) {
     await db
       .update(subdomains)
@@ -228,6 +323,7 @@ export const createMailboxForUser = async (
   } else {
     await db.insert(subdomains).values({
       id: randomId("sub"),
+      domainId: domain.id,
       name: subdomain,
       enabledAt: now,
       lastUsedAt: now,
@@ -237,10 +333,10 @@ export const createMailboxForUser = async (
     });
   }
 
-  const id = randomId("mbx");
   const created = {
-    id,
+    id: randomId("mbx"),
     userId: user.id,
+    domainId: domain.id,
     localPart,
     subdomain,
     address: mailboxAddress.address,
@@ -250,20 +346,36 @@ export const createMailboxForUser = async (
     expiresAt,
     destroyedAt: null,
   } as const;
+
   await db.insert(mailboxes).values(created);
-  return toMailboxDto(created, null);
+  return toMailboxDto(
+    {
+      ...created,
+      rootDomain: domain.rootDomain,
+    },
+    null,
+  );
 };
 
 export const ensureMailboxForUser = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   user: AuthUser,
-  input: EnsureMailboxInput,
+  input:
+    | { address: string; expiresInMinutes?: number }
+    | {
+        localPart: string;
+        subdomain: string;
+        rootDomain?: string;
+        expiresInMinutes?: number;
+      },
 ) => {
-  const mailboxAddress = resolveRequestedMailboxAddress(
-    input,
-    config.MAIL_DOMAIN,
-  );
+  const activeRootDomains = await listActiveRootDomains(env);
+  const mailboxAddress =
+    "address" in input
+      ? resolveRequestedMailboxAddress(input, activeRootDomains)
+      : resolveRequestedMailboxAddress(input, activeRootDomains);
+
   const classification = classifyMailboxAddressState(
     await listMailboxesByAddress(env, mailboxAddress.address),
     user,
@@ -284,6 +396,7 @@ export const ensureMailboxForUser = async (
   const mailbox = await createMailboxForUser(env, config, user, {
     localPart: mailboxAddress.localPart,
     subdomain: mailboxAddress.subdomain,
+    rootDomain: mailboxAddress.rootDomain,
     expiresInMinutes: input.expiresInMinutes,
   });
 
@@ -299,16 +412,15 @@ export const resolveMailboxForUser = async (
   address: string,
 ) => {
   const classification = classifyMailboxAddressState(
-    await listMailboxesByAddress(env, address),
+    await listMailboxesByAddress(env, normalizeMailboxAddress(address)),
     user,
   );
   if (classification.kind !== "reuse") {
     throw new ApiError(404, "Mailbox not found");
   }
 
-  const [mailbox] = await attachLastReceivedAt(env, [classification.row]);
-  if (!mailbox) throw new ApiError(404, "Mailbox not found");
-  return mailbox;
+  const [resolved] = await attachLastReceivedAt(env, [classification.row]);
+  return resolved;
 };
 
 export const destroyMailbox = async (
@@ -325,16 +437,30 @@ export const destroyMailbox = async (
     .limit(1);
   const mailbox = mailboxRows[0];
   if (!mailbox) throw new ApiError(404, "Mailbox not found");
-  if (actor && actor.role !== "admin" && actor.id !== mailbox.userId)
+  if (actor && actor.role !== "admin" && actor.id !== mailbox.userId) {
     throw new ApiError(403, "Forbidden");
-  if (mailbox.status === "destroyed") return toMailboxDto(mailbox, null);
+  }
+
+  const rootDomain = getFallbackRootDomain(mailbox);
+  if (mailbox.status === "destroyed") {
+    return toMailboxDto({ ...mailbox, rootDomain }, null);
+  }
 
   await db
     .update(mailboxes)
     .set({ status: "destroying" })
     .where(eq(mailboxes.id, mailbox.id));
-  if (mailbox.routingRuleId)
-    await deleteRoutingRule(config, mailbox.routingRuleId);
+
+  if (mailbox.routingRuleId) {
+    const domain = await resolveMailboxDomain(env, config, mailbox);
+    if (!domain) {
+      throw new ApiError(500, "Mailbox domain not found for routing cleanup", {
+        mailboxId: mailbox.id,
+        address: mailbox.address,
+      });
+    }
+    await deleteRoutingRule(config, domain, mailbox.routingRuleId);
+  }
 
   const relatedMessages = await db
     .select()
@@ -344,6 +470,7 @@ export const destroyMailbox = async (
     await env.MAIL_BUCKET.delete(message.rawR2Key);
     await env.MAIL_BUCKET.delete(message.parsedR2Key);
   }
+
   const messageIds = relatedMessages.map((message) => message.id);
   if (messageIds.length > 0) {
     await db
@@ -353,18 +480,21 @@ export const destroyMailbox = async (
       .delete(messageRecipients)
       .where(inArray(messageRecipients.messageId, messageIds));
   }
+
   await db.delete(messages).where(eq(messages.mailboxId, mailbox.id));
   const destroyedAt = nowIso();
   await db
     .update(mailboxes)
     .set({ status: "destroyed", destroyedAt, routingRuleId: null })
     .where(eq(mailboxes.id, mailbox.id));
+
   return toMailboxDto(
     {
       ...mailbox,
       status: "destroyed",
       destroyedAt,
       routingRuleId: null,
+      rootDomain,
     },
     null,
   );
@@ -382,5 +512,6 @@ export const listExpiredMailboxIds = async (
     .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
     .orderBy(mailboxes.expiresAt)
     .limit(config.CLEANUP_BATCH_SIZE);
+
   return rows.filter((row) => row.id && row.id.length > 0).map((row) => row.id);
 };

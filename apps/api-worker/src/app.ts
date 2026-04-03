@@ -7,11 +7,15 @@ import { applyCorsHeaders, resolveAllowedCorsOrigin } from "./lib/cors";
 import { ApiError, buildApiErrorPayload } from "./lib/errors";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
+import { domainRoutes } from "./routes/domains";
 import { mailboxRoutes } from "./routes/mailboxes";
 import { messageRoutes } from "./routes/messages";
 import { metaRoutes } from "./routes/meta";
 import { userRoutes } from "./routes/users";
-import { ensureBootstrapAdmin } from "./services/bootstrap";
+import {
+  ensureBootstrapAdmin,
+  ensureBootstrapDomains,
+} from "./services/bootstrap";
 import type { AppBindings } from "./types";
 
 export const createApp = () => {
@@ -20,7 +24,9 @@ export const createApp = () => {
   app.use("*", async (c, next) => {
     const runtimeConfig = parseRuntimeConfig(c.env);
     c.set("runtimeConfig", runtimeConfig);
-    await ensureBootstrapAdmin(getDb(c.env), runtimeConfig);
+    const db = getDb(c.env);
+    await ensureBootstrapAdmin(db, runtimeConfig);
+    await ensureBootstrapDomains(db, runtimeConfig);
     await next();
   });
 
@@ -53,6 +59,7 @@ export const createApp = () => {
   );
   app.route("/api/auth", authRoutes);
   app.route("/api/api-keys", apiKeyRoutes);
+  app.route("/api/domains", domainRoutes);
   app.route("/api/meta", metaRoutes);
   app.route("/api/mailboxes", mailboxRoutes);
   app.route("/api/messages", messageRoutes);

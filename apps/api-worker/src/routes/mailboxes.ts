@@ -9,7 +9,6 @@ import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";
-import { apiValidationHook } from "../lib/validation";
 import { requireAuth } from "../services/auth";
 import {
   createMailboxForUser,
@@ -31,23 +30,19 @@ export const mailboxRoutes = new Hono<AppBindings>()
       }),
     );
   })
-  .post(
-    "/",
-    zValidator("json", createMailboxRequestSchema, apiValidationHook),
-    async (c) => {
-      const user = c.get("authUser");
-      const mailbox = await createMailboxForUser(
-        c.env,
-        parseRuntimeConfig(c.env),
-        user,
-        c.req.valid("json"),
-      );
-      return c.json(mailboxSchema.parse(mailbox), 201);
-    },
-  )
+  .post("/", zValidator("json", createMailboxRequestSchema), async (c) => {
+    const user = c.get("authUser");
+    const mailbox = await createMailboxForUser(
+      c.env,
+      parseRuntimeConfig(c.env),
+      user,
+      c.req.valid("json"),
+    );
+    return c.json(mailboxSchema.parse(mailbox), 201);
+  })
   .post(
     "/ensure",
-    zValidator("json", ensureMailboxRequestSchema, apiValidationHook),
+    zValidator("json", ensureMailboxRequestSchema),
     async (c) => {
       const user = c.get("authUser");
       const ensured = await ensureMailboxForUser(
@@ -62,19 +57,16 @@ export const mailboxRoutes = new Hono<AppBindings>()
       );
     },
   )
-  .get(
-    "/resolve",
-    zValidator("query", resolveMailboxQuerySchema, apiValidationHook),
-    async (c) =>
-      c.json(
-        mailboxSchema.parse(
-          await resolveMailboxForUser(
-            c.env,
-            c.get("authUser"),
-            c.req.valid("query").address,
-          ),
+  .get("/resolve", zValidator("query", resolveMailboxQuerySchema), async (c) =>
+    c.json(
+      mailboxSchema.parse(
+        await resolveMailboxForUser(
+          c.env,
+          c.get("authUser"),
+          c.req.valid("query").address,
         ),
       ),
+    ),
   )
   .get("/:id", async (c) =>
     c.json(

@@ -3,6 +3,7 @@ import type {
   ApiMeta,
   CreateApiKeyResult,
   CreateUserResult,
+  DomainRecord,
   Mailbox,
   MessageDetail,
   MessageSummary,
@@ -12,6 +13,7 @@ import type {
 } from "@/lib/contracts";
 import {
   demoApiKeys,
+  demoDomains,
   demoMailboxes,
   demoMessageDetails,
   demoMessages,
@@ -25,23 +27,23 @@ const clone = <T>(value: T): T => structuredClone(value);
 const randomId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
-const parseAddress = (address: string) => {
-  const [localPart, domain] = normalizeAddress(address).split("@");
-  const suffix = `.${demoMeta.rootDomain}`;
-  if (!localPart || !domain?.endsWith(suffix)) return null;
-  const subdomain = domain.slice(0, -suffix.length);
-  if (!subdomain) return null;
-  return {
-    localPart,
-    subdomain,
-    address: `${localPart}@${subdomain}${suffix}`,
-  };
+const buildAddress = (
+  localPart: string,
+  subdomain: string,
+  rootDomain: string,
+) => `${localPart}@${subdomain}.${rootDomain}`;
+
+const pickRandomRootDomain = (domains: string[]) => {
+  if (domains.length === 0) return null;
+  const index = Math.floor(Math.random() * domains.length);
+  return domains[index] ?? domains[0] ?? null;
 };
 
 interface DemoState {
   session: SessionResponse | null;
   apiKeys: ApiKeyRecord[];
   users: UserRecord[];
+  domains: DomainRecord[];
   mailboxes: Mailbox[];
   messages: MessageSummary[];
   messageDetails: Record<string, MessageDetail>;
@@ -53,6 +55,7 @@ const createState = (): DemoState => ({
   session: null,
   apiKeys: clone(demoApiKeys),
   users: clone(demoUsers),
+  domains: clone(demoDomains),
   mailboxes: clone(demoMailboxes),
   messages: clone(demoMessages),
   messageDetails: clone(demoMessageDetails),
@@ -99,21 +102,42 @@ export const demoApi = {
   async createMailbox(input: {
     localPart?: string;
     subdomain?: string;
+    rootDomain?: string;
     expiresInMinutes: number;
   }) {
+    const rootDomain = (
+      input.rootDomain?.trim().toLowerCase() ??
+      pickRandomRootDomain(state.meta.domains)
+    )?.toLowerCase();
+    if (!rootDomain) {
+      throw new Error("No mailbox domains are enabled");
+    }
+    if (!state.meta.domains.includes(rootDomain)) {
+      throw new Error("Mailbox domain is not enabled");
+    }
     const localPart =
       input.localPart?.trim() ||
       `mail-${Math.random().toString(36).slice(2, 8)}`;
     const subdomain =
       input.subdomain?.trim() ||
       `box-${Math.random().toString(36).slice(2, 8)}`;
+    const address = buildAddress(localPart, subdomain, rootDomain);
+    if (
+      state.mailboxes.some(
+        (mailbox) =>
+          mailbox.address === address && mailbox.status !== "destroyed",
+      )
+    ) {
+      throw new Error("Mailbox already exists");
+    }
     const createdAt = new Date().toISOString();
     const mailbox: Mailbox = {
       id: randomId("mbx"),
       userId: demoSessionUser.id,
       localPart,
       subdomain,
-      address: `${localPart}@${subdomain}.${state.meta.rootDomain}`,
+      rootDomain,
+      address,
       status: "active",
       createdAt,
       lastReceivedAt: null,
@@ -132,26 +156,46 @@ export const demoApi = {
       | {
           localPart: string;
           subdomain: string;
+          rootDomain?: string;
           expiresInMinutes?: number;
         },
   ) {
     const address =
       "address" in input
-        ? parseAddress(input.address)?.address
-        : `${input.localPart.trim().toLowerCase()}@${input.subdomain.trim().toLowerCase()}.${state.meta.rootDomain}`;
-    if (!address) throw new Error("Invalid mailbox address");
-
+        ? normalizeAddress(input.address)
+        : buildAddress(
+            input.localPart.trim(),
+            input.subdomain.trim(),
+            (
+              input.rootDomain?.trim().toLowerCase() ??
+              pickRandomRootDomain(state.meta.domains)
+            )?.toLowerCase() ?? "",
+          );
     const existing = state.mailboxes.find(
       (mailbox) => mailbox.address === address && mailbox.status === "active",
     );
     if (existing) return clone(existing);
 
-    const parsed = parseAddress(address);
-    if (!parsed) throw new Error("Invalid mailbox address");
+    if (
+      state.mailboxes.some(
+        (mailbox) =>
+          mailbox.address === address && mailbox.status !== "destroyed",
+      )
+    ) {
+      throw new Error("Mailbox already exists");
+    }
 
+    const [localPart, domain] = address.split("@");
+    const rootDomain =
+      state.meta.domains.find((entry) => domain.endsWith(`.${entry}`)) ?? null;
+    if (!rootDomain) {
+      throw new Error("Mailbox domain is not enabled");
+    }
+    const subdomain = domain.slice(0, -(rootDomain.length + 1));
     return this.createMailbox({
-      localPart: parsed.localPart,
-      subdomain: parsed.subdomain,
+      localPart,
+      subdomain,
+      rootDomain,
       expiresInMinutes:
         input.expiresInMinutes ?? state.meta.defaultMailboxTtlMinutes,
     });
@@ -181,9 +225,9 @@ export const demoApi = {
   },
   async listMessages(
     mailboxAddresses: string[],
-    filters?: { after?: string; since?: string },
+    input?: { after?: string; since?: string },
   ) {
-    const receivedAfter = [filters?.after, filters?.since]
+    const receivedAfter = [input?.after, input?.since]
       .map((value) => {
         if (!value) return null;
         const parsed = new Date(value);
@@ -238,6 +282,69 @@ export const demoApi = {
   },
   async listUsers() {
     return clone(state.users);
+  },
+  async listDomains() {
+    return clone(state.domains);
+  },
+  async createDomain(input: { rootDomain: string; zoneId: string }) {
+    const rootDomain = input.rootDomain.trim().toLowerCase();
+    const existing = state.domains.find(
+      (domain) => domain.rootDomain === rootDomain,
+    );
+    if (existing?.status === "active") {
+      throw new Error("Mailbox domain already exists");
+    }
+
+    const updatedAt = new Date().toISOString();
+    const domain: DomainRecord = {
+      id: existing?.id ?? randomId("dom"),
+      rootDomain,
+      zoneId: input.zoneId.trim(),
+      status: rootDomain.includes("fail") ? "provisioning_error" : "active",
+      lastProvisionError: rootDomain.includes("fail")
+        ? "Zone access denied"
+        : null,
+      createdAt: existing?.createdAt ?? updatedAt,
+      updatedAt,
+      lastProvisionedAt: rootDomain.includes("fail") ? null : updatedAt,
+      disabledAt: null,
+    };
+    if (existing) {
+      Object.assign(existing, domain);
+    } else {
+      state.domains.unshift(domain);
+    }
+    state.meta.domains = state.domains
+      .filter((entry) => entry.status === "active")
+      .map((entry) => entry.rootDomain);
+    state.meta.addressRules.examples = state.meta.domains
+      .slice(0, 2)
+      .flatMap((entry) => [`build@alpha.${entry}`, `spec@ops.alpha.${entry}`]);
+    return clone(domain);
+  },
+  async disableDomain(id: string) {
+    const domain = state.domains.find((entry) => entry.id === id);
+    if (!domain) throw new Error("Mailbox domain not found");
+    domain.status = "disabled";
+    domain.disabledAt = new Date().toISOString();
+    domain.updatedAt = domain.disabledAt;
+    state.meta.domains = state.domains
+      .filter((entry) => entry.status === "active")
+      .map((entry) => entry.rootDomain);
+    return clone(domain);
+  },
+  async retryDomain(id: string) {
+    const domain = state.domains.find((entry) => entry.id === id);
+    if (!domain) throw new Error("Mailbox domain not found");
+    domain.status = "active";
+    domain.lastProvisionError = null;
+    domain.disabledAt = null;
+    domain.updatedAt = new Date().toISOString();
+    domain.lastProvisionedAt = domain.updatedAt;
+    state.meta.domains = state.domains
+      .filter((entry) => entry.status === "active")
+      .map((entry) => entry.rootDomain);
+    return clone(domain);
   },
   async createUser(input: {
     email: string;

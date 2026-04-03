@@ -1,8 +1,12 @@
 import {
+  apiErrorSchema,
   apiMetaResponseSchema,
   createApiKeyResponseSchema,
+  createDomainRequestSchema,
   createUserResponseSchema,
+  domainSchema,
   listApiKeysResponseSchema,
+  listDomainsResponseSchema,
   listMailboxesResponseSchema,
   listMessagesResponseSchema,
   listUsersResponseSchema,
@@ -16,6 +20,15 @@ import { demoApi } from "@/lib/demo-store";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    public readonly details: unknown = null,
+  ) {
+    super(message);
+  }
+}
 
 const requestJson = async <T>(
   path: string,
@@ -34,7 +47,16 @@ const requestJson = async <T>(
   });
   if (response.status === 204) return parser({});
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error ?? "Request failed");
+  if (!response.ok) {
+    const parsedError = apiErrorSchema.safeParse(payload);
+    if (parsedError.success) {
+      throw new ApiClientError(
+        parsedError.data.error,
+        parsedError.data.details ?? null,
+      );
+    }
+    throw new ApiClientError("Request failed");
+  }
   return parser(payload);
 };
 
@@ -92,6 +114,7 @@ export const apiClient = {
   async createMailbox(input: {
     localPart?: string;
     subdomain?: string;
+    rootDomain?: string;
     expiresInMinutes: number;
   }) {
     if (DEMO_MODE) return demoApi.createMailbox(input);
@@ -107,6 +130,7 @@ export const apiClient = {
       | {
           localPart: string;
           subdomain: string;
+          rootDomain?: string;
           expiresInMinutes?: number;
         },
   ) {
@@ -205,6 +229,40 @@ export const apiClient = {
       "/api/users",
       { method: "POST", body: JSON.stringify(input) },
       (value) => createUserResponseSchema.parse(value),
+    );
+  },
+  async listDomains() {
+    if (DEMO_MODE) return demoApi.listDomains();
+    const payload = await requestJson(
+      "/api/domains",
+      { method: "GET" },
+      (value) => listDomainsResponseSchema.parse(value),
+    );
+    return payload.domains;
+  },
+  async createDomain(input: { rootDomain: string; zoneId: string }) {
+    const payload = createDomainRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.createDomain(payload);
+    return requestJson(
+      "/api/domains",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => domainSchema.parse(value),
+    );
+  },
+  async disableDomain(id: string) {
+    if (DEMO_MODE) return demoApi.disableDomain(id);
+    return requestJson(
+      `/api/domains/${id}/disable`,
+      { method: "POST" },
+      (value) => domainSchema.parse(value),
+    );
+  },
+  async retryDomain(id: string) {
+    if (DEMO_MODE) return demoApi.retryDomain(id);
+    return requestJson(
+      `/api/domains/${id}/retry`,
+      { method: "POST" },
+      (value) => domainSchema.parse(value),
     );
   },
 };

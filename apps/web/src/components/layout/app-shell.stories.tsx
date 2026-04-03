@@ -52,6 +52,9 @@ export const Default: Story = {
       canvas.getByRole("link", { name: /邮箱管理/i }),
     ).toBeInTheDocument();
     await expect(
+      canvas.getByRole("link", { name: /域名/i }),
+    ).toBeInTheDocument();
+    await expect(
       canvas.getByRole("button", { name: "退出登录" }),
     ).toBeInTheDocument();
   },

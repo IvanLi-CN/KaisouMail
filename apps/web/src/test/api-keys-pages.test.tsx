@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
-import { demoApiKeys, demoSessionUser, demoVersion } from "@/mocks/data";
+import {
+  demoApiKeys,
+  demoMeta,
+  demoSessionUser,
+  demoVersion,
+} from "@/mocks/data";
 import { ApiKeysDocsPage } from "@/pages/api-keys-docs-page";
 import { ApiKeysPage, ApiKeysPageView } from "@/pages/api-keys-page";
 
@@ -21,6 +26,13 @@ vi.mock("@/hooks/use-api-keys", () => ({
   }),
   useRevokeApiKeyMutation: () => ({
     mutate: vi.fn(),
+  }),
+}));
+
+vi.mock("@/hooks/use-meta", () => ({
+  useMetaQuery: () => ({
+    data: demoMeta,
+    isLoading: false,
   }),
 }));
 
@@ -89,6 +101,7 @@ describe("api key integration docs", () => {
     );
     expect(screen.getByText("Session Auth")).toBeInTheDocument();
     expect(screen.getByText("/api/api-keys/:id/revoke")).toBeInTheDocument();
+    expect(screen.getByText("/api/meta")).toBeInTheDocument();
   });
 
   it("documents the implemented auth and message contracts", () => {
@@ -101,8 +114,10 @@ describe("api key integration docs", () => {
 
     expect(screen.getByText("Automation / Agent")).toBeInTheDocument();
     expect(screen.getByText("Browser Session")).toBeInTheDocument();
-    expect(screen.getByText("/api/meta")).toBeInTheDocument();
     expect(screen.getByText("/api/mailboxes/ensure")).toBeInTheDocument();
+    expect(
+      screen.getByText("/api/mailboxes/resolve?address=<mailbox>"),
+    ).toBeInTheDocument();
     expect(screen.getByText("/api/messages/:id/raw")).toBeInTheDocument();
     expect(screen.getByText("ApiError Envelope")).toBeInTheDocument();
     expect(screen.getByText("Auth Failure")).toBeInTheDocument();

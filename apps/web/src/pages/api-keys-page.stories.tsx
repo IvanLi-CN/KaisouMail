@@ -3,9 +3,15 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
+import type { ApiMeta } from "@/lib/contracts";
 import { appRoutes } from "@/lib/routes";
-import { demoApiKeys, demoSessionUser, demoVersion } from "@/mocks/data";
-import { ApiKeysDocsPage } from "@/pages/api-keys-docs-page";
+import {
+  demoApiKeys,
+  demoMeta,
+  demoSessionUser,
+  demoVersion,
+} from "@/mocks/data";
+import { ApiKeysDocsPageView } from "@/pages/api-keys-docs-page";
 import { ApiKeysPageView } from "@/pages/api-keys-page";
 
 const PathnameBadge = () => {
@@ -20,10 +26,24 @@ const PathnameBadge = () => {
   );
 };
 
+const docsReferenceMeta: ApiMeta = {
+  ...demoMeta,
+  domains: ["mail.example.net", "ops.example.org"],
+  addressRules: {
+    ...demoMeta.addressRules,
+    examples: [
+      "build@alpha.mail.example.net",
+      "spec@ops.alpha.ops.example.org",
+    ],
+  },
+};
+
 const RouteFlowHarness = ({
   latestSecret = null,
+  meta = demoMeta,
 }: {
   latestSecret?: string | null;
+  meta?: ApiMeta;
 }) => (
   <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
     <div className="space-y-4">
@@ -41,7 +61,10 @@ const RouteFlowHarness = ({
             />
           }
         />
-        <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+        <Route
+          path={appRoutes.apiKeysDocs}
+          element={<ApiKeysDocsPageView meta={meta} />}
+        />
       </Routes>
     </div>
   </AppShell>
@@ -112,7 +135,10 @@ export const RouteFlow: Story = {
 
 export const DocsReference: Story = {
   render: () => (
-    <RouteFlowHarness latestSecret="cfm_full_secret_returned_once" />
+    <RouteFlowHarness
+      latestSecret="cfm_full_secret_returned_once"
+      meta={docsReferenceMeta}
+    />
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -123,6 +149,8 @@ export const DocsReference: Story = {
       ).toBeInTheDocument();
     });
     await expect(canvas.getByText("Automation / Agent")).toBeInTheDocument();
+    await expect(canvas.getByText("/api/meta")).toBeInTheDocument();
+    await expect(canvas.getByText("/api/mailboxes/ensure")).toBeInTheDocument();
     await expect(canvas.getByText("/api/messages/:id/raw")).toBeInTheDocument();
   },
 };

@@ -10,6 +10,7 @@ describe("demoApi", () => {
   it("creates and destroys a mailbox lifecycle", async () => {
     const created = await demoApi.createMailbox({
       subdomain: "ops.alpha",
+      rootDomain: "707979.xyz",
       expiresInMinutes: 60,
     });
     expect(created.status).toBe("active");
@@ -23,22 +24,57 @@ describe("demoApi", () => {
     expect(destroyed.routingRuleId).toBeNull();
   });
 
-  it("reuses active mailboxes through ensure and exposes meta", async () => {
-    const meta = await demoApi.getMeta();
-    expect(meta.rootDomain).toBe("707979.xyz");
-
+  it("reuses active mailboxes through ensure and recreates destroyed addresses", async () => {
     const reused = await demoApi.ensureMailbox({
       address: "build@alpha.707979.xyz",
     });
     expect(reused.id).toBe("mbx_alpha");
+
+    const created = await demoApi.createMailbox({
+      localPart: "qa",
+      subdomain: "team.gamma",
+      rootDomain: "mail.example.net",
+      expiresInMinutes: 30,
+    });
+    await demoApi.destroyMailbox(created.id);
+
+    const recreated = await demoApi.ensureMailbox({
+      address: created.address,
+      expiresInMinutes: 30,
+    });
+    expect(recreated.id).not.toBe(created.id);
+    expect(recreated.status).toBe("active");
+    expect(recreated.address).toBe(created.address);
   });
 
-  it("filters messages by after/since cursor aliases", async () => {
-    const filtered = await demoApi.listMessages([], {
-      after: "2026-04-01T08:31:00.000Z",
-      since: "2026-04-01T08:35:00.000Z",
+  it("exposes meta and filters messages by cursor aliases", async () => {
+    const meta = await demoApi.getMeta();
+    expect(meta.domains).toContain("707979.xyz");
+
+    const messages = await demoApi.listMessages([], {
+      after: "2026-04-01T08:35:00.000Z",
+      since: "2026-04-01T08:31:00.000Z",
     });
-    expect(filtered.map((message) => message.id)).toEqual(["msg_beta"]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.id).toBe("msg_beta");
+  });
+
+  it("allows re-submitting a non-active domain with a corrected zone id", async () => {
+    const repaired = await demoApi.createDomain({
+      rootDomain: "mail.fail.example.net",
+      zoneId: "zone_fixed",
+    });
+    expect(repaired.status).toBe("provisioning_error");
+
+    await demoApi.disableDomain(repaired.id);
+
+    const retried = await demoApi.createDomain({
+      rootDomain: "mail.fail.example.net",
+      zoneId: "zone_repaired",
+    });
+    expect(retried.id).toBe(repaired.id);
+    expect(retried.zoneId).toBe("zone_repaired");
+    expect(retried.disabledAt).toBeNull();
   });
 
   it("creates api keys and users with an initial key", async () => {

@@ -12,6 +12,7 @@ describe("email helpers", () => {
     expect(buildMailboxAddress("mail", "box", "example.com")).toEqual({
       localPart: "mail",
       subdomain: "box",
+      rootDomain: "example.com",
       address: "mail@box.example.com",
     });
   });
@@ -20,6 +21,7 @@ describe("email helpers", () => {
     expect(buildMailboxAddress("mail", "ops.alpha", "707979.xyz")).toEqual({
       localPart: "mail",
       subdomain: "ops.alpha",
+      rootDomain: "707979.xyz",
       address: "mail@ops.alpha.707979.xyz",
     });
   });
@@ -36,11 +38,25 @@ describe("email helpers", () => {
     });
   });
 
+  it("still accepts an explicit root domain in mailbox creation payloads", () => {
+    expect(
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops.alpha",
+        rootDomain: "707979.xyz",
+        expiresInMinutes: 60,
+      }),
+    ).toMatchObject({
+      rootDomain: "707979.xyz",
+    });
+  });
+
   it("rejects malformed dotted subdomains", () => {
     expect(() =>
       createMailboxRequestSchema.parse({
         localPart: "mail",
         subdomain: "ops..alpha",
+        rootDomain: "707979.xyz",
         expiresInMinutes: 60,
       }),
     ).toThrow();

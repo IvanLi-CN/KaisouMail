@@ -3,6 +3,7 @@ import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "@cf-mail/shared";
 export interface ParsedMailboxAddress {
   localPart: string;
   subdomain: string;
+  rootDomain: string;
   address: string;
 }
 
@@ -13,6 +14,7 @@ export const buildMailboxAddress = (
 ): ParsedMailboxAddress => ({
   localPart,
   subdomain,
+  rootDomain,
   address: `${localPart}@${subdomain}.${rootDomain}`,
 });
 
@@ -20,6 +22,12 @@ export const randomLabel = (prefix: string) =>
   `${prefix}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase();
 
 export const normalizeLabel = (value: string) => value.toLowerCase().trim();
+
+export const normalizeRootDomain = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/^\.+|\.+$/g, "");
 
 export const normalizeMailboxAddress = (value: string) =>
   value.trim().toLowerCase();
@@ -30,13 +38,13 @@ export const parseMailboxAddress = (
 ): ParsedMailboxAddress | null => {
   const address = normalizeMailboxAddress(value);
   const [localPart, domain] = address.split("@");
-  const suffix = `.${rootDomain.toLowerCase().trim()}`;
+  const normalizedRootDomain = normalizeRootDomain(rootDomain);
+  const suffix = `.${normalizedRootDomain}`;
 
   if (!localPart || !domain || domain.length <= suffix.length) return null;
   if (!domain.endsWith(suffix)) return null;
 
   const subdomain = domain.slice(0, -suffix.length);
-  if (!subdomain) return null;
   if (
     !mailboxLocalPartRegex.test(localPart) ||
     !mailboxSubdomainRegex.test(subdomain)
@@ -47,8 +55,36 @@ export const parseMailboxAddress = (
   return {
     localPart,
     subdomain,
+    rootDomain: normalizedRootDomain,
     address: `${localPart}@${subdomain}${suffix}`,
   };
+};
+
+export const parseMailboxAddressAgainstDomains = (
+  value: string,
+  rootDomains: string[],
+) => {
+  const orderedDomains = [...rootDomains]
+    .map((entry) => normalizeRootDomain(entry))
+    .sort((left, right) => right.length - left.length);
+
+  for (const rootDomain of orderedDomains) {
+    const parsed = parseMailboxAddress(value, rootDomain);
+    if (parsed) return parsed;
+  }
+
+  return null;
+};
+
+export const extractRootDomainFromAddress = (
+  address: string,
+  subdomain: string,
+) => {
+  const [, domain] = normalizeMailboxAddress(address).split("@");
+  if (!domain) return null;
+  const prefix = `${normalizeLabel(subdomain)}.`;
+  if (!domain.startsWith(prefix) || domain.length <= prefix.length) return null;
+  return domain.slice(prefix.length);
 };
 
 export const extractPreviewText = (

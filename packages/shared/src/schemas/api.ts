@@ -5,9 +5,11 @@ import {
   mailboxSubdomainRegex,
   maxMailboxTtlMinutes,
   minMailboxTtlMinutes,
+  rootDomainRegex,
 } from "../consts";
 import {
   apiKeySchema,
+  domainSchema,
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
@@ -43,6 +45,7 @@ export const createApiKeyResponseSchema = z.object({
 export const createMailboxRequestSchema = z.object({
   localPart: z.string().regex(mailboxLocalPartRegex).optional(),
   subdomain: z.string().regex(mailboxSubdomainRegex).optional(),
+  rootDomain: z.string().regex(rootDomainRegex).optional(),
   expiresInMinutes: z
     .number()
     .int()
@@ -67,6 +70,7 @@ export const ensureMailboxRequestSchema = z.union([
     .object({
       localPart: z.string().regex(mailboxLocalPartRegex),
       subdomain: z.string().regex(mailboxSubdomainRegex),
+      rootDomain: z.string().regex(rootDomainRegex).optional(),
       expiresInMinutes: z
         .number()
         .int()
@@ -97,8 +101,17 @@ export const createUserResponseSchema = z.object({
   initialKey: createApiKeyResponseSchema,
 });
 
+export const createDomainRequestSchema = z.object({
+  rootDomain: z.string().regex(rootDomainRegex),
+  zoneId: z.string().min(1).max(128),
+});
+
 export const listMailboxesResponseSchema = z.object({
   mailboxes: z.array(mailboxSchema),
+});
+
+export const listDomainsResponseSchema = z.object({
+  domains: z.array(domainSchema),
 });
 
 export const listMessagesResponseSchema = z.object({
@@ -125,7 +138,7 @@ export const messageDetailResponseSchema = z.object({
 });
 
 export const apiMetaResponseSchema = z.object({
-  rootDomain: z.string().min(1),
+  domains: z.array(z.string().regex(rootDomainRegex)),
   defaultMailboxTtlMinutes: z
     .number()
     .int()

@@ -3,6 +3,7 @@ import { versionInfo } from "@cf-mail/shared";
 import type {
   ApiKeyRecord,
   ApiMeta,
+  DomainRecord,
   Mailbox,
   MessageDetail,
   MessageSummary,
@@ -63,6 +64,7 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "build",
     subdomain: "alpha",
+    rootDomain: "707979.xyz",
     address: "build@alpha.707979.xyz",
     status: "active",
     createdAt: "2026-04-01T08:05:00.000Z",
@@ -76,7 +78,8 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "spec",
     subdomain: "ops.beta",
-    address: "spec@ops.beta.707979.xyz",
+    rootDomain: "mail.example.net",
+    address: "spec@ops.beta.mail.example.net",
     status: "active",
     createdAt: "2026-04-01T08:15:00.000Z",
     lastReceivedAt: "2026-04-01T08:40:00.000Z",
@@ -89,7 +92,8 @@ export const demoMailboxes: Mailbox[] = [
     userId: memberUser.id,
     localPart: "qa",
     subdomain: "team.gamma",
-    address: "qa@team.gamma.707979.xyz",
+    rootDomain: "disabled.example.org",
+    address: "qa@team.gamma.disabled.example.org",
     status: "destroyed",
     createdAt: "2026-04-01T07:00:00.000Z",
     lastReceivedAt: null,
@@ -159,7 +163,7 @@ const demoDetails: MessageDetail[] = [
   {
     id: "msg_beta",
     mailboxId: "mbx_beta",
-    mailboxAddress: "spec@ops.beta.707979.xyz",
+    mailboxAddress: "spec@ops.beta.mail.example.net",
     subject: "Spec review notes",
     previewText:
       "There are two action items and one blocker around API scopes.",
@@ -170,14 +174,14 @@ const demoDetails: MessageDetail[] = [
     attachmentCount: 0,
     hasHtml: false,
     envelopeFrom: "reviewer@example.org",
-    envelopeTo: "spec@ops.beta.707979.xyz",
+    envelopeTo: "spec@ops.beta.mail.example.net",
     messageId: "<demo-beta@example.org>",
     dateHeader: "2026-04-01T08:40:00.000Z",
     html: null,
     text: "Action items:\n1. tighten API key scopes\n2. expose mailbox TTL in list view",
     headers: [
       { key: "From", value: "Reviewer <reviewer@example.org>" },
-      { key: "To", value: "spec@ops.beta.707979.xyz" },
+      { key: "To", value: "spec@ops.beta.mail.example.net" },
       { key: "Subject", value: "Spec review notes" },
     ],
     recipients: {
@@ -186,7 +190,7 @@ const demoDetails: MessageDetail[] = [
           id: "rcp_to_beta",
           kind: "to",
           name: null,
-          address: "spec@ops.beta.707979.xyz",
+          address: "spec@ops.beta.mail.example.net",
         },
       ],
       cc: [
@@ -230,8 +234,59 @@ export const demoVersion: VersionInfo = {
   builtAt: versionInfo.builtAt,
 };
 
+export const demoSessionUser = baseUser;
+
+export const demoDomains: DomainRecord[] = [
+  {
+    id: "dom_primary",
+    rootDomain: "707979.xyz",
+    zoneId: "zone_primary",
+    status: "active",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:00:00.000Z",
+    updatedAt: "2026-04-01T08:05:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:05:00.000Z",
+    disabledAt: null,
+  },
+  {
+    id: "dom_secondary",
+    rootDomain: "mail.example.net",
+    zoneId: "zone_secondary",
+    status: "active",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:10:00.000Z",
+    updatedAt: "2026-04-01T08:12:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:12:00.000Z",
+    disabledAt: null,
+  },
+  {
+    id: "dom_failed",
+    rootDomain: "staging.example.dev",
+    zoneId: "zone_failed",
+    status: "provisioning_error",
+    lastProvisionError: "Zone access denied",
+    createdAt: "2026-04-01T08:20:00.000Z",
+    updatedAt: "2026-04-01T08:25:00.000Z",
+    lastProvisionedAt: null,
+    disabledAt: null,
+  },
+  {
+    id: "dom_disabled",
+    rootDomain: "disabled.example.org",
+    zoneId: "zone_disabled",
+    status: "disabled",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:30:00.000Z",
+    updatedAt: "2026-04-01T08:40:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:35:00.000Z",
+    disabledAt: "2026-04-01T08:40:00.000Z",
+  },
+];
+
 export const demoMeta: ApiMeta = {
-  rootDomain: "707979.xyz",
+  domains: demoDomains
+    .filter((domain) => domain.status === "active")
+    .map((domain) => domain.rootDomain),
   defaultMailboxTtlMinutes: 60,
   minMailboxTtlMinutes: 5,
   maxMailboxTtlMinutes: 1440,
@@ -240,8 +295,6 @@ export const demoMeta: ApiMeta = {
     localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",
     subdomainPattern:
       "^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$",
-    examples: ["build@alpha.707979.xyz", "spec@ops.alpha.707979.xyz"],
+    examples: ["build@alpha.707979.xyz", "spec@ops.alpha.mail.example.net"],
   },
 };
-
-export const demoSessionUser = baseUser;

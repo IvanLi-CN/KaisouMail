@@ -5,10 +5,13 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 ## Features
 
 - Multi-user temporary mailbox management with per-user API keys
-- Random or custom mailbox creation with TTL-based cleanup
+- Multi-domain mailbox management backed by D1-stored Cloudflare zone records
+- Random or custom mailbox creation with TTL-based cleanup and explicit `rootDomain` selection
+- Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
+- Idempotent mailbox ensure/resolve endpoints for address-based automation flows
 - Multi-level mailbox subdomains such as `alpha.<mail-root>` and `ops.alpha.<mail-root>`
 - Incoming mail storage in R2 with parsed metadata in D1
-- Message list filtering by multiple mailbox addresses
+- Message list filtering by multiple mailbox addresses plus `after` / `since` cursor aliases
 - Message detail view with headers, text/html bodies, recipients, attachments, and raw `.eml` download
 - React + shadcn/ui control plane for mailboxes, messages, API keys, and users
 - GitHub Actions for PR/main CI, Worker deploy, Pages deploy, and PR-label-driven releases
@@ -50,7 +53,7 @@ cp apps/web/.env.example apps/web/.env
 
 ### Worker
 
-`apps/api-worker/wrangler.jsonc` and `apps/api-worker/wrangler.email.jsonc` are checked in with the production topology for `707979.xyz`.
+`apps/api-worker/wrangler.jsonc` and `apps/api-worker/wrangler.email.jsonc` are checked in with one production topology example.
 Copy `.dev.vars.example` to `.dev.vars` to override those values safely for local development.
 
 ```bash
@@ -86,13 +89,11 @@ The Worker expects these bindings and variables:
 ### Optional live-management secrets
 
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_ZONE_ID`
 - `CLOUDFLARE_API_TOKEN`
 
 ### Vars
 
 - `APP_ENV`
-- `MAIL_DOMAIN`
 - `EMAIL_WORKER_NAME` (required when live Email Routing management is enabled)
 - `DEFAULT_MAILBOX_TTL_MINUTES`
 - `CLEANUP_BATCH_SIZE`
@@ -100,7 +101,14 @@ The Worker expects these bindings and variables:
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
 - `CF_ROUTE_RULESET_TAG`
-- `WEB_APP_ORIGIN` (optional override for the Pages origin)
+- `WEB_APP_ORIGIN` (production control-plane origin; the only trusted browser origin outside local preview)
+
+### Legacy bootstrap vars
+
+- `MAIL_DOMAIN`
+- `CLOUDFLARE_ZONE_ID`
+
+These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
 
@@ -110,6 +118,7 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 
 - `users`
 - `api_keys`
+- `domains`
 - `subdomains`
 - `mailboxes`
 - `messages`
@@ -124,10 +133,16 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 ## API surface
 
 - `GET /api/version`
+- `GET /api/meta`
 - `GET|POST|DELETE /api/auth/session`
 - `GET|POST /api/api-keys`
 - `POST /api/api-keys/:id/revoke`
+- `GET|POST /api/domains`
+- `POST /api/domains/:id/retry`
+- `POST /api/domains/:id/disable`
 - `GET|POST /api/mailboxes`
+- `POST /api/mailboxes/ensure`
+- `GET /api/mailboxes/resolve`
 - `GET|DELETE /api/mailboxes/:id`
 - `GET /api/messages`
 - `GET /api/messages/:id`
@@ -147,7 +162,7 @@ bun run --cwd apps/api-worker db:migrate:remote
 - `label-gate.yml`: validates that PRs targeting `main` carry exactly one `type:*` label and one `channel:*` label
 - `ci-pr.yml`: PR/feature-branch quality gates for lint, typecheck, tests, builds, Storybook, and Playwright smoke
 - `ci-main.yml`: main-branch quality gates plus immutable release snapshot generation in `refs/notes/release-snapshots`
-- `deploy-main.yml`: D1 migrations, Worker deploy, and Pages direct upload for release-driven deployments
+- `deploy-main.yml`: D1 migrations, Worker deploy, Pages direct upload on `main`
 - `release.yml`: queued GitHub Release publishing driven by merged PR labels and CI Main snapshots
 
 ### Release labels
@@ -170,7 +185,6 @@ The first release baseline comes from the root `package.json` version when no st
 - `ci-main.yml` writes an immutable release snapshot to git notes at `refs/notes/release-snapshots`
 - `release.yml` publishes the oldest pending releasable snapshot on the first-parent `main` history, so consecutive merges are released in order
 - after a GitHub Release is created, the workflow upserts a marker-based comment back onto the source PR
-- `release.yml` dispatches `deploy-main.yml` immediately after publishing a GitHub Release, and `deploy-main.yml` also supports direct `release.published` or manual dispatch when needed
 - all GitHub API operations use the default `secrets.GITHUB_TOKEN`; no extra PAT or custom GitHub credential is required
 
 ### Manual backfill
@@ -191,17 +205,19 @@ To use the deploy workflow, configure:
 ## Deployment checklist
 
 1. Create the Pages project `cf-mail` once in Cloudflare
-2. Bind `cfm.707979.xyz` to Pages
+2. Bind your control-plane origin (for example `cfm.example.com`) to Pages
 3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, `CLOUDFLARE_API_TOKEN`)
-4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail (for `707979.xyz`, this is `email-receiver-worker`)
+4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=https://api.cfm.707979.xyz`
-7. Publish through `release.yml` to auto-dispatch `deploy-main.yml`, or run `deploy-main.yml` manually when needed
+6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=<your api origin>`
+7. Set `WEB_APP_ORIGIN=<your pages origin>`
+8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
+9. Push to `main` to trigger the deploy workflow
 
 ## Worker topology
 
 - `cf-mail-api`
-  - serves `https://api.cfm.707979.xyz`
+  - serves your single control-plane API origin
   - owns the REST API and scheduled cleanup trigger
 - `email-receiver-worker`
   - receives Email Routing `email()` events
@@ -209,12 +225,14 @@ To use the deploy workflow, configure:
 
 ## Domain topology example
 
-- Web UI: `https://cfm.707979.xyz`
-- Worker API: `https://api.cfm.707979.xyz`
-- Mail root domain: `707979.xyz`
-- Mailboxes can use nested subdomains like:
+- Web UI: `https://cfm.example.com`
+- Worker API: `https://api.cfm.example.com`
+- Mail root domains managed in-app:
+  - `707979.xyz`
+  - `mail.example.net`
+- Mailboxes must select a root domain explicitly and can use nested subdomains like:
   - `build@alpha.707979.xyz`
-  - `spec@ops.alpha.707979.xyz`
+  - `spec@ops.alpha.mail.example.net`
 
 ## Notes on Cloudflare limits
 

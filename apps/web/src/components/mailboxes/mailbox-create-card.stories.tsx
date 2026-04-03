@@ -10,7 +10,7 @@ const meta = {
   args: {
     onSubmit: fn(),
     isPending: false,
-    rootDomain: "707979.xyz",
+    domains: ["707979.xyz", "mail.example.net"],
     defaultTtlMinutes: 60,
     maxTtlMinutes: 1440,
     isMetaLoading: false,
@@ -21,17 +21,25 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+export const RandomDefault: Story = {};
+
 export const Default: Story = {
+  args: {},
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByLabelText("用户名"), "nightly");
     await userEvent.type(canvas.getByLabelText("子域名"), "ops.alpha");
+    await userEvent.selectOptions(
+      canvas.getByLabelText("邮箱域名"),
+      "mail.example.net",
+    );
     await userEvent.clear(canvas.getByLabelText("生命周期（分钟）"));
     await userEvent.type(canvas.getByLabelText("生命周期（分钟）"), "90");
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
       localPart: "nightly",
       subdomain: "ops.alpha",
+      rootDomain: "mail.example.net",
       expiresInMinutes: 90,
     });
   },
@@ -40,20 +48,21 @@ export const Default: Story = {
 export const Pending: Story = {
   args: {
     isPending: true,
+    domains: ["707979.xyz", "mail.example.net"],
   },
 };
 
 export const LoadingMeta: Story = {
   args: {
     isMetaLoading: true,
+    domains: ["707979.xyz", "mail.example.net"],
   },
 };
 
-export const MetaLoadFailed: Story = {
+export const CustomDomain: Story = {
   args: {
-    metaError: "Failed to load mailbox rules",
-    rootDomain: undefined,
-    defaultTtlMinutes: undefined,
-    maxTtlMinutes: undefined,
+    domains: ["mail.example.net", "ops.example.org"],
+    defaultTtlMinutes: 120,
+    maxTtlMinutes: 720,
   },
 };

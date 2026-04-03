@@ -4,12 +4,10 @@ import { createRoutingRule } from "../services/emailRouting";
 
 const baseConfig = {
   APP_ENV: "production",
-  MAIL_DOMAIN: "707979.xyz",
   EMAIL_WORKER_NAME: "email-receiver-worker",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
-  CLOUDFLARE_ZONE_ID: "zone_123",
   CLOUDFLARE_API_TOKEN: "token_123",
   SESSION_SECRET: "super-secret-session-key",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
@@ -35,6 +33,10 @@ describe("email routing service", () => {
 
     const ruleId = await createRoutingRule(
       baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
       "smoke@ops.alpha.707979.xyz",
     );
 
@@ -53,6 +55,10 @@ describe("email routing service", () => {
         {
           ...baseConfig,
           EMAIL_WORKER_NAME: undefined,
+        },
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
         },
         "smoke@ops.alpha.707979.xyz",
       ),

@@ -41,16 +41,41 @@ export const apiKeys = sqliteTable(
   ],
 );
 
+export const domains = sqliteTable(
+  "domains",
+  {
+    id: text("id").primaryKey(),
+    rootDomain: text("root_domain").notNull(),
+    zoneId: text("zone_id"),
+    status: text("status").notNull(),
+    lastProvisionError: text("last_provision_error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastProvisionedAt: text("last_provisioned_at"),
+    disabledAt: text("disabled_at"),
+  },
+  (table) => [
+    uniqueIndex("domains_root_domain_unique").on(table.rootDomain),
+    index("domains_status_idx").on(table.status, table.rootDomain),
+  ],
+);
+
 export const subdomains = sqliteTable(
   "subdomains",
   {
     id: text("id").primaryKey(),
+    domainId: text("domain_id").references(() => domains.id, {
+      onDelete: "restrict",
+    }),
     name: text("name").notNull(),
     enabledAt: text("enabled_at").notNull(),
     lastUsedAt: text("last_used_at").notNull(),
     metadata: text("metadata"),
   },
-  (table) => [uniqueIndex("subdomains_name_unique").on(table.name)],
+  (table) => [
+    uniqueIndex("subdomains_domain_name_unique").on(table.domainId, table.name),
+    index("subdomains_domain_idx").on(table.domainId),
+  ],
 );
 
 export const mailboxes = sqliteTable(
@@ -60,6 +85,9 @@ export const mailboxes = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    domainId: text("domain_id").references(() => domains.id, {
+      onDelete: "restrict",
+    }),
     localPart: text("local_part").notNull(),
     subdomain: text("subdomain").notNull(),
     address: text("address").notNull(),
@@ -70,10 +98,11 @@ export const mailboxes = sqliteTable(
     destroyedAt: text("destroyed_at"),
   },
   (table) => [
-    uniqueIndex("mailboxes_address_active_unique")
+    uniqueIndex("mailboxes_address_unique")
       .on(table.address)
-      .where(sql`${table.status} <> 'destroyed'`),
+      .where(sql`${table.status} != 'destroyed'`),
     index("mailboxes_user_idx").on(table.userId),
+    index("mailboxes_domain_idx").on(table.domainId, table.status),
     index("mailboxes_status_expires_idx").on(table.status, table.expiresAt),
   ],
 );

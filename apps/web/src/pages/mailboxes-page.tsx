@@ -16,11 +16,11 @@ import {
 import {
   useCreateMailboxMutation,
   useDestroyMailboxMutation,
-  useEnsureMailboxMutation,
   useMailboxesQuery,
 } from "@/hooks/use-mailboxes";
 import { useMessagesQuery } from "@/hooks/use-messages";
 import { useMetaQuery } from "@/hooks/use-meta";
+import type { ApiMeta, Mailbox } from "@/lib/contracts";
 import { useReadMessageIds } from "@/lib/message-read-state";
 
 const buildMailboxMessageStats = (
@@ -48,91 +48,118 @@ const buildMailboxMessageStats = (
   return stats;
 };
 
-export const MailboxesPage = () => {
-  const mailboxesQuery = useMailboxesQuery();
-  const metaQuery = useMetaQuery();
-  const createMailboxMutation = useCreateMailboxMutation();
-  const ensureMailboxMutation = useEnsureMailboxMutation();
-  const messagesQuery = useMessagesQuery();
-  const destroyMailboxMutation = useDestroyMailboxMutation();
-  const readMessageIds = useReadMessageIds();
-  const metaError =
-    metaQuery.isError && metaQuery.error instanceof Error
-      ? metaQuery.error.message
-      : metaQuery.isError
-        ? "请稍后重试"
-        : null;
-  const mailboxMessageStats = buildMailboxMessageStats(
-    (mailboxesQuery.data ?? []).map((mailbox) => mailbox.id),
-    messagesQuery.data ?? [],
-    readMessageIds,
-  );
+type MailboxesPageViewProps = {
+  meta: ApiMeta | null;
+  isMetaLoading?: boolean;
+  mailboxes: Mailbox[];
+  messageStatsByMailbox: Map<string, { unread: number; total: number }>;
+  isCreatePending?: boolean;
+  onCreate: Parameters<typeof MailboxCreateCard>[0]["onSubmit"];
+  onDestroy: (mailboxId: string) => void;
+};
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="邮箱控制台"
-        description="这里仅保留邮箱地址管理。查看邮件、正文和附件统一跳转到邮件工作台。"
-        eyebrow="Mailboxes"
-        action={
-          <ActionButton
-            asChild
-            density="default"
-            icon={PanelsTopLeft}
-            label="打开邮件工作台"
-            priority="secondary"
-            variant="outline"
-          >
-            <Link to="/workspace">打开邮件工作台</Link>
-          </ActionButton>
-        }
-      />
+export const MailboxesPageView = ({
+  meta,
+  isMetaLoading = false,
+  mailboxes,
+  messageStatsByMailbox,
+  isCreatePending = false,
+  onCreate,
+  onDestroy,
+}: MailboxesPageViewProps) => (
+  <div className="space-y-6">
+    <PageHeader
+      title="邮箱控制台"
+      description="这里仅保留邮箱地址管理。查看邮件、正文和附件统一跳转到邮件工作台。"
+      eyebrow="Mailboxes"
+      action={
+        <ActionButton
+          asChild
+          density="default"
+          icon={PanelsTopLeft}
+          label="打开邮件工作台"
+          priority="secondary"
+          variant="outline"
+        >
+          <Link to="/workspace">打开邮件工作台</Link>
+        </ActionButton>
+      }
+    />
+
+    {meta ? (
       <MailboxCreateCard
-        onSubmit={async (values) => {
-          if (values.localPart && values.subdomain) {
-            await ensureMailboxMutation.mutateAsync({
-              localPart: values.localPart,
-              subdomain: values.subdomain,
-              expiresInMinutes: values.expiresInMinutes,
-            });
-            return;
-          }
-
-          await createMailboxMutation.mutateAsync(values);
-        }}
-        isPending={
-          createMailboxMutation.isPending || ensureMailboxMutation.isPending
-        }
-        rootDomain={metaQuery.data?.rootDomain}
-        defaultTtlMinutes={metaQuery.data?.defaultMailboxTtlMinutes}
-        maxTtlMinutes={metaQuery.data?.maxMailboxTtlMinutes}
-        isMetaLoading={metaQuery.isLoading}
-        metaError={metaError}
+        domains={meta.domains}
+        defaultTtlMinutes={meta.defaultMailboxTtlMinutes}
+        maxTtlMinutes={meta.maxMailboxTtlMinutes}
+        isMetaLoading={isMetaLoading}
+        isPending={isCreatePending}
+        onSubmit={onCreate}
       />
+    ) : (
       <Card>
         <CardHeader>
-          <CardTitle>邮箱列表</CardTitle>
+          <CardTitle>创建邮箱</CardTitle>
           <CardDescription>
-            这里只做邮箱存续管理；点开任一地址后会直接进入工作台查看该邮箱的邮件上下文。
+            创建入口需要先从 `/api/meta` 读取域名和 TTL 规则。
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {mailboxesQuery.data && mailboxesQuery.data.length > 0 ? (
-            <MailboxList
-              mailboxes={mailboxesQuery.data}
-              messageStatsByMailbox={mailboxMessageStats}
-              onDestroy={(mailboxId) =>
-                destroyMailboxMutation.mutate(mailboxId)
-              }
-            />
-          ) : (
-            <EmptyState
-              title="暂无邮箱"
-              description="当前还没有可管理的邮箱地址。"
-            />
-          )}
+          <EmptyState
+            title="正在加载邮箱规则"
+            description="拿到当前环境的邮箱元数据后，才会显示创建表单。"
+          />
         </CardContent>
       </Card>
-    </div>
+    )}
+
+    <Card>
+      <CardHeader>
+        <CardTitle>邮箱列表</CardTitle>
+        <CardDescription>
+          这里只做邮箱存续管理；点开任一地址后会直接进入工作台查看该邮箱的邮件上下文。
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {mailboxes.length > 0 ? (
+          <MailboxList
+            mailboxes={mailboxes}
+            messageStatsByMailbox={messageStatsByMailbox}
+            onDestroy={onDestroy}
+          />
+        ) : (
+          <EmptyState
+            title="暂无邮箱"
+            description="当前还没有可管理的邮箱地址。"
+          />
+        )}
+      </CardContent>
+    </Card>
+  </div>
+);
+
+export const MailboxesPage = () => {
+  const metaQuery = useMetaQuery();
+  const mailboxesQuery = useMailboxesQuery();
+  const createMailboxMutation = useCreateMailboxMutation();
+  const messagesQuery = useMessagesQuery();
+  const destroyMailboxMutation = useDestroyMailboxMutation();
+  const readMessageIds = useReadMessageIds();
+
+  return (
+    <MailboxesPageView
+      meta={metaQuery.data ?? null}
+      isMetaLoading={metaQuery.isLoading}
+      mailboxes={mailboxesQuery.data ?? []}
+      messageStatsByMailbox={buildMailboxMessageStats(
+        (mailboxesQuery.data ?? []).map((mailbox) => mailbox.id),
+        messagesQuery.data ?? [],
+        readMessageIds,
+      )}
+      isCreatePending={createMailboxMutation.isPending}
+      onCreate={async (values) => {
+        await createMailboxMutation.mutateAsync(values);
+      }}
+      onDestroy={(mailboxId) => destroyMailboxMutation.mutate(mailboxId)}
+    />
   );
 };

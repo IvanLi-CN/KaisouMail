@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RootLayout } from "@/app/root-layout";
 import { ApiKeysDocsPage } from "@/pages/api-keys-docs-page";
 import { ApiKeysPage } from "@/pages/api-keys-page";
+import { DomainsPage } from "@/pages/domains-page";
 import { LoginPage } from "@/pages/login-page";
 import { MailboxDetailPage } from "@/pages/mailbox-detail-page";
 import { MailboxesPage } from "@/pages/mailboxes-page";
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { path: "messages/:messageId", element: <MessageDetailPage /> },
       { path: "api-keys", element: <ApiKeysPage /> },
       { path: "api-keys/docs", element: <ApiKeysDocsPage /> },
+      { path: "domains", element: <DomainsPage /> },
       { path: "users", element: <UsersPage /> },
     ],
   },

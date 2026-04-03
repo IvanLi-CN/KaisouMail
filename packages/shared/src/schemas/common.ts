@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   attachmentDispositions,
+  domainStatuses,
   mailboxStatuses,
   recipientKinds,
   userRoles,
@@ -10,6 +11,7 @@ import {
 export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
+export const domainStatusSchema = z.enum(domainStatuses);
 export const recipientKindSchema = z.enum(recipientKinds);
 export const attachmentDispositionSchema = z.enum(attachmentDispositions);
 
@@ -61,6 +63,7 @@ export const mailboxSchema = z.object({
   userId: z.string(),
   localPart: z.string(),
   subdomain: z.string(),
+  rootDomain: z.string(),
   address: z.string().email(),
   status: mailboxStatusSchema,
   createdAt: isoDateSchema,
@@ -68,6 +71,18 @@ export const mailboxSchema = z.object({
   expiresAt: isoDateSchema,
   destroyedAt: isoDateSchema.nullable(),
   routingRuleId: z.string().nullable(),
+});
+
+export const domainSchema = z.object({
+  id: z.string(),
+  rootDomain: z.string(),
+  zoneId: z.string().nullable(),
+  status: domainStatusSchema,
+  lastProvisionError: z.string().nullable(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema,
+  lastProvisionedAt: isoDateSchema.nullable(),
+  disabledAt: isoDateSchema.nullable(),
 });
 
 export const messageSummarySchema = z.object({

@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  Globe,
   KeyRound,
   LayoutPanelTop,
   LogOut,
@@ -34,6 +35,13 @@ const navItems = [
     label: "邮箱管理",
     icon: Mailbox,
     activePatterns: ["/mailboxes", "/mailboxes/:mailboxId"],
+  },
+  {
+    to: "/domains",
+    label: "域名",
+    icon: Globe,
+    activePatterns: ["/domains"],
+    adminOnly: true,
   },
   {
     to: "/api-keys",
