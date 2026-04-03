@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
+import type { ApiMeta } from "@/lib/contracts";
 import { appRoutes } from "@/lib/routes";
 import {
   demoApiKeys,
@@ -25,10 +26,24 @@ const PathnameBadge = () => {
   );
 };
 
+const docsReferenceMeta: ApiMeta = {
+  ...demoMeta,
+  domains: ["mail.example.net", "ops.example.org"],
+  addressRules: {
+    ...demoMeta.addressRules,
+    examples: [
+      "build@alpha.mail.example.net",
+      "spec@ops.alpha.ops.example.org",
+    ],
+  },
+};
+
 const RouteFlowHarness = ({
   latestSecret = null,
+  meta = demoMeta,
 }: {
   latestSecret?: string | null;
+  meta?: ApiMeta;
 }) => (
   <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
     <div className="space-y-4">
@@ -48,7 +63,7 @@ const RouteFlowHarness = ({
         />
         <Route
           path={appRoutes.apiKeysDocs}
-          element={<ApiKeysDocsPageView meta={demoMeta} />}
+          element={<ApiKeysDocsPageView meta={meta} />}
         />
       </Routes>
     </div>
@@ -120,7 +135,10 @@ export const RouteFlow: Story = {
 
 export const DocsReference: Story = {
   render: () => (
-    <RouteFlowHarness latestSecret="cfm_full_secret_returned_once" />
+    <RouteFlowHarness
+      latestSecret="cfm_full_secret_returned_once"
+      meta={docsReferenceMeta}
+    />
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

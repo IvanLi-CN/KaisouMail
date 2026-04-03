@@ -33,7 +33,7 @@ const quickstartSteps = [
   "在 `/api-keys` 页面创建一把新的 API Key，并保存好返回时展示的完整 secret。",
   "自动化或 Agent 调用受保护接口时，直接发送 `Authorization: Bearer <API_KEY>`。",
   "浏览器场景先调用 `POST /api/auth/session` 交换 `cf_mail_session` cookie，再用同一会话访问后续接口。",
-  "邮箱地址规则、默认 TTL 与上限 TTL 可先通过 `GET /api/meta` 获取，避免在客户端硬编码猜测。",
+  "邮箱地址规则、可用域名、默认 TTL 与上限 TTL 可先通过 `GET /api/meta` 获取，避免在客户端硬编码猜测。",
   "需要撤销凭证时调用 `POST /api/api-keys/:id/revoke`，已撤销 Key 会保留审计记录，但不能继续鉴权。",
 ] as const;
 
@@ -110,7 +110,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   const maxTtl = meta.maxMailboxTtlMinutes;
   const localPartExample = "build";
   const subdomainExample = "alpha";
-  const rootDomainExample = meta.domains[0] ?? "mail.example.net";
+  const rootDomainExample = "mail.example.net";
   const addressExample = `${localPartExample}@${subdomainExample}.${rootDomainExample}`;
 
   return [
@@ -137,8 +137,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   }
 }`,
           notes: [
-            "客户端可先调用这个接口拿到当前可用域名列表，再显式选择 rootDomain。",
-            "这份响应不提供默认域名；调用方缺失 rootDomain 时应直接报错而不是兜底。",
+            "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `rootDomain`。",
+            "创建邮箱时如果省略 `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
           ],
         },
       ],
@@ -578,6 +578,7 @@ const buildBearerExample = () => `curl "$API_BASE/api/api-keys" \\
 
 const ApiKeysDocsPageView = ({ meta }: { meta: ApiMeta }) => {
   const endpointGroups = buildEndpointGroups(meta);
+  const overviewAddressExample = "build@alpha.mail.example.net";
   const errorContract = `{
   "error": "Authentication required",
   "details": null
@@ -631,14 +632,15 @@ const ApiKeysDocsPageView = ({ meta }: { meta: ApiMeta }) => {
 
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
               <p>
-                当前启用域名为{" "}
-                <code>{meta.domains.join(", ") || "暂无 active 域名"}</code>
-                ，默认 TTL 为 <code>{meta.defaultMailboxTtlMinutes}</code>{" "}
-                分钟，最长 <code>{meta.maxMailboxTtlMinutes}</code> 分钟。
+                可用域名列表应通过 <code>GET /api/meta</code>{" "}
+                动态读取；创建邮箱时既可以显式传 <code>rootDomain</code>
+                ，也可以省略后让服务端从 active 域名中随机分配。 默认 TTL 为{" "}
+                <code>{meta.defaultMailboxTtlMinutes}</code> 分钟，最长{" "}
+                <code>{meta.maxMailboxTtlMinutes}</code> 分钟。
               </p>
               <p className="mt-2">
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：
-                <code className="ml-1">{meta.addressRules.examples[0]}</code>
+                <code className="ml-1">{overviewAddressExample}</code>
               </p>
             </div>
 
