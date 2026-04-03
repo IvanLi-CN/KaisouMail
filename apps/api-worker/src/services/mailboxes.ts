@@ -11,7 +11,13 @@ import {
 } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { buildMailboxAddress, normalizeLabel, randomLabel } from "../lib/email";
+import {
+  buildMailboxAddress,
+  normalizeLabel,
+  normalizeMailboxAddress,
+  parseMailboxAddress,
+  randomLabel,
+} from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
 import {
@@ -20,10 +26,16 @@ import {
   ensureSubdomainEnabled,
 } from "./emailRouting";
 
-const toMailboxDto = (
-  row: typeof mailboxes.$inferSelect,
-  lastReceivedAt: string | null = null,
-) =>
+type MailboxRow = typeof mailboxes.$inferSelect;
+type EnsureMailboxInput =
+  | { address: string; expiresInMinutes?: number }
+  | {
+      localPart: string;
+      subdomain: string;
+      expiresInMinutes?: number;
+    };
+
+const toMailboxDto = (row: MailboxRow, lastReceivedAt: string | null = null) =>
   mailboxSchema.parse({
     id: row.id,
     userId: row.userId,
@@ -70,6 +82,67 @@ const attachLastReceivedAt = async (
   }
 
   return rows.map((row) => toMailboxDto(row, recentMap.get(row.id) ?? null));
+};
+
+const isReusableMailbox = (row: MailboxRow, user: AuthUser) =>
+  row.userId === user.id;
+
+export const classifyMailboxAddressState = (
+  rows: MailboxRow[],
+  user: AuthUser,
+) => {
+  const reusableActive = rows.find(
+    (row) => row.status === "active" && isReusableMailbox(row, user),
+  );
+  if (reusableActive) {
+    return {
+      kind: "reuse" as const,
+      row: reusableActive,
+    };
+  }
+
+  const blocking = rows.find((row) => row.status !== "destroyed");
+  if (blocking) {
+    return {
+      kind: "conflict" as const,
+      row: blocking,
+    };
+  }
+
+  return {
+    kind: "create" as const,
+  };
+};
+
+const listMailboxesByAddress = async (env: WorkerEnv, address: string) => {
+  const db = getDb(env);
+  return db
+    .select()
+    .from(mailboxes)
+    .where(eq(mailboxes.address, normalizeMailboxAddress(address)))
+    .orderBy(desc(mailboxes.createdAt));
+};
+
+export const resolveRequestedMailboxAddress = (
+  input: EnsureMailboxInput,
+  rootDomain: string,
+) => {
+  if ("address" in input) {
+    const parsed = parseMailboxAddress(input.address, rootDomain);
+    if (!parsed) {
+      throw new ApiError(400, "Invalid mailbox address", {
+        address: input.address,
+        rootDomain,
+      });
+    }
+    return parsed;
+  }
+
+  return buildMailboxAddress(
+    normalizeLabel(input.localPart),
+    normalizeLabel(input.subdomain),
+    rootDomain,
+  );
 };
 
 export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
@@ -135,9 +208,8 @@ export const createMailboxForUser = async (
   const existing = await db
     .select()
     .from(mailboxes)
-    .where(eq(mailboxes.address, mailboxAddress.address))
-    .limit(1);
-  if (existing[0] && existing[0].status !== "destroyed")
+    .where(eq(mailboxes.address, mailboxAddress.address));
+  if (existing.some((row) => row.status !== "destroyed"))
     throw new ApiError(409, "Mailbox already exists");
 
   const now = nowIso();
@@ -180,6 +252,63 @@ export const createMailboxForUser = async (
   } as const;
   await db.insert(mailboxes).values(created);
   return toMailboxDto(created, null);
+};
+
+export const ensureMailboxForUser = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  user: AuthUser,
+  input: EnsureMailboxInput,
+) => {
+  const mailboxAddress = resolveRequestedMailboxAddress(
+    input,
+    config.MAIL_DOMAIN,
+  );
+  const classification = classifyMailboxAddressState(
+    await listMailboxesByAddress(env, mailboxAddress.address),
+    user,
+  );
+
+  if (classification.kind === "reuse") {
+    const [mailbox] = await attachLastReceivedAt(env, [classification.row]);
+    return {
+      mailbox,
+      created: false,
+    };
+  }
+
+  if (classification.kind === "conflict") {
+    throw new ApiError(409, "Mailbox already exists");
+  }
+
+  const mailbox = await createMailboxForUser(env, config, user, {
+    localPart: mailboxAddress.localPart,
+    subdomain: mailboxAddress.subdomain,
+    expiresInMinutes: input.expiresInMinutes,
+  });
+
+  return {
+    mailbox,
+    created: true,
+  };
+};
+
+export const resolveMailboxForUser = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  address: string,
+) => {
+  const classification = classifyMailboxAddressState(
+    await listMailboxesByAddress(env, address),
+    user,
+  );
+  if (classification.kind !== "reuse") {
+    throw new ApiError(404, "Mailbox not found");
+  }
+
+  const [mailbox] = await attachLastReceivedAt(env, [classification.row]);
+  if (!mailbox) throw new ApiError(404, "Mailbox not found");
+  return mailbox;
 };
 
 export const destroyMailbox = async (

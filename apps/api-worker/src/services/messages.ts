@@ -1,5 +1,5 @@
 import { messageDetailSchema, messageSummarySchema } from "@cf-mail/shared";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import PostalMime from "postal-mime";
 
 import { getDb } from "../db/client";
@@ -45,10 +45,27 @@ const mapSummary = (row: typeof messages.$inferSelect) =>
     hasHtml: row.hasHtml,
   });
 
+export const resolveReceivedAfter = (input: {
+  after?: string;
+  since?: string;
+}) => {
+  const candidates = [input.after, input.since]
+    .map((value) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    })
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => left.localeCompare(right));
+
+  return candidates.at(-1) ?? null;
+};
+
 export const listMessagesForUser = async (
   env: WorkerEnv,
   user: AuthUser,
   mailboxAddresses: string[],
+  after?: string | null,
 ) => {
   const db = getDb(env);
   const filters = [];
@@ -57,6 +74,9 @@ export const listMessagesForUser = async (
   }
   if (mailboxAddresses.length > 0) {
     filters.push(inArray(messages.mailboxAddress, mailboxAddresses));
+  }
+  if (after) {
+    filters.push(gt(messages.receivedAt, after));
   }
 
   const rows =

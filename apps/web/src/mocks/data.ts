@@ -2,6 +2,7 @@ import { versionInfo } from "@cf-mail/shared";
 
 import type {
   ApiKeyRecord,
+  ApiMeta,
   Mailbox,
   MessageDetail,
   MessageSummary,
@@ -227,6 +228,20 @@ export const demoVersion: VersionInfo = {
   commitSha: versionInfo.commitSha,
   branch: versionInfo.branch,
   builtAt: versionInfo.builtAt,
+};
+
+export const demoMeta: ApiMeta = {
+  rootDomain: "707979.xyz",
+  defaultMailboxTtlMinutes: 60,
+  minMailboxTtlMinutes: 5,
+  maxMailboxTtlMinutes: 1440,
+  addressRules: {
+    format: "localPart@subdomain.rootDomain",
+    localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",
+    subdomainPattern:
+      "^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$",
+    examples: ["build@alpha.707979.xyz", "spec@ops.alpha.707979.xyz"],
+  },
 };
 
 export const demoSessionUser = baseUser;

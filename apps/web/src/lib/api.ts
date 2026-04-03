@@ -1,4 +1,5 @@
 import {
+  apiMetaResponseSchema,
   createApiKeyResponseSchema,
   createUserResponseSchema,
   listApiKeysResponseSchema,
@@ -67,6 +68,12 @@ export const apiClient = {
       versionResponseSchema.parse(value),
     );
   },
+  async getMeta() {
+    if (DEMO_MODE) return demoApi.getMeta();
+    return requestJson("/api/meta", { method: "GET" }, (value) =>
+      apiMetaResponseSchema.parse(value),
+    );
+  },
   async listMailboxes() {
     if (DEMO_MODE) return demoApi.listMailboxes();
     const payload = await requestJson(
@@ -94,16 +101,46 @@ export const apiClient = {
       (value) => mailboxSchema.parse(value),
     );
   },
+  async ensureMailbox(
+    input:
+      | { address: string; expiresInMinutes?: number }
+      | {
+          localPart: string;
+          subdomain: string;
+          expiresInMinutes?: number;
+        },
+  ) {
+    if (DEMO_MODE) return demoApi.ensureMailbox(input);
+    return requestJson(
+      "/api/mailboxes/ensure",
+      { method: "POST", body: JSON.stringify(input) },
+      (value) => mailboxSchema.parse(value),
+    );
+  },
+  async resolveMailbox(address: string) {
+    if (DEMO_MODE) return demoApi.resolveMailbox(address);
+    const params = new URLSearchParams({ address });
+    return requestJson(
+      `/api/mailboxes/resolve?${params.toString()}`,
+      { method: "GET" },
+      (value) => mailboxSchema.parse(value),
+    );
+  },
   async destroyMailbox(id: string) {
     if (DEMO_MODE) return demoApi.destroyMailbox(id);
     return requestJson(`/api/mailboxes/${id}`, { method: "DELETE" }, (value) =>
       mailboxSchema.parse(value),
     );
   },
-  async listMessages(mailboxes: string[] = []) {
-    if (DEMO_MODE) return demoApi.listMessages(mailboxes);
+  async listMessages(
+    mailboxes: string[] = [],
+    filters?: { after?: string; since?: string },
+  ) {
+    if (DEMO_MODE) return demoApi.listMessages(mailboxes, filters);
     const params = new URLSearchParams();
     for (const mailbox of mailboxes) params.append("mailbox", mailbox);
+    if (filters?.after) params.set("after", filters.after);
+    if (filters?.since) params.set("since", filters.since);
     const payload = await requestJson(
       `/api/messages${params.size > 0 ? `?${params.toString()}` : ""}`,
       { method: "GET" },

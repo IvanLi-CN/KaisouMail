@@ -10,6 +10,10 @@ const meta = {
   args: {
     onSubmit: fn(),
     isPending: false,
+    rootDomain: "707979.xyz",
+    defaultTtlMinutes: 60,
+    maxTtlMinutes: 1440,
+    isMetaLoading: false,
   },
 } satisfies Meta<typeof MailboxCreateCard>;
 
@@ -36,5 +40,20 @@ export const Default: Story = {
 export const Pending: Story = {
   args: {
     isPending: true,
+  },
+};
+
+export const LoadingMeta: Story = {
+  args: {
+    isMetaLoading: true,
+  },
+};
+
+export const MetaLoadFailed: Story = {
+  args: {
+    metaError: "Failed to load mailbox rules",
+    rootDomain: undefined,
+    defaultTtlMinutes: undefined,
+    maxTtlMinutes: undefined,
   },
 };

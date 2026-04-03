@@ -101,6 +101,8 @@ describe("api key integration docs", () => {
 
     expect(screen.getByText("Automation / Agent")).toBeInTheDocument();
     expect(screen.getByText("Browser Session")).toBeInTheDocument();
+    expect(screen.getByText("/api/meta")).toBeInTheDocument();
+    expect(screen.getByText("/api/mailboxes/ensure")).toBeInTheDocument();
     expect(screen.getByText("/api/messages/:id/raw")).toBeInTheDocument();
     expect(screen.getByText("ApiError Envelope")).toBeInTheDocument();
     expect(screen.getByText("Auth Failure")).toBeInTheDocument();

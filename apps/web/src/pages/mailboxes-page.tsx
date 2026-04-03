@@ -1,6 +1,7 @@
 import { PanelsTopLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { MailboxCreateCard } from "@/components/mailboxes/mailbox-create-card";
 import { MailboxList } from "@/components/mailboxes/mailbox-list";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -13,10 +14,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  useCreateMailboxMutation,
   useDestroyMailboxMutation,
+  useEnsureMailboxMutation,
   useMailboxesQuery,
 } from "@/hooks/use-mailboxes";
 import { useMessagesQuery } from "@/hooks/use-messages";
+import { useMetaQuery } from "@/hooks/use-meta";
 import { useReadMessageIds } from "@/lib/message-read-state";
 
 const buildMailboxMessageStats = (
@@ -46,9 +50,18 @@ const buildMailboxMessageStats = (
 
 export const MailboxesPage = () => {
   const mailboxesQuery = useMailboxesQuery();
+  const metaQuery = useMetaQuery();
+  const createMailboxMutation = useCreateMailboxMutation();
+  const ensureMailboxMutation = useEnsureMailboxMutation();
   const messagesQuery = useMessagesQuery();
   const destroyMailboxMutation = useDestroyMailboxMutation();
   const readMessageIds = useReadMessageIds();
+  const metaError =
+    metaQuery.isError && metaQuery.error instanceof Error
+      ? metaQuery.error.message
+      : metaQuery.isError
+        ? "请稍后重试"
+        : null;
   const mailboxMessageStats = buildMailboxMessageStats(
     (mailboxesQuery.data ?? []).map((mailbox) => mailbox.id),
     messagesQuery.data ?? [],
@@ -73,6 +86,28 @@ export const MailboxesPage = () => {
             <Link to="/workspace">打开邮件工作台</Link>
           </ActionButton>
         }
+      />
+      <MailboxCreateCard
+        onSubmit={async (values) => {
+          if (values.localPart && values.subdomain) {
+            await ensureMailboxMutation.mutateAsync({
+              localPart: values.localPart,
+              subdomain: values.subdomain,
+              expiresInMinutes: values.expiresInMinutes,
+            });
+            return;
+          }
+
+          await createMailboxMutation.mutateAsync(values);
+        }}
+        isPending={
+          createMailboxMutation.isPending || ensureMailboxMutation.isPending
+        }
+        rootDomain={metaQuery.data?.rootDomain}
+        defaultTtlMinutes={metaQuery.data?.defaultMailboxTtlMinutes}
+        maxTtlMinutes={metaQuery.data?.maxMailboxTtlMinutes}
+        isMetaLoading={metaQuery.isLoading}
+        metaError={metaError}
       />
       <Card>
         <CardHeader>

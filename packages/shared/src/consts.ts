@@ -6,6 +6,8 @@ export const attachmentDispositions = [
   "inline",
   "unknown",
 ] as const;
+export const minMailboxTtlMinutes = 5;
+export const maxMailboxTtlMinutes = 24 * 60;
 
 export const mailboxLocalPartRegex = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 

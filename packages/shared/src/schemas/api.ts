@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "../consts";
+import {
+  mailboxLocalPartRegex,
+  mailboxSubdomainRegex,
+  maxMailboxTtlMinutes,
+  minMailboxTtlMinutes,
+} from "../consts";
 import {
   apiKeySchema,
   mailboxSchema,
@@ -13,6 +18,11 @@ import {
 
 export const createSessionRequestSchema = z.object({
   apiKey: z.string().min(16),
+});
+
+export const apiErrorSchema = z.object({
+  error: z.string(),
+  details: z.unknown().nullable(),
 });
 
 export const sessionResponseSchema = z.object({
@@ -36,9 +46,44 @@ export const createMailboxRequestSchema = z.object({
   expiresInMinutes: z
     .number()
     .int()
-    .min(5)
-    .max(24 * 60)
+    .min(minMailboxTtlMinutes)
+    .max(maxMailboxTtlMinutes)
     .default(60),
+});
+
+export const ensureMailboxRequestSchema = z.union([
+  z
+    .object({
+      address: z.string().email(),
+      expiresInMinutes: z
+        .number()
+        .int()
+        .min(minMailboxTtlMinutes)
+        .max(maxMailboxTtlMinutes)
+        .optional(),
+    })
+    .strict(),
+  z
+    .object({
+      localPart: z.string().regex(mailboxLocalPartRegex),
+      subdomain: z.string().regex(mailboxSubdomainRegex),
+      expiresInMinutes: z
+        .number()
+        .int()
+        .min(minMailboxTtlMinutes)
+        .max(maxMailboxTtlMinutes)
+        .optional(),
+    })
+    .strict(),
+]);
+
+export const resolveMailboxQuerySchema = z.object({
+  address: z.string().email(),
+});
+
+export const listMessagesQuerySchema = z.object({
+  after: z.string().datetime({ offset: true }).optional(),
+  since: z.string().datetime({ offset: true }).optional(),
 });
 
 export const createUserRequestSchema = z.object({
@@ -77,4 +122,21 @@ export const versionResponseSchema = z.object({
 
 export const messageDetailResponseSchema = z.object({
   message: messageDetailSchema,
+});
+
+export const apiMetaResponseSchema = z.object({
+  rootDomain: z.string().min(1),
+  defaultMailboxTtlMinutes: z
+    .number()
+    .int()
+    .min(minMailboxTtlMinutes)
+    .max(maxMailboxTtlMinutes),
+  minMailboxTtlMinutes: z.number().int().min(1),
+  maxMailboxTtlMinutes: z.number().int().min(minMailboxTtlMinutes),
+  addressRules: z.object({
+    format: z.literal("localPart@subdomain.rootDomain"),
+    localPartPattern: z.string(),
+    subdomainPattern: z.string(),
+    examples: z.array(z.string()),
+  }),
 });

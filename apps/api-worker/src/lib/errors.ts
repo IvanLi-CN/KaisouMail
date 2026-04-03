@@ -1,3 +1,5 @@
+import { apiErrorSchema } from "@cf-mail/shared";
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -7,3 +9,21 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+export const buildApiErrorPayload = (error: string, details: unknown = null) =>
+  apiErrorSchema.parse({
+    error,
+    details,
+  });
+
+export const jsonError = (
+  status: number,
+  error: string,
+  details: unknown = null,
+) =>
+  new Response(JSON.stringify(buildApiErrorPayload(error, details)), {
+    status,
+    headers: {
+      "content-type": "application/json",
+    },
+  });
