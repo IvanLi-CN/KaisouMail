@@ -4,37 +4,37 @@ import { PageHeader } from "@/components/shared/page-header";
 import {
   useCreateDomainMutation,
   useDisableDomainMutation,
-  useDomainsQuery,
+  useDomainCatalogQuery,
   useRetryDomainMutation,
 } from "@/hooks/use-domains";
 import { useSessionQuery } from "@/hooks/use-session";
-import type { DomainRecord } from "@/lib/contracts";
+import type { DomainCatalogItem } from "@/lib/contracts";
 
 type DomainsPageViewProps = {
-  domains: DomainRecord[];
-  isCreatePending?: boolean;
-  onCreate: Parameters<typeof DomainTable>[0]["onCreate"];
+  domains: DomainCatalogItem[];
+  isEnablePending?: boolean;
+  onEnable: Parameters<typeof DomainTable>[0]["onEnable"];
   onDisable: (domainId: string) => void;
   onRetry: (domainId: string) => void;
 };
 
 export const DomainsPageView = ({
   domains,
-  isCreatePending = false,
-  onCreate,
+  isEnablePending = false,
+  onEnable,
   onDisable,
   onRetry,
 }: DomainsPageViewProps) => (
   <div className="space-y-6">
     <PageHeader
       title="邮箱域名"
-      description="管理员可以把多个 Cloudflare 邮箱根域名接入同一套控制台，并统一分配给邮箱创建流程。"
+      description="Cloudflare 里先加域，控制台会实时发现并允许你在项目内启用、停用或重试接入。"
       eyebrow="Domains"
     />
     <DomainTable
       domains={domains}
-      isCreatePending={isCreatePending}
-      onCreate={onCreate}
+      isEnablePending={isEnablePending}
+      onEnable={onEnable}
       onDisable={onDisable}
       onRetry={onRetry}
     />
@@ -43,7 +43,7 @@ export const DomainsPageView = ({
 
 export const DomainsPage = () => {
   const sessionQuery = useSessionQuery();
-  const domainsQuery = useDomainsQuery();
+  const domainCatalogQuery = useDomainCatalogQuery();
   const createDomainMutation = useCreateDomainMutation();
   const disableDomainMutation = useDisableDomainMutation();
   const retryDomainMutation = useRetryDomainMutation();
@@ -59,9 +59,9 @@ export const DomainsPage = () => {
 
   return (
     <DomainsPageView
-      domains={domainsQuery.data ?? []}
-      isCreatePending={createDomainMutation.isPending}
-      onCreate={async (values) => {
+      domains={domainCatalogQuery.data ?? []}
+      isEnablePending={createDomainMutation.isPending}
+      onEnable={async (values) => {
         await createDomainMutation.mutateAsync(values);
       }}
       onDisable={(domainId) => disableDomainMutation.mutate(domainId)}

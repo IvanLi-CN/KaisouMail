@@ -9,6 +9,7 @@ import {
 } from "../consts";
 import {
   apiKeySchema,
+  domainCatalogItemSchema,
   domainSchema,
   mailboxSchema,
   messageDetailSchema,
@@ -112,6 +113,10 @@ export const listMailboxesResponseSchema = z.object({
 
 export const listDomainsResponseSchema = z.object({
   domains: z.array(domainSchema),
+});
+
+export const listDomainCatalogResponseSchema = z.object({
+  domains: z.array(domainCatalogItemSchema),
 });
 
 export const listMessagesResponseSchema = z.object({

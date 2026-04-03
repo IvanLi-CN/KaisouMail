@@ -1,6 +1,7 @@
 import {
   createDomainRequestSchema,
   domainSchema,
+  listDomainCatalogResponseSchema,
   listDomainsResponseSchema,
 } from "@cf-mail/shared";
 import { zValidator } from "@hono/zod-validator";
@@ -11,6 +12,7 @@ import { requireAuth } from "../services/auth";
 import {
   createDomain,
   disableDomain,
+  listDomainCatalog,
   listDomains,
   retryDomainProvision,
 } from "../services/domains";
@@ -21,6 +23,13 @@ export const domainRoutes = new Hono<AppBindings>()
   .get("/", async (c) =>
     c.json(
       listDomainsResponseSchema.parse({ domains: await listDomains(c.env) }),
+    ),
+  )
+  .get("/catalog", async (c) =>
+    c.json(
+      listDomainCatalogResponseSchema.parse({
+        domains: await listDomainCatalog(c.env, parseRuntimeConfig(c.env)),
+      }),
     ),
   )
   .post("/", zValidator("json", createDomainRequestSchema), async (c) => {

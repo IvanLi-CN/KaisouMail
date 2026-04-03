@@ -12,6 +12,11 @@ export interface EmailRoutingDomain {
   zoneId: string | null;
 }
 
+export interface CloudflareZoneSummary {
+  id: string;
+  name: string;
+}
+
 const ensureManagementEnabled = (config: RuntimeConfig) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return false;
   if (!config.CLOUDFLARE_API_TOKEN) {
@@ -60,6 +65,11 @@ const cfRequest = async <T>(
     );
   }
   return data.result;
+};
+
+export const listZones = async (config: RuntimeConfig) => {
+  if (!ensureManagementEnabled(config)) return [];
+  return cfRequest<CloudflareZoneSummary[]>(config, "/zones?per_page=100");
 };
 
 export const ensureSubdomainEnabled = async (

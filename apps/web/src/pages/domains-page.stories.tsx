@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { demoDomains, demoSessionUser, demoVersion } from "@/mocks/data";
+import { demoDomainCatalog, demoSessionUser, demoVersion } from "@/mocks/data";
 import { DomainsPageView } from "@/pages/domains-page";
 
 const meta = {
@@ -10,9 +10,9 @@ const meta = {
   component: DomainsPageView,
   tags: ["autodocs"],
   args: {
-    domains: demoDomains,
-    isCreatePending: false,
-    onCreate: fn(),
+    domains: demoDomainCatalog,
+    isEnablePending: false,
+    onEnable: fn(),
     onDisable: fn(),
     onRetry: fn(),
   },
@@ -29,27 +29,43 @@ type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {};
 
-export const CreateFlow: Story = {
+export const EnableFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText("根域名"), "inbox.example.com");
-    await userEvent.type(
-      canvas.getByLabelText("Cloudflare Zone ID"),
-      "zone_new",
-    );
-    await userEvent.click(canvas.getByRole("button", { name: "接入域名" }));
-    await expect(args.onCreate).toHaveBeenCalledWith({
-      rootDomain: "inbox.example.com",
-      zoneId: "zone_new",
+    await userEvent.click(canvas.getByRole("button", { name: "启用域名" }));
+    await expect(args.onEnable).toHaveBeenCalledWith({
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
     });
   },
 };
 
 export const ProvisioningError: Story = {
   args: {
-    domains: demoDomains.filter(
+    domains: demoDomainCatalog.filter(
       (domain) =>
-        domain.status !== "active" || domain.rootDomain !== "mail.example.net",
+        domain.projectStatus !== "active" ||
+        domain.rootDomain !== "mail.example.net",
     ),
+  },
+};
+
+export const MissingInCloudflare: Story = {
+  args: {
+    domains: [
+      ...demoDomainCatalog,
+      {
+        id: "dom_missing",
+        rootDomain: "orphaned.example.io",
+        zoneId: "zone_missing",
+        cloudflareAvailability: "missing",
+        projectStatus: "disabled",
+        lastProvisionError: null,
+        createdAt: "2026-04-01T08:45:00.000Z",
+        updatedAt: "2026-04-01T08:50:00.000Z",
+        lastProvisionedAt: "2026-04-01T08:47:00.000Z",
+        disabledAt: "2026-04-01T08:50:00.000Z",
+      },
+    ],
   },
 };

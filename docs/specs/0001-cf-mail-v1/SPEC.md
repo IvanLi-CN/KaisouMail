@@ -24,8 +24,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ### Domains
 - `/domains`
-- Admin-only mailbox domain registry and Cloudflare provisioning status surface
-- Add root domains with zone ids, retry failed provisioning, and disable domains for future mailbox creation
+- Admin-only mailbox domain catalog and Cloudflare provisioning status surface
+- Discover currently manageable Cloudflare zones in real time, then enable, disable, or retry mailbox domains inside the project
 
 ### Messages
 - `/messages/:messageId`
@@ -41,7 +41,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## API Behavior
 
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, and address validation hints used by Web and automation clients
-- `GET|POST /api/domains` plus `POST /api/domains/:id/retry|disable` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance
+- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability` and `projectStatus`
+- `GET|POST /api/domains` plus `POST /api/domains/:id/retry|disable` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a domain discovered in the Cloudflare catalog instead of accepting free-form manual input in the Web UI
 - `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
@@ -98,6 +99,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ### Domains
 
 ![Domains page overview](./assets/domains-page-overview.png)
+
+![Domains page with Cloudflare-missing domain](./assets/domains-page-missing-cloudflare.png)
 
 ### Mailbox Creation
 

@@ -6,6 +6,7 @@ import {
   createUserResponseSchema,
   domainSchema,
   listApiKeysResponseSchema,
+  listDomainCatalogResponseSchema,
   listDomainsResponseSchema,
   listMailboxesResponseSchema,
   listMessagesResponseSchema,
@@ -237,6 +238,15 @@ export const apiClient = {
       "/api/domains",
       { method: "GET" },
       (value) => listDomainsResponseSchema.parse(value),
+    );
+    return payload.domains;
+  },
+  async listDomainCatalog() {
+    if (DEMO_MODE) return demoApi.listDomainCatalog();
+    const payload = await requestJson(
+      "/api/domains/catalog",
+      { method: "GET" },
+      (value) => listDomainCatalogResponseSchema.parse(value),
     );
     return payload.domains;
   },

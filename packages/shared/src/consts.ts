@@ -5,6 +5,13 @@ export const domainStatuses = [
   "disabled",
   "provisioning_error",
 ] as const;
+export const domainCatalogAvailabilities = ["available", "missing"] as const;
+export const domainProjectStatuses = [
+  "not_enabled",
+  "active",
+  "disabled",
+  "provisioning_error",
+] as const;
 export const recipientKinds = ["to", "cc", "bcc", "replyTo"] as const;
 export const attachmentDispositions = [
   "attachment",

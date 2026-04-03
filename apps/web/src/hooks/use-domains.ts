@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 
 const domainsKey = ["domains"] as const;
+const domainCatalogKey = ["domains", "catalog"] as const;
 const metaKey = ["meta"] as const;
 
 export const useDomainsQuery = () =>
@@ -11,12 +12,19 @@ export const useDomainsQuery = () =>
     queryFn: () => apiClient.listDomains(),
   });
 
+export const useDomainCatalogQuery = () =>
+  useQuery({
+    queryKey: domainCatalogKey,
+    queryFn: () => apiClient.listDomainCatalog(),
+  });
+
 export const useCreateDomainMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: apiClient.createDomain,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -28,6 +36,7 @@ export const useDisableDomainMutation = () => {
     mutationFn: (domainId: string) => apiClient.disableDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -39,6 +48,7 @@ export const useRetryDomainMutation = () => {
     mutationFn: (domainId: string) => apiClient.retryDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });

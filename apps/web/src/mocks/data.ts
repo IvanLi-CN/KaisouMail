@@ -3,6 +3,7 @@ import { versionInfo } from "@cf-mail/shared";
 import type {
   ApiKeyRecord,
   ApiMeta,
+  DomainCatalogItem,
   DomainRecord,
   Mailbox,
   MessageDetail,
@@ -280,6 +281,92 @@ export const demoDomains: DomainRecord[] = [
     updatedAt: "2026-04-01T08:40:00.000Z",
     lastProvisionedAt: "2026-04-01T08:35:00.000Z",
     disabledAt: "2026-04-01T08:40:00.000Z",
+  },
+];
+
+export const demoCloudflareZones = [
+  {
+    id: "zone_primary",
+    rootDomain: "707979.xyz",
+  },
+  {
+    id: "zone_secondary",
+    rootDomain: "mail.example.net",
+  },
+  {
+    id: "zone_failed",
+    rootDomain: "staging.example.dev",
+  },
+  {
+    id: "zone_disabled",
+    rootDomain: "disabled.example.org",
+  },
+  {
+    id: "zone_available",
+    rootDomain: "ops.example.org",
+  },
+];
+
+export const demoDomainCatalog: DomainCatalogItem[] = [
+  {
+    id: "dom_primary",
+    rootDomain: "707979.xyz",
+    zoneId: "zone_primary",
+    cloudflareAvailability: "available",
+    projectStatus: "active",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:00:00.000Z",
+    updatedAt: "2026-04-01T08:05:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:05:00.000Z",
+    disabledAt: null,
+  },
+  {
+    id: "dom_secondary",
+    rootDomain: "mail.example.net",
+    zoneId: "zone_secondary",
+    cloudflareAvailability: "available",
+    projectStatus: "active",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:10:00.000Z",
+    updatedAt: "2026-04-01T08:12:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:12:00.000Z",
+    disabledAt: null,
+  },
+  {
+    id: "dom_failed",
+    rootDomain: "staging.example.dev",
+    zoneId: "zone_failed",
+    cloudflareAvailability: "available",
+    projectStatus: "provisioning_error",
+    lastProvisionError: "Zone access denied",
+    createdAt: "2026-04-01T08:20:00.000Z",
+    updatedAt: "2026-04-01T08:25:00.000Z",
+    lastProvisionedAt: null,
+    disabledAt: null,
+  },
+  {
+    id: "dom_disabled",
+    rootDomain: "disabled.example.org",
+    zoneId: "zone_disabled",
+    cloudflareAvailability: "available",
+    projectStatus: "disabled",
+    lastProvisionError: null,
+    createdAt: "2026-04-01T08:30:00.000Z",
+    updatedAt: "2026-04-01T08:40:00.000Z",
+    lastProvisionedAt: "2026-04-01T08:35:00.000Z",
+    disabledAt: "2026-04-01T08:40:00.000Z",
+  },
+  {
+    id: null,
+    rootDomain: "ops.example.org",
+    zoneId: "zone_available",
+    cloudflareAvailability: "available",
+    projectStatus: "not_enabled",
+    lastProvisionError: null,
+    createdAt: null,
+    updatedAt: null,
+    lastProvisionedAt: null,
+    disabledAt: null,
   },
 ];
 

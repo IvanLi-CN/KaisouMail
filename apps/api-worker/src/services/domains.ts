@@ -1,4 +1,4 @@
-import { domainSchema } from "@cf-mail/shared";
+import { domainCatalogItemSchema, domainSchema } from "@cf-mail/shared";
 import { asc, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client";
@@ -11,8 +11,10 @@ import {
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import {
+  type CloudflareZoneSummary,
   type EmailRoutingDomain,
   enableDomainRouting,
+  listZones,
   validateZoneAccess,
 } from "./emailRouting";
 
@@ -33,6 +35,24 @@ const toDomainDto = (row: DomainRow) =>
     updatedAt: row.updatedAt,
     lastProvisionedAt: row.lastProvisionedAt,
     disabledAt: row.disabledAt,
+  });
+
+const toDomainCatalogDto = (input: {
+  row: DomainRow | null;
+  zone: CloudflareZoneSummary | null;
+  rootDomain: string;
+}) =>
+  domainCatalogItemSchema.parse({
+    id: input.row?.id ?? null,
+    rootDomain: input.rootDomain,
+    zoneId: input.zone?.id ?? input.row?.zoneId ?? null,
+    cloudflareAvailability: input.zone ? "available" : "missing",
+    projectStatus: input.row?.status ?? "not_enabled",
+    lastProvisionError: input.row?.lastProvisionError ?? null,
+    createdAt: input.row?.createdAt ?? null,
+    updatedAt: input.row?.updatedAt ?? null,
+    lastProvisionedAt: input.row?.lastProvisionedAt ?? null,
+    disabledAt: input.row?.disabledAt ?? null,
   });
 
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
@@ -78,13 +98,68 @@ const provisionDomain = async (
   };
 };
 
-export const listDomains = async (env: WorkerEnv) => {
+const listLocalDomainRows = async (env: WorkerEnv) => {
   const db = getDb(env);
-  const rows = await db
+  return db
     .select()
     .from(domains)
     .orderBy(...orderByRootDomain);
+};
+
+const listCloudflareZonesByRootDomain = async (config: RuntimeConfig) => {
+  const zones = await listZones(config);
+  return new Map(
+    zones.map((zone) => [normalizeRootDomain(zone.name), zone] as const),
+  );
+};
+
+const requireCatalogZone = async (
+  config: RuntimeConfig,
+  rootDomain: string,
+  zoneId: string,
+) => {
+  if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return;
+
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(config);
+  const zone = zonesByRootDomain.get(rootDomain);
+  if (!zone || zone.id !== zoneId) {
+    throw new ApiError(400, "Mailbox domain is not available in Cloudflare", {
+      rootDomain,
+      zoneId,
+    });
+  }
+};
+
+export const listDomains = async (env: WorkerEnv) => {
+  const rows = await listLocalDomainRows(env);
   return rows.map(toDomainDto);
+};
+
+export const listDomainCatalog = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+) => {
+  const [rows, zonesByRootDomain] = await Promise.all([
+    listLocalDomainRows(env),
+    listCloudflareZonesByRootDomain(config),
+  ]);
+  const rowsByRootDomain = new Map(
+    rows.map((row) => [row.rootDomain, row] as const),
+  );
+  const rootDomains = new Set([
+    ...rowsByRootDomain.keys(),
+    ...zonesByRootDomain.keys(),
+  ]);
+
+  return [...rootDomains]
+    .sort((left, right) => left.localeCompare(right))
+    .map((rootDomain) =>
+      toDomainCatalogDto({
+        row: rowsByRootDomain.get(rootDomain) ?? null,
+        zone: zonesByRootDomain.get(rootDomain) ?? null,
+        rootDomain,
+      }),
+    );
 };
 
 export const listActiveRootDomains = async (env: WorkerEnv) => {
@@ -162,6 +237,7 @@ export const createDomain = async (
   if (!zoneId) {
     throw new ApiError(400, "zoneId is required");
   }
+  await requireCatalogZone(config, rootDomain, zoneId);
 
   const existing = await getDomainByRootDomain(env, rootDomain);
   const createState = classifyDomainCreateState(existing);

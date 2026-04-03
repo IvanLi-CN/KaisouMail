@@ -407,7 +407,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     {
       title: "Mailbox Domains",
       description:
-        "管理员在单控制台内管理多个邮箱根域名与对应 Cloudflare zone。",
+        "管理员先在 Cloudflare 添加域，再在单控制台里实时发现并切换项目启用状态。",
       endpoints: [
         {
           method: "GET",
@@ -435,9 +435,48 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           ],
         },
         {
+          method: "GET",
+          path: "/api/domains/catalog",
+          summary: "实时列出 Cloudflare 当前可见域名，并合并项目内启用状态。",
+          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          responseBody: `{
+  "domains": [
+    {
+      "id": null,
+      "rootDomain": "ops.example.org",
+      "zoneId": "cf-zone-ops",
+      "cloudflareAvailability": "available",
+      "projectStatus": "not_enabled",
+      "lastProvisionError": null,
+      "createdAt": null,
+      "updatedAt": null,
+      "lastProvisionedAt": null,
+      "disabledAt": null
+    },
+    {
+      "id": "dom_primary",
+      "rootDomain": "${rootDomainExample}",
+      "zoneId": "cf-zone-primary",
+      "cloudflareAvailability": "available",
+      "projectStatus": "active",
+      "lastProvisionError": null,
+      "createdAt": "2026-04-03T12:00:00.000Z",
+      "updatedAt": "2026-04-03T12:00:00.000Z",
+      "lastProvisionedAt": "2026-04-03T12:00:00.000Z",
+      "disabledAt": null
+    }
+  ]
+}`,
+          notes: [
+            "`cloudflareAvailability` 表示当前 token 是否还能列出该 zone，`projectStatus` 表示项目内是否启用。",
+            "本地已有记录但 Cloudflare 当前不可见时，仍会回显为 `missing`，方便管理员继续停用或排查权限。",
+          ],
+        },
+        {
           method: "POST",
           path: "/api/domains",
-          summary: "新增邮箱域名并立即尝试接入 Cloudflare Email Routing。",
+          summary:
+            "从 Cloudflare catalog 启用域名，并立即尝试接入 Email Routing。",
           auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
           requestBody: `{
   "rootDomain": "${rootDomainExample}",
@@ -455,8 +494,9 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "disabledAt": null
 }`,
           notes: [
+            "前端不会再让管理员手填 zone id，而是直接从 `GET /api/domains/catalog` 的可见域里选中后提交。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
-            "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会用新的 zone id 原地修复。",
+            "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
           ],
         },
         {

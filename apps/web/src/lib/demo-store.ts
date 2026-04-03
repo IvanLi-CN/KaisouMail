@@ -3,6 +3,7 @@ import type {
   ApiMeta,
   CreateApiKeyResult,
   CreateUserResult,
+  DomainCatalogItem,
   DomainRecord,
   Mailbox,
   MessageDetail,
@@ -13,6 +14,7 @@ import type {
 } from "@/lib/contracts";
 import {
   demoApiKeys,
+  demoCloudflareZones,
   demoDomains,
   demoMailboxes,
   demoMessageDetails,
@@ -43,6 +45,7 @@ interface DemoState {
   session: SessionResponse | null;
   apiKeys: ApiKeyRecord[];
   users: UserRecord[];
+  cloudflareZones: Array<{ id: string; rootDomain: string }>;
   domains: DomainRecord[];
   mailboxes: Mailbox[];
   messages: MessageSummary[];
@@ -55,6 +58,7 @@ const createState = (): DemoState => ({
   session: null,
   apiKeys: clone(demoApiKeys),
   users: clone(demoUsers),
+  cloudflareZones: clone(demoCloudflareZones),
   domains: clone(demoDomains),
   mailboxes: clone(demoMailboxes),
   messages: clone(demoMessages),
@@ -64,6 +68,47 @@ const createState = (): DemoState => ({
 });
 
 let state = createState();
+
+const buildDomainCatalog = (): DomainCatalogItem[] => {
+  const localDomains = new Map(
+    state.domains.map((domain) => [domain.rootDomain, domain] as const),
+  );
+  const cloudflareZones = new Map(
+    state.cloudflareZones.map((zone) => [zone.rootDomain, zone] as const),
+  );
+  const rootDomains = new Set([
+    ...localDomains.keys(),
+    ...cloudflareZones.keys(),
+  ]);
+
+  return [...rootDomains]
+    .sort((left, right) => left.localeCompare(right))
+    .map((rootDomain) => {
+      const local = localDomains.get(rootDomain) ?? null;
+      const zone = cloudflareZones.get(rootDomain) ?? null;
+      return {
+        id: local?.id ?? null,
+        rootDomain,
+        zoneId: zone?.id ?? local?.zoneId ?? null,
+        cloudflareAvailability: zone ? "available" : "missing",
+        projectStatus: local?.status ?? "not_enabled",
+        lastProvisionError: local?.lastProvisionError ?? null,
+        createdAt: local?.createdAt ?? null,
+        updatedAt: local?.updatedAt ?? null,
+        lastProvisionedAt: local?.lastProvisionedAt ?? null,
+        disabledAt: local?.disabledAt ?? null,
+      } satisfies DomainCatalogItem;
+    });
+};
+
+const syncMetaDomains = () => {
+  state.meta.domains = state.domains
+    .filter((entry) => entry.status === "active")
+    .map((entry) => entry.rootDomain);
+  state.meta.addressRules.examples = state.meta.domains
+    .slice(0, 2)
+    .flatMap((entry) => [`build@alpha.${entry}`, `spec@ops.alpha.${entry}`]);
+};
 
 export const demoApi = {
   reset() {
@@ -286,8 +331,18 @@ export const demoApi = {
   async listDomains() {
     return clone(state.domains);
   },
+  async listDomainCatalog() {
+    return clone(buildDomainCatalog());
+  },
   async createDomain(input: { rootDomain: string; zoneId: string }) {
     const rootDomain = input.rootDomain.trim().toLowerCase();
+    const zoneId = input.zoneId.trim();
+    const catalogMatch = state.cloudflareZones.find(
+      (zone) => zone.rootDomain === rootDomain && zone.id === zoneId,
+    );
+    if (!catalogMatch) {
+      throw new Error("Mailbox domain is not available in Cloudflare");
+    }
     const existing = state.domains.find(
       (domain) => domain.rootDomain === rootDomain,
     );
@@ -299,7 +354,7 @@ export const demoApi = {
     const domain: DomainRecord = {
       id: existing?.id ?? randomId("dom"),
       rootDomain,
-      zoneId: input.zoneId.trim(),
+      zoneId,
       status: rootDomain.includes("fail") ? "provisioning_error" : "active",
       lastProvisionError: rootDomain.includes("fail")
         ? "Zone access denied"
@@ -314,12 +369,7 @@ export const demoApi = {
     } else {
       state.domains.unshift(domain);
     }
-    state.meta.domains = state.domains
-      .filter((entry) => entry.status === "active")
-      .map((entry) => entry.rootDomain);
-    state.meta.addressRules.examples = state.meta.domains
-      .slice(0, 2)
-      .flatMap((entry) => [`build@alpha.${entry}`, `spec@ops.alpha.${entry}`]);
+    syncMetaDomains();
     return clone(domain);
   },
   async disableDomain(id: string) {
@@ -328,9 +378,7 @@ export const demoApi = {
     domain.status = "disabled";
     domain.disabledAt = new Date().toISOString();
     domain.updatedAt = domain.disabledAt;
-    state.meta.domains = state.domains
-      .filter((entry) => entry.status === "active")
-      .map((entry) => entry.rootDomain);
+    syncMetaDomains();
     return clone(domain);
   },
   async retryDomain(id: string) {
@@ -341,9 +389,7 @@ export const demoApi = {
     domain.disabledAt = null;
     domain.updatedAt = new Date().toISOString();
     domain.lastProvisionedAt = domain.updatedAt;
-    state.meta.domains = state.domains
-      .filter((entry) => entry.status === "active")
-      .map((entry) => entry.rootDomain);
+    syncMetaDomains();
     return clone(domain);
   },
   async createUser(input: {

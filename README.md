@@ -5,8 +5,8 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 ## Features
 
 - Multi-user temporary mailbox management with per-user API keys
-- Multi-domain mailbox management backed by D1-stored Cloudflare zone records
-- Random or custom mailbox creation with TTL-based cleanup and explicit `rootDomain` selection
+- Multi-domain mailbox management backed by D1-stored Cloudflare zone records and real-time Cloudflare zone discovery
+- Random or custom mailbox creation with TTL-based cleanup and optional `rootDomain` selection
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
 - Multi-level mailbox subdomains such as `alpha.<mail-root>` and `ops.alpha.<mail-root>`
@@ -138,6 +138,7 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 - `GET|POST /api/api-keys`
 - `POST /api/api-keys/:id/revoke`
 - `GET|POST /api/domains`
+- `GET /api/domains/catalog`
 - `POST /api/domains/:id/retry`
 - `POST /api/domains/:id/disable`
 - `GET|POST /api/mailboxes`
@@ -230,7 +231,7 @@ To use the deploy workflow, configure:
 - Mail root domains managed in-app:
   - `707979.xyz`
   - `mail.example.net`
-- Mailboxes must select a root domain explicitly and can use nested subdomains like:
+- Mailboxes can either select a root domain explicitly or omit it and let the API randomly choose one active domain; nested subdomains still work:
   - `build@alpha.707979.xyz`
   - `spec@ops.alpha.mail.example.net`
 

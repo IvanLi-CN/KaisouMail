@@ -59,21 +59,21 @@ describe("demoApi", () => {
     expect(messages[0]?.id).toBe("msg_beta");
   });
 
-  it("allows re-submitting a non-active domain with a corrected zone id", async () => {
+  it("allows re-enabling a discovered non-active domain", async () => {
     const repaired = await demoApi.createDomain({
-      rootDomain: "mail.fail.example.net",
-      zoneId: "zone_fixed",
+      rootDomain: "staging.example.dev",
+      zoneId: "zone_failed",
     });
-    expect(repaired.status).toBe("provisioning_error");
+    expect(repaired.status).toBe("active");
 
     await demoApi.disableDomain(repaired.id);
 
     const retried = await demoApi.createDomain({
-      rootDomain: "mail.fail.example.net",
-      zoneId: "zone_repaired",
+      rootDomain: "staging.example.dev",
+      zoneId: "zone_failed",
     });
     expect(retried.id).toBe(repaired.id);
-    expect(retried.zoneId).toBe("zone_repaired");
+    expect(retried.zoneId).toBe("zone_failed");
     expect(retried.disabledAt).toBeNull();
   });
 

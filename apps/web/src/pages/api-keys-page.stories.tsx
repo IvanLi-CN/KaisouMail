@@ -150,6 +150,7 @@ export const DocsReference: Story = {
     });
     await expect(canvas.getByText("Automation / Agent")).toBeInTheDocument();
     await expect(canvas.getByText("/api/meta")).toBeInTheDocument();
+    await expect(canvas.getByText("/api/domains/catalog")).toBeInTheDocument();
     await expect(canvas.getByText("/api/mailboxes/ensure")).toBeInTheDocument();
     await expect(canvas.getByText("/api/messages/:id/raw")).toBeInTheDocument();
   },
