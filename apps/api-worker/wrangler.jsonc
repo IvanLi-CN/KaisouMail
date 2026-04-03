@@ -30,6 +30,7 @@
   "vars": {
     "APP_ENV": "production",
     "MAIL_DOMAIN": "707979.xyz",
+    "WEB_APP_ORIGIN": "https://cfm.707979.xyz",
     "EMAIL_WORKER_NAME": "email-receiver-worker",
     "DEFAULT_MAILBOX_TTL_MINUTES": "60",
     "CLEANUP_BATCH_SIZE": "3",
