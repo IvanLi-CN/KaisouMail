@@ -1,3 +1,4 @@
+import { BookOpenText, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,8 @@ import {
 } from "@/components/ui/card";
 import { useMetaQuery } from "@/hooks/use-meta";
 import type { ApiMeta } from "@/lib/contracts";
+import type { PublicDocsLinks } from "@/lib/public-docs";
+import { publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 
 type EndpointDoc = {
@@ -616,7 +619,13 @@ const buildCurlExample = () => `curl -X POST "$API_BASE/api/auth/session" \\
 const buildBearerExample = () => `curl "$API_BASE/api/api-keys" \\
   -H "Authorization: Bearer cfm_your_secret_here"`;
 
-const ApiKeysDocsPageView = ({ meta }: { meta: ApiMeta }) => {
+const ApiKeysDocsPageView = ({
+  meta,
+  docsLinks = null,
+}: {
+  meta: ApiMeta;
+  docsLinks?: PublicDocsLinks | null;
+}) => {
   const endpointGroups = buildEndpointGroups(meta);
   const overviewAddressExample = "build@alpha.mail.example.net";
   const errorContract = `{
@@ -631,13 +640,35 @@ const ApiKeysDocsPageView = ({ meta }: { meta: ApiMeta }) => {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="API 对接文档"
-        description="给人类和 Agent 看的站内参考页：围绕当前已实现的 Worker 路由与 shared schema，整理凭证、会话、邮箱和消息接口的实际接入方式。"
+        title="API 对接速查"
+        description="站内速查页只保留当前运行时最常用的接口示例与权限摘要；完整部署、Token 权限矩阵和 Storybook 入口请走公开文档站。"
         eyebrow="Integration"
         action={
-          <Button asChild variant="outline">
-            <Link to={appRoutes.apiKeys}>回到 API Keys</Link>
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {docsLinks ? (
+              <>
+                <Button asChild variant="secondary">
+                  <a href={docsLinks.docsHome} target="_blank" rel="noreferrer">
+                    <BookOpenText className="mr-2 h-4 w-4" />
+                    公开文档站
+                  </a>
+                </Button>
+                <Button asChild variant="outline">
+                  <a
+                    href={docsLinks.storybook}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    公开 Storybook
+                  </a>
+                </Button>
+              </>
+            ) : null}
+            <Button asChild variant="outline">
+              <Link to={appRoutes.apiKeys}>回到 API Keys</Link>
+            </Button>
+          </div>
         }
       />
 
@@ -682,6 +713,41 @@ const ApiKeysDocsPageView = ({ meta }: { meta: ApiMeta }) => {
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：
                 <code className="ml-1">{overviewAddressExample}</code>
               </p>
+              <p className="mt-2">
+                Cloudflare 域名接入最少需要
+                <code className="ml-1">Zone: Email Routing Rules: Edit</code>、
+                <code className="ml-1">Zone: DNS: Edit</code>、
+                <code className="ml-1">Zone: Workers Routes: Edit</code> 和
+                <code className="ml-1">Zone: Zone Settings: Edit</code>。
+              </p>
+              <p className="mt-2">
+                如果域名目录显示 <code>provisioning_error</code> /{" "}
+                <code>Authentication error</code>，优先检查 token 是否缺少{" "}
+                <code>Zone Settings: Edit</code>，以及 scope 是否覆盖目标 zone。
+              </p>
+              {docsLinks ? (
+                <p className="mt-2">
+                  完整权限矩阵、部署说明与公开组件预览见{" "}
+                  <a
+                    className="underline underline-offset-4"
+                    href={docsLinks.tokenPermissions}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Cloudflare Token 权限页
+                  </a>{" "}
+                  与{" "}
+                  <a
+                    className="underline underline-offset-4"
+                    href={docsLinks.storybook}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Storybook
+                  </a>
+                  。
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -768,8 +834,8 @@ export const ApiKeysDocsPage = () => {
     return (
       <div className="space-y-4">
         <PageHeader
-          title="API 对接文档"
-          description="正在读取 `/api/meta`，准备把当前可用域名、TTL 和地址规则写进这份文档。"
+          title="API 对接速查"
+          description="正在读取 `/api/meta`，准备把当前可用域名、TTL 和地址规则写进这份速查页。"
           eyebrow="Integration"
         />
         <Card className={sectionCardClassName}>
@@ -781,7 +847,9 @@ export const ApiKeysDocsPage = () => {
     );
   }
 
-  return <ApiKeysDocsPageView meta={metaQuery.data} />;
+  return (
+    <ApiKeysDocsPageView meta={metaQuery.data} docsLinks={publicDocsLinks} />
+  );
 };
 
 export { ApiKeysDocsPageView };

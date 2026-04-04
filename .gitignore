@@ -11,6 +11,8 @@ apps/web/.vite
 apps/web/storybook-static
 apps/web/playwright/.cache
 apps/api-worker/.wrangler
+docs-site/.rspress
+docs-site/doc_build
 screenshots
 .artifacts
 __pycache__

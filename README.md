@@ -2,6 +2,13 @@
 
 Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, and a React + shadcn/ui control plane.
 
+## Docs & Storybook
+
+- Public docs site: [ivanli-cn.github.io/cf-mail](https://ivanli-cn.github.io/cf-mail/)
+- Public Storybook: [ivanli-cn.github.io/cf-mail/storybook.html](https://ivanli-cn.github.io/cf-mail/storybook.html)
+- Chinese README: [README.zh-CN.md](./README.zh-CN.md)
+- In-app quick reference: `/api-keys/docs`
+
 ## Features
 
 - Multi-user temporary mailbox management with per-user API keys
@@ -29,6 +36,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 - `apps/api-worker`: Worker API, Email Worker, scheduled cleanup, Drizzle schema, Wrangler config
 - `apps/web`: Pages-deployed React admin UI, Storybook, Playwright smoke tests
+- `docs-site`: GitHub Pages-deployed Rspress docs site that links to the public Storybook surface
 - `packages/shared`: shared contracts, constants, and version metadata
 
 ## Repository scripts
@@ -37,8 +45,9 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 bun run check            # biome checks across the monorepo
 bun run typecheck        # shared + worker + web typecheck
 bun run test             # worker/web unit tests
-bun run build            # worker dry-run deploy + web production build
+bun run build            # worker dry-run deploy + web/docs production build
 bun run build-storybook  # static Storybook build
+bun run build-docs-site  # static Rspress docs build
 bun run test:e2e         # Playwright smoke test against demo mode
 ```
 
@@ -70,6 +79,12 @@ PORT=4173 bun run --cwd apps/web dev
 
 ```bash
 STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
+```
+
+### Public docs site
+
+```bash
+DOCS_PORT=56007 bun run --cwd docs-site dev
 ```
 
 ## Cloudflare runtime contract
@@ -111,6 +126,32 @@ The Worker expects these bindings and variables:
 These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
+
+## Cloudflare API Tokens
+
+This repository currently uses `CLOUDFLARE_API_TOKEN` for both deploy-time automation and runtime mailbox-domain management. If you keep using one shared token, it must satisfy the union of both permission sets.
+
+### Runtime mailbox-domain management
+
+To discover zones in `/api/domains/catalog` and enable Email Routing from the control plane, the token must cover every managed zone and include these zone-level write permissions:
+
+- `Zone: Email Routing Rules: Edit`
+- `Zone: DNS: Edit`
+- `Zone: Workers Routes: Edit`
+- `Zone: Zone Settings: Edit`
+
+`Zone: Zone Settings: Edit` is the permission most often missed. If a zone appears in the catalog but enabling it fails with `provisioning_error` / `Authentication error`, check that permission first and confirm the token scope covers the target zone.
+
+### Deploy-time permissions
+
+The release and deploy workflows also need:
+
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+If you later split the deploy token and the runtime management token, these two sections can be applied independently. Until then, the shared token needs the full union.
 
 ## D1 and R2 layout
 
@@ -164,6 +205,7 @@ bun run --cwd apps/api-worker db:migrate:remote
 - `ci-pr.yml`: PR/feature-branch quality gates for lint, typecheck, tests, builds, Storybook, and Playwright smoke
 - `ci-main.yml`: main-branch quality gates plus immutable release snapshot generation in `refs/notes/release-snapshots`
 - `deploy-main.yml`: D1 migrations, Worker deploy, Pages direct upload on `main`
+- `docs-pages.yml`: GitHub Pages build/deploy for the public docs site and Storybook bundle
 - `release.yml`: queued GitHub Release publishing driven by merged PR labels and CI Main snapshots
 
 ### Release labels
@@ -203,6 +245,8 @@ To use the deploy workflow, configure:
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
 
+To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
+
 ## Deployment checklist
 
 1. Create the Pages project `cf-mail` once in Cloudflare
@@ -214,6 +258,7 @@ To use the deploy workflow, configure:
 7. Set `WEB_APP_ORIGIN=<your pages origin>`
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
 9. Push to `main` to trigger the deploy workflow
+10. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
 
 ## Worker topology
 
