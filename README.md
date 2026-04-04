@@ -129,56 +129,30 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 
 ## Cloudflare API Tokens
 
-This repository currently ships with a single `CLOUDFLARE_API_TOKEN` secret that is reused by deploy-time automation and runtime mailbox-domain management. That default is the fastest way to get started, but it is not the strict security recommendation for long-lived production deployments.
+Start with the operational answer, not the philosophy:
 
-### Scenario A: runtime mailbox-domain management only
+- recommended production setup: use two different token values
+- keep the secret name the same in both places: `CLOUDFLARE_API_TOKEN`
+- separate them by storage location, not by renaming variables
 
-If you customize your deployment so runtime mailbox-domain management uses its own token, the current code path only needs the permissions required by these operations:
+Use this wiring:
 
-- `GET /zones`
-- `GET /zones/:zone_id`
-- `POST /zones/:zone_id/email/routing/enable`
-- `POST /zones/:zone_id/email/routing/dns`
-- `POST /zones/:zone_id/email/routing/rules`
-- `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+| Purpose | Stored in | Secret name | Value |
+| --- | --- | --- | --- |
+| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_API_TOKEN` | runtime token |
+| Deploy workflow | GitHub Actions repository secret | `CLOUDFLARE_API_TOKEN` | deploy token |
 
-For that runtime-only token, document and provision this minimum set:
+### Runtime token minimum permissions
 
 - `Zone: Zone: Read`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
-The token scope must still cover every mailbox domain you want the control plane to discover or enable.
+The runtime token scope must cover every mailbox domain you want the control plane to discover or enable.
 
 `Zone: Zone Settings: Edit` is the permission most often missed. If a zone appears in the catalog but enabling it fails with `provisioning_error` / `Authentication error`, check that permission first and confirm the token scope covers the target zone.
 
-### Scenario B: one shared token for deploy and runtime
-
-This is the current repository default and the easiest onboarding path. If you keep one shared `CLOUDFLARE_API_TOKEN`, it must satisfy the union of runtime and deploy permissions:
-
-- `Zone: Zone: Read`
-- `Zone: Email Routing Rules: Edit`
-- `Zone: Zone Settings: Edit`
-- `Account: D1: Edit`
-- `Account: Workers Scripts: Edit`
-- `Account: Cloudflare Pages: Edit`
-- `Zone: Workers Routes: Edit`
-
-### Decision
-
-This repository should document one clear recommendation:
-
-- preferred default: split the runtime token and the deploy token
-- long-lived production: do not share one token across both concerns
-- shared-token setup is kept only for fastest onboarding, short-lived evaluation, or low-risk single-operator use
-
-Why:
-
-- It combines deploy permissions and live runtime mutation permissions in one credential
-- Leakage from either GitHub Actions or the running Worker increases the blast radius
-- Durable automation is better served by separate, least-privileged, account-owned tokens
-
-### Deploy-time permissions only
+### Deploy token minimum permissions
 
 The release and deploy workflows need:
 
@@ -186,6 +160,20 @@ The release and deploy workflows need:
 - `Account: Workers Scripts: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
+
+### Shared token is quickstart only
+
+If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, it must satisfy the union:
+
+- `Zone: Zone: Read`
+- `Zone: Email Routing Rules: Edit`
+- `Zone: Zone Settings: Edit`
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+That shared-token mode is kept only for fastest onboarding, short-lived evaluation, or low-risk single-operator use. It is not the recommended production setup.
 
 ## D1 and R2 layout
 

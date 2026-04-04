@@ -714,16 +714,18 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">{overviewAddressExample}</code>
               </p>
               <p className="mt-2">
-                当前仓库默认把同一个{" "}
-                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>{" "}
-                同时用于部署和运行时域名管理；如果你把两者拆开，运行时最小权限应收敛为
-                <code className="ml-1">Zone: Zone: Read</code>、
-                <code className="ml-1">Zone: Email Routing Rules: Edit</code> 和
-                <code className="ml-1">Zone: Zone Settings: Edit</code>。
+                正式环境推荐拆成两把 token，但两边的密钥名都继续叫{" "}
+                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>：Worker
+                secret 里放 runtime token，GitHub Actions secret 里放 deploy
+                token。
               </p>
               <p className="mt-2">
-                明确建议：长期生产环境不要共用同一个
-                token。共用方案只保留给最快上手的试用或低风险单人环境。
+                runtime token 最小权限是{" "}
+                <code className="ml-1">Zone: Zone: Read</code>、
+                <code className="ml-1">Zone: Email Routing Rules: Edit</code> 和
+                <code className="ml-1">Zone: Zone Settings: Edit</code>；deploy
+                token 负责 D1、Workers Scripts、Cloudflare Pages 和 Workers
+                Routes。
               </p>
               <p className="mt-2">
                 如果域名目录显示 <code>provisioning_error</code> /{" "}
