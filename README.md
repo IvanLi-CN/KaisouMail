@@ -130,20 +130,12 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 
 ## Cloudflare API Tokens
 
-The project supports both layouts:
-
-- recommended production setup: split runtime and deploy tokens
-- quickstart setup: reuse one shared token
-- explicit split tokens are supported natively; shared-token mode stays as a fallback
-
-Use this precedence:
+Recommended production setup:
 
 | Surface | Preferred secret | Fallback secret | Used for |
 | --- | --- | --- | --- |
 | API Worker runtime | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | domain catalog + Email Routing management |
 | Deploy workflow | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
-
-### Recommended production wiring
 
 | Purpose | Stored in | Secret name | Value |
 | --- | --- | --- | --- |
@@ -181,7 +173,7 @@ If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, put it in both the 
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
-That shared-token mode is kept only for fastest onboarding, short-lived evaluation, or low-risk single-operator use. It is not the recommended production setup.
+Use shared-token mode only for fastest onboarding, short-lived evaluation, or low-risk single-operator use.
 
 ## D1 and R2 layout
 

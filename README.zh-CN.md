@@ -56,20 +56,12 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## Cloudflare API Token 权限
 
-项目现在原生支持两种配置：
-
-- 正式环境推荐拆成两把 token
-- 快速上手允许共用一把 token
-- 显式拆分优先，共享 token 只作为兼容回退
-
-优先级如下：
+正式环境推荐配置：
 
 | 面向 | 优先读取 | 回退读取 | 用途 |
 | --- | --- | --- | --- |
 | API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | 域名目录 + Email Routing 管理 |
 | 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
-
-正式环境推荐接法如下：
 
 | 用途 | 存放位置 | 密钥名 | 应填什么 |
 | --- | --- | --- | --- |
@@ -107,7 +99,7 @@ scope 必须覆盖所有要接入 CF Mail 的 zones。
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
-长期生产环境不建议共用，原因很简单：它把部署权限和线上运行时变更权限绑在了同一把凭据上，GitHub Actions secret 或 Worker secret 任一侧泄露，影响面都会放大。
+共享 token 只建议用于最快上手、临时验证和低风险单人环境。
 
 ## 环境变量
 

@@ -2,49 +2,38 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 
 # Cloudflare Token 权限
 
-这一页只回答 5 个问题：
+## 推荐配置（正式环境）
 
-1. 正式环境应该怎么配
-2. 两把 token 分别放哪里
-3. 每把 token 需要哪些权限
-4. 什么时候才允许偷懒共用一把 token
-5. 项目到底按什么优先级读取这些 token
-
-## 项目支持的配置方式
-
-项目现在原生支持两种方式：
-
-- 正式环境：拆成两把 token
-- 快速上手：共用一把 token
-
-实际读取优先级如下：
-
-| 面向 | 优先读取 | 回退读取 | 用途 |
-| --- | --- | --- | --- |
-| API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | 域名目录 + Email Routing 管理 |
-| 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
-
-## 正式环境推荐接法
-
-| 用途 | 存放位置 | 密钥名 | 应填什么 |
+| 用途 | 存放位置 | 密钥名 | 值 |
 | --- | --- | --- | --- |
 | 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
-| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
+| 部署流水线 | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
-照着这个表配置即可，不需要改代码。
+按这个表配置即可。项目已经支持拆分 token，不需要改代码。
 
-## Runtime token
+## 快速上手（单人试用）
 
-### 放哪里
+如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以只配一把共享 token：
 
-- Cloudflare Dashboard
-- Worker `cf-mail-api`
-- Secrets
-- `CLOUDFLARE_RUNTIME_API_TOKEN=<runtime token>`
+- Cloudflare `cf-mail-api` Worker secret：`CLOUDFLARE_API_TOKEN`
+- GitHub repository secret：`CLOUDFLARE_API_TOKEN`
 
-### 最小权限
+这把共享 token 需要同时覆盖运行时和部署两侧权限。
 
-当前运行时代码路径会调用：
+<CloudflareTokenConfigMock />
+
+## 读取顺序
+
+| 面向 | 优先读取 | 回退读取 |
+| --- | --- | --- |
+| API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` |
+| 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` |
+
+如果显式拆分 token 和共享 token 同时存在，项目优先使用显式拆分的那一组。
+
+## Runtime token 最小权限
+
+运行时代码会调用：
 
 - `GET /zones`
 - `GET /zones/:zone_id`
@@ -55,61 +44,34 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 
 所以 runtime token 只需要：
 
-| 权限 | 必须 | 用途 |
-| --- | --- | --- |
-| `Zone: Zone: Read` | 是 | 列出和校验 zone |
-| `Zone: Email Routing Rules: Edit` | 是 | 创建/删除邮箱 routing rule |
-| `Zone: Zone Settings: Edit` | 是 | 启用 Email Routing |
+| 权限 | 用途 |
+| --- | --- |
+| `Zone: Zone: Read` | 列出和校验 zone |
+| `Zone: Email Routing Rules: Edit` | 创建/删除邮箱 routing rule |
+| `Zone: Zone Settings: Edit` | 启用 Email Routing |
 
-### Scope
+Scope 要覆盖所有要接入 CF Mail 的 zones。
 
-- 必须覆盖所有要接入 CF Mail 的 zones
-- 如果只覆盖 `707979.xyz`，那别的域名即使在 Cloudflare 里存在，也不能在项目里正常启用
+## Deploy token 最小权限
 
-## Deploy token
+部署流程会做：
 
-### 放哪里
-
-- GitHub repository secrets
-- `CLOUDFLARE_DEPLOY_API_TOKEN=<deploy token>`
-
-### 最小权限
-
-当前部署流程会做：
-
-- `wrangler deploy` 发布 Worker
-- `wrangler pages deploy` 发布控制台
-- 远程 D1 migration
+- `wrangler deploy`
+- `wrangler pages deploy`
+- remote D1 migration
 
 所以 deploy token 需要：
 
-| 权限 | 必须 | 用途 |
-| --- | --- | --- |
-| `Account: D1: Edit` | 是 | 远程 D1 migration |
-| `Account: Workers Scripts: Edit` | 是 | 发布 Worker |
-| `Account: Cloudflare Pages: Edit` | 是 | 发布 Pages |
-| `Zone: Workers Routes: Edit` | 是 | 绑定 Worker 自定义域路由 |
+| 权限 | 用途 |
+| --- | --- |
+| `Account: D1: Edit` | 远程 D1 migration |
+| `Account: Workers Scripts: Edit` | 发布 Worker |
+| `Account: Cloudflare Pages: Edit` | 发布 Pages |
+| `Zone: Workers Routes: Edit` | 绑定 Worker 自定义域路由 |
 
-### Scope
+## 共享 token 并集权限
 
-- Account scope：目标 Cloudflare account
-- Zone scope：所有会被 Worker route / custom domain 使用到的 zones
-
-## 快速试用：共用一把 token
-
-只在这些情况下允许共用：
-
-- 单人维护
-- 自建环境
-- 临时验证
-- 低风险内部演示
-
-这时你可以把同一把 token 同时填到：
-
-- GitHub Actions secret `CLOUDFLARE_API_TOKEN`
-- `cf-mail-api` Worker secret `CLOUDFLARE_API_TOKEN`
-
-这把共享 token 必须满足并集权限：
+如果你选择快速上手的共享 token，它必须同时具备：
 
 - `Zone: Zone: Read`
 - `Zone: Email Routing Rules: Edit`
@@ -119,39 +81,21 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
-## 共享 token 对照抄配置
+## 常见报错
 
-下面这个示意块只对应 **快速试用时的共享 token**。它不是正式环境推荐配置，也不是 runtime token 的最小权限。
+### `Authentication error`
 
-<CloudflareTokenConfigMock />
+优先检查这两项：
 
-## 为什么正式环境不建议共用
+1. token 是否具备 `Zone: Zone Settings: Edit`
+2. token 的 scope 是否覆盖目标 zone
 
-- 它把部署权限和线上运行时变更权限绑在了同一把凭据上
-- GitHub Actions secret 或 Worker secret 任一侧泄露，影响面都会变大
-- Cloudflare 官方也更倾向于让长期自动化使用独立、边界清晰的 token，并强调最小权限和资源范围约束
+### 域名目录能看到 zone，但不能启用
 
-所以这里不是让你自己推导规则，而是项目已经定好：
+这通常表示 token 只有读取能力，没有对应 zone 的写权限。能列出 zone，不代表能启用 Email Routing。
 
-- **正式环境：优先填显式拆分 token**
-- **快速试用：允许只填共享 token**
-- **如果两类变量都存在，项目优先使用显式拆分的那一组**
-
-## 参考官方
+## 官方文档
 
 - [Create API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
 - [Account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)
 - [Enable Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/methods/enable/)
-
-## 最小排障顺序
-
-1. 确认 token 资源范围覆盖目标 zone
-2. 确认 runtime token 放在 `cf-mail-api` Worker secret `CLOUDFLARE_RUNTIME_API_TOKEN`，deploy token 放在 GitHub Actions secret `CLOUDFLARE_DEPLOY_API_TOKEN`
-3. 确认 token 具备 `Zone Settings: Edit`
-4. 确认 `EMAIL_ROUTING_MANAGEMENT_ENABLED=true`
-5. 确认 `EMAIL_WORKER_NAME` 已配置
-6. 回到控制台域名页执行“重试接入”
-
-## English summary
-
-Production should use two explicit secrets: `CLOUDFLARE_RUNTIME_API_TOKEN` on the `cf-mail-api` Worker for runtime management, and `CLOUDFLARE_DEPLOY_API_TOKEN` in GitHub Actions for deploy. The project still supports one shared `CLOUDFLARE_API_TOKEN` for quickstart, but explicit split tokens win when both are present. Runtime needs `Zone: Zone: Read`, `Zone: Email Routing Rules: Edit`, and `Zone: Zone Settings: Edit`. Deploy needs `Account: D1: Edit`, `Account: Workers Scripts: Edit`, `Account: Cloudflare Pages: Edit`, and `Zone: Workers Routes: Edit`.
