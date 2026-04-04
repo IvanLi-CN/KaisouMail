@@ -149,7 +149,9 @@ export const MailboxesPageView = ({
 
 export const MailboxesPage = () => {
   const metaQuery = useMetaQuery();
-  const mailboxesQuery = useMailboxesQuery();
+  const mailboxesQuery = useMailboxesQuery({
+    pollingIntervalMs: 60_000,
+  });
   const createMailboxMutation = useCreateMailboxMutation();
   const messagesQuery = useMessagesQuery([], undefined, {
     pollingIntervalMs: 60_000,

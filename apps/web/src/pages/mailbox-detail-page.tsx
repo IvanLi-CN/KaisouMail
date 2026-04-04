@@ -28,7 +28,9 @@ export const MailboxDetailPage = () => {
   const workspaceParams = new URLSearchParams(location.search);
   const sortParam = workspaceParams.get("sort");
   const workspaceSort = isMailboxSortMode(sortParam) ? sortParam : null;
-  const mailboxQuery = useMailboxDetailQuery(mailboxId);
+  const mailboxQuery = useMailboxDetailQuery(mailboxId, {
+    pollingIntervalMs: 60_000,
+  });
   const messagesQuery = useMessagesQuery([], undefined, {
     pollingIntervalMs: 60_000,
   });
