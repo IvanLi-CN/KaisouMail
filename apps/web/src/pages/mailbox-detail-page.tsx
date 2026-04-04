@@ -1,7 +1,7 @@
 import { PanelsTopLeft, Trash2, Undo2 } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
-
 import { MailboxList } from "@/components/mailboxes/mailbox-list";
+import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import {
@@ -12,11 +12,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  mailboxKeys,
   useDestroyMailboxMutation,
   useMailboxDetailQuery,
 } from "@/hooks/use-mailboxes";
-import { useMessagesQuery } from "@/hooks/use-messages";
+import { messageKeys, useMessagesQuery } from "@/hooks/use-messages";
+import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import { useReadMessageIds } from "@/lib/message-read-state";
+import { resolveLatestRefreshAt } from "@/lib/message-refresh";
 import { buildWorkspaceSearch, isMailboxSortMode } from "@/lib/workspace";
 
 export const MailboxDetailPage = () => {
@@ -26,9 +29,23 @@ export const MailboxDetailPage = () => {
   const sortParam = workspaceParams.get("sort");
   const workspaceSort = isMailboxSortMode(sortParam) ? sortParam : null;
   const mailboxQuery = useMailboxDetailQuery(mailboxId);
-  const messagesQuery = useMessagesQuery();
+  const messagesQuery = useMessagesQuery([], undefined, {
+    pollingIntervalMs: 60_000,
+  });
   const destroyMailboxMutation = useDestroyMailboxMutation();
   const readMessageIds = useReadMessageIds();
+  const manualRefresh = useQueryRefresh([
+    { queryKey: mailboxKeys.detail(mailboxId) },
+    { queryKey: messageKeys.all, exact: false },
+  ]);
+  const lastRefreshedAt = resolveLatestRefreshAt(
+    mailboxQuery.dataUpdatedAt,
+    messagesQuery.dataUpdatedAt,
+  );
+  const isRefreshing =
+    manualRefresh.isRefreshing ||
+    mailboxQuery.isFetching ||
+    messagesQuery.isFetching;
 
   if (!mailboxQuery.data) {
     return <div className="text-muted-foreground">加载邮箱中…</div>;
@@ -56,6 +73,12 @@ export const MailboxDetailPage = () => {
         eyebrow="Mailbox Detail"
         action={
           <div className="flex flex-wrap gap-2">
+            <MessageRefreshControl
+              density="default"
+              isRefreshing={isRefreshing}
+              lastRefreshedAt={lastRefreshedAt}
+              onRefresh={manualRefresh.refresh}
+            />
             <ActionButton
               asChild
               density="default"

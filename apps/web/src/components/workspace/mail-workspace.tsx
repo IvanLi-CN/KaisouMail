@@ -6,6 +6,7 @@ import {
   PanelRightOpen,
   Search,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
@@ -38,6 +39,7 @@ type MailWorkspaceProps = {
   selectedMessage: MessageDetail | null;
   searchQuery: string;
   sortMode: MailboxSortMode;
+  refreshAction?: ReactNode;
   isMailboxesLoading?: boolean;
   isMessagesLoading?: boolean;
   isMessageLoading?: boolean;
@@ -62,6 +64,7 @@ export const MailWorkspace = ({
   selectedMessage,
   searchQuery,
   sortMode,
+  refreshAction,
   isMailboxesLoading = false,
   isMessagesLoading = false,
   isMessageLoading = false,
@@ -82,17 +85,20 @@ export const MailWorkspace = ({
         description="在一个三栏视图里完成邮箱筛选、聚合收件浏览和正文阅读。默认先看全部邮箱，再按需要钻取到单邮箱上下文。"
         eyebrow="Workspace"
         action={
-          <ActionButton
-            asChild
-            density="dense"
-            icon={ListTree}
-            label="打开邮箱管理"
-            priority="secondary"
-            tooltip="打开邮箱管理"
-            variant="outline"
-          >
-            <Link to={mailboxManagementHref}>打开邮箱管理</Link>
-          </ActionButton>
+          <div className="flex flex-wrap items-center gap-2">
+            {refreshAction}
+            <ActionButton
+              asChild
+              density="dense"
+              icon={ListTree}
+              label="打开邮箱管理"
+              priority="secondary"
+              tooltip="打开邮箱管理"
+              variant="outline"
+            >
+              <Link to={mailboxManagementHref}>打开邮箱管理</Link>
+            </ActionButton>
+          </div>
         }
       />
 

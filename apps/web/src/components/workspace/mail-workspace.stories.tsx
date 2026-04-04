@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import { demoMailboxes, demoMessageDetails, demoMessages } from "@/mocks/data";
 
@@ -35,6 +36,13 @@ const meta = {
     selectedMessage: demoMessageDetails.msg_alpha,
     searchQuery: "",
     sortMode: "recent",
+    refreshAction: (
+      <MessageRefreshControl
+        isRefreshing={false}
+        lastRefreshedAt={new Date("2026-04-04T09:12:00.000Z").getTime()}
+        onRefresh={fn()}
+      />
+    ),
     isMailboxesLoading: false,
     isMessagesLoading: false,
     isMessageLoading: false,
@@ -129,5 +137,17 @@ export const SearchEmptyState: Story = {
     selectedMessageId: null,
     selectedMessage: null,
     messageDetailHref: null,
+  },
+};
+
+export const RefreshingWorkspace: Story = {
+  args: {
+    refreshAction: (
+      <MessageRefreshControl
+        isRefreshing
+        lastRefreshedAt={new Date("2026-04-04T09:12:00.000Z").getTime()}
+        onRefresh={fn()}
+      />
+    ),
   },
 };

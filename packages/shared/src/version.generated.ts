@@ -1,6 +1,6 @@
 export const versionInfo = {
-  version: "0.4.0",
-  commitSha: "90af804",
-  branch: "th/cloudflare-domain-catalog",
-  builtAt: "2026-04-03T18:52:18.655Z",
+  version: "0.1.0",
+  commitSha: "9fee04b",
+  branch: "th/workspace-smart-refresh",
+  builtAt: "2026-04-04T05:51:03.101Z",
 } as const;

@@ -13,6 +13,9 @@ import type {
   VersionInfo,
 } from "@/lib/contracts";
 
+const primaryRootDomain = "relay.example.test";
+const primaryMailboxAddress = `build@alpha.${primaryRootDomain}`;
+
 const baseUser: SessionUser = {
   id: "usr_demo_admin",
   email: "owner@example.com",
@@ -65,8 +68,8 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "build",
     subdomain: "alpha",
-    rootDomain: "707979.xyz",
-    address: "build@alpha.707979.xyz",
+    rootDomain: primaryRootDomain,
+    address: primaryMailboxAddress,
     status: "active",
     createdAt: "2026-04-01T08:05:00.000Z",
     lastReceivedAt: "2026-04-01T08:32:00.000Z",
@@ -108,7 +111,7 @@ const demoDetails: MessageDetail[] = [
   {
     id: "msg_alpha",
     mailboxId: "mbx_alpha",
-    mailboxAddress: "build@alpha.707979.xyz",
+    mailboxAddress: primaryMailboxAddress,
     subject: "Build artifacts ready",
     previewText: "Your nightly bundle is attached and the preview URL is warm.",
     fromName: "CI Runner",
@@ -118,14 +121,14 @@ const demoDetails: MessageDetail[] = [
     attachmentCount: 1,
     hasHtml: true,
     envelopeFrom: "ci@example.net",
-    envelopeTo: "build@alpha.707979.xyz",
+    envelopeTo: primaryMailboxAddress,
     messageId: "<demo-alpha@example.net>",
     dateHeader: "2026-04-01T08:32:00.000Z",
     html: "<p><strong>Nightly bundle</strong> is ready. Preview URL has been pre-warmed.</p>",
     text: "Nightly bundle is ready. Preview URL has been pre-warmed.",
     headers: [
       { key: "From", value: "CI Runner <ci@example.net>" },
-      { key: "To", value: "build@alpha.707979.xyz" },
+      { key: "To", value: primaryMailboxAddress },
       { key: "Subject", value: "Build artifacts ready" },
       { key: "Message-ID", value: "<demo-alpha@example.net>" },
     ],
@@ -135,7 +138,7 @@ const demoDetails: MessageDetail[] = [
           id: "rcp_to_alpha",
           kind: "to",
           name: null,
-          address: "build@alpha.707979.xyz",
+          address: primaryMailboxAddress,
         },
       ],
       cc: [],
@@ -240,7 +243,7 @@ export const demoSessionUser = baseUser;
 export const demoDomains: DomainRecord[] = [
   {
     id: "dom_primary",
-    rootDomain: "707979.xyz",
+    rootDomain: primaryRootDomain,
     zoneId: "zone_primary",
     status: "active",
     lastProvisionError: null,
@@ -287,7 +290,7 @@ export const demoDomains: DomainRecord[] = [
 export const demoCloudflareZones = [
   {
     id: "zone_primary",
-    rootDomain: "707979.xyz",
+    rootDomain: primaryRootDomain,
   },
   {
     id: "zone_secondary",
@@ -310,7 +313,7 @@ export const demoCloudflareZones = [
 export const demoDomainCatalog: DomainCatalogItem[] = [
   {
     id: "dom_primary",
-    rootDomain: "707979.xyz",
+    rootDomain: primaryRootDomain,
     zoneId: "zone_primary",
     cloudflareAvailability: "available",
     projectStatus: "active",
@@ -382,6 +385,6 @@ export const demoMeta: ApiMeta = {
     localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",
     subdomainPattern:
       "^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$",
-    examples: ["build@alpha.707979.xyz", "spec@ops.alpha.mail.example.net"],
+    examples: [primaryMailboxAddress, "spec@ops.alpha.mail.example.net"],
   },
 };

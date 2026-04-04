@@ -32,7 +32,9 @@ describe("mailboxes page view", () => {
     const rootDomainField = screen.getByLabelText(
       "邮箱域名",
     ) as HTMLSelectElement;
-    expect(["707979.xyz", "mail.example.net"]).toContain(rootDomainField.value);
+    expect(["relay.example.test", "mail.example.net"]).toContain(
+      rootDomainField.value,
+    );
     expect(
       screen.getByText(
         new RegExp(
