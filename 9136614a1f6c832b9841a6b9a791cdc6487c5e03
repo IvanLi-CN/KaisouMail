@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.6.1",
+  "base_stable_version": "0.6.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-04T06:26:59Z",
+  "next_stable_version": "0.6.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "32ec17b2b49ffee7287075c6fb4ce62fcafae5ae",
+  "pr_number": 11,
+  "pr_title": "fix: poll mailbox queries with refresh timers",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.6.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.6.1",
+  "target_sha": "9136614a1f6c832b9841a6b9a791cdc6487c5e03",
+  "type_label": "type:patch"
+}
