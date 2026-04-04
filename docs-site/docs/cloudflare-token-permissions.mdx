@@ -2,30 +2,36 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 
 # Cloudflare Token 权限
 
-这一页只回答 4 个问题：
+这一页只回答 5 个问题：
 
 1. 正式环境应该怎么配
 2. 两把 token 分别放哪里
 3. 每把 token 需要哪些权限
 4. 什么时候才允许偷懒共用一把 token
+5. 项目到底按什么优先级读取这些 token
 
-## 结论
+## 项目支持的配置方式
 
-**正式环境默认推荐拆成两把 token。**
+项目现在原生支持两种方式：
 
-- Worker 运行时用一把 `runtime token`
-- GitHub Actions 部署用一把 `deploy token`
-- 两边的变量名都继续叫 `CLOUDFLARE_API_TOKEN`
-- 区别只在于：**存放位置不同，值也不同**
+- 正式环境：拆成两把 token
+- 快速上手：共用一把 token
+
+实际读取优先级如下：
+
+| 面向 | 优先读取 | 回退读取 | 用途 |
+| --- | --- | --- | --- |
+| API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | 域名目录 + Email Routing 管理 |
+| 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
 
 ## 正式环境推荐接法
 
 | 用途 | 存放位置 | 密钥名 | 应填什么 |
 | --- | --- | --- | --- |
-| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_API_TOKEN` | runtime token |
-| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_API_TOKEN` | deploy token |
+| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
-照着这个关系配置即可，不需要修改代码里的变量名。
+照着这个表配置即可，不需要改代码。
 
 ## Runtime token
 
@@ -34,7 +40,7 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 - Cloudflare Dashboard
 - Worker `cf-mail-api`
 - Secrets
-- `CLOUDFLARE_API_TOKEN=<runtime token>`
+- `CLOUDFLARE_RUNTIME_API_TOKEN=<runtime token>`
 
 ### 最小权限
 
@@ -65,7 +71,7 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 ### 放哪里
 
 - GitHub repository secrets
-- `CLOUDFLARE_API_TOKEN=<deploy token>`
+- `CLOUDFLARE_DEPLOY_API_TOKEN=<deploy token>`
 
 ### 最小权限
 
@@ -125,10 +131,11 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 - GitHub Actions secret 或 Worker secret 任一侧泄露，影响面都会变大
 - Cloudflare 官方也更倾向于让长期自动化使用独立、边界清晰的 token，并强调最小权限和资源范围约束
 
-所以这里的默认决策不是“由你自己权衡”，而是：
+所以这里不是让你自己推导规则，而是项目已经定好：
 
-- **正式环境：拆分**
-- **快速试用：可共用**
+- **正式环境：优先填显式拆分 token**
+- **快速试用：允许只填共享 token**
+- **如果两类变量都存在，项目优先使用显式拆分的那一组**
 
 ## 参考官方
 
@@ -139,12 +146,12 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 ## 最小排障顺序
 
 1. 确认 token 资源范围覆盖目标 zone
-2. 确认 runtime token 放在 `cf-mail-api` Worker secret，而 deploy token 放在 GitHub Actions secret
-2. 确认 token 具备 `Zone Settings: Edit`
-3. 确认 `EMAIL_ROUTING_MANAGEMENT_ENABLED=true`
-4. 确认 `EMAIL_WORKER_NAME` 已配置
-5. 回到控制台域名页执行“重试接入”
+2. 确认 runtime token 放在 `cf-mail-api` Worker secret `CLOUDFLARE_RUNTIME_API_TOKEN`，deploy token 放在 GitHub Actions secret `CLOUDFLARE_DEPLOY_API_TOKEN`
+3. 确认 token 具备 `Zone Settings: Edit`
+4. 确认 `EMAIL_ROUTING_MANAGEMENT_ENABLED=true`
+5. 确认 `EMAIL_WORKER_NAME` 已配置
+6. 回到控制台域名页执行“重试接入”
 
 ## English summary
 
-Production should use two different token values under the same secret name `CLOUDFLARE_API_TOKEN`: one stored as the `cf-mail-api` Worker secret for runtime, and one stored as the GitHub Actions repository secret for deploy. Runtime needs `Zone: Zone: Read`, `Zone: Email Routing Rules: Edit`, and `Zone: Zone Settings: Edit`. Deploy needs `Account: D1: Edit`, `Account: Workers Scripts: Edit`, `Account: Cloudflare Pages: Edit`, and `Zone: Workers Routes: Edit`. A single shared token is kept only for quickstart and internal low-risk use.
+Production should use two explicit secrets: `CLOUDFLARE_RUNTIME_API_TOKEN` on the `cf-mail-api` Worker for runtime management, and `CLOUDFLARE_DEPLOY_API_TOKEN` in GitHub Actions for deploy. The project still supports one shared `CLOUDFLARE_API_TOKEN` for quickstart, but explicit split tokens win when both are present. Runtime needs `Zone: Zone: Read`, `Zone: Email Routing Rules: Edit`, and `Zone: Zone Settings: Edit`. Deploy needs `Account: D1: Edit`, `Account: Workers Scripts: Edit`, `Account: Cloudflare Pages: Edit`, and `Zone: Workers Routes: Edit`.

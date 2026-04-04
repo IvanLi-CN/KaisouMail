@@ -105,6 +105,7 @@ The Worker expects these bindings and variables:
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_RUNTIME_API_TOKEN`
 
 ### Vars
 
@@ -129,18 +130,25 @@ If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mo
 
 ## Cloudflare API Tokens
 
-Start with the operational answer, not the philosophy:
+The project supports both layouts:
 
-- recommended production setup: use two different token values
-- keep the secret name the same in both places: `CLOUDFLARE_API_TOKEN`
-- separate them by storage location, not by renaming variables
+- recommended production setup: split runtime and deploy tokens
+- quickstart setup: reuse one shared token
+- explicit split tokens are supported natively; shared-token mode stays as a fallback
 
-Use this wiring:
+Use this precedence:
+
+| Surface | Preferred secret | Fallback secret | Used for |
+| --- | --- | --- | --- |
+| API Worker runtime | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | domain catalog + Email Routing management |
+| Deploy workflow | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
+
+### Recommended production wiring
 
 | Purpose | Stored in | Secret name | Value |
 | --- | --- | --- | --- |
-| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_API_TOKEN` | runtime token |
-| Deploy workflow | GitHub Actions repository secret | `CLOUDFLARE_API_TOKEN` | deploy token |
+| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| Deploy workflow | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 ### Runtime token minimum permissions
 
@@ -163,7 +171,7 @@ The release and deploy workflows need:
 
 ### Shared token is quickstart only
 
-If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, it must satisfy the union:
+If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, put it in both the Worker secret and the GitHub repository secret. It must satisfy the union:
 
 - `Zone: Zone: Read`
 - `Zone: Email Routing Rules: Edit`
@@ -262,7 +270,7 @@ Actions -> Release -> Run workflow -> commit_sha=<main commit sha>
 
 To use the deploy workflow, configure:
 
-- GitHub secret: `CLOUDFLARE_API_TOKEN`
+- GitHub secret: `CLOUDFLARE_DEPLOY_API_TOKEN` (or fall back to `CLOUDFLARE_API_TOKEN` for quickstart)
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
@@ -273,9 +281,9 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 1. Create the Pages project `cf-mail` once in Cloudflare
 2. Bind your control-plane origin (for example `cfm.example.com`) to Pages
-3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, `CLOUDFLARE_API_TOKEN`)
+3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, and either `CLOUDFLARE_RUNTIME_API_TOKEN` or the shared `CLOUDFLARE_API_TOKEN`)
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
-5. Set GitHub secret `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`)
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=<your api origin>`
 7. Set `WEB_APP_ORIGIN=<your pages origin>`
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row

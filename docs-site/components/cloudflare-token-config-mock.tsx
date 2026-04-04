@@ -421,9 +421,11 @@ export function CloudflareTokenConfigMock() {
               lineHeight: 1.7,
             }}
           >
-            对着抄时，把上面的 7
-            行权限全部加上；如果项目将运行时域名管理和部署拆成两把
-            token，再按下方文档拆分权限集合。
+            这张图只对应快速试用：把同一个 <code>CLOUDFLARE_API_TOKEN</code>{" "}
+            同时放进 Worker secret 和 GitHub secret。正式环境如果拆成两把
+            token，请按上方表格分别配置{" "}
+            <code>CLOUDFLARE_RUNTIME_API_TOKEN</code> 和{" "}
+            <code>CLOUDFLARE_DEPLOY_API_TOKEN</code>。
           </div>
         </main>
       </div>

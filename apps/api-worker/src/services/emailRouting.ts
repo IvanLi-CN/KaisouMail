@@ -22,7 +22,7 @@ const ensureManagementEnabled = (config: RuntimeConfig) => {
   if (!config.CLOUDFLARE_API_TOKEN) {
     throw new ApiError(
       500,
-      "Email Routing management is enabled but CLOUDFLARE_API_TOKEN is not configured",
+      "Email Routing management is enabled but CLOUDFLARE_RUNTIME_API_TOKEN or CLOUDFLARE_API_TOKEN is not configured",
     );
   }
   return true;

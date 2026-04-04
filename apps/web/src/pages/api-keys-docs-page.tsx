@@ -714,18 +714,25 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">{overviewAddressExample}</code>
               </p>
               <p className="mt-2">
-                正式环境推荐拆成两把 token，但两边的密钥名都继续叫{" "}
-                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>：Worker
-                secret 里放 runtime token，GitHub Actions secret 里放 deploy
-                token。
+                项目同时支持拆分 token 和共享 token：运行时优先读取{" "}
+                <code className="ml-1">CLOUDFLARE_RUNTIME_API_TOKEN</code>，
+                部署流水线优先读取{" "}
+                <code className="ml-1">CLOUDFLARE_DEPLOY_API_TOKEN</code>；
+                两边都没单独配置时，才回退到共享的{" "}
+                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>。
               </p>
               <p className="mt-2">
-                runtime token 最小权限是{" "}
+                正式环境推荐拆成两把 token。runtime token 最小权限是{" "}
                 <code className="ml-1">Zone: Zone: Read</code>、
                 <code className="ml-1">Zone: Email Routing Rules: Edit</code> 和
                 <code className="ml-1">Zone: Zone Settings: Edit</code>；deploy
                 token 负责 D1、Workers Scripts、Cloudflare Pages 和 Workers
                 Routes。
+              </p>
+              <p className="mt-2">
+                如果你只是单人快速试用，也可以只配置一把共享的{" "}
+                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>
+                ，但它必须同时具备运行时和部署两侧的并集权限。
               </p>
               <p className="mt-2">
                 如果域名目录显示 <code>provisioning_error</code> /{" "}

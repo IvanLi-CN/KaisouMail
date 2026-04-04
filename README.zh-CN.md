@@ -56,18 +56,25 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## Cloudflare API Token 权限
 
-先给最终结论：
+项目现在原生支持两种配置：
 
-- 正式环境默认推荐拆成两把 token
-- 两边变量名都继续叫 `CLOUDFLARE_API_TOKEN`
-- 区别只在于“存放位置不同，值也不同”
+- 正式环境推荐拆成两把 token
+- 快速上手允许共用一把 token
+- 显式拆分优先，共享 token 只作为兼容回退
 
-推荐接法如下：
+优先级如下：
+
+| 面向 | 优先读取 | 回退读取 | 用途 |
+| --- | --- | --- | --- |
+| API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | 域名目录 + Email Routing 管理 |
+| 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
+
+正式环境推荐接法如下：
 
 | 用途 | 存放位置 | 密钥名 | 应填什么 |
 | --- | --- | --- | --- |
-| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_API_TOKEN` | runtime token |
-| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_API_TOKEN` | deploy token |
+| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 ### Runtime token 最小权限
 
@@ -90,7 +97,7 @@ scope 必须覆盖所有要接入 CF Mail 的 zones。
 
 ### 只在快速试用时允许共用
 
-如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以共用一把 token，但它必须满足并集权限：
+如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以在 Worker secret 和 GitHub repository secret 里都放同一个 `CLOUDFLARE_API_TOKEN`，但它必须满足并集权限：
 
 - `Zone: Zone: Read`
 - `Zone: Email Routing Rules: Edit`
@@ -109,6 +116,7 @@ Worker 侧重点变量：
 - `SESSION_SECRET`
 - `BOOTSTRAP_ADMIN_API_KEY`
 - `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `WEB_APP_ORIGIN`
