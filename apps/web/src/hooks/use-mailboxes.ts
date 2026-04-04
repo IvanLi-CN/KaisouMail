@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { messageKeys } from "@/hooks/use-messages";
 import { apiClient } from "@/lib/api";
 
 export const mailboxKeys = {
   all: ["mailboxes"] as const,
   detail: (id: string) => ["mailboxes", id] as const,
-  messages: (mailboxes: string[]) => ["messages", ...mailboxes] as const,
 };
 
 export const useMailboxesQuery = () =>
@@ -50,7 +50,7 @@ export const useDestroyMailboxMutation = () => {
     onSuccess: (mailbox) => {
       queryClient.setQueryData(mailboxKeys.detail(mailbox.id), mailbox);
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ["messages"] });
+      void queryClient.invalidateQueries({ queryKey: messageKeys.all });
     },
   });
 };

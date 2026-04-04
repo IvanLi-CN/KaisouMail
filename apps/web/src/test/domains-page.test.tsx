@@ -18,7 +18,7 @@ describe("domains page view", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("707979.xyz")).toBeInTheDocument();
+    expect(screen.getByText("relay.example.test")).toBeInTheDocument();
     expect(screen.getByText("provisioning_error")).toBeInTheDocument();
     expect(screen.getByText("Zone access denied")).toBeInTheDocument();
     expect(screen.getByText("not_enabled")).toBeInTheDocument();

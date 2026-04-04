@@ -10,11 +10,11 @@ describe("demoApi", () => {
   it("creates and destroys a mailbox lifecycle", async () => {
     const created = await demoApi.createMailbox({
       subdomain: "ops.alpha",
-      rootDomain: "707979.xyz",
+      rootDomain: "relay.example.test",
       expiresInMinutes: 60,
     });
     expect(created.status).toBe("active");
-    expect(created.address).toContain("@ops.alpha.707979.xyz");
+    expect(created.address).toContain("@ops.alpha.relay.example.test");
 
     const listed = await demoApi.listMailboxes();
     expect(listed.some((mailbox) => mailbox.id === created.id)).toBe(true);
@@ -26,7 +26,7 @@ describe("demoApi", () => {
 
   it("reuses active mailboxes through ensure and recreates destroyed addresses", async () => {
     const reused = await demoApi.ensureMailbox({
-      address: "build@alpha.707979.xyz",
+      address: "build@alpha.relay.example.test",
     });
     expect(reused.id).toBe("mbx_alpha");
 
@@ -49,7 +49,7 @@ describe("demoApi", () => {
 
   it("exposes meta and filters messages by cursor aliases", async () => {
     const meta = await demoApi.getMeta();
-    expect(meta.domains).toContain("707979.xyz");
+    expect(meta.domains).toContain("relay.example.test");
 
     const messages = await demoApi.listMessages([], {
       after: "2026-04-01T08:35:00.000Z",

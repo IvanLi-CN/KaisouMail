@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import {
   demoMailboxes,
   demoMessages,
@@ -36,6 +37,14 @@ const meta = {
     mailboxes: demoMailboxes,
     messageStatsByMailbox,
     isCreatePending: false,
+    refreshAction: (
+      <MessageRefreshControl
+        density="default"
+        isRefreshing={false}
+        lastRefreshedAt={new Date("2026-04-04T09:12:00.000Z").getTime()}
+        onRefresh={fn()}
+      />
+    ),
     onCreate: fn(),
     onDestroy: fn(),
   },
@@ -84,5 +93,18 @@ export const CreateFlow: Story = {
     await expect(
       canvas.getByRole("link", { name: "打开邮件工作台" }),
     ).toBeInTheDocument();
+  },
+};
+
+export const RefreshingStats: Story = {
+  args: {
+    refreshAction: (
+      <MessageRefreshControl
+        density="default"
+        isRefreshing
+        lastRefreshedAt={new Date("2026-04-04T09:12:00.000Z").getTime()}
+        onRefresh={fn()}
+      />
+    ),
   },
 };

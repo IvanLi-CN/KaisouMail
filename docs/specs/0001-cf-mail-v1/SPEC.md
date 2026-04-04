@@ -14,6 +14,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/workspace`
 - Three-pane mail workbench for mailbox filtering, aggregated message browsing, and inline message reading
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
+- Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh
 
 ### Mailboxes
 - `/mailboxes`
@@ -51,6 +52,16 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters; when both cursor aliases are present, the later timestamp is used as the strict lower bound
 - All JSON error responses use the same `{ error, details }` envelope
 
+## Refresh Behavior
+
+- Message refresh stays pull-based in V1; no WebSocket, SSE, Durable Object broadcast, or queue-driven push channel is introduced
+- Workspace all-mailbox view refreshes its message stream every 15 seconds only while the tab is visible and online
+- Workspace single-mailbox view refreshes the selected mailbox stream every 15 seconds while visible and online, while aggregate mailbox-count backing data refreshes every 60 seconds
+- Mailboxes page and mailbox detail stats refresh every 60 seconds while visible and online
+- Message detail does not interval-poll because stored message bodies are treated as immutable after ingest; it refreshes on manual action plus normal focus/reconnect catch-up
+- Hidden-tab and offline polling are disabled; window focus regain and reconnect trigger a single catch-up refetch through the active query layer
+- All message-related pages expose a compact manual refresh control with loading feedback and a latest-refresh timestamp
+
 ### Users
 - `/users`
 - Admin-only user management with initial key issuance
@@ -63,6 +74,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
+- Refresh controls must remain compact, single-line, and header-aligned; visual treatment should communicate freshness without introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts
 - Icon-only actions use a mature third-party tooltip with long-press / hover reveal and collision-aware floating placement
@@ -88,6 +100,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ![Workspace selected message](./assets/workspace-selected-message.png)
 
+![Workspace refreshing state](./assets/workspace-refreshing.png)
+
 ### UI Primitives
 
 ![Action button intent showcase](./assets/action-button-intent-showcase.png)
@@ -95,6 +109,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ### Mailboxes
 
 ![Mailboxes page](./assets/mailboxes.png)
+
+![Mailboxes page refreshing state](./assets/mailboxes-refreshing.png)
 
 ### Domains
 

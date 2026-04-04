@@ -1,13 +1,15 @@
 import { ListTree, PanelsTopLeft } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-
 import { MessageDetailCard } from "@/components/messages/message-detail-card";
+import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
-import { useMessageDetailQuery } from "@/hooks/use-messages";
+import { messageKeys, useMessageDetailQuery } from "@/hooks/use-messages";
+import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import { apiClient } from "@/lib/api";
 import { markMessageAsRead } from "@/lib/message-read-state";
+import { resolveLatestRefreshAt } from "@/lib/message-refresh";
 import { buildWorkspaceSearch, isMailboxSortMode } from "@/lib/workspace";
 
 export const MessageDetailPage = () => {
@@ -17,6 +19,11 @@ export const MessageDetailPage = () => {
   const sortParam = workspaceParams.get("sort");
   const workspaceSort = isMailboxSortMode(sortParam) ? sortParam : null;
   const messageQuery = useMessageDetailQuery(messageId);
+  const manualRefresh = useQueryRefresh([
+    { queryKey: messageKeys.detail(messageId) },
+  ]);
+  const lastRefreshedAt = resolveLatestRefreshAt(messageQuery.dataUpdatedAt);
+  const isRefreshing = manualRefresh.isRefreshing || messageQuery.isFetching;
 
   useEffect(() => {
     markMessageAsRead(messageQuery.data?.id);
@@ -34,6 +41,12 @@ export const MessageDetailPage = () => {
         eyebrow="Message Detail"
         action={
           <div className="flex flex-wrap gap-2">
+            <MessageRefreshControl
+              density="default"
+              isRefreshing={isRefreshing}
+              lastRefreshedAt={lastRefreshedAt}
+              onRefresh={manualRefresh.refresh}
+            />
             <ActionButton
               asChild
               density="default"

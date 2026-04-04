@@ -10,7 +10,7 @@ const meta = {
   args: {
     onSubmit: fn(),
     isPending: false,
-    domains: ["707979.xyz", "mail.example.net"],
+    domains: ["relay.example.test", "mail.example.net"],
     defaultTtlMinutes: 60,
     maxTtlMinutes: 1440,
     isMetaLoading: false,
@@ -48,14 +48,14 @@ export const Default: Story = {
 export const Pending: Story = {
   args: {
     isPending: true,
-    domains: ["707979.xyz", "mail.example.net"],
+    domains: ["relay.example.test", "mail.example.net"],
   },
 };
 
 export const LoadingMeta: Story = {
   args: {
     isMetaLoading: true,
-    domains: ["707979.xyz", "mail.example.net"],
+    domains: ["relay.example.test", "mail.example.net"],
   },
 };
 

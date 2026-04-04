@@ -1,10 +1,20 @@
 import { useCallback, useDeferredValue, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
-import { useMailboxesQuery } from "@/hooks/use-mailboxes";
-import { useMessageDetailQuery, useMessagesQuery } from "@/hooks/use-messages";
+import { mailboxKeys, useMailboxesQuery } from "@/hooks/use-mailboxes";
+import {
+  messageKeys,
+  useMessageDetailQuery,
+  useMessagesQuery,
+} from "@/hooks/use-messages";
+import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import { markMessageAsRead } from "@/lib/message-read-state";
+import {
+  resolveLatestRefreshAt,
+  resolveNextSelectedMessageId,
+} from "@/lib/message-refresh";
 import {
   buildWorkspaceSearch,
   filterMailboxes,
@@ -25,7 +35,6 @@ const readStoredSortMode = () => {
 export const WorkspacePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const mailboxesQuery = useMailboxesQuery();
-  const allMessagesQuery = useMessagesQuery();
   const mailboxes = mailboxesQuery.data ?? [];
 
   const selectedMailboxId = searchParams.get("mailbox") ?? "all";
@@ -69,19 +78,14 @@ export const WorkspacePage = () => {
     window.localStorage.setItem(MAILBOX_SORT_STORAGE_KEY, resolvedSortMode);
   }, [resolvedSortMode]);
 
-  const visibleMailboxes = useMemo(
-    () =>
-      filterMailboxes(
-        sortMailboxes(mailboxes, resolvedSortMode),
-        deferredQuery,
-      ),
-    [deferredQuery, mailboxes, resolvedSortMode],
-  );
-
   const selectedMailbox =
     selectedMailboxId === "all"
       ? null
       : (mailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ?? null);
+
+  const allMessagesQuery = useMessagesQuery([], undefined, {
+    pollingIntervalMs: selectedMailbox ? 60_000 : 15_000,
+  });
 
   useEffect(() => {
     if (selectedMailboxId === "all") return;
@@ -95,10 +99,38 @@ export const WorkspacePage = () => {
 
   const messagesQuery = useMessagesQuery(
     selectedMailbox ? [selectedMailbox.address] : [],
+    undefined,
+    {
+      pollingIntervalMs: 15_000,
+    },
   );
   const messages = messagesQuery.data ?? [];
   const allMessages = allMessagesQuery.data ?? [];
   const selectedMessageId = searchParams.get("message");
+  const mailboxesWithLiveRecency = useMemo(() => {
+    const latestByMailboxId = new Map<string, string>();
+
+    for (const message of allMessages) {
+      const current = latestByMailboxId.get(message.mailboxId);
+      if (!current || message.receivedAt.localeCompare(current) > 0) {
+        latestByMailboxId.set(message.mailboxId, message.receivedAt);
+      }
+    }
+
+    return mailboxes.map((mailbox) => ({
+      ...mailbox,
+      lastReceivedAt:
+        latestByMailboxId.get(mailbox.id) ?? mailbox.lastReceivedAt,
+    }));
+  }, [allMessages, mailboxes]);
+  const visibleMailboxes = useMemo(
+    () =>
+      filterMailboxes(
+        sortMailboxes(mailboxesWithLiveRecency, resolvedSortMode),
+        deferredQuery,
+      ),
+    [deferredQuery, mailboxesWithLiveRecency, resolvedSortMode],
+  );
   const mailboxMessageCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -116,21 +148,21 @@ export const WorkspacePage = () => {
 
   useEffect(() => {
     if (messagesQuery.isLoading) return;
+    const nextSelectedMessageId = resolveNextSelectedMessageId(
+      messages,
+      selectedMessageId,
+    );
 
-    const selectedExists = selectedMessageId
-      ? messages.some((message) => message.id === selectedMessageId)
-      : false;
-
-    if (messages.length === 0 && selectedMessageId) {
+    if (!nextSelectedMessageId && selectedMessageId) {
       updateSearchParams((draft) => {
         draft.delete("message");
       }, true);
       return;
     }
 
-    if (messages.length > 0 && !selectedExists) {
+    if (nextSelectedMessageId && nextSelectedMessageId !== selectedMessageId) {
       updateSearchParams((draft) => {
-        draft.set("message", messages[0].id);
+        draft.set("message", nextSelectedMessageId);
       }, true);
     }
   }, [
@@ -141,10 +173,42 @@ export const WorkspacePage = () => {
   ]);
 
   const messageDetailQuery = useMessageDetailQuery(selectedMessageId ?? "");
+  const refreshTargets = useMemo(
+    () => [
+      { queryKey: mailboxKeys.all },
+      { queryKey: messageKeys.list([]) },
+      {
+        queryKey: messageKeys.list(
+          selectedMailbox ? [selectedMailbox.address] : [],
+        ),
+      },
+      ...(selectedMessageId
+        ? [{ queryKey: messageKeys.detail(selectedMessageId) }]
+        : []),
+    ],
+    [selectedMailbox, selectedMessageId],
+  );
+  const manualRefresh = useQueryRefresh(refreshTargets);
+  const workspaceLastRefreshedAt = resolveLatestRefreshAt(
+    mailboxesQuery.dataUpdatedAt,
+    allMessagesQuery.dataUpdatedAt,
+    messagesQuery.dataUpdatedAt,
+    messageDetailQuery.dataUpdatedAt,
+  );
+  const isWorkspaceRefreshing =
+    manualRefresh.isRefreshing ||
+    mailboxesQuery.isFetching ||
+    allMessagesQuery.isFetching ||
+    messagesQuery.isFetching ||
+    messageDetailQuery.isFetching;
 
   useEffect(() => {
     markMessageAsRead(messageDetailQuery.data?.id);
   }, [messageDetailQuery.data?.id]);
+
+  const handleRefresh = useCallback(async () => {
+    await manualRefresh.refresh();
+  }, [manualRefresh]);
 
   return (
     <MailWorkspace
@@ -160,6 +224,14 @@ export const WorkspacePage = () => {
       selectedMessage={messageDetailQuery.data ?? null}
       searchQuery={searchQuery}
       sortMode={resolvedSortMode}
+      refreshAction={
+        <MessageRefreshControl
+          density="dense"
+          isRefreshing={isWorkspaceRefreshing}
+          lastRefreshedAt={workspaceLastRefreshedAt}
+          onRefresh={handleRefresh}
+        />
+      }
       isMailboxesLoading={mailboxesQuery.isLoading}
       isMessagesLoading={messagesQuery.isLoading}
       isMessageLoading={messageDetailQuery.isLoading}
