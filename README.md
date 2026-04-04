@@ -164,20 +164,19 @@ This is the current repository default and the easiest onboarding path. If you k
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
-### Strict recommendation
+### Decision
 
-Using one shared token is reasonable only when simplicity is the top priority, for example a solo operator, a short-lived evaluation, or a small self-hosted setup where the same owner controls both GitHub Actions and the production Worker secrets.
+This repository should document one clear recommendation:
 
-From a stricter security standpoint, one shared token is not the preferred production posture:
+- preferred default: split the runtime token and the deploy token
+- long-lived production: do not share one token across both concerns
+- shared-token setup is kept only for fastest onboarding, short-lived evaluation, or low-risk single-operator use
+
+Why:
 
 - It combines deploy permissions and live runtime mutation permissions in one credential
 - Leakage from either GitHub Actions or the running Worker increases the blast radius
 - Durable automation is better served by separate, least-privileged, account-owned tokens
-
-If security matters more than setup speed, prefer split tokens:
-
-- one runtime token with only the runtime minimum above
-- one deploy token with only the deploy permissions below
 
 ### Deploy-time permissions only
 

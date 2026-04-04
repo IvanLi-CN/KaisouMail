@@ -722,6 +722,10 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">Zone: Zone Settings: Edit</code>。
               </p>
               <p className="mt-2">
+                明确建议：长期生产环境不要共用同一个
+                token。共用方案只保留给最快上手的试用或低风险单人环境。
+              </p>
+              <p className="mt-2">
                 如果域名目录显示 <code>provisioning_error</code> /{" "}
                 <code>Authentication error</code>，优先检查 token 是否缺少{" "}
                 <code>Zone Settings: Edit</code>，以及 scope 是否覆盖目标 zone。

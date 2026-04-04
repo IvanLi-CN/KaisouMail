@@ -161,9 +161,9 @@ export function CloudflareTokenConfigMock() {
               fontWeight: 600,
             }}
           >
-            共享 token 示例
+            共享 token 快速上手示例
             <span style={{ color: "#c2410c", fontWeight: 500 }}>
-              当前仓库默认接法，不是运行时最小权限
+              仅用于试用；正式环境推荐拆分
             </span>
           </div>
 
