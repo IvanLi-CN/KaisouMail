@@ -56,20 +56,57 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## Cloudflare API Token 权限
 
-当前工程默认把 `CLOUDFLARE_API_TOKEN` 同时用于部署和运行时域名管理。若继续共用同一把 token，它必须满足两类权限的并集。
+当前工程默认只提供一个 `CLOUDFLARE_API_TOKEN`，同时用于部署和运行时域名管理。这个默认值最容易上手，但从严格安全角度看，它并不是长期生产环境的优先做法。
 
-### 运行时域名管理
+### 场景 A：只给运行时域名管理使用
 
-控制台 `/domains` 需要至少具备这些 zone 级写权限：
+如果你把部署 token 和运行时 token 分开，当前运行时代码路径只会调用这些接口：
 
+- `GET /zones`
+- `GET /zones/:zone_id`
+- `POST /zones/:zone_id/email/routing/enable`
+- `POST /zones/:zone_id/email/routing/dns`
+- `POST /zones/:zone_id/email/routing/rules`
+- `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+
+按这条运行时路径，最小权限应写成：
+
+- `Zone: Zone: Read`
 - `Zone: Email Routing Rules: Edit`
-- `Zone: DNS: Edit`
-- `Zone: Workers Routes: Edit`
 - `Zone: Zone Settings: Edit`
+
+token 的 scope 仍然必须覆盖所有要接入 CF Mail 的 zones。
 
 其中最容易漏的是 `Zone: Zone Settings: Edit`。如果域名目录里某个 zone 明明可见，却在启用时变成 `provisioning_error / Authentication error`，优先检查这项权限和 token 的 zone 覆盖范围。
 
-### 部署权限
+### 场景 B：同一把 token 同时负责部署和运行时
+
+这就是当前仓库默认的接线方式，也是上手最快的方式。若继续共用同一把 `CLOUDFLARE_API_TOKEN`，它必须满足并集权限：
+
+- `Zone: Zone: Read`
+- `Zone: Email Routing Rules: Edit`
+- `Zone: Zone Settings: Edit`
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+### 严格安全判断
+
+如果你的优先级是“先跑起来”，例如单人维护、自建环境、临时验证或低风险小规模使用，共用同一把 token 是可以接受的。
+
+但从更严格的安全视角看，这不是更优做法：
+
+- 它把部署权限和线上运行时变更权限绑在了同一把凭据上
+- GitHub Actions secret 或运行中的 Worker secret 任一侧泄露，影响面都会放大
+- 长期自动化更适合使用独立、最小权限、边界清晰、且最好由账户持有的 token
+
+更推荐的长期方案是：
+
+- 一个运行时 token，只保留上面的运行时最小权限
+- 一个部署 token，只保留下面的部署权限
+
+### 仅部署权限
 
 部署流程还需要：
 

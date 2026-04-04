@@ -1,0 +1,94 @@
+import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config-mock";
+
+# Cloudflare Token 权限
+
+这一页专门说明 **Cloudflare API token** 在两种场景下分别应该具备哪些权限，以及为什么缺这些权限时你会在域名页看到 `Authentication error`。
+
+## 场景 A：仅运行时域名管理
+
+如果你把部署 token 和运行时 token 分开，当前运行时代码路径会调用：
+
+- `GET /zones`
+- `GET /zones/:zone_id`
+- `POST /zones/:zone_id/email/routing/enable`
+- `POST /zones/:zone_id/email/routing/dns`
+- `POST /zones/:zone_id/email/routing/rules`
+- `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+
+按这条运行时路径，最小权限应写成：
+
+- `Zone: Zone: Read`
+- `Zone: Email Routing Rules: Edit`
+- `Zone: Zone Settings: Edit`
+
+其中最容易漏的是 `Zone: Zone Settings: Edit`。`POST /zones/{zone_id}/email/routing/enable` 依赖它；如果缺这个权限，控制台通常会把 Cloudflare 的失败消息记录成 `provisioning_error / Authentication error`。
+
+## 场景 B：当前仓库默认的共享 token
+
+仓库当前默认把同一个 `CLOUDFLARE_API_TOKEN` 同时提供给部署流水线和运行时域名管理。这是最容易上手的方式，但它不是运行时最小权限。
+
+如果沿用这个默认接法，共享 token 需要满足这组并集权限：
+
+- `Zone: Zone: Read`
+- `Zone: Email Routing Rules: Edit`
+- `Zone: Zone Settings: Edit`
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+## 共享 token 对照抄配置
+
+下面这个示意块对应的是 **场景 B：共享 token**。也就是说，这张图是“当前仓库默认接法的方便抄配置”，不是“运行时最小权限”。
+
+<CloudflareTokenConfigMock />
+
+## Scope 要覆盖哪些 zones
+
+权限名写对还不够，token 的资源范围也必须覆盖你准备接入到 CF Mail 的所有 zones。
+
+- 能在 `/api/domains/catalog` 里看到 zone，说明 token 至少能读取到它
+- 但如果 token 只覆盖可见/可读，没覆盖写权限，启用时仍然会失败
+- 典型现象就是：域名目录显示 `available`，但项目状态变成 `provisioning_error`
+
+## 是否建议共用同一个 token
+
+如果你的目标是最低门槛上手，例如单人维护、自建环境、临时验证或低风险内部使用，共用同一把 token 是可以接受的。
+
+如果从更严格的安全视角判断，我不建议把部署和运行时长期绑在同一把 token 上：
+
+- 它把部署权限和线上运行时变更权限绑在了同一把凭据上
+- GitHub Actions secret 或 Worker secret 任一侧泄露，影响面都会变大
+- Cloudflare 官方也更倾向于让长期自动化使用独立、边界清晰的 token，并强调最小权限和资源范围约束
+
+结论很简单：
+
+- **为了最快上手**：当前仓库默认的共享 token 可以用
+- **为了更好的安全边界**：应拆成“运行时 token”与“部署 token”两把凭据
+
+## 参考官方
+
+- [Create API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+- [Account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)
+- [Enable Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/methods/enable/)
+
+## 仅部署权限
+
+如果你把部署和运行时分开，部署流程需要：
+
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+## 最小排障顺序
+
+1. 确认 token 资源范围覆盖目标 zone
+2. 确认 token 具备 `Zone Settings: Edit`
+3. 确认 `EMAIL_ROUTING_MANAGEMENT_ENABLED=true`
+4. 确认 `EMAIL_WORKER_NAME` 已配置
+5. 回到控制台域名页执行“重试接入”
+
+## English summary
+
+Runtime-only mailbox-domain management should be documented with the minimum set: `Zone: Zone: Read`, `Zone: Email Routing Rules: Edit`, and `Zone: Zone Settings: Edit`, with scope covering every managed zone. The repository default is a shared token used by both deploy and runtime, which additionally needs `Account: D1: Edit`, `Account: Workers Scripts: Edit`, `Account: Cloudflare Pages: Edit`, and `Zone: Workers Routes: Edit`. Shared-token setup is acceptable for easiest onboarding, but split tokens are the stricter production recommendation.

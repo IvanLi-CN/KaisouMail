@@ -714,10 +714,11 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">{overviewAddressExample}</code>
               </p>
               <p className="mt-2">
-                Cloudflare 域名接入最少需要
-                <code className="ml-1">Zone: Email Routing Rules: Edit</code>、
-                <code className="ml-1">Zone: DNS: Edit</code>、
-                <code className="ml-1">Zone: Workers Routes: Edit</code> 和
+                当前仓库默认把同一个{" "}
+                <code className="ml-1">CLOUDFLARE_API_TOKEN</code>{" "}
+                同时用于部署和运行时域名管理；如果你把两者拆开，运行时最小权限应收敛为
+                <code className="ml-1">Zone: Zone: Read</code>、
+                <code className="ml-1">Zone: Email Routing Rules: Edit</code> 和
                 <code className="ml-1">Zone: Zone Settings: Edit</code>。
               </p>
               <p className="mt-2">

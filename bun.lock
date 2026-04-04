@@ -76,6 +76,7 @@
       "name": "@cf-mail/docs-site",
       "version": "0.1.0",
       "devDependencies": {
+        "@types/react": "^19.1.16",
         "rspress": "^1.47.1",
       },
     },
