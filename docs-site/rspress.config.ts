@@ -8,6 +8,8 @@ function normalizeBase(base: string | undefined) {
 }
 
 const docsBase = normalizeBase(process.env.DOCS_BASE);
+const localStorybookDevOrigin =
+  process.env.VITE_STORYBOOK_DEV_ORIGIN?.trim() ?? "";
 
 export default defineConfig({
   root: "docs",
@@ -16,6 +18,15 @@ export default defineConfig({
   title: "CF Mail 文档",
   description:
     "CF Mail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
+  builderConfig: {
+    source: {
+      define: {
+        "process.env.RSPRESS_STORYBOOK_DEV_ORIGIN": JSON.stringify(
+          localStorybookDevOrigin,
+        ),
+      },
+    },
+  },
   themeConfig: {
     search: true,
     nav: [
@@ -46,7 +57,6 @@ export default defineConfig({
             },
             { text: "API 参考", link: "/api-reference" },
             { text: "FAQ / 故障排查", link: "/faq" },
-            { text: "组件预览 / Storybook", link: "/storybook" },
           ],
         },
       ],

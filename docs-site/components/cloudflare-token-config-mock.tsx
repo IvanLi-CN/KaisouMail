@@ -72,36 +72,34 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
 
 const shellStyle = {
   margin: "24px 0 28px",
-  border: "1px solid rgba(130, 170, 255, 0.16)",
+  border: "1px solid #d9e1ec",
   borderRadius: "18px",
   overflow: "hidden",
-  color: "#e7eefc",
-  background:
-    "linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(8, 14, 26, 0.98) 100%)",
-  boxShadow: "0 24px 80px rgba(3, 9, 18, 0.42)",
+  color: "#1f2937",
+  background: "#ffffff",
+  boxShadow: "0 18px 48px rgba(15, 23, 42, 0.08)",
   position: "relative" as const,
 } as const;
 
 const topBarStyle = {
   height: "56px",
-  borderBottom: "1px solid rgba(130, 170, 255, 0.14)",
+  borderBottom: "1px solid #e5ebf3",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   gap: "16px",
   padding: "0 20px",
-  color: "#8fa2c5",
+  color: "#6b7280",
   fontSize: "13px",
-  background:
-    "linear-gradient(180deg, rgba(15, 25, 44, 0.96) 0%, rgba(10, 18, 31, 0.96) 100%)",
+  background: "#ffffff",
 } as const;
 
 const fieldBase = {
   height: "40px",
-  border: "1px solid rgba(143, 162, 197, 0.18)",
+  border: "1px solid #d5deea",
   borderRadius: "8px",
-  background: "rgba(10, 18, 31, 0.88)",
-  color: "#e7eefc",
+  background: "#ffffff",
+  color: "#172033",
   fontSize: "14px",
   display: "flex",
   alignItems: "center",
@@ -130,7 +128,7 @@ function SectionTitle({
     <div style={{ marginBottom: "12px" }}>
       <div
         style={{
-          color: "#f3f7ff",
+          color: "#172033",
           fontWeight: 700,
           fontSize: "22px",
           lineHeight: 1.25,
@@ -141,7 +139,7 @@ function SectionTitle({
       <div
         style={{
           marginTop: "6px",
-          color: "#8fa2c5",
+          color: "#66758d",
           fontSize: "14px",
           lineHeight: 1.6,
         }}
@@ -166,10 +164,10 @@ export function CloudflareTokenConfigMock({
           position: "absolute",
           inset: 0,
           backgroundImage:
-            "linear-gradient(rgba(130,170,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(130,170,255,0.06) 1px, transparent 1px)",
+            "linear-gradient(rgba(15,23,42,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.03) 1px, transparent 1px)",
           backgroundSize: "28px 28px",
           pointerEvents: "none",
-          opacity: 0.28,
+          opacity: 0.35,
         }}
       />
 
@@ -216,7 +214,7 @@ export function CloudflareTokenConfigMock({
           <div
             style={{
               marginTop: "18px",
-              color: "#f3f7ff",
+              color: "#172033",
               fontSize: "34px",
               lineHeight: 1.15,
               fontWeight: 800,
@@ -247,7 +245,7 @@ export function CloudflareTokenConfigMock({
             style={{
               marginTop: "12px",
               maxWidth: "760px",
-              color: "#a5b6d3",
+              color: "#66758d",
               fontSize: "14px",
               lineHeight: 1.7,
             }}
@@ -281,7 +279,7 @@ export function CloudflareTokenConfigMock({
                 display: "grid",
                 gridTemplateColumns: "160px minmax(0, 1fr) 186px",
                 gap: "10px",
-                color: "#8fa2c5",
+                color: "#66758d",
                 fontSize: "13px",
                 marginBottom: "10px",
               }}
@@ -350,7 +348,7 @@ export function CloudflareTokenConfigMock({
               borderRadius: "12px",
               border: `1px solid ${config.accent}2f`,
               background: `${config.accent}10`,
-              color: "#d5e1f6",
+              color: "#243247",
               fontSize: "14px",
               lineHeight: 1.7,
             }}
