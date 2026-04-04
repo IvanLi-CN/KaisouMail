@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,24 @@ const createKeySchema = z.object({
 
 type CreateKeyValues = z.infer<typeof createKeySchema>;
 
+const API_KEYS_PER_PAGE = 10;
+
+const compareApiKeysByRecentUse = (left: ApiKeyRecord, right: ApiKeyRecord) => {
+  if (left.lastUsedAt && right.lastUsedAt) {
+    const lastUsedComparison = right.lastUsedAt.localeCompare(left.lastUsedAt);
+    if (lastUsedComparison !== 0) return lastUsedComparison;
+  } else if (left.lastUsedAt) {
+    return -1;
+  } else if (right.lastUsedAt) {
+    return 1;
+  }
+
+  const createdAtComparison = right.createdAt.localeCompare(left.createdAt);
+  if (createdAtComparison !== 0) return createdAtComparison;
+
+  return left.id.localeCompare(right.id);
+};
+
 export const ApiKeyTable = ({
   apiKeys,
   latestSecret,
@@ -46,6 +65,31 @@ export const ApiKeyTable = ({
     resolver: zodResolver(createKeySchema),
     defaultValues: { name: "" },
   });
+  const [paginationState, setPaginationState] = useState({
+    page: 1,
+    resetKey: "",
+  });
+  const sortedApiKeys = [...apiKeys].sort(compareApiKeysByRecentUse);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedApiKeys.length / API_KEYS_PER_PAGE),
+  );
+  const paginationResetKey = sortedApiKeys
+    .map(
+      (apiKey) => `${apiKey.id}:${apiKey.createdAt}:${apiKey.lastUsedAt ?? ""}`,
+    )
+    .join("|");
+  const page =
+    paginationState.resetKey === paginationResetKey
+      ? Math.min(paginationState.page, totalPages)
+      : 1;
+  const pageStart = (page - 1) * API_KEYS_PER_PAGE;
+  const paginatedApiKeys = sortedApiKeys.slice(
+    pageStart,
+    pageStart + API_KEYS_PER_PAGE,
+  );
+  const visibleRangeStart = sortedApiKeys.length === 0 ? 0 : pageStart + 1;
+  const visibleRangeEnd = pageStart + paginatedApiKeys.length;
 
   return (
     <div className="grid gap-6 2xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -111,7 +155,7 @@ export const ApiKeyTable = ({
               </TableRow>
             </TableHead>
             <TableBody>
-              {apiKeys.map((apiKey) => (
+              {paginatedApiKeys.map((apiKey) => (
                 <TableRow key={apiKey.id}>
                   <TableCell>
                     <div className="space-y-1">
@@ -140,6 +184,45 @@ export const ApiKeyTable = ({
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 ? (
+            <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                显示 {visibleRangeStart}-{visibleRangeEnd} 项，共{" "}
+                {sortedApiKeys.length} 项
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <span>
+                  第 {page} / {totalPages} 页
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setPaginationState({
+                      page: page - 1,
+                      resetKey: paginationResetKey,
+                    })
+                  }
+                  disabled={page === 1}
+                >
+                  上一页
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setPaginationState({
+                      page: page + 1,
+                      resetKey: paginationResetKey,
+                    })
+                  }
+                  disabled={page === totalPages}
+                >
+                  下一页
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

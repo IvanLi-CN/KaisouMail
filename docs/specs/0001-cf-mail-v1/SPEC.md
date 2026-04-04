@@ -37,6 +37,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/api-keys`
 - `/api-keys/docs`
 - Create and revoke API keys for automation and browser sign-in
+- The Web console keeps revoked keys in the inventory for audit, sorts the list by most recent use, and paginates the table in 10-row pages
 - Protected integration reference for human operators and Agents, covering runtime metadata, session exchange, API key lifecycle, mailbox lookup/create endpoints, and message polling endpoints
 
 ## API Behavior
@@ -130,7 +131,7 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### API Key Management
 
-![API keys page with integration docs entry](./assets/api-keys-page-docs-entry.png)
+![API keys page with recent-use sorting and pagination](./assets/api-keys-page-docs-entry.png)
 
 ### Integration Reference
 
