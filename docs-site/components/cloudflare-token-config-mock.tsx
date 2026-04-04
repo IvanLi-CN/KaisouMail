@@ -1,19 +1,107 @@
-const permissions = [
-  ["区域", "Zone", "读取"],
-  ["区域", "Email Routing Rules", "编辑"],
-  ["区域", "Zone Settings", "编辑"],
-  ["帐户", "D1", "编辑"],
-  ["帐户", "Workers 脚本", "编辑"],
-  ["帐户", "Cloudflare Pages", "编辑"],
-  ["区域", "Workers Routes", "编辑"],
-] as const;
+type PermissionRow = readonly [
+  resource: string,
+  permission: string,
+  access: string,
+];
+
+type MockVariant = "runtime" | "deploy" | "shared";
+
+type VariantConfig = {
+  badge: string;
+  accent: string;
+  tokenName: string;
+  helper: string;
+  permissions: PermissionRow[];
+  accountScope: string;
+  zoneScope: string;
+  footer: string;
+};
+
+const variantConfigs: Record<MockVariant, VariantConfig> = {
+  runtime: {
+    badge: "正式环境 / runtime token",
+    accent: "#64d2ff",
+    tokenName: "cfm-runtime",
+    helper: "给 cf-mail-api Worker 用，只负责域名目录和 Email Routing 管理。",
+    permissions: [
+      ["区域", "Zone", "读取"],
+      ["区域", "Email Routing Rules", "编辑"],
+      ["区域", "Zone Settings", "编辑"],
+    ],
+    accountScope: "不设置",
+    zoneScope: "所有 CF Mail 域名区域",
+    footer:
+      "把这把 token 填到 Cloudflare Worker secret：CLOUDFLARE_RUNTIME_API_TOKEN。",
+  },
+  deploy: {
+    badge: "正式环境 / deploy token",
+    accent: "#7ef0c1",
+    tokenName: "cfm-deploy",
+    helper: "给 GitHub Actions 用，只负责部署、Pages 和远程 D1 migration。",
+    permissions: [
+      ["帐户", "D1", "编辑"],
+      ["帐户", "Workers 脚本", "编辑"],
+      ["帐户", "Cloudflare Pages", "编辑"],
+      ["区域", "Workers Routes", "编辑"],
+    ],
+    accountScope: "目标 Cloudflare 帐户",
+    zoneScope: "用于 Worker Routes 的区域",
+    footer:
+      "把这把 token 填到 GitHub repository secret：CLOUDFLARE_DEPLOY_API_TOKEN。",
+  },
+  shared: {
+    badge: "快速上手 / shared token",
+    accent: "#ffb86b",
+    tokenName: "cfm",
+    helper: "单人试用时可共用；同一把 token 同时给 Worker 和 GitHub Actions。",
+    permissions: [
+      ["区域", "Zone", "读取"],
+      ["区域", "Email Routing Rules", "编辑"],
+      ["区域", "Zone Settings", "编辑"],
+      ["帐户", "D1", "编辑"],
+      ["帐户", "Workers 脚本", "编辑"],
+      ["帐户", "Cloudflare Pages", "编辑"],
+      ["区域", "Workers Routes", "编辑"],
+    ],
+    accountScope: "目标 Cloudflare 帐户",
+    zoneScope: "所有 CF Mail 域名区域",
+    footer:
+      "把同一个 token 同时填到 Worker secret 和 GitHub repository secret：CLOUDFLARE_API_TOKEN。",
+  },
+};
+
+const shellStyle = {
+  margin: "24px 0 28px",
+  border: "1px solid rgba(130, 170, 255, 0.16)",
+  borderRadius: "18px",
+  overflow: "hidden",
+  color: "#e7eefc",
+  background:
+    "linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(8, 14, 26, 0.98) 100%)",
+  boxShadow: "0 24px 80px rgba(3, 9, 18, 0.42)",
+  position: "relative" as const,
+} as const;
+
+const topBarStyle = {
+  height: "56px",
+  borderBottom: "1px solid rgba(130, 170, 255, 0.14)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
+  padding: "0 20px",
+  color: "#8fa2c5",
+  fontSize: "13px",
+  background:
+    "linear-gradient(180deg, rgba(15, 25, 44, 0.96) 0%, rgba(10, 18, 31, 0.96) 100%)",
+} as const;
 
 const fieldBase = {
-  height: "38px",
-  border: "1px solid #cfd7e3",
-  borderRadius: "4px",
-  background: "#fff",
-  color: "#1f2937",
+  height: "40px",
+  border: "1px solid rgba(143, 162, 197, 0.18)",
+  borderRadius: "8px",
+  background: "rgba(10, 18, 31, 0.88)",
+  color: "#e7eefc",
   fontSize: "14px",
   display: "flex",
   alignItems: "center",
@@ -26,7 +114,7 @@ function SelectField({ value, width }: { value: string; width?: string }) {
   return (
     <div style={{ ...fieldBase, width: width ?? "100%" }}>
       <span>{value}</span>
-      <span style={{ color: "#6b7280", fontSize: "12px" }}>▾</span>
+      <span style={{ color: "#7b8baa", fontSize: "12px" }}>▾</span>
     </div>
   );
 }
@@ -42,8 +130,8 @@ function SectionTitle({
     <div style={{ marginBottom: "12px" }}>
       <div
         style={{
-          color: "#111827",
-          fontWeight: 600,
+          color: "#f3f7ff",
+          fontWeight: 700,
           fontSize: "22px",
           lineHeight: 1.25,
         }}
@@ -53,7 +141,7 @@ function SectionTitle({
       <div
         style={{
           marginTop: "6px",
-          color: "#6b7280",
+          color: "#8fa2c5",
           fontSize: "14px",
           lineHeight: 1.6,
         }}
@@ -64,32 +152,29 @@ function SectionTitle({
   );
 }
 
-export function CloudflareTokenConfigMock() {
+export function CloudflareTokenConfigMock({
+  variant,
+}: {
+  variant: MockVariant;
+}) {
+  const config = variantConfigs[variant];
+
   return (
-    <div
-      style={{
-        margin: "24px 0 28px",
-        border: "1px solid #d9e0ea",
-        borderRadius: "16px",
-        overflow: "hidden",
-        background: "#fff",
-        boxShadow: "0 16px 48px rgba(15, 23, 42, 0.18)",
-      }}
-    >
-      <div style={{ minHeight: "1120px", background: "#fff" }}>
-        <div
-          style={{
-            height: "56px",
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "16px",
-            padding: "0 20px",
-            color: "#4b5563",
-            fontSize: "13px",
-          }}
-        >
+    <div style={shellStyle}>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage:
+            "linear-gradient(rgba(130,170,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(130,170,255,0.06) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+          pointerEvents: "none",
+          opacity: 0.28,
+        }}
+      />
+
+      <div style={{ minHeight: "980px", position: "relative" }}>
+        <div style={topBarStyle}>
           <div
             style={{
               width: "22px",
@@ -111,13 +196,7 @@ export function CloudflareTokenConfigMock() {
               }}
             />
           </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "16px",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <span>支持</span>
             <span>👤</span>
           </div>
@@ -126,9 +205,9 @@ export function CloudflareTokenConfigMock() {
         <main style={{ padding: "28px 56px 40px", maxWidth: "980px" }}>
           <div
             style={{
-              color: "#2563eb",
+              color: "#76a9ff",
               fontSize: "14px",
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
             ← 返回以查看所有令牌
@@ -137,10 +216,10 @@ export function CloudflareTokenConfigMock() {
           <div
             style={{
               marginTop: "18px",
-              color: "#111827",
+              color: "#f3f7ff",
               fontSize: "34px",
               lineHeight: 1.15,
-              fontWeight: 700,
+              fontWeight: 800,
             }}
           >
             创建自定义令牌
@@ -154,20 +233,29 @@ export function CloudflareTokenConfigMock() {
               gap: "10px",
               padding: "10px 14px",
               borderRadius: "999px",
-              border: "1px solid #fed7aa",
-              background: "#fff7ed",
-              color: "#9a3412",
+              border: `1px solid ${config.accent}44`,
+              background: `${config.accent}14`,
+              color: config.accent,
               fontSize: "13px",
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
-            共享 token 快速上手示例
-            <span style={{ color: "#c2410c", fontWeight: 500 }}>
-              仅用于试用；正式环境推荐拆分
-            </span>
+            {config.badge}
           </div>
 
-          <section style={{ marginTop: "22px", maxWidth: "840px" }}>
+          <div
+            style={{
+              marginTop: "12px",
+              maxWidth: "760px",
+              color: "#a5b6d3",
+              fontSize: "14px",
+              lineHeight: 1.7,
+            }}
+          >
+            {config.helper}
+          </div>
+
+          <section style={{ marginTop: "24px", maxWidth: "840px" }}>
             <SectionTitle
               title="令牌名称"
               description="为您的 API 令牌指定描述性名称。"
@@ -177,24 +265,23 @@ export function CloudflareTokenConfigMock() {
                 ...fieldBase,
                 width: "420px",
                 justifyContent: "flex-start",
-                color: "#111827",
               }}
             >
-              cfm
+              {config.tokenName}
             </div>
           </section>
 
-          <section style={{ marginTop: "26px", maxWidth: "960px" }}>
+          <section style={{ marginTop: "28px", maxWidth: "960px" }}>
             <SectionTitle
               title="权限"
-              description="为此令牌选择要应用于您的帐户或网站的编辑或读取权限。"
+              description="按 CF Mail 对应场景把权限配全即可。"
             />
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "160px minmax(0, 1fr) 186px",
                 gap: "10px",
-                color: "#6b7280",
+                color: "#8fa2c5",
                 fontSize: "13px",
                 marginBottom: "10px",
               }}
@@ -205,9 +292,9 @@ export function CloudflareTokenConfigMock() {
             </div>
 
             <div style={{ display: "grid", gap: "10px" }}>
-              {permissions.map(([resource, permission, access]) => (
+              {config.permissions.map(([resource, permission, access]) => (
                 <div
-                  key={`${resource}-${permission}`}
+                  key={`${variant}-${resource}-${permission}`}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "160px minmax(0, 1fr) 186px",
@@ -220,40 +307,29 @@ export function CloudflareTokenConfigMock() {
                 </div>
               ))}
             </div>
-
-            <div
-              style={{
-                marginTop: "10px",
-                color: "#2563eb",
-                fontSize: "14px",
-                fontWeight: 500,
-              }}
-            >
-              + 添加更多
-            </div>
           </section>
 
-          <section style={{ marginTop: "26px", maxWidth: "960px" }}>
+          <section style={{ marginTop: "28px", maxWidth: "960px" }}>
             <SectionTitle
               title="帐户资源"
-              description="选择要包括或排除的帐户。"
+              description="按这个示意选择范围即可。"
             />
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "140px 260px",
+                gridTemplateColumns: "140px 300px",
                 gap: "10px",
               }}
             >
               <SelectField value="包括" />
-              <SelectField value="所有帐户" />
+              <SelectField value={config.accountScope} />
             </div>
           </section>
 
-          <section style={{ marginTop: "26px", maxWidth: "960px" }}>
+          <section style={{ marginTop: "28px", maxWidth: "960px" }}>
             <SectionTitle
               title="区域资源"
-              description="选择要包括或排除的区域。推荐覆盖 CF Mail 会管理的所有目标区域。"
+              description="推荐覆盖当前项目会管理到的所有目标区域。"
             />
             <div
               style={{
@@ -263,169 +339,23 @@ export function CloudflareTokenConfigMock() {
               }}
             >
               <SelectField value="包括" />
-              <SelectField value="所有区域" />
-            </div>
-            <div
-              style={{
-                marginTop: "10px",
-                color: "#2563eb",
-                fontSize: "14px",
-                fontWeight: 500,
-              }}
-            >
-              + 添加更多
-            </div>
-          </section>
-
-          <section style={{ marginTop: "26px", maxWidth: "960px" }}>
-            <SectionTitle
-              title="客户端 IP 地址筛选"
-              description="选择要筛选的 IP 地址或 IP 地址范围。默认情况下，此令牌适用于所有地址。"
-            />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "140px minmax(0, 1fr) 96px",
-                gap: "10px",
-                alignItems: "end",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    color: "#6b7280",
-                    fontSize: "13px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  运算符
-                </div>
-                <SelectField value="选择" />
-              </div>
-              <div>
-                <div
-                  style={{
-                    color: "#6b7280",
-                    fontSize: "13px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  值
-                </div>
-                <div
-                  style={{
-                    ...fieldBase,
-                    justifyContent: "flex-start",
-                    color: "#9ca3af",
-                  }}
-                >
-                  例如，192.168.1.88
-                </div>
-              </div>
-              <div
-                style={{
-                  height: "38px",
-                  borderRadius: "4px",
-                  background: "#dbeafe",
-                  color: "#3b82f6",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                使用我的 IP
-              </div>
-            </div>
-            <div
-              style={{
-                marginTop: "10px",
-                color: "#2563eb",
-                fontSize: "14px",
-                fontWeight: 500,
-              }}
-            >
-              + 添加更多
-            </div>
-          </section>
-
-          <section style={{ marginTop: "26px", maxWidth: "960px" }}>
-            <SectionTitle
-              title="TTL"
-              description="定义此令牌将保持活动状态的时间长度。"
-            />
-            <div
-              style={{
-                ...fieldBase,
-                width: "196px",
-                justifyContent: "center",
-                gap: "10px",
-                color: "#4b5563",
-              }}
-            >
-              <span>Start Date</span>
-              <span>→</span>
-              <span>End Date</span>
+              <SelectField value={config.zoneScope} />
             </div>
           </section>
 
           <div
             style={{
-              marginTop: "34px",
-              paddingTop: "18px",
-              borderTop: "1px solid #e5e7eb",
-              display: "flex",
-              gap: "10px",
-            }}
-          >
-            <div
-              style={{
-                height: "36px",
-                padding: "0 14px",
-                borderRadius: "4px",
-                background: "#e5e7eb",
-                color: "#374151",
-                fontSize: "14px",
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              取消
-            </div>
-            <div
-              style={{
-                height: "36px",
-                padding: "0 16px",
-                borderRadius: "4px",
-                background: "#2563eb",
-                color: "#fff",
-                fontSize: "14px",
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              继续以显示摘要
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: "18px",
-              color: "#6b7280",
-              fontSize: "13px",
+              marginTop: "30px",
+              padding: "16px 18px",
+              borderRadius: "12px",
+              border: `1px solid ${config.accent}2f`,
+              background: `${config.accent}10`,
+              color: "#d5e1f6",
+              fontSize: "14px",
               lineHeight: 1.7,
             }}
           >
-            这张图只对应快速试用：把同一个 <code>CLOUDFLARE_API_TOKEN</code>{" "}
-            同时放进 Worker secret 和 GitHub secret。正式环境如果拆成两把
-            token，请按上方表格分别配置{" "}
-            <code>CLOUDFLARE_RUNTIME_API_TOKEN</code> 和{" "}
-            <code>CLOUDFLARE_DEPLOY_API_TOKEN</code>。
+            {config.footer}
           </div>
         </main>
       </div>

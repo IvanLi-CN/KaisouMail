@@ -11,6 +11,14 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 
 按这个表配置即可。项目已经支持拆分 token，不需要改代码。
 
+### Runtime token 示意配置
+
+<CloudflareTokenConfigMock variant="runtime" />
+
+### Deploy token 示意配置
+
+<CloudflareTokenConfigMock variant="deploy" />
+
 ## 快速上手（单人试用）
 
 如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以只配一把共享 token：
@@ -20,7 +28,7 @@ import { CloudflareTokenConfigMock } from "../components/cloudflare-token-config
 
 这把共享 token 需要同时覆盖运行时和部署两侧权限。
 
-<CloudflareTokenConfigMock />
+<CloudflareTokenConfigMock variant="shared" />
 
 ## 读取顺序
 
