@@ -9,7 +9,7 @@ const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 
 const repoRoot = process.cwd();
-const tempRoot = mkdtempSync(join(tmpdir(), "cf-mail-write-version-"));
+const tempRoot = mkdtempSync(join(tmpdir(), "kaisoumail-write-version-"));
 mkdirSync(join(tempRoot, "scripts"), { recursive: true });
 mkdirSync(join(tempRoot, "packages/shared/src"), { recursive: true });
 copyFileSync(
@@ -19,7 +19,7 @@ copyFileSync(
 
 writeFileSync(
   join(tempRoot, "package.json"),
-  JSON.stringify({ name: "cf-mail", version: "0.1.0", private: true, type: "module" }, null, 2),
+  JSON.stringify({ name: "kaisoumail", version: "0.1.0", private: true, type: "module" }, null, 2),
 );
 
 const run = (cmd, args, env = process.env) =>

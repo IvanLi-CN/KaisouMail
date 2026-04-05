@@ -90,7 +90,7 @@ export const AppShell = ({
                 </span>
                 <span>
                   <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
-                    CF Mail
+                    KaisouMail
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     Temporary inbox control plane

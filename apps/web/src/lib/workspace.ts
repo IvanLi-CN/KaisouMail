@@ -2,7 +2,7 @@ import type { Mailbox } from "@/lib/contracts";
 
 export type MailboxSortMode = "recent" | "created";
 
-export const MAILBOX_SORT_STORAGE_KEY = "cf-mail:workspace-mailbox-sort";
+export const MAILBOX_SORT_STORAGE_KEY = "kaisoumail:workspace-mailbox-sort";
 
 export const isMailboxSortMode = (
   value: string | null | undefined,

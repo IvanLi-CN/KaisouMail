@@ -11,7 +11,7 @@ const baseConfig = {
   CLOUDFLARE_API_TOKEN: "token_123",
   SESSION_SECRET: "super-secret-session-key",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
-  CF_ROUTE_RULESET_TAG: "cf-mail",
+  CF_ROUTE_RULESET_TAG: "kaisoumail",
 } as const;
 
 afterEach(() => {

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "cf-mail",
+      "name": "kaisoumail",
       "devDependencies": {
         "@biomejs/biome": "^2.4.6",
         "@types/node": "^25.5.0",
@@ -12,10 +12,10 @@
       },
     },
     "apps/api-worker": {
-      "name": "@cf-mail/api-worker",
+      "name": "@kaisoumail/api-worker",
       "version": "0.1.0",
       "dependencies": {
-        "@cf-mail/shared": "workspace:*",
+        "@kaisoumail/shared": "workspace:*",
         "@hono/zod-validator": "^0.7.4",
         "drizzle-orm": "^0.44.7",
         "hono": "^4.10.2",
@@ -31,10 +31,10 @@
       },
     },
     "apps/web": {
-      "name": "@cf-mail/web",
+      "name": "@kaisoumail/web",
       "version": "0.1.0",
       "dependencies": {
-        "@cf-mail/shared": "workspace:*",
+        "@kaisoumail/shared": "workspace:*",
         "@hookform/resolvers": "^5.2.2",
         "@radix-ui/react-popover": "^1.1.15",
         "@radix-ui/react-slot": "^1.2.3",
@@ -74,7 +74,7 @@
       },
     },
     "docs-site": {
-      "name": "@cf-mail/docs-site",
+      "name": "@kaisoumail/docs-site",
       "version": "0.1.0",
       "devDependencies": {
         "@types/react": "^19.1.16",
@@ -82,7 +82,7 @@
       },
     },
     "packages/shared": {
-      "name": "@cf-mail/shared",
+      "name": "@kaisoumail/shared",
       "version": "0.1.0",
       "dependencies": {
         "zod": "^4.3.6",
@@ -162,13 +162,13 @@
 
     "@bufbuild/protobuf": ["@bufbuild/protobuf@2.11.0", "", {}, "sha512-sBXGT13cpmPR5BMgHE6UEEfEaShh5Ror6rfN3yEK5si7QVrtZg8LEPQb0VVhiLRUslD2yLnXtnRzG035J/mZXQ=="],
 
-    "@cf-mail/api-worker": ["@cf-mail/api-worker@workspace:apps/api-worker"],
+    "@kaisoumail/api-worker": ["@kaisoumail/api-worker@workspace:apps/api-worker"],
 
-    "@cf-mail/docs-site": ["@cf-mail/docs-site@workspace:docs-site"],
+    "@kaisoumail/docs-site": ["@kaisoumail/docs-site@workspace:docs-site"],
 
-    "@cf-mail/shared": ["@cf-mail/shared@workspace:packages/shared"],
+    "@kaisoumail/shared": ["@kaisoumail/shared@workspace:packages/shared"],
 
-    "@cf-mail/web": ["@cf-mail/web@workspace:apps/web"],
+    "@kaisoumail/web": ["@kaisoumail/web@workspace:apps/web"],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.4.2", "", {}, "sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ=="],
 

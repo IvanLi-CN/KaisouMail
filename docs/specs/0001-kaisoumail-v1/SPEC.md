@@ -1,4 +1,4 @@
-# CF Mail V1 Spec
+# KaisouMail V1 Spec
 
 Status: 已完成
 
@@ -98,6 +98,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Visual Evidence
 
 Evidence is persisted with this spec and refreshed whenever the rendered control-plane surfaces change.
+
+### Auth
+
+![Login card with KaisouMail branding](./assets/login-card-kaisoumail.png)
 
 ### App Shell
 

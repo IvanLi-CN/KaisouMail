@@ -12,7 +12,7 @@ import type {
   sessionResponseSchema,
   userSchema,
   versionResponseSchema,
-} from "@cf-mail/shared";
+} from "@kaisoumail/shared";
 import type { z } from "zod";
 
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;

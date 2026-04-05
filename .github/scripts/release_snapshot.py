@@ -27,7 +27,7 @@ ALLOWED_TYPE_LABELS = {
 }
 ALLOWED_CHANNEL_LABELS = {"channel:stable", "channel:rc"}
 STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-RELEASE_COMMENT_MARKER = "<!-- cf-mail-release-version-comment -->"
+RELEASE_COMMENT_MARKER = "<!-- kaisoumail-release-version-comment -->"
 LINK_NEXT_RE = re.compile(r'<([^>]+)>;\s*rel="next"')
 
 
@@ -134,7 +134,7 @@ def github_request(api_root: str, token: str, path: str, *, allow_404: bool = Fa
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json, application/vnd.github.groot-preview+json",
-        "User-Agent": "cf-mail-release-snapshot",
+        "User-Agent": "kaisoumail-release-snapshot",
         "X-GitHub-Api-Version": API_VERSION,
     }
     url = path if path.startswith("http://") or path.startswith("https://") else f"{api_root.rstrip('/')}{path}"
@@ -516,7 +516,7 @@ def ensure_snapshot(args: argparse.Namespace) -> int:
         api_root=args.api_root,
         snapshot_source="manual-backfill" if args.target_only else "ci-main",
     )
-    with tempfile.TemporaryDirectory(prefix="cf-mail-release-snapshot-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="kaisoumail-release-snapshot-") as tmp:
         temp_note = Path(tmp) / "snapshot.json"
         write_json(temp_note, snapshot)
         git("notes", f"--ref={args.notes_ref}", "add", "-f", "-F", str(temp_note), target_sha)

@@ -1,4 +1,4 @@
-import { versionInfo } from "@cf-mail/shared";
+import { versionInfo } from "@kaisoumail/shared";
 
 import type {
   ApiKeyRecord,

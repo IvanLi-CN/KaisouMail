@@ -1,9 +1,9 @@
+import { zValidator } from "@hono/zod-validator";
 import {
   listMessagesQuerySchema,
   listMessagesResponseSchema,
   messageDetailResponseSchema,
-} from "@cf-mail/shared";
-import { zValidator } from "@hono/zod-validator";
+} from "@kaisoumail/shared";
 import { Hono } from "hono";
 import { apiValidationHook } from "../lib/validation";
 import { requireAuth } from "../services/auth";

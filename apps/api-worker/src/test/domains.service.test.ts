@@ -55,7 +55,7 @@ const runtimeConfig = {
   EMAIL_WORKER_NAME: "mail-worker",
   SESSION_SECRET: "super-secret-session-key",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
-  CF_ROUTE_RULESET_TAG: "cf-mail",
+  CF_ROUTE_RULESET_TAG: "kaisoumail",
 } as const;
 
 const createDb = (rows: unknown[]) => ({

@@ -6,7 +6,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 
 | 用途 | 存放位置 | 密钥名 | 值 |
 | --- | --- | --- | --- |
-| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| 运行时域名管理 | Cloudflare `kaisoumail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
 | 部署流水线 | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 项目已经支持拆分 token，不需要改代码。
@@ -23,7 +23,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 
 如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以只配一把共享 token：
 
-- Cloudflare `cf-mail-api` Worker secret：`CLOUDFLARE_API_TOKEN`
+- Cloudflare `kaisoumail-api` Worker secret：`CLOUDFLARE_API_TOKEN`
 - GitHub repository secret：`CLOUDFLARE_API_TOKEN`
 
 这把共享 token 需要同时覆盖运行时和部署两侧权限。
@@ -58,7 +58,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 | `Zone: Email Routing Rules: Edit` | 创建/删除邮箱 routing rule |
 | `Zone: Zone Settings: Edit` | 启用 Email Routing |
 
-Scope 要覆盖所有要接入 CF Mail 的 zones。
+Scope 要覆盖所有要接入 KaisouMail 的 zones。
 
 ## Deploy token 最小权限
 

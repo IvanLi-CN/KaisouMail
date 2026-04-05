@@ -6,7 +6,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 
 | Purpose | Stored in | Secret name | Value |
 | --- | --- | --- | --- |
-| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| Runtime mailbox-domain management | Cloudflare `kaisoumail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
 | Deploy workflow | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 This repository already supports split tokens. No code change is required.
@@ -23,7 +23,7 @@ This repository already supports split tokens. No code change is required.
 
 If you only need the fastest single-operator setup for evaluation or a low-risk environment, you can keep one shared token:
 
-- Cloudflare `cf-mail-api` Worker secret: `CLOUDFLARE_API_TOKEN`
+- Cloudflare `kaisoumail-api` Worker secret: `CLOUDFLARE_API_TOKEN`
 - GitHub repository secret: `CLOUDFLARE_API_TOKEN`
 
 That shared token must cover both runtime and deploy permissions.
@@ -58,7 +58,7 @@ Required permissions:
 | `Zone: Email Routing Rules: Edit` | create and delete mailbox routing rules |
 | `Zone: Zone Settings: Edit` | enable Email Routing |
 
-The runtime token scope must cover every zone that CF Mail should manage.
+The runtime token scope must cover every zone that KaisouMail should manage.
 
 ## Deploy token minimum permissions
 

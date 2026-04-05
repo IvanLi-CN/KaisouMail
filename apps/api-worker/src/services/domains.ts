@@ -1,4 +1,4 @@
-import { domainCatalogItemSchema, domainSchema } from "@cf-mail/shared";
+import { domainCatalogItemSchema, domainSchema } from "@kaisoumail/shared";
 import { asc, eq } from "drizzle-orm";
 
 import { getDb } from "../db/client";

@@ -1,4 +1,4 @@
-import type { sessionUserSchema } from "@cf-mail/shared";
+import type { sessionUserSchema } from "@kaisoumail/shared";
 import type { Context } from "hono";
 import type { z } from "zod";
 

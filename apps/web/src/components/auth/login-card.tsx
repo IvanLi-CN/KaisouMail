@@ -39,7 +39,7 @@ export const LoginCard = ({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Sign in
         </p>
-        <CardTitle className="text-2xl">登录 cf-mail</CardTitle>
+        <CardTitle className="text-2xl">登录 KaisouMail</CardTitle>
         <CardDescription>
           使用 API Key 登录控制台。浏览器端会换成 HttpOnly session cookie。
         </CardDescription>

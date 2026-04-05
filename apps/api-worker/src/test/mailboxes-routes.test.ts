@@ -1,4 +1,4 @@
-import { mailboxSchema } from "@cf-mail/shared";
+import { mailboxSchema } from "@kaisoumail/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { createMailboxForUser, ensureMailboxForUser, resolveMailboxForUser } =
@@ -44,7 +44,7 @@ const env = {
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
-  CF_ROUTE_RULESET_TAG: "cf-mail",
+  CF_ROUTE_RULESET_TAG: "kaisoumail",
 } as never;
 
 const activeMailbox = mailboxSchema.parse({

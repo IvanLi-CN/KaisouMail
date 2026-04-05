@@ -4,7 +4,7 @@ import {
   mailboxSubdomainRegex,
   maxMailboxTtlMinutes,
   minMailboxTtlMinutes,
-} from "@cf-mail/shared";
+} from "@kaisoumail/shared";
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";

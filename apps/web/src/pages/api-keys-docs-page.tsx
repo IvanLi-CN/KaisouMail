@@ -35,7 +35,7 @@ type EndpointGroup = {
 const quickstartSteps = [
   "在 `/api-keys` 页面创建一把新的 API Key，并保存好返回时展示的完整 secret。",
   "自动化或 Agent 调用受保护接口时，直接发送 `Authorization: Bearer <API_KEY>`。",
-  "浏览器场景先调用 `POST /api/auth/session` 交换 `cf_mail_session` cookie，再用同一会话访问后续接口。",
+  "浏览器场景先调用 `POST /api/auth/session` 交换 `kaisoumail_session` cookie，再用同一会话访问后续接口。",
   "邮箱地址规则、可用域名、默认 TTL 与上限 TTL 可先通过 `GET /api/meta` 获取，避免在客户端硬编码猜测。",
   "需要撤销凭证时调用 `POST /api/api-keys/:id/revoke`，已撤销 Key 会保留审计记录，但不能继续鉴权。",
 ] as const;
@@ -51,7 +51,7 @@ const authModes = [
     title: "Browser Session",
     description: "适合控制台、嵌入式 WebView 或需要 cookie 会话的前端。",
     detail:
-      "`POST /api/auth/session` 会校验 API Key、返回当前用户信息，并通过 `Set-Cookie` 写入 `cf_mail_session`。后续浏览器请求使用 `credentials: include` 即可。",
+      "`POST /api/auth/session` 会校验 API Key、返回当前用户信息，并通过 `Set-Cookie` 写入 `kaisoumail_session`。后续浏览器请求使用 `credentials: include` 即可。",
   },
 ] as const;
 
@@ -169,7 +169,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "`apiKey` 必填，shared schema 只约束最少 16 个字符。",
-            "成功时会额外返回 `Set-Cookie: cf_mail_session=...; HttpOnly; Path=/; SameSite=Lax`。",
+            "成功时会额外返回 `Set-Cookie: kaisoumail_session=...; HttpOnly; Path=/; SameSite=Lax`。",
             "失败时也统一返回 `{ error, details }`。",
           ],
         },
@@ -177,7 +177,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/auth/session",
           summary: "读取当前会话用户信息。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
   "user": {
     "id": "usr_xxx",
@@ -199,7 +199,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "无需预先登录",
           notes: [
             "成功时返回 `204 No Content`。",
-            "接口会下发过期的 `cf_mail_session` cookie，用于浏览器退出登录。",
+            "接口会下发过期的 `kaisoumail_session` cookie，用于浏览器退出登录。",
           ],
         },
       ],
@@ -212,7 +212,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/api-keys",
           summary: "列出当前用户可见的 API Keys。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
   "apiKeys": [
     {
@@ -235,7 +235,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/api-keys",
           summary: "为当前用户创建新的 API Key。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           requestBody: `{
   "name": "CI bot",
   "scopes": ["mailboxes:write", "messages:read"]
@@ -262,7 +262,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/api-keys/:id/revoke",
           summary: "撤销指定 API Key。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           notes: [
             "成功时返回 `204 No Content`。",
             "当前实现允许 Key 所属用户本人撤销，也允许 admin 撤销其他用户的 Key。",
@@ -279,7 +279,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/mailboxes",
           summary: "列出当前用户可访问的邮箱。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
   "mailboxes": [
     {
@@ -307,7 +307,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/mailboxes",
           summary: "创建新的临时邮箱。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           requestBody: `{
   "localPart": "${localPartExample}",
   "subdomain": "${subdomainExample}",
@@ -339,7 +339,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           path: "/api/mailboxes/ensure",
           summary:
             "按 address 或 localPart+subdomain 幂等获取 active mailbox，不存在时创建。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           requestBody: `{
   "address": "${addressExample}",
   "expiresInMinutes": ${ttl}
@@ -368,7 +368,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/mailboxes/resolve?address=<mailbox>",
           summary: "按邮箱地址直接解析当前用户可见的 active mailbox。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
       "id": "mbx_alpha",
       "userId": "usr_xxx",
@@ -392,14 +392,14 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/mailboxes/:id",
           summary: "读取单个邮箱详情。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           notes: ["成功时直接返回 `mailboxSchema`，不会再额外包一层对象。"],
         },
         {
           method: "DELETE",
           path: "/api/mailboxes/:id",
           summary: "销毁指定邮箱。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           notes: [
             "成功时直接返回更新后的邮箱记录。",
             "自动化销毁后可用 `destroyedAt` 与 `status` 判断后续状态。",
@@ -416,7 +416,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/domains",
           summary: "列出全部邮箱域名记录。",
-          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           responseBody: `{
   "domains": [
     {
@@ -441,7 +441,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/domains/catalog",
           summary: "实时列出 Cloudflare 当前可见域名，并合并项目内启用状态。",
-          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           responseBody: `{
   "domains": [
     {
@@ -480,7 +480,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           path: "/api/domains",
           summary:
             "从 Cloudflare catalog 启用域名，并立即尝试接入 Email Routing。",
-          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           requestBody: `{
   "rootDomain": "${rootDomainExample}",
   "zoneId": "cf-zone-primary"
@@ -506,7 +506,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/domains/:id/retry",
           summary: "重试失败域名的 Cloudflare 接入。",
-          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           notes: [
             "成功后状态会切回 `active`，并刷新 `lastProvisionedAt`。",
             "已停用的域名不能 retry；需要新建一条新记录。",
@@ -516,7 +516,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/domains/:id/disable",
           summary: "停用域名，阻止后续新建邮箱。",
-          auth: "Bearer 或 `cf_mail_session` cookie（admin only）",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           notes: [
             "停用不会删除该域名下现有 mailbox 或 routing rule。",
             "停用后 `/api/meta` 不再把该域名放进 `domains[]`。",
@@ -533,7 +533,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           path: "/api/messages?mailbox=<address>&after=<iso>&since=<iso>",
           summary:
             "按邮箱地址和时间下界过滤消息列表；`mailbox` 查询参数可重复出现。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
   "messages": [
     {
@@ -561,7 +561,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/messages/:id",
           summary: "读取单条消息的完整解析结果。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
   "message": {
     "id": "msg_alpha",
@@ -601,7 +601,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/messages/:id/raw",
           summary: "下载原始 EML。",
-          auth: "Bearer 或 `cf_mail_session` cookie",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
           notes: [
             "该接口返回的是原始邮件响应体，不走 JSON 包装。",
             "适合做归档、重放或交给其他解析器二次处理。",

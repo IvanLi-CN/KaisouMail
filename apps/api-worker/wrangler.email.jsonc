@@ -8,7 +8,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "cf-mail-db",
+      "database_name": "kaisoumail-db",
       "database_id": "460e9fd5-002f-4d45-82be-6d1d6c7abf3a",
       "preview_database_id": "3584c425-b4df-485f-b863-2db411db8c8e",
       "migrations_dir": "drizzle"
@@ -17,8 +17,8 @@
   "r2_buckets": [
     {
       "binding": "MAIL_BUCKET",
-      "bucket_name": "cf-mail-bucket",
-      "preview_bucket_name": "cf-mail-bucket-preview"
+      "bucket_name": "kaisoumail-bucket",
+      "preview_bucket_name": "kaisoumail-bucket-preview"
     }
   ],
   "vars": {

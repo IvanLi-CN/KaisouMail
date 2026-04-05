@@ -1,11 +1,11 @@
-# CF Mail
+# KaisouMail
 
 基于 Cloudflare Email Routing、Workers、D1、R2 的临时邮箱平台，带有 React + shadcn/ui 控制台。
 
 ## 文档与 Storybook
 
-- 公开文档站：[ivanli-cn.github.io/cf-mail/zh/](https://ivanli-cn.github.io/cf-mail/zh/)
-- 公开 Storybook：[ivanli-cn.github.io/cf-mail/zh/storybook.html](https://ivanli-cn.github.io/cf-mail/zh/storybook.html)
+- 公开文档站：[ivanli-cn.github.io/KaisouMail/zh/](https://ivanli-cn.github.io/KaisouMail/zh/)
+- 公开 Storybook：[ivanli-cn.github.io/KaisouMail/zh/storybook.html](https://ivanli-cn.github.io/KaisouMail/zh/storybook.html)
 - 英文 README：[README.md](./README.md)
 - 控制台内速查页：`/api-keys/docs`
 
@@ -65,7 +65,7 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 | 用途 | 存放位置 | 密钥名 | 应填什么 |
 | --- | --- | --- | --- |
-| 运行时域名管理 | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| 运行时域名管理 | Cloudflare `kaisoumail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
 | 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 ### Runtime token 最小权限
@@ -74,7 +74,7 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
-scope 必须覆盖所有要接入 CF Mail 的 zones。
+scope 必须覆盖所有要接入 KaisouMail 的 zones。
 
 其中最容易漏的是 `Zone: Zone Settings: Edit`。如果域名目录里某个 zone 明明可见，却在启用时变成 `provisioning_error / Authentication error`，优先检查这项权限和 token 的 zone 覆盖范围。
 

@@ -1,4 +1,4 @@
-import { apiErrorSchema } from "@cf-mail/shared";
+import { apiErrorSchema } from "@kaisoumail/shared";
 
 export class ApiError extends Error {
   constructor(

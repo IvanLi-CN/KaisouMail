@@ -1,4 +1,7 @@
-import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "@cf-mail/shared";
+import {
+  mailboxLocalPartRegex,
+  mailboxSubdomainRegex,
+} from "@kaisoumail/shared";
 
 export interface ParsedMailboxAddress {
   localPart: string;
