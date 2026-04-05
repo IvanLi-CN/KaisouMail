@@ -10,6 +10,7 @@ const runtimeConfigSchema = z.object({
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CLOUDFLARE_RUNTIME_API_TOKEN: z.string().optional(),
   BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
   BOOTSTRAP_ADMIN_NAME: z.string().default("Owner"),
   BOOTSTRAP_ADMIN_API_KEY: z.string().min(16).optional(),
@@ -30,6 +31,7 @@ export interface WorkerEnv {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
+  CLOUDFLARE_RUNTIME_API_TOKEN?: string;
   BOOTSTRAP_ADMIN_EMAIL?: string;
   BOOTSTRAP_ADMIN_NAME?: string;
   BOOTSTRAP_ADMIN_API_KEY?: string;
@@ -40,5 +42,13 @@ export interface WorkerEnv {
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 
-export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig =>
-  runtimeConfigSchema.parse(env);
+export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig => {
+  const config = runtimeConfigSchema.parse(env);
+  return {
+    ...config,
+    // Prefer the explicit runtime token, but keep the shared token as a
+    // quickstart-compatible fallback.
+    CLOUDFLARE_API_TOKEN:
+      config.CLOUDFLARE_RUNTIME_API_TOKEN ?? config.CLOUDFLARE_API_TOKEN,
+  };
+};

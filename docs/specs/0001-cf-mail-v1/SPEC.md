@@ -38,7 +38,12 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/api-keys/docs`
 - Create and revoke API keys for automation and browser sign-in
 - The Web console keeps revoked keys in the inventory for audit, sorts the list by most recent use, and paginates the table in 10-row pages
-- Protected integration reference for human operators and Agents, covering runtime metadata, session exchange, API key lifecycle, mailbox lookup/create endpoints, and message polling endpoints
+- Protected in-app quick reference for human operators and Agents, covering runtime metadata, session exchange, API key lifecycle, mailbox lookup/create endpoints, and message polling endpoints
+
+### Public Docs
+- GitHub Pages public docs site
+- GitHub Pages public Storybook surface at `/storybook/` plus `/storybook.html`
+- Public deployment, token permission, domain enablement, API, and troubleshooting guidance outside the authenticated control plane
 
 ## API Behavior
 
@@ -138,3 +143,13 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ![API integration reference page](./assets/api-keys-docs-page.png)
 
 ![API integration mailbox and polling reference](./assets/api-keys-docs-mailboxes.png)
+
+### Public Docs
+
+![Public docs site homepage](./assets/docs-site-home.png)
+
+![Cloudflare token permissions docs page](./assets/docs-site-token-permissions.png)
+
+![Public docs FAQ page](./assets/docs-site-faq.png)
+
+![Public Storybook domains page](./assets/storybook-public-home.png)

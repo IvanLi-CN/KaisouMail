@@ -6,17 +6,19 @@
   "packageManager": "bun@1.3.11",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "docs-site"
   ],
   "scripts": {
     "prepare": "lefthook install",
     "version:write": "node ./scripts/write-version.mjs",
-    "check": "bun run check:root && bun run --cwd packages/shared check && bun run --cwd apps/api-worker check && bun run --cwd apps/web check",
+    "check": "bun run check:root && bun run --cwd packages/shared check && bun run --cwd apps/api-worker check && bun run --cwd apps/web check && bun run --cwd docs-site check",
     "check:root": "biome check .",
-    "typecheck": "bun run version:write && bun run --cwd packages/shared typecheck && bun run --cwd apps/api-worker typecheck && bun run --cwd apps/web typecheck",
+    "typecheck": "bun run version:write && bun run --cwd packages/shared typecheck && bun run --cwd apps/api-worker typecheck && bun run --cwd apps/web typecheck && bun run --cwd docs-site typecheck",
     "test": "bun run version:write && bun run --cwd apps/api-worker test && bun run --cwd apps/web test",
-    "build": "bun run version:write && bun run --cwd apps/api-worker build && bun run --cwd apps/web build",
+    "build": "bun run version:write && bun run --cwd apps/api-worker build && bun run --cwd apps/web build && bun run --cwd docs-site build",
     "build-storybook": "bun run version:write && bun run --cwd apps/web build-storybook",
+    "build-docs-site": "bun run --cwd docs-site build",
     "test:e2e": "bun run version:write && bun run --cwd apps/web test:e2e"
   },
   "devDependencies": {

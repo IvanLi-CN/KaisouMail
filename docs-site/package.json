@@ -1,0 +1,17 @@
+{
+  "name": "@cf-mail/docs-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "rspress dev --host 127.0.0.1 --port ${DOCS_PORT:-56007}",
+    "build": "rspress build",
+    "preview": "rspress preview --host 127.0.0.1 --port ${DOCS_PORT:-56007}",
+    "check": "biome check components docs rspress.config.ts package.json tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.16",
+    "rspress": "^1.47.1"
+  }
+}

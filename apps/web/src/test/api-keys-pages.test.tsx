@@ -5,6 +5,7 @@ import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 import {
   demoApiKeys,
@@ -12,12 +13,17 @@ import {
   demoSessionUser,
   demoVersion,
 } from "@/mocks/data";
-import { ApiKeysDocsPage } from "@/pages/api-keys-docs-page";
+import {
+  ApiKeysDocsPage,
+  ApiKeysDocsPageView,
+} from "@/pages/api-keys-docs-page";
 import { ApiKeysPage, ApiKeysPageView } from "@/pages/api-keys-page";
 
 const sessionHookState = {
   user: demoSessionUser,
 };
+
+const docsLinks = buildPublicDocsLinks("https://ivanli-cn.github.io/cf-mail");
 
 vi.mock("@/hooks/use-api-keys", () => ({
   useApiKeysQuery: () => ({ data: demoApiKeys }),
@@ -78,7 +84,12 @@ const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
               />
             }
           />
-          <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+          <Route
+            path={appRoutes.apiKeysDocs}
+            element={
+              <ApiKeysDocsPageView meta={demoMeta} docsLinks={docsLinks} />
+            }
+          />
         </Routes>
       </AppShell>
     </MemoryRouter>,
@@ -93,7 +104,7 @@ describe("api key integration docs", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "API 对接文档", level: 1 }),
+        screen.getByRole("heading", { name: "API 对接速查", level: 1 }),
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "API Keys" })).toHaveClass(
@@ -102,6 +113,16 @@ describe("api key integration docs", () => {
     expect(screen.getByText("Session Auth")).toBeInTheDocument();
     expect(screen.getByText("/api/api-keys/:id/revoke")).toBeInTheDocument();
     expect(screen.getByText("/api/meta")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "公开文档站" })).toHaveAttribute(
+      "href",
+      "https://ivanli-cn.github.io/cf-mail/zh/",
+    );
+    expect(
+      screen.getByRole("link", { name: "公开 Storybook" }),
+    ).toHaveAttribute(
+      "href",
+      "https://ivanli-cn.github.io/cf-mail/zh/storybook.html",
+    );
   });
 
   it("documents the implemented auth and message contracts", () => {
@@ -157,7 +178,7 @@ describe("api key integration docs", () => {
     fireEvent.click(screen.getByRole("link", { name: "对接文档" }));
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "API 对接文档", level: 1 }),
+        screen.getByRole("heading", { name: "API 对接速查", level: 1 }),
       ).toBeInTheDocument();
     });
 

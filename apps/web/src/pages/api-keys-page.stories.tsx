@@ -4,6 +4,7 @@ import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
 import type { ApiMeta } from "@/lib/contracts";
+import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 import {
   demoApiKeys,
@@ -38,6 +39,10 @@ const docsReferenceMeta: ApiMeta = {
   },
 };
 
+const docsReferenceLinks = buildPublicDocsLinks(
+  "https://ivanli-cn.github.io/cf-mail",
+);
+
 const RouteFlowHarness = ({
   latestSecret = null,
   meta = demoMeta,
@@ -63,7 +68,9 @@ const RouteFlowHarness = ({
         />
         <Route
           path={appRoutes.apiKeysDocs}
-          element={<ApiKeysDocsPageView meta={meta} />}
+          element={
+            <ApiKeysDocsPageView meta={meta} docsLinks={docsReferenceLinks} />
+          }
         />
       </Routes>
     </div>
@@ -153,7 +160,7 @@ export const RouteFlow: Story = {
 
     await waitFor(async () => {
       await expect(
-        canvas.getByRole("heading", { name: "API 对接文档", level: 1 }),
+        canvas.getByRole("heading", { name: "API 对接速查", level: 1 }),
       ).toBeInTheDocument();
     });
     await expect(
@@ -187,7 +194,7 @@ export const DocsReference: Story = {
     await userEvent.click(canvas.getByRole("link", { name: "对接文档" }));
     await waitFor(async () => {
       await expect(
-        canvas.getByRole("heading", { name: "API 对接文档", level: 1 }),
+        canvas.getByRole("heading", { name: "API 对接速查", level: 1 }),
       ).toBeInTheDocument();
     });
     await expect(canvas.getByText("Automation / Agent")).toBeInTheDocument();
@@ -195,5 +202,14 @@ export const DocsReference: Story = {
     await expect(canvas.getByText("/api/domains/catalog")).toBeInTheDocument();
     await expect(canvas.getByText("/api/mailboxes/ensure")).toBeInTheDocument();
     await expect(canvas.getByText("/api/messages/:id/raw")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: "公开文档站" }),
+    ).toHaveAttribute("href", "https://ivanli-cn.github.io/cf-mail/zh/");
+    await expect(
+      canvas.getByRole("link", { name: "公开 Storybook" }),
+    ).toHaveAttribute(
+      "href",
+      "https://ivanli-cn.github.io/cf-mail/zh/storybook.html",
+    );
   },
 };

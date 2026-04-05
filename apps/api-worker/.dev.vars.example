@@ -11,3 +11,5 @@ BOOTSTRAP_ADMIN_API_KEY=replace-with-a-bootstrap-api-key
 CLOUDFLARE_ACCOUNT_ID=replace-with-your-account-id
 CLOUDFLARE_ZONE_ID=replace-with-your-zone-id
 CLOUDFLARE_API_TOKEN=replace-with-an-email-routing-token
+# Optional: use a dedicated runtime token instead of the shared quickstart token.
+# CLOUDFLARE_RUNTIME_API_TOKEN=replace-with-a-runtime-email-routing-token

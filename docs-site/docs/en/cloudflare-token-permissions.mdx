@@ -1,0 +1,109 @@
+import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-config-mock";
+
+# Cloudflare Token Permissions
+
+## Recommended production setup
+
+| Purpose | Stored in | Secret name | Value |
+| --- | --- | --- | --- |
+| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| Deploy workflow | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
+
+This repository already supports split tokens. No code change is required.
+
+### Runtime token example
+
+<CloudflareTokenConfigMock variant="runtime" />
+
+### Deploy token example
+
+<CloudflareTokenConfigMock variant="deploy" />
+
+## Quickstart for a single operator
+
+If you only need the fastest single-operator setup for evaluation or a low-risk environment, you can keep one shared token:
+
+- Cloudflare `cf-mail-api` Worker secret: `CLOUDFLARE_API_TOKEN`
+- GitHub repository secret: `CLOUDFLARE_API_TOKEN`
+
+That shared token must cover both runtime and deploy permissions.
+
+<CloudflareTokenConfigMock variant="shared" />
+
+## Resolution order
+
+| Surface | Preferred secret | Fallback secret |
+| --- | --- | --- |
+| API Worker runtime | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` |
+| Deploy workflow | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` |
+
+If split-token secrets and a shared token both exist, the split-token secrets win.
+
+## Runtime token minimum permissions
+
+Runtime code calls:
+
+- `GET /zones`
+- `GET /zones/:zone_id`
+- `POST /zones/:zone_id/email/routing/enable`
+- `POST /zones/:zone_id/email/routing/dns`
+- `POST /zones/:zone_id/email/routing/rules`
+- `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+
+Required permissions:
+
+| Permission | Purpose |
+| --- | --- |
+| `Zone: Zone: Read` | list and validate zones |
+| `Zone: Email Routing Rules: Edit` | create and delete mailbox routing rules |
+| `Zone: Zone Settings: Edit` | enable Email Routing |
+
+The runtime token scope must cover every zone that CF Mail should manage.
+
+## Deploy token minimum permissions
+
+The deploy flow performs:
+
+- `wrangler deploy`
+- `wrangler pages deploy`
+- remote D1 migrations
+
+Required permissions:
+
+| Permission | Purpose |
+| --- | --- |
+| `Account: D1: Edit` | remote D1 migrations |
+| `Account: Workers Scripts: Edit` | Worker deploy |
+| `Account: Cloudflare Pages: Edit` | Pages deploy |
+| `Zone: Workers Routes: Edit` | Worker custom-domain routes |
+
+## Shared token union
+
+If you use the shared quickstart token, it must include all of the following:
+
+- `Zone: Zone: Read`
+- `Zone: Email Routing Rules: Edit`
+- `Zone: Zone Settings: Edit`
+- `Account: D1: Edit`
+- `Account: Workers Scripts: Edit`
+- `Account: Cloudflare Pages: Edit`
+- `Zone: Workers Routes: Edit`
+
+## Common errors
+
+### `Authentication error`
+
+Check these first:
+
+1. The token includes `Zone: Zone Settings: Edit`.
+2. The token scope covers the target zone.
+
+### The zone is visible but enablement still fails
+
+This usually means the token can read the zone but cannot write the required Email Routing settings for that zone.
+
+## References
+
+- [Create API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+- [Account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)
+- [Enable Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/methods/enable/)
