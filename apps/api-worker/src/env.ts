@@ -15,7 +15,7 @@ const runtimeConfigSchema = z.object({
   BOOTSTRAP_ADMIN_NAME: z.string().default("Owner"),
   BOOTSTRAP_ADMIN_API_KEY: z.string().min(16).optional(),
   SESSION_SECRET: z.string().min(16),
-  CF_ROUTE_RULESET_TAG: z.string().default("cf-mail"),
+  CF_ROUTE_RULESET_TAG: z.string().default("kaisoumail"),
   WEB_APP_ORIGIN: z.string().url().optional(),
 });
 

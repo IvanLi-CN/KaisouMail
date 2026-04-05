@@ -1,9 +1,9 @@
+import { zValidator } from "@hono/zod-validator";
 import {
   createApiKeyRequestSchema,
   createApiKeyResponseSchema,
   listApiKeysResponseSchema,
-} from "@cf-mail/shared";
-import { zValidator } from "@hono/zod-validator";
+} from "@kaisoumail/shared";
 import { Hono } from "hono";
 
 import { apiValidationHook } from "../lib/validation";

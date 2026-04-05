@@ -1,4 +1,4 @@
-import { versionInfo, versionResponseSchema } from "@cf-mail/shared";
+import { versionInfo, versionResponseSchema } from "@kaisoumail/shared";
 import { Hono } from "hono";
 
 import { getDb } from "./db/client";

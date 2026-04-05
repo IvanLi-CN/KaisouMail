@@ -1,11 +1,11 @@
-# cf-mail
+# KaisouMail
 
 Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, and a React + shadcn/ui control plane.
 
 ## Docs & Storybook
 
-- Public docs site: [ivanli-cn.github.io/cf-mail](https://ivanli-cn.github.io/cf-mail/)
-- Public Storybook: [ivanli-cn.github.io/cf-mail/storybook.html](https://ivanli-cn.github.io/cf-mail/storybook.html)
+- Public docs site: [ivanli-cn.github.io/KaisouMail](https://ivanli-cn.github.io/KaisouMail/)
+- Public Storybook: [ivanli-cn.github.io/KaisouMail/storybook.html](https://ivanli-cn.github.io/KaisouMail/storybook.html)
 - Chinese README: [README.zh-CN.md](./README.zh-CN.md)
 - In-app quick reference: `/api-keys/docs`
 
@@ -139,7 +139,7 @@ Recommended production setup:
 
 | Purpose | Stored in | Secret name | Value |
 | --- | --- | --- | --- |
-| Runtime mailbox-domain management | Cloudflare `cf-mail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
+| Runtime mailbox-domain management | Cloudflare `kaisoumail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
 | Deploy workflow | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 ### Runtime token minimum permissions
@@ -271,12 +271,12 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 ## Deployment checklist
 
-1. Create the Pages project `cf-mail` once in Cloudflare
+1. Create the Pages project `kaisoumail` once in Cloudflare
 2. Bind your control-plane origin (for example `cfm.example.com`) to Pages
 3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, and either `CLOUDFLARE_RUNTIME_API_TOKEN` or the shared `CLOUDFLARE_API_TOKEN`)
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`)
-6. Set GitHub vars `CF_PAGES_PROJECT_NAME=cf-mail` and `VITE_API_BASE_URL=<your api origin>`
+6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your api origin>`
 7. Set `WEB_APP_ORIGIN=<your pages origin>`
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
 9. Push to `main` to trigger the deploy workflow
@@ -284,12 +284,12 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 ## Worker topology
 
-- `cf-mail-api`
+- `kaisoumail-api`
   - serves your single control-plane API origin
   - owns the REST API and scheduled cleanup trigger
 - `email-receiver-worker`
   - receives Email Routing `email()` events
-  - uses the same source code as `cf-mail-api`, but is deployed with the dedicated `wrangler.email.jsonc` config and the same D1/R2 bindings
+  - uses the same source code as `kaisoumail-api`, but is deployed with the dedicated `wrangler.email.jsonc` config and the same D1/R2 bindings
 
 ## Domain topology example
 

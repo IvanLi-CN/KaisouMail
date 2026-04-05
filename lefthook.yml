@@ -5,7 +5,7 @@ pre-commit:
       run: bun run check
 
 pre-push:
-  parallel: true
+  parallel: false
   commands:
     typecheck:
       run: bun run typecheck

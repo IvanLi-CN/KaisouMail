@@ -1,4 +1,4 @@
-import { createMailboxRequestSchema } from "@cf-mail/shared";
+import { createMailboxRequestSchema } from "@kaisoumail/shared";
 import { describe, expect, it } from "vitest";
 
 import {

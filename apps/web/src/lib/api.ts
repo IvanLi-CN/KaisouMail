@@ -15,7 +15,7 @@ import {
   messageDetailResponseSchema,
   sessionResponseSchema,
   versionResponseSchema,
-} from "@cf-mail/shared";
+} from "@kaisoumail/shared";
 
 import { demoApi } from "@/lib/demo-store";
 

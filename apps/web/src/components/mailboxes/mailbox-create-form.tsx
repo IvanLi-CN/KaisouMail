@@ -1,5 +1,8 @@
-import { mailboxLocalPartRegex, mailboxSubdomainRegex } from "@cf-mail/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  mailboxLocalPartRegex,
+  mailboxSubdomainRegex,
+} from "@kaisoumail/shared";
 import { LoaderCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";

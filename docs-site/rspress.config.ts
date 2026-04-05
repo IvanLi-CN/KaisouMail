@@ -19,16 +19,16 @@ export default defineConfig({
     {
       lang: "en",
       label: "English",
-      title: "CF Mail Docs",
+      title: "KaisouMail Docs",
       description:
-        "Deployment, domain onboarding, Cloudflare token, API, and operator docs for CF Mail.",
+        "Deployment, domain onboarding, Cloudflare token, API, and operator docs for KaisouMail.",
     },
     {
       lang: "zh",
       label: "简体中文",
-      title: "CF Mail 文档",
+      title: "KaisouMail 文档",
       description:
-        "CF Mail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
+        "KaisouMail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
     },
   ],
   builderConfig: {
@@ -47,9 +47,9 @@ export default defineConfig({
       {
         lang: "en",
         label: "English",
-        title: "CF Mail Docs",
+        title: "KaisouMail Docs",
         description:
-          "Deployment, domain onboarding, Cloudflare token, API, and operator docs for CF Mail.",
+          "Deployment, domain onboarding, Cloudflare token, API, and operator docs for KaisouMail.",
         nav: [
           { text: "Home", link: "/" },
           { text: "Quick Start", link: "/quick-start" },
@@ -58,7 +58,7 @@ export default defineConfig({
           { text: "Storybook", link: "/storybook.html" },
           {
             text: "GitHub",
-            link: "https://github.com/IvanLi-CN/cf-mail",
+            link: "https://github.com/IvanLi-CN/KaisouMail",
             position: "right",
           },
         ],
@@ -91,9 +91,9 @@ export default defineConfig({
       {
         lang: "zh",
         label: "简体中文",
-        title: "CF Mail 文档",
+        title: "KaisouMail 文档",
         description:
-          "CF Mail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
+          "KaisouMail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
         nav: [
           { text: "首页", link: "/zh/" },
           { text: "快速开始", link: "/zh/quick-start" },
@@ -105,7 +105,7 @@ export default defineConfig({
           { text: "Storybook", link: "/zh/storybook.html" },
           {
             text: "GitHub",
-            link: "https://github.com/IvanLi-CN/cf-mail",
+            link: "https://github.com/IvanLi-CN/KaisouMail",
             position: "right",
           },
         ],

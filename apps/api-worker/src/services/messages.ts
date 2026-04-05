@@ -1,4 +1,4 @@
-import { messageDetailSchema, messageSummarySchema } from "@cf-mail/shared";
+import { messageDetailSchema, messageSummarySchema } from "@kaisoumail/shared";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import PostalMime from "postal-mime";
 

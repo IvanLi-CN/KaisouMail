@@ -1,4 +1,4 @@
-import { maxMailboxTtlMinutes } from "@cf-mail/shared";
+import { maxMailboxTtlMinutes } from "@kaisoumail/shared";
 import {
   useCallback,
   useDeferredValue,

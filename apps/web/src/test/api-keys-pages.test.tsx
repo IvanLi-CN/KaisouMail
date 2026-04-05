@@ -23,7 +23,9 @@ const sessionHookState = {
   user: demoSessionUser,
 };
 
-const docsLinks = buildPublicDocsLinks("https://ivanli-cn.github.io/cf-mail");
+const docsLinks = buildPublicDocsLinks(
+  "https://ivanli-cn.github.io/KaisouMail",
+);
 
 vi.mock("@/hooks/use-api-keys", () => ({
   useApiKeysQuery: () => ({ data: demoApiKeys }),
@@ -115,13 +117,13 @@ describe("api key integration docs", () => {
     expect(screen.getByText("/api/meta")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "公开文档站" })).toHaveAttribute(
       "href",
-      "https://ivanli-cn.github.io/cf-mail/zh/",
+      "https://ivanli-cn.github.io/KaisouMail/zh/",
     );
     expect(
       screen.getByRole("link", { name: "公开 Storybook" }),
     ).toHaveAttribute(
       "href",
-      "https://ivanli-cn.github.io/cf-mail/zh/storybook.html",
+      "https://ivanli-cn.github.io/KaisouMail/zh/storybook.html",
     );
   });
 

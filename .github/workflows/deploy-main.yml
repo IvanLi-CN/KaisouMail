@@ -119,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if bunx wrangler pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-cf-mail}" --branch main; then
+            if bunx wrangler pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-kaisoumail}" --branch main; then
               exit 0
             fi
 

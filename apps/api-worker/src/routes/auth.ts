@@ -1,8 +1,8 @@
+import { zValidator } from "@hono/zod-validator";
 import {
   createSessionRequestSchema,
   sessionResponseSchema,
-} from "@cf-mail/shared";
-import { zValidator } from "@hono/zod-validator";
+} from "@kaisoumail/shared";
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";

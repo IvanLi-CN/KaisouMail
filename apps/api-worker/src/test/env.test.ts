@@ -9,7 +9,7 @@ const baseEnv = {
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
-  CF_ROUTE_RULESET_TAG: "cf-mail",
+  CF_ROUTE_RULESET_TAG: "kaisoumail",
 } as const;
 
 describe("runtime config parsing", () => {

@@ -1,4 +1,4 @@
-import { mailboxSchema } from "@cf-mail/shared";
+import { mailboxSchema } from "@kaisoumail/shared";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 
 import { getDb } from "../db/client";

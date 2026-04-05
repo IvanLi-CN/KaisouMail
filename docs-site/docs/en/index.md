@@ -1,4 +1,4 @@
-# CF Mail Docs
+# KaisouMail Docs
 
 ## Reading order
 

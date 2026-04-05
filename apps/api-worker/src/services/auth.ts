@@ -1,4 +1,4 @@
-import { sessionUserSchema } from "@cf-mail/shared";
+import { sessionUserSchema } from "@kaisoumail/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -19,7 +19,7 @@ import { ApiError } from "../lib/errors";
 import type { AppBindings, AuthUser } from "../types";
 import { ensureBootstrapAdmin } from "./bootstrap";
 
-const SESSION_COOKIE = "cf_mail_session";
+const SESSION_COOKIE = "kaisoumail_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 const authUserSchema = sessionUserSchema;

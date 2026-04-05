@@ -1,5 +1,5 @@
 {
-  "name": "@cf-mail/api-worker",
+  "name": "@kaisoumail/api-worker",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,11 +10,11 @@
     "test": "vitest run",
     "build": "wrangler deploy --dry-run --config wrangler.jsonc && wrangler deploy --dry-run --config wrangler.email.jsonc",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "wrangler d1 migrations apply cf-mail-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply cf-mail-db --remote"
+    "db:migrate:local": "wrangler d1 migrations apply kaisoumail-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply kaisoumail-db --remote"
   },
   "dependencies": {
-    "@cf-mail/shared": "workspace:*",
+    "@kaisoumail/shared": "workspace:*",
     "@hono/zod-validator": "^0.7.4",
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.2",

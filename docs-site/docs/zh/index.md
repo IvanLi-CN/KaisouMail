@@ -1,4 +1,4 @@
-# CF Mail 文档
+# KaisouMail 文档
 
 ## 阅读顺序
 

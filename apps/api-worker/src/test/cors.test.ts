@@ -13,7 +13,7 @@ describe("cors helpers", () => {
         EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
         SESSION_SECRET: "super-secret-session-key",
         BOOTSTRAP_ADMIN_NAME: "Ivan",
-        CF_ROUTE_RULESET_TAG: "cf-mail",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
       }),
     ).toBe("https://cfm.707979.xyz");
   });
@@ -27,7 +27,7 @@ describe("cors helpers", () => {
         EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
         SESSION_SECRET: "super-secret-session-key",
         BOOTSTRAP_ADMIN_NAME: "Ivan",
-        CF_ROUTE_RULESET_TAG: "cf-mail",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
       }),
     ).toBe("http://localhost:4173");
   });
@@ -42,7 +42,7 @@ describe("cors helpers", () => {
         EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
         SESSION_SECRET: "super-secret-session-key",
         BOOTSTRAP_ADMIN_NAME: "Ivan",
-        CF_ROUTE_RULESET_TAG: "cf-mail",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
       }),
     ).toBeNull();
   });

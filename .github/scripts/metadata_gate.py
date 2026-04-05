@@ -39,7 +39,7 @@ class GitHubClient:
         url = self.api_root + path
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": "cf-mail-metadata-gate/1.0",
+            "User-Agent": "kaisoumail-metadata-gate/1.0",
             "X-GitHub-Api-Version": API_VERSION,
         }
         if self.token:
@@ -56,7 +56,7 @@ class GitHubClient:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate cf-mail PR metadata gates.")
+    parser = argparse.ArgumentParser(description="Evaluate KaisouMail PR metadata gates.")
     parser.add_argument("gate", choices=("label",))
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--api-root", default=os.environ.get("GITHUB_API_URL", "https://api.github.com"))

@@ -51,18 +51,18 @@ with tempfile.TemporaryDirectory() as tmp:
     run("git", "init", "-b", "main")
     run("git", "remote", "add", "origin", ".")
 
-    (tmp_path / "package.json").write_text(json.dumps({"name": "cf-mail", "version": "0.1.0"}) + "\n")
+    (tmp_path / "package.json").write_text(json.dumps({"name": "kaisoumail", "version": "0.1.0"}) + "\n")
     run("git", "add", "package.json")
     run("git", "commit", "-m", "init")
     first_sha = run("git", "rev-parse", "HEAD").stdout.strip()
     run("git", "tag", "v0.1.0", first_sha)
 
-    (tmp_path / "package.json").write_text(json.dumps({"name": "cf-mail", "version": "0.1.0", "x": 1}) + "\n")
+    (tmp_path / "package.json").write_text(json.dumps({"name": "kaisoumail", "version": "0.1.0", "x": 1}) + "\n")
     run("git", "add", "package.json")
     run("git", "commit", "-m", "second")
     second_sha = run("git", "rev-parse", "HEAD").stdout.strip()
 
-    (tmp_path / "package.json").write_text(json.dumps({"name": "cf-mail", "version": "0.1.0", "x": 2}) + "\n")
+    (tmp_path / "package.json").write_text(json.dumps({"name": "kaisoumail", "version": "0.1.0", "x": 2}) + "\n")
     run("git", "add", "package.json")
     run("git", "commit", "-m", "third")
     third_sha = run("git", "rev-parse", "HEAD").stdout.strip()
@@ -125,7 +125,7 @@ with tempfile.TemporaryDirectory() as tmp:
         "refs/notes/release-snapshots",
         third_sha,
         api_root="https://api.github.com",
-        repository="IvanLi-CN/cf-mail",
+        repository="IvanLi-CN/KaisouMail",
         token="token",
     ) == [second_sha]
     module.release_side_effects_completed = lambda snapshot, **kwargs: snapshot["target_sha"] == second_sha
@@ -133,45 +133,45 @@ with tempfile.TemporaryDirectory() as tmp:
         "refs/notes/release-snapshots",
         third_sha,
         api_root="https://api.github.com",
-        repository="IvanLi-CN/cf-mail",
+        repository="IvanLi-CN/KaisouMail",
         token="token",
     ) == [third_sha]
     module.release_side_effects_completed = original_release_state
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path == "/repos/IvanLi-CN/cf-mail/releases/tags/v0.2.0":
+            if self.path == "/repos/IvanLi-CN/KaisouMail/releases/tags/v0.2.0":
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({"tag_name": "v0.2.0"}).encode())
                 return
-            if self.path == "/repos/IvanLi-CN/cf-mail/issues/10/comments?per_page=100":
+            if self.path == "/repos/IvanLi-CN/KaisouMail/issues/10/comments?per_page=100":
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(
                     json.dumps(
                         [
                             {
-                                "body": "<!-- cf-mail-release-version-comment -->",
+                                "body": "<!-- kaisoumail-release-version-comment -->",
                                 "user": {"type": "Bot", "login": "github-actions[bot]"},
                             }
                         ]
                     ).encode()
                 )
                 return
-            if self.path == "/repos/IvanLi-CN/cf-mail/releases/tags/v0.2.1":
+            if self.path == "/repos/IvanLi-CN/KaisouMail/releases/tags/v0.2.1":
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(json.dumps({"tag_name": "v0.2.1"}).encode())
                 return
-            if self.path == "/repos/IvanLi-CN/cf-mail/issues/11/comments?per_page=100":
+            if self.path == "/repos/IvanLi-CN/KaisouMail/issues/11/comments?per_page=100":
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(
                     json.dumps(
                         [
                             {
-                                "body": "<!-- cf-mail-release-version-comment -->",
+                                "body": "<!-- kaisoumail-release-version-comment -->",
                                 "user": {"type": "User", "login": "someone"},
                             }
                         ]
@@ -191,13 +191,13 @@ with tempfile.TemporaryDirectory() as tmp:
     assert module.release_side_effects_completed(
         first_snapshot,
         api_root=api_root,
-        repository="IvanLi-CN/cf-mail",
+        repository="IvanLi-CN/KaisouMail",
         token="token",
     ) is True
     assert module.release_side_effects_completed(
         second_snapshot,
         api_root=api_root,
-        repository="IvanLi-CN/cf-mail",
+        repository="IvanLi-CN/KaisouMail",
         token="token",
     ) is False
     server.shutdown()
@@ -208,7 +208,7 @@ with tempfile.TemporaryDirectory() as tmp:
     try:
         module.build_snapshot(
             target_sha=third_sha,
-            repository="IvanLi-CN/cf-mail",
+            repository="IvanLi-CN/KaisouMail",
             token="token",
             notes_ref="refs/notes/release-snapshots",
             api_root="https://api.github.com",

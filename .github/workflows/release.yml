@@ -272,7 +272,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo
-            const marker = "<!-- cf-mail-release-version-comment -->"
+            const marker = "<!-- kaisoumail-release-version-comment -->"
             const issueNumber = Number(process.env.RELEASE_PR_NUMBER)
             const releaseTag = process.env.RELEASE_TAG
             const appVersion = process.env.APP_EFFECTIVE_VERSION

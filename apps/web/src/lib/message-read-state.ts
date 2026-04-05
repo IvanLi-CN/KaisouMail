@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "cf-mail:read-message-ids";
-const CHANGE_EVENT = "cf-mail:read-message-ids-change";
+const STORAGE_KEY = "kaisoumail:read-message-ids";
+const CHANGE_EVENT = "kaisoumail:read-message-ids-change";
 
 const readSnapshot = () => {
   if (typeof window === "undefined") {

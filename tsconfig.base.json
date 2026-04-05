@@ -15,8 +15,8 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@cf-mail/shared": ["packages/shared/src/index.ts"],
-      "@cf-mail/shared/*": ["packages/shared/src/*"]
+      "@kaisoumail/shared": ["packages/shared/src/index.ts"],
+      "@kaisoumail/shared/*": ["packages/shared/src/*"]
     }
   }
 }

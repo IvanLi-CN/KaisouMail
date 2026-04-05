@@ -22,14 +22,15 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
     badge: "正式环境 / runtime token",
     accent: "#64d2ff",
     tokenName: "cfm-runtime",
-    helper: "给 cf-mail-api Worker 用，只负责域名目录和 Email Routing 管理。",
+    helper:
+      "给 kaisoumail-api Worker 用，只负责域名目录和 Email Routing 管理。",
     permissions: [
       ["区域", "Zone", "读取"],
       ["区域", "Email Routing Rules", "编辑"],
       ["区域", "Zone Settings", "编辑"],
     ],
     accountScope: "不设置",
-    zoneScope: "所有 CF Mail 域名区域",
+    zoneScope: "所有 KaisouMail 域名区域",
     footer:
       "把这把 token 填到 Cloudflare Worker secret：CLOUDFLARE_RUNTIME_API_TOKEN。",
   },
@@ -64,7 +65,7 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
       ["区域", "Workers Routes", "编辑"],
     ],
     accountScope: "目标 Cloudflare 帐户",
-    zoneScope: "所有 CF Mail 域名区域",
+    zoneScope: "所有 KaisouMail 域名区域",
     footer:
       "把同一个 token 同时填到 Worker secret 和 GitHub repository secret：CLOUDFLARE_API_TOKEN。",
   },
@@ -272,7 +273,7 @@ export function CloudflareTokenConfigMock({
           <section style={{ marginTop: "28px", maxWidth: "960px" }}>
             <SectionTitle
               title="权限"
-              description="按 CF Mail 对应场景把权限配全即可。"
+              description="按 KaisouMail 对应场景把权限配全即可。"
             />
             <div
               style={{
