@@ -100,6 +100,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change Log
 
 - 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
+- 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
 
 ## Visual Evidence
 
