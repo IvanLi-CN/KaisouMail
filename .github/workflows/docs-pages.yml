@@ -6,6 +6,10 @@ on:
     paths:
       - "docs-site/**"
       - "apps/web/**"
+      - "packages/shared/**"
+      - "scripts/write-version.mjs"
+      - "package.json"
+      - "bun.lock"
       - "README.md"
       - "README.zh-CN.md"
       - ".github/workflows/docs-pages.yml"
@@ -15,6 +19,10 @@ on:
     paths:
       - "docs-site/**"
       - "apps/web/**"
+      - "packages/shared/**"
+      - "scripts/write-version.mjs"
+      - "package.json"
+      - "bun.lock"
       - "README.md"
       - "README.zh-CN.md"
       - ".github/workflows/docs-pages.yml"

@@ -17,14 +17,16 @@ cat > "${out_dir}/storybook.html" <<'EOF'
   <head>
     <meta charset="utf-8" />
     <title>CF Mail Storybook</title>
-    <meta http-equiv="refresh" content="0; url=./storybook/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script>
-      window.location.replace("./storybook/");
+      const target = new URL("./storybook/", window.location.href);
+      target.search = window.location.search;
+      target.hash = window.location.hash;
+      window.location.replace(target.toString());
     </script>
   </head>
   <body>
-    <p>Redirecting to Storybook…</p>
+    <p><a href="./storybook/">Redirecting to Storybook…</a></p>
   </body>
 </html>
 EOF
