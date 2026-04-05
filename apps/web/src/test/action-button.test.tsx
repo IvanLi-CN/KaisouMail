@@ -37,4 +37,24 @@ describe("ActionButton", () => {
     expect(button).toHaveAttribute("data-icon-only", "true");
     expect(button).toHaveClass("h-9", "w-9", "whitespace-nowrap");
   });
+
+  it("can restore dense labels at the desktop breakpoint without changing the accessible name", () => {
+    render(
+      <ActionButton
+        density="dense"
+        forceIconOnly
+        icon={Download}
+        label="打开邮箱管理"
+        labelVisibility="desktop"
+        variant="outline"
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "打开邮箱管理" });
+    const label = screen.getByText("打开邮箱管理");
+
+    expect(button).toHaveAttribute("data-icon-only", "desktop");
+    expect(button).toHaveAttribute("data-label-visibility", "desktop");
+    expect(label).toHaveClass("sr-only", "lg:not-sr-only", "lg:inline");
+  });
 });

@@ -6,6 +6,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type ActionButtonDensity = "default" | "dense";
+export type ActionButtonLabelVisibility = "auto" | "desktop" | "always";
 export type ActionButtonPriority = "primary" | "secondary";
 
 export interface ActionButtonProps extends Omit<ButtonProps, "children"> {
@@ -15,6 +16,7 @@ export interface ActionButtonProps extends Omit<ButtonProps, "children"> {
   density?: ActionButtonDensity;
   forceIconOnly?: boolean;
   iconClassName?: string;
+  labelVisibility?: ActionButtonLabelVisibility;
   priority?: ActionButtonPriority;
   tooltip?: React.ReactNode;
   tooltipDelayDuration?: number;
@@ -33,6 +35,7 @@ export const ActionButton = React.forwardRef<
       density = "default",
       forceIconOnly,
       iconClassName,
+      labelVisibility = "auto",
       priority = "secondary",
       size,
       tooltip,
@@ -43,23 +46,37 @@ export const ActionButton = React.forwardRef<
     },
     ref,
   ) => {
-    const iconOnly =
+    const baseIconOnly =
       forceIconOnly ?? (density === "dense" && priority !== "primary");
-    const resolvedSize = iconOnly
+    const responsiveDesktopLabel =
+      labelVisibility === "desktop" && baseIconOnly;
+    const iconOnly = labelVisibility === "always" ? false : baseIconOnly;
+    const resolvedSize = responsiveDesktopLabel
       ? size === "sm"
         ? "icon-sm"
         : "icon"
-      : (size ?? "default");
+      : iconOnly
+        ? size === "sm"
+          ? "icon-sm"
+          : "icon"
+        : (size ?? "default");
     const content = (
       <>
         <Icon
           aria-hidden="true"
           className={cn("h-4 w-4 shrink-0", iconClassName)}
         />
-        {iconOnly ? (
+        {iconOnly && !responsiveDesktopLabel ? (
           <span className="sr-only">{label}</span>
         ) : (
-          <span className="whitespace-nowrap">{label}</span>
+          <span
+            className={cn(
+              "whitespace-nowrap",
+              responsiveDesktopLabel && "sr-only lg:not-sr-only lg:inline",
+            )}
+          >
+            {label}
+          </span>
         )}
       </>
     );
@@ -79,10 +96,17 @@ export const ActionButton = React.forwardRef<
       <Button
         ref={ref}
         asChild={asChild}
-        aria-label={iconOnly ? label : ariaLabel}
-        className={cn(className)}
+        aria-label={iconOnly || responsiveDesktopLabel ? label : ariaLabel}
+        className={cn(
+          className,
+          responsiveDesktopLabel &&
+            (size === "sm" ? "lg:w-auto lg:px-3" : "lg:w-auto lg:px-4"),
+        )}
         data-density={density}
-        data-icon-only={iconOnly ? "true" : "false"}
+        data-icon-only={
+          responsiveDesktopLabel ? "desktop" : iconOnly ? "true" : "false"
+        }
+        data-label-visibility={labelVisibility}
         size={resolvedSize}
         {...props}
       >
@@ -90,7 +114,7 @@ export const ActionButton = React.forwardRef<
       </Button>
     );
 
-    if (!iconOnly) {
+    if (!iconOnly || responsiveDesktopLabel) {
       return button;
     }
 

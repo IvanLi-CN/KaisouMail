@@ -73,6 +73,23 @@ export const DenseDestructiveIconButton: Story = {
   },
 };
 
+export const DenseDesktopLabelButton: Story = {
+  args: {
+    density: "dense",
+    forceIconOnly: true,
+    icon: PanelsTopLeft,
+    label: "打开邮箱管理",
+    labelVisibility: "desktop",
+    variant: "outline",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("button", { name: "打开邮箱管理" }),
+    ).toHaveAttribute("data-icon-only", "desktop");
+  },
+};
+
 export const IntentShowcase: Story = {
   parameters: {
     layout: "fullscreen",
@@ -89,10 +106,9 @@ export const IntentShowcase: Story = {
               高级按钮的使用意图
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              默认用图标 +
-              文字表达主要动作；在工具栏、表格行和高密度列表里，次级动作收敛为图标按钮，并用
-              tooltip
-              补足语义。危险动作始终保持高辨识度，不和普通次级动作混在一起。
+              默认用图标 + 文字表达主要动作；高密度工具栏默认收敛为
+              icon-only，但也支持在 desktop
+              断点恢复文字。危险动作始终保持高辨识度，不和普通次级动作混在一起。
             </p>
           </div>
         </div>
@@ -154,6 +170,35 @@ export const IntentShowcase: Story = {
           </section>
 
           <section className="space-y-4 rounded-2xl border border-border bg-muted/10 p-5">
+            <div className="space-y-2">
+              <h2 className="text-base font-semibold">桌面补全文案</h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                页头工具条在移动端可以压成图标，但在大屏上恢复文案，避免用户猜按钮语义。
+              </p>
+            </div>
+            <div className="flex min-h-[104px] flex-wrap items-end gap-3 pt-8">
+              <ActionButton
+                density="dense"
+                forceIconOnly
+                icon={PanelsTopLeft}
+                label="打开邮箱管理"
+                labelVisibility="desktop"
+                priority="secondary"
+                variant="outline"
+              />
+              <ActionButton
+                density="dense"
+                forceIconOnly
+                icon={Download}
+                label="新建邮箱"
+                labelVisibility="desktop"
+                priority="primary"
+                variant="default"
+              />
+            </div>
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-border bg-muted/10 p-5 xl:col-span-3">
             <div className="space-y-2">
               <h2 className="text-base font-semibold">受限与危险动作</h2>
               <p className="text-sm leading-6 text-muted-foreground">

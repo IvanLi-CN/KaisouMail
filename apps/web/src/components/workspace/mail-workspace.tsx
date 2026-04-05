@@ -4,11 +4,13 @@ import {
   ListTree,
   MailOpen,
   PanelRightOpen,
+  Plus,
   Search,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -16,6 +18,11 @@ import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -27,6 +34,25 @@ const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
 ];
 
 type MailWorkspaceProps = {
+  createMailboxAction: {
+    defaultTtlMinutes: number;
+    domains: string[];
+    error: string | null;
+    isMetaLoading: boolean;
+    isOpen: boolean;
+    isPending: boolean;
+    maxTtlMinutes: number;
+    metaError: string | null;
+    onCancel: () => void;
+    onOpen: () => void;
+    onSubmit: (values: {
+      localPart?: string;
+      subdomain?: string;
+      rootDomain?: string;
+      expiresInMinutes: number;
+    }) => Promise<void> | void;
+  };
+  highlightedMailboxId?: string | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
   totalMessageCount: number;
@@ -52,6 +78,8 @@ type MailWorkspaceProps = {
 };
 
 export const MailWorkspace = ({
+  createMailboxAction,
+  highlightedMailboxId = null,
   visibleMailboxes,
   totalMailboxCount,
   totalMessageCount,
@@ -86,12 +114,74 @@ export const MailWorkspace = ({
         eyebrow="Workspace"
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <Popover open={createMailboxAction.isOpen}>
+              <PopoverAnchor asChild>
+                <ActionButton
+                  density="dense"
+                  forceIconOnly
+                  icon={Plus}
+                  label="新建邮箱"
+                  labelVisibility="desktop"
+                  priority="primary"
+                  variant="default"
+                  onClick={createMailboxAction.onOpen}
+                />
+              </PopoverAnchor>
+              <PopoverContent
+                align="end"
+                collisionPadding={20}
+                onEscapeKeyDown={(event) => {
+                  if (createMailboxAction.isPending) {
+                    event.preventDefault();
+                    return;
+                  }
+
+                  createMailboxAction.onCancel();
+                }}
+                onFocusOutside={(event) => {
+                  event.preventDefault();
+                }}
+                onInteractOutside={(event) => {
+                  event.preventDefault();
+                }}
+              >
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      新建邮箱
+                    </p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      在当前工作台里直接创建新地址。支持随机或指定用户名 /
+                      子域，创建成功后会自动切到新邮箱上下文。
+                    </p>
+                    {createMailboxAction.metaError ? (
+                      <p className="text-xs leading-5 text-destructive">
+                        邮箱规则加载失败：{createMailboxAction.metaError}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <MailboxCreateForm
+                    autoFocusFirstField
+                    defaultTtlMinutes={createMailboxAction.defaultTtlMinutes}
+                    domains={createMailboxAction.domains}
+                    isMetaLoading={createMailboxAction.isMetaLoading}
+                    isPending={createMailboxAction.isPending}
+                    maxTtlMinutes={createMailboxAction.maxTtlMinutes}
+                    submitError={createMailboxAction.error}
+                    onCancel={createMailboxAction.onCancel}
+                    onSubmit={createMailboxAction.onSubmit}
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
             {refreshAction}
             <ActionButton
               asChild
               density="dense"
               icon={ListTree}
               label="打开邮箱管理"
+              labelVisibility="desktop"
               priority="secondary"
               tooltip="打开邮箱管理"
               variant="outline"
@@ -196,6 +286,7 @@ export const MailWorkspace = ({
                   visibleMailboxes.map((mailbox) => {
                     const isActive = selectedMailboxId === mailbox.id;
                     const isDestroyed = mailbox.status === "destroyed";
+                    const isHighlighted = highlightedMailboxId === mailbox.id;
                     const messageCount =
                       mailboxMessageCounts.get(mailbox.id) ?? 0;
                     return (
@@ -214,20 +305,30 @@ export const MailWorkspace = ({
                           !isDestroyed && !isActive
                             ? "border-border bg-muted/10 hover:bg-white/5"
                             : null,
+                          !isDestroyed && isHighlighted
+                            ? "border-primary/70 bg-primary/18 ring-1 ring-primary/35 shadow-[0_0_0_1px_rgba(148,163,184,0.14)_inset]"
+                            : null,
                         )}
                         onClick={() => onSelectMailbox(mailbox.id)}
                       >
                         <div className="flex w-full items-center justify-between gap-3">
-                          <p
-                            className={cn(
-                              "min-w-0 text-sm font-medium",
-                              isDestroyed
-                                ? "truncate text-muted-foreground"
-                                : "break-all text-foreground",
-                            )}
-                          >
-                            {mailbox.address}
-                          </p>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <p
+                              className={cn(
+                                "min-w-0 text-sm font-medium",
+                                isDestroyed
+                                  ? "truncate text-muted-foreground"
+                                  : "break-all text-foreground",
+                              )}
+                            >
+                              {mailbox.address}
+                            </p>
+                            {isHighlighted ? (
+                              <Badge className="border-primary/40 bg-primary/20 text-primary">
+                                新建
+                              </Badge>
+                            ) : null}
+                          </div>
                           <Badge
                             className={cn(
                               "min-w-7 justify-center px-2",
@@ -245,10 +346,13 @@ export const MailWorkspace = ({
                 ) : (
                   <EmptyState
                     title="没有匹配邮箱"
-                    description="试试清空搜索词，或者到邮箱管理页新建一个地址。"
+                    description="试试清空搜索词，或者直接在这里新建一个地址。"
                     action={
-                      <Button asChild variant="outline">
-                        <Link to={mailboxManagementHref}>去创建邮箱</Link>
+                      <Button
+                        variant="outline"
+                        onClick={createMailboxAction.onOpen}
+                      >
+                        新建邮箱
                       </Button>
                     }
                   />
