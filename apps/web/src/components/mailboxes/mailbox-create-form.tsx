@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 const mailboxFieldClassName =
   "flex h-10 w-full rounded-lg border border-input bg-muted/40 px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
+const mailboxAddressSegmentClassName = "min-w-0 flex-1";
 
 const createMailboxSchema = z.object({
   localPart: z
@@ -127,46 +128,80 @@ export const MailboxCreateForm = ({
       )}
     >
       <fieldset className="grid gap-4" disabled={isPending}>
-        <div
-          className={
-            domains.length > 0
-              ? "grid gap-4 md:grid-cols-3"
-              : "grid gap-4 md:grid-cols-2"
-          }
-        >
-          <div className="space-y-2">
-            <Label htmlFor="localPart">用户名</Label>
-            <Input
-              autoFocus={autoFocusFirstField}
-              id="localPart"
-              placeholder="留空则随机"
-              {...form.register("localPart")}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="subdomain">子域名</Label>
-            <Input
-              id="subdomain"
-              placeholder="留空则随机，例如 ops.alpha"
-              {...form.register("subdomain")}
-            />
-          </div>
-          {domains.length > 0 ? (
-            <div className="space-y-2">
-              <Label htmlFor="rootDomain">邮箱域名</Label>
-              <select
-                id="rootDomain"
-                className={mailboxFieldClassName}
-                {...form.register("rootDomain")}
+        <div className="space-y-2">
+          <Label>邮箱地址</Label>
+          <div className="rounded-xl border border-border bg-muted/15 p-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className={mailboxAddressSegmentClassName}>
+                <Label className="sr-only" htmlFor="localPart">
+                  用户名
+                </Label>
+                <Input
+                  autoFocus={autoFocusFirstField}
+                  aria-label="用户名"
+                  id="localPart"
+                  placeholder="用户名"
+                  {...form.register("localPart")}
+                />
+              </div>
+              <span
+                aria-hidden="true"
+                className="hidden shrink-0 text-sm font-semibold text-muted-foreground md:inline"
               >
-                {domains.map((domain) => (
-                  <option key={domain} value={domain}>
-                    {domain}
-                  </option>
-                ))}
-              </select>
+                @
+              </span>
+              <div className={mailboxAddressSegmentClassName}>
+                <Label className="sr-only" htmlFor="subdomain">
+                  子域名
+                </Label>
+                <Input
+                  aria-label="子域名"
+                  id="subdomain"
+                  placeholder="子域名"
+                  {...form.register("subdomain")}
+                />
+              </div>
+              {domains.length > 0 ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="hidden shrink-0 text-sm font-semibold text-muted-foreground md:inline"
+                  >
+                    .
+                  </span>
+                  <div
+                    className={cn(
+                      mailboxAddressSegmentClassName,
+                      "md:max-w-[14rem]",
+                    )}
+                  >
+                    <Label className="sr-only" htmlFor="rootDomain">
+                      邮箱域名
+                    </Label>
+                    <select
+                      aria-label="邮箱域名"
+                      id="rootDomain"
+                      className={mailboxFieldClassName}
+                      {...form.register("rootDomain")}
+                    >
+                      {domains.map((domain) => (
+                        <option key={domain} value={domain}>
+                          {domain}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : null}
             </div>
-          ) : null}
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              组合格式为{" "}
+              <span className="font-medium text-foreground">
+                xxxxx@yyyyyy.zzzzz
+              </span>
+              ；用户名和子域名留空时会随机补齐，邮箱域名可直接切换。
+            </p>
+          </div>
         </div>
 
         <div className="space-y-2">
