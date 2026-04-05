@@ -114,7 +114,7 @@ export const ActionButton = React.forwardRef<
       </Button>
     );
 
-    if (!iconOnly || responsiveDesktopLabel) {
+    if (!iconOnly) {
       return button;
     }
 
