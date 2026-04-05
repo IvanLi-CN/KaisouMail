@@ -1,5 +1,7 @@
 # CF Mail V1 Spec
 
+Status: 已完成
+
 ## Objective
 
 Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-oriented web console for login, mailbox lifecycle management, message inspection, API key management, and multi-user administration.
