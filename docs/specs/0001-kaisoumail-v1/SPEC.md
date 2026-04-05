@@ -1,6 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
+Last: 2026-04-06
 
 ## Objective
 
@@ -81,6 +82,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
 - Sticky top navigation with clear active state, account context, logout, and skip-to-content affordance
+- Authenticated AppShell keeps the top summary strip product-focused while repository, developer, and runtime-version metadata live in a true footer that stays at the bottom of short pages
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
@@ -95,6 +97,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
 
+## Change Log
+
+- 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
+
 ## Visual Evidence
 
 Evidence is persisted with this spec and refreshed whenever the rendered control-plane surfaces change.
@@ -106,6 +112,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ### App Shell
 
 ![Top navigation shell](./assets/app-shell-top-nav.png)
+
+![Authenticated AppShell footer metadata](./assets/app-shell-footer.png)
 
 ### Workspace
 
