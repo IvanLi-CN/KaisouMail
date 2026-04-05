@@ -1,0 +1,31 @@
+# Domain Catalog & Enablement
+
+You no longer need to type a `zoneId` by hand. Use this flow:
+
+1. Add or onboard the domain in Cloudflare.
+2. Open `/domains` in the control plane.
+3. Wait for `GET /api/domains/catalog` to discover the zone.
+4. Click **Enable**.
+5. The app writes the local `domains` record and attempts to enable Email Routing on that zone.
+
+## Status meanings
+
+| Status | Meaning |
+| --- | --- |
+| `not_enabled` | visible in Cloudflare, not enabled in the project yet |
+| `active` | enabled and available for mailbox creation |
+| `disabled` | disabled for new mailbox creation |
+| `provisioning_error` | enablement failed; inspect the error column and retry |
+| `missing` | local record exists, but the current token no longer sees the zone |
+
+## What changes after enablement
+
+- `POST /api/mailboxes`: `rootDomain` is optional; when omitted, the server randomly selects one `active` domain.
+- `POST /api/mailboxes/ensure`: `rootDomain` is also optional for `localPart + subdomain`; omission uses the same random `active` pool.
+- `GET /api/meta`: returns only `active` domains, not the full Cloudflare catalog.
+
+## Notes
+
+- A visible zone is not automatically usable for mailbox creation.
+- Only `active` domains enter the mailbox creation pool.
+- `disabled` does not delete historical routing rules, so old mailboxes may continue receiving mail.

@@ -14,11 +14,14 @@ export const buildPublicDocsLinks = (
   if (!rawOrigin) return null;
 
   const docsOrigin = trimTrailingSlash(rawOrigin);
+  const zhDocsOrigin = docsOrigin.endsWith("/zh")
+    ? docsOrigin
+    : `${docsOrigin}/zh`;
   return {
-    docsHome: docsOrigin,
-    storybook: `${docsOrigin}/storybook.html`,
-    tokenPermissions: `${docsOrigin}/cloudflare-token-permissions`,
-    faq: `${docsOrigin}/faq`,
+    docsHome: `${zhDocsOrigin}/`,
+    storybook: `${zhDocsOrigin}/storybook.html`,
+    tokenPermissions: `${zhDocsOrigin}/cloudflare-token-permissions`,
+    faq: `${zhDocsOrigin}/faq`,
   };
 };
 

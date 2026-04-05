@@ -4,8 +4,8 @@
 
 ## 文档与 Storybook
 
-- 公开文档站：[ivanli-cn.github.io/cf-mail](https://ivanli-cn.github.io/cf-mail/)
-- 公开 Storybook：[ivanli-cn.github.io/cf-mail/storybook.html](https://ivanli-cn.github.io/cf-mail/storybook.html)
+- 公开文档站：[ivanli-cn.github.io/cf-mail/zh/](https://ivanli-cn.github.io/cf-mail/zh/)
+- 公开 Storybook：[ivanli-cn.github.io/cf-mail/zh/storybook.html](https://ivanli-cn.github.io/cf-mail/zh/storybook.html)
 - 英文 README：[README.md](./README.md)
 - 控制台内速查页：`/api-keys/docs`
 

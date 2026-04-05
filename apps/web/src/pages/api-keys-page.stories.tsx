@@ -204,12 +204,12 @@ export const DocsReference: Story = {
     await expect(canvas.getByText("/api/messages/:id/raw")).toBeInTheDocument();
     await expect(
       canvas.getByRole("link", { name: "公开文档站" }),
-    ).toHaveAttribute("href", "https://ivanli-cn.github.io/cf-mail");
+    ).toHaveAttribute("href", "https://ivanli-cn.github.io/cf-mail/zh/");
     await expect(
       canvas.getByRole("link", { name: "公开 Storybook" }),
     ).toHaveAttribute(
       "href",
-      "https://ivanli-cn.github.io/cf-mail/storybook.html",
+      "https://ivanli-cn.github.io/cf-mail/zh/storybook.html",
     );
   },
 };

@@ -115,13 +115,13 @@ describe("api key integration docs", () => {
     expect(screen.getByText("/api/meta")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "公开文档站" })).toHaveAttribute(
       "href",
-      "https://ivanli-cn.github.io/cf-mail",
+      "https://ivanli-cn.github.io/cf-mail/zh/",
     );
     expect(
       screen.getByRole("link", { name: "公开 Storybook" }),
     ).toHaveAttribute(
       "href",
-      "https://ivanli-cn.github.io/cf-mail/storybook.html",
+      "https://ivanli-cn.github.io/cf-mail/zh/storybook.html",
     );
   });
 
