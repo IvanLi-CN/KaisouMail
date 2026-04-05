@@ -7,7 +7,7 @@ import { LoaderCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
+import { RANDOM_ROOT_DOMAIN_OPTION_LABEL } from "@/components/mailboxes/mailbox-create-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,12 +40,6 @@ const createMailboxSchema = z.object({
 
 type CreateMailboxValues = z.infer<typeof createMailboxSchema>;
 
-const pickRandomDomain = (domains: string[]) => {
-  if (domains.length === 0) return "";
-  const index = Math.floor(Math.random() * domains.length);
-  return domains[index] ?? "";
-};
-
 export const MailboxCreateForm = ({
   onSubmit,
   onCancel,
@@ -74,14 +68,14 @@ export const MailboxCreateForm = ({
   submitError?: string | null;
   autoFocusFirstField?: boolean;
   className?: string;
-  onDomainPreviewChange?: (rootDomain: string) => void;
+  onDomainPreviewChange?: (rootDomain?: string) => void;
 }) => {
   const form = useForm<CreateMailboxValues>({
     resolver: zodResolver(createMailboxSchema),
     defaultValues: {
       localPart: "",
       subdomain: "",
-      rootDomain: pickRandomDomain(domains),
+      rootDomain: "",
       expiresInMinutes: defaultTtlMinutes,
     },
   });
@@ -96,18 +90,9 @@ export const MailboxCreateForm = ({
 
   useEffect(() => {
     const nextDomain = selectedRootDomain;
-    if (domains.length === 0) {
-      if (nextDomain) {
-        form.setValue("rootDomain", "", {
-          shouldDirty: false,
-          shouldTouch: false,
-          shouldValidate: false,
-        });
-      }
-      return;
-    }
-    if (nextDomain && domains.includes(nextDomain)) return;
-    form.setValue("rootDomain", pickRandomDomain(domains), {
+    if (!nextDomain) return;
+    if (domains.includes(nextDomain)) return;
+    form.setValue("rootDomain", "", {
       shouldDirty: false,
       shouldTouch: false,
       shouldValidate: false,
@@ -115,17 +100,17 @@ export const MailboxCreateForm = ({
   }, [domains, form, selectedRootDomain]);
 
   useEffect(() => {
-    onDomainPreviewChange?.(selectedRootDomain || domains[0] || "example.com");
-  }, [domains, onDomainPreviewChange, selectedRootDomain]);
+    onDomainPreviewChange?.(selectedRootDomain || undefined);
+  }, [onDomainPreviewChange, selectedRootDomain]);
 
   return (
     <form
       className={cn("grid gap-4", className)}
       onSubmit={form.handleSubmit((values) =>
         onSubmit({
-          localPart: values.localPart || undefined,
-          subdomain: values.subdomain || undefined,
-          rootDomain: values.rootDomain || undefined,
+          ...(values.localPart ? { localPart: values.localPart } : {}),
+          ...(values.subdomain ? { subdomain: values.subdomain } : {}),
+          ...(values.rootDomain ? { rootDomain: values.rootDomain } : {}),
           expiresInMinutes: values.expiresInMinutes,
         }),
       )}
@@ -187,6 +172,9 @@ export const MailboxCreateForm = ({
                       className={mailboxFieldClassName}
                       {...form.register("rootDomain")}
                     >
+                      <option value="">
+                        {RANDOM_ROOT_DOMAIN_OPTION_LABEL}
+                      </option>
                       {domains.map((domain) => (
                         <option key={domain} value={domain}>
                           {domain}
@@ -202,7 +190,10 @@ export const MailboxCreateForm = ({
               <span className="font-medium text-foreground">
                 xxxxx@yyyyyy.zzzzz
               </span>
-              ；用户名和子域名留空时会随机补齐，邮箱域名可直接切换。
+              ；用户名和子域名留空时会随机补齐，
+              {domains.length > 0
+                ? "邮箱域名默认随机分配 active 域名，也可以手动切换。"
+                : "当前没有 active 域名可供分配；启用域名后才能创建邮箱。"}
             </p>
           </div>
         </div>
