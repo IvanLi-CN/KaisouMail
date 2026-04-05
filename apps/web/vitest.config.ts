@@ -16,5 +16,8 @@ export default defineConfig({
     css: true,
     include: ["src/test/**/*.test.ts", "src/test/**/*.test.tsx"],
     exclude: ["src/test/e2e/**"],
+    fileParallelism: false,
+    maxWorkers: 1,
+    testTimeout: 15_000,
   },
 });

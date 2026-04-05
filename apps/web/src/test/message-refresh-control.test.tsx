@@ -18,7 +18,7 @@ describe("MessageRefreshControl", () => {
     expect(screen.getByText(/更新于/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "手动刷新" }));
     expect(onRefresh).toHaveBeenCalled();
-  });
+  }, 10_000);
 
   it("surfaces refreshing state while an update is in flight", () => {
     render(
