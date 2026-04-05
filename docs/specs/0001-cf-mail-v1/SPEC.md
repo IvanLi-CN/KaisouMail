@@ -1,5 +1,7 @@
 # CF Mail V1 Spec
 
+Status: 已完成
+
 ## Objective
 
 Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-oriented web console for login, mailbox lifecycle management, message inspection, API key management, and multi-user administration.
@@ -13,6 +15,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Workspace
 - `/workspace`
 - Three-pane mail workbench for mailbox filtering, aggregated message browsing, and inline message reading
+- Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
+- Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
 - Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh
 
@@ -82,8 +86,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
 - Refresh controls must remain compact, single-line, and header-aligned; visual treatment should communicate freshness without introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
-- Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts
+- Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
 - Icon-only actions use a mature third-party tooltip with long-press / hover reveal and collision-aware floating placement
+- Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
 - Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
 - Destroyed mailboxes collapse to a muted single-line row in dense lists to avoid wasting vertical space
@@ -101,6 +106,12 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ### Workspace
 
 ![Workspace all mailboxes](./assets/workspace-all-mailboxes.png)
+
+![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
+
+![Workspace mailbox creation pending state](./assets/workspace-create-pending.png)
+
+![Workspace newly created mailbox highlight](./assets/workspace-new-mailbox-highlight.png)
 
 ![Workspace single mailbox](./assets/workspace-single-mailbox.png)
 

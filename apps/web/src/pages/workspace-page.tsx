@@ -1,15 +1,29 @@
-import { useCallback, useDeferredValue, useEffect, useMemo } from "react";
+import { maxMailboxTtlMinutes } from "@cf-mail/shared";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
-import { mailboxKeys, useMailboxesQuery } from "@/hooks/use-mailboxes";
+import {
+  mailboxKeys,
+  useCreateMailboxMutation,
+  useMailboxesQuery,
+} from "@/hooks/use-mailboxes";
 import {
   messageKeys,
   useMessageDetailQuery,
   useMessagesQuery,
 } from "@/hooks/use-messages";
+import { useMetaQuery } from "@/hooks/use-meta";
 import { useQueryRefresh } from "@/hooks/use-query-refresh";
+import { ApiClientError } from "@/lib/api";
 import { markMessageAsRead } from "@/lib/message-read-state";
 import {
   resolveLatestRefreshAt,
@@ -25,6 +39,7 @@ import {
 } from "@/lib/workspace";
 
 const DEFAULT_SORT_MODE: MailboxSortMode = "recent";
+const DEFAULT_WORKSPACE_TTL_MINUTES = 60;
 
 const readStoredSortMode = () => {
   if (typeof window === "undefined") return DEFAULT_SORT_MODE;
@@ -34,7 +49,16 @@ const readStoredSortMode = () => {
 
 export const WorkspacePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isCreateMailboxOpen, setIsCreateMailboxOpen] = useState(false);
+  const [createMailboxError, setCreateMailboxError] = useState<string | null>(
+    null,
+  );
+  const [highlightedMailboxId, setHighlightedMailboxId] = useState<
+    string | null
+  >(null);
+  const metaQuery = useMetaQuery();
   const mailboxesQuery = useMailboxesQuery();
+  const createMailboxMutation = useCreateMailboxMutation();
   const mailboxes = mailboxesQuery.data ?? [];
 
   const selectedMailboxId = searchParams.get("mailbox") ?? "all";
@@ -206,12 +230,106 @@ export const WorkspacePage = () => {
     markMessageAsRead(messageDetailQuery.data?.id);
   }, [messageDetailQuery.data?.id]);
 
+  const clearMailboxHighlight = useEffectEvent(() => {
+    setHighlightedMailboxId(null);
+  });
+
+  useEffect(() => {
+    if (!highlightedMailboxId) return;
+
+    const handleInteraction = () => {
+      clearMailboxHighlight();
+    };
+
+    window.addEventListener("pointerdown", handleInteraction, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener("keydown", handleInteraction, {
+      capture: true,
+      once: true,
+    });
+
+    return () => {
+      window.removeEventListener("pointerdown", handleInteraction, {
+        capture: true,
+      });
+      window.removeEventListener("keydown", handleInteraction, {
+        capture: true,
+      });
+    };
+  }, [highlightedMailboxId]);
+
   const handleRefresh = useCallback(async () => {
     await manualRefresh.refresh();
   }, [manualRefresh]);
 
+  const handleOpenCreateMailbox = useCallback(() => {
+    if (createMailboxMutation.isPending) return;
+    setCreateMailboxError(null);
+    setIsCreateMailboxOpen(true);
+  }, [createMailboxMutation.isPending]);
+
+  const handleCancelCreateMailbox = useCallback(() => {
+    if (createMailboxMutation.isPending) return;
+    setCreateMailboxError(null);
+    setIsCreateMailboxOpen(false);
+  }, [createMailboxMutation.isPending]);
+
+  const handleCreateMailbox = useCallback(
+    async (values: {
+      localPart?: string;
+      subdomain?: string;
+      rootDomain?: string;
+      expiresInMinutes: number;
+    }) => {
+      setCreateMailboxError(null);
+
+      try {
+        const createdMailbox = await createMailboxMutation.mutateAsync(values);
+        setHighlightedMailboxId(createdMailbox.id);
+        setIsCreateMailboxOpen(false);
+        updateSearchParams((draft) => {
+          draft.delete("q");
+          draft.delete("message");
+          draft.set("mailbox", createdMailbox.id);
+          if (!isMailboxSortMode(draft.get("sort"))) {
+            draft.set("sort", resolvedSortMode);
+          }
+        });
+      } catch (reason) {
+        setCreateMailboxError(
+          reason instanceof ApiClientError || reason instanceof Error
+            ? reason.message
+            : "创建邮箱失败",
+        );
+      }
+    },
+    [createMailboxMutation, resolvedSortMode, updateSearchParams],
+  );
+
+  const workspaceMetaError =
+    metaQuery.error instanceof Error ? metaQuery.error.message : null;
+
   return (
     <MailWorkspace
+      createMailboxAction={{
+        defaultTtlMinutes:
+          metaQuery.data?.defaultMailboxTtlMinutes ??
+          DEFAULT_WORKSPACE_TTL_MINUTES,
+        domains: metaQuery.data?.domains ?? [],
+        error: createMailboxError,
+        isMetaLoading: metaQuery.isLoading,
+        isOpen: isCreateMailboxOpen,
+        isPending: createMailboxMutation.isPending,
+        maxTtlMinutes:
+          metaQuery.data?.maxMailboxTtlMinutes ?? maxMailboxTtlMinutes,
+        metaError: workspaceMetaError,
+        onCancel: handleCancelCreateMailbox,
+        onOpen: handleOpenCreateMailbox,
+        onSubmit: handleCreateMailbox,
+      }}
+      highlightedMailboxId={highlightedMailboxId}
       visibleMailboxes={visibleMailboxes}
       totalMailboxCount={mailboxes.length}
       totalMessageCount={messages.length}
@@ -229,6 +347,7 @@ export const WorkspacePage = () => {
           density="dense"
           isRefreshing={isWorkspaceRefreshing}
           lastRefreshedAt={workspaceLastRefreshedAt}
+          labelVisibility="desktop"
           onRefresh={handleRefresh}
         />
       }

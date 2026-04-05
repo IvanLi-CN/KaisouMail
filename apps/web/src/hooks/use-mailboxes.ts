@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { messageKeys } from "@/hooks/use-messages";
 import { usePageActivity } from "@/hooks/use-page-activity";
 import { apiClient } from "@/lib/api";
+import type { Mailbox } from "@/lib/contracts";
 import { resolveAutoRefreshInterval } from "@/lib/message-refresh";
 
 export const mailboxKeys = {
@@ -60,6 +61,11 @@ export const useCreateMailboxMutation = () => {
     mutationFn: apiClient.createMailbox,
     onSuccess: (mailbox) => {
       queryClient.setQueryData(mailboxKeys.detail(mailbox.id), mailbox);
+      queryClient.setQueryData<Mailbox[]>(mailboxKeys.all, (current) =>
+        current
+          ? [mailbox, ...current.filter((entry) => entry.id !== mailbox.id)]
+          : [mailbox],
+      );
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
     },
   });
