@@ -129,6 +129,7 @@ export const MailWorkspace = ({
               </PopoverAnchor>
               <PopoverContent
                 align="end"
+                className="w-[min(calc(100vw-2rem),32rem)]"
                 collisionPadding={20}
                 onEscapeKeyDown={(event) => {
                   if (createMailboxAction.isPending) {
