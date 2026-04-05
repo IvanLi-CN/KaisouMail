@@ -23,6 +23,7 @@ export const PopoverContent = React.forwardRef<
       sticky = "partial",
       hideWhenDetached = true,
       children,
+      style,
       ...props
     },
     ref,
@@ -33,7 +34,7 @@ export const PopoverContent = React.forwardRef<
         align={align}
         avoidCollisions={avoidCollisions}
         className={cn(
-          "z-50 w-[min(calc(100vw-2rem),28rem)] rounded-2xl border border-border bg-card p-5 text-foreground shadow-[0_28px_84px_rgba(2,6,23,0.46),0_14px_34px_rgba(2,6,23,0.32)] outline-none",
+          "z-50 w-[min(calc(100vw-2rem),28rem)] rounded-2xl border border-border p-5 text-foreground shadow-[0_28px_84px_rgba(2,6,23,0.46),0_14px_34px_rgba(2,6,23,0.32)] outline-none backdrop-blur-xl",
           className,
         )}
         collisionPadding={collisionPadding}
@@ -41,12 +42,17 @@ export const PopoverContent = React.forwardRef<
         side={side}
         sideOffset={sideOffset}
         sticky={sticky}
+        style={{
+          backgroundColor: "hsl(var(--card))",
+          ...style,
+        }}
         {...props}
       >
         {children}
         <PopoverPrimitive.Arrow
-          className="fill-card drop-shadow-[0_8px_18px_rgba(2,6,23,0.24)]"
+          className="drop-shadow-[0_8px_18px_rgba(2,6,23,0.24)]"
           height={10}
+          style={{ fill: "hsl(var(--card))" }}
           width={18}
         />
       </PopoverPrimitive.Content>
