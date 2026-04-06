@@ -134,6 +134,7 @@ const insertMailboxIfDomainStillActive = async (
     expiresAt: string;
     destroyedAt: string | null;
   },
+  expectedZoneId: string | null,
   rootDomain: string,
 ) => {
   const result = await env.DB.prepare(
@@ -145,7 +146,10 @@ const insertMailboxIfDomainStillActive = async (
     WHERE EXISTS (
       SELECT 1
       FROM domains
-      WHERE id = ? AND status = 'active' AND deleted_at IS NULL
+      WHERE id = ?
+        AND status = 'active'
+        AND deleted_at IS NULL
+        AND zone_id IS ?
     )`,
   )
     .bind(
@@ -161,6 +165,7 @@ const insertMailboxIfDomainStillActive = async (
       created.expiresAt,
       created.destroyedAt,
       created.domainId,
+      expectedZoneId,
     )
     .run();
 
@@ -414,7 +419,12 @@ export const createMailboxForUser = async (
 
   let mailboxInserted = false;
   try {
-    await insertMailboxIfDomainStillActive(env, created, domain.rootDomain);
+    await insertMailboxIfDomainStillActive(
+      env,
+      created,
+      domain.zoneId,
+      domain.rootDomain,
+    );
     mailboxInserted = true;
 
     if (knownSubdomain[0]) {

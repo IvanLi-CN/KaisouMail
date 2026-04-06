@@ -334,4 +334,83 @@ describe("mailbox service helpers", () => {
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
   });
+
+  it("rolls back routing creation when the insert loses the zone binding race", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_new");
+
+    const run = vi.fn(async () => ({
+      meta: {
+        changes: 0,
+      },
+    }));
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+
+    await expect(
+      createMailboxForUser(
+        {
+          DB: {
+            prepare,
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          localPart: "build",
+          subdomain: "ops",
+          rootDomain: domain.rootDomain,
+        },
+      ),
+    ).rejects.toThrow("Mailbox domain is no longer available");
+
+    expect(bind).toHaveBeenCalledWith(
+      expect.any(String),
+      memberUser.id,
+      domain.id,
+      "build",
+      "ops",
+      "build@ops.707979.xyz",
+      "rule_new",
+      "active",
+      expect.any(String),
+      expect.any(String),
+      null,
+      domain.id,
+      domain.zoneId,
+    );
+    expect(deleteRoutingRule).toHaveBeenCalledWith(
+      runtimeConfig,
+      domain,
+      "rule_new",
+    );
+    expect(db.delete).not.toHaveBeenCalledWith(mailboxes);
+  });
 });
