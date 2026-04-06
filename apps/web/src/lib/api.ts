@@ -55,6 +55,7 @@ export class ApiClientError extends Error {
   constructor(
     message: string,
     public readonly details: unknown = null,
+    public readonly status: number | null = null,
   ) {
     super(message);
   }
@@ -83,9 +84,10 @@ const requestJson = async <T>(
       throw new ApiClientError(
         parsedError.data.error,
         parsedError.data.details ?? null,
+        response.status,
       );
     }
-    throw new ApiClientError("Request failed");
+    throw new ApiClientError("Request failed", null, response.status);
   }
   return parser(payload);
 };

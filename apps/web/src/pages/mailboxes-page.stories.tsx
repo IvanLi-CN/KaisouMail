@@ -108,3 +108,40 @@ export const RefreshingStats: Story = {
     ),
   },
 };
+
+export const RulesLoadError: Story = {
+  args: {
+    meta: null,
+    createError: {
+      variant: "recoverable",
+      title: "邮箱规则暂时加载失败",
+      description:
+        "域名与 TTL 元数据还没拿到，所以创建入口不会被误渲染成空表单。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "meta offline"\n}',
+    },
+    onRetryCreate: fn(),
+  },
+};
+
+export const MailboxListError: Story = {
+  args: {
+    listError: {
+      variant: "recoverable",
+      title: "邮箱列表加载失败",
+      description: "邮箱存续数据不可用，所以控制台不会把它误判成“暂无邮箱”。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "mailboxes offline"\n}',
+    },
+    mailboxes: [],
+    messageStatsByMailbox: new Map(),
+    onRetryList: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "重新加载邮箱列表" }),
+    );
+    await expect(args.onRetryList).toHaveBeenCalled();
+  },
+};

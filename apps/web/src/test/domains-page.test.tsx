@@ -1,9 +1,52 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { demoDomainCatalog } from "@/mocks/data";
-import { DomainsPageView } from "@/pages/domains-page";
+import { demoDomainCatalog, demoSessionUser } from "@/mocks/data";
+import { DomainsPage, DomainsPageView } from "@/pages/domains-page";
+
+const domainsHookState = {
+  catalog: demoDomainCatalog,
+  error: null as Error | null,
+  refetch: vi.fn(),
+  role: "admin" as "admin" | "member",
+};
+
+vi.mock("@/hooks/use-session", () => ({
+  useSessionQuery: () => ({
+    data: {
+      user: {
+        ...demoSessionUser,
+        role: domainsHookState.role,
+      },
+    },
+  }),
+}));
+
+vi.mock("@/hooks/use-domains", () => ({
+  useDomainCatalogQuery: () => ({
+    data: domainsHookState.catalog,
+    error: domainsHookState.error,
+    refetch: domainsHookState.refetch,
+  }),
+  useCreateDomainMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+  useDisableDomainMutation: () => ({
+    mutate: vi.fn(),
+  }),
+  useRetryDomainMutation: () => ({
+    mutate: vi.fn(),
+  }),
+}));
+
+afterEach(() => {
+  domainsHookState.catalog = demoDomainCatalog;
+  domainsHookState.error = null;
+  domainsHookState.refetch = vi.fn();
+  domainsHookState.role = "admin";
+});
 
 describe("domains page view", () => {
   it("renders binding controls, statuses, and delete actions", async () => {
@@ -70,6 +113,50 @@ describe("domains page view", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "删除域名" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders a recoverable error state instead of an empty catalog", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[]}
+          error={{
+            variant: "recoverable",
+            title: "域名目录暂时加载失败",
+            description: "Cloudflare 域名目录目前不可用。",
+            details: '{"error":"Authentication error"}',
+          }}
+          onReload={vi.fn()}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "域名目录暂时加载失败" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "重新加载域名目录" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("relay.example.test")).not.toBeInTheDocument();
+  });
+
+  it("keeps the cached catalog visible when a background refetch fails", () => {
+    domainsHookState.catalog = demoDomainCatalog;
+    domainsHookState.error = new Error("Cloudflare temporarily unavailable");
+
+    render(
+      <MemoryRouter>
+        <DomainsPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("relay.example.test")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "域名目录暂时加载失败" }),
     ).not.toBeInTheDocument();
   });
 });
