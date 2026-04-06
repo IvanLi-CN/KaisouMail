@@ -1,9 +1,19 @@
 import type { RuntimeConfig, WorkerEnv } from "../env";
-import { resolveConfiguredWebAppOrigin } from "../env";
+import { resolveConfiguredWebAppOrigins } from "../env";
 
 const localOriginRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 const trimTrailingSlash = (value: string) => value.replace(/\/$/, "");
+
+const buildAllowedOriginsSet = (configuredOrigins: Iterable<string>) => {
+  const allowedOrigins = new Set<string>();
+
+  for (const configuredOrigin of configuredOrigins) {
+    allowedOrigins.add(trimTrailingSlash(configuredOrigin));
+  }
+
+  return allowedOrigins;
+};
 
 export const resolveAllowedCorsOrigin = (
   origin: string | undefined,
@@ -12,11 +22,10 @@ export const resolveAllowedCorsOrigin = (
   if (!origin) return null;
 
   const normalizedOrigin = trimTrailingSlash(origin);
-  const allowedOrigins = new Set<string>();
-
-  if (config.WEB_APP_ORIGIN) {
-    allowedOrigins.add(trimTrailingSlash(config.WEB_APP_ORIGIN));
-  }
+  const allowedOrigins = buildAllowedOriginsSet([
+    ...(config.WEB_APP_ORIGINS ?? []),
+    ...(config.WEB_APP_ORIGIN ? [config.WEB_APP_ORIGIN] : []),
+  ]);
 
   if (
     config.APP_ENV !== "production" &&
@@ -30,17 +39,14 @@ export const resolveAllowedCorsOrigin = (
 
 export const resolveAllowedCorsOriginFromEnv = (
   origin: string | undefined,
-  env: Pick<WorkerEnv, "APP_ENV" | "WEB_APP_ORIGIN">,
+  env: Pick<WorkerEnv, "APP_ENV" | "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS">,
 ) => {
   if (!origin) return null;
 
   const normalizedOrigin = trimTrailingSlash(origin);
-  const allowedOrigins = new Set<string>();
-  const configuredOrigin = resolveConfiguredWebAppOrigin(env);
-
-  if (configuredOrigin) {
-    allowedOrigins.add(trimTrailingSlash(configuredOrigin));
-  }
+  const allowedOrigins = buildAllowedOriginsSet(
+    resolveConfiguredWebAppOrigins(env),
+  );
 
   if (env.APP_ENV !== "production" && localOriginRegex.test(normalizedOrigin)) {
     allowedOrigins.add(normalizedOrigin);

@@ -9,6 +9,10 @@
     {
       "pattern": "api.cfm.707979.xyz",
       "custom_domain": true
+    },
+    {
+      "pattern": "api.km.707979.xyz",
+      "custom_domain": true
     }
   ],
   "d1_databases": [
@@ -34,6 +38,7 @@
     "APP_ENV": "production",
     "MAIL_DOMAIN": "707979.xyz",
     "WEB_APP_ORIGIN": "https://cfm.707979.xyz",
+    "WEB_APP_ORIGINS": "https://cfm.707979.xyz,https://km.707979.xyz",
     "EMAIL_WORKER_NAME": "email-receiver-worker",
     "DEFAULT_MAILBOX_TTL_MINUTES": "60",
     "CLEANUP_BATCH_SIZE": "3",

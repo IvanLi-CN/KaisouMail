@@ -194,6 +194,37 @@ describe("meta and auth routes", () => {
     });
   });
 
+  it("returns the alias CORS origin for /api/version when WEB_APP_ORIGINS includes km.707979.xyz", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/version", {
+        headers: {
+          origin: "https://km.707979.xyz",
+          "Access-Control-Request-Headers": "Content-Type",
+        },
+      }),
+      {
+        APP_ENV: "production",
+        DEFAULT_MAILBOX_TTL_MINUTES: "60",
+        CLEANUP_BATCH_SIZE: "3",
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+        BOOTSTRAP_ADMIN_NAME: "Ivan",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
+        WEB_APP_ORIGINS:
+          "https://cfm.707979.xyz, https://km.707979.xyz/workspace",
+      } as never,
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://km.707979.xyz",
+    );
+    await expect(response.json()).resolves.toEqual({
+      error: "Internal server error",
+      details: null,
+    });
+  });
+
   it("keeps localhost preview CORS on /api/version when SESSION_SECRET is missing", async () => {
     const app = createApp();
     const response = await app.fetch(

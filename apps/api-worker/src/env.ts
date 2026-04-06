@@ -19,6 +19,7 @@ const runtimeConfigSchema = z.object({
   SESSION_SECRET: z.string().min(16),
   CF_ROUTE_RULESET_TAG: z.string().default("kaisoumail"),
   WEB_APP_ORIGIN: z.string().url().optional(),
+  WEB_APP_ORIGINS: z.string().optional(),
 });
 
 export interface WorkerEnv {
@@ -40,36 +41,79 @@ export interface WorkerEnv {
   SESSION_SECRET: string;
   CF_ROUTE_RULESET_TAG?: string;
   WEB_APP_ORIGIN?: string;
+  WEB_APP_ORIGINS?: string;
 }
 
-export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
+export interface RuntimeConfig
+  extends Omit<
+    z.infer<typeof runtimeConfigSchema>,
+    "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS"
+  > {
+  WEB_APP_ORIGIN?: string;
+  WEB_APP_ORIGINS?: string[];
+}
 
 export type RuntimeConfigParseResult =
   | { success: true; config: RuntimeConfig }
   | { success: false; issues: z.ZodIssue[] };
 
 const toWebAppOrigin = (value: string | undefined) => {
-  if (!value) {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
     return undefined;
   }
 
   try {
-    return new URL(value).origin;
+    return new URL(trimmedValue).origin;
   } catch {
     return undefined;
   }
 };
 
+const parseConfiguredWebAppOrigins = (value: string | undefined) => {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((origin) => toWebAppOrigin(origin))
+    .filter((origin): origin is string => Boolean(origin));
+};
+
+export const resolveConfiguredWebAppOrigins = (
+  env: Pick<WorkerEnv, "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS">,
+) => {
+  const origins = new Set<string>();
+  const primaryOrigin = toWebAppOrigin(env.WEB_APP_ORIGIN);
+
+  if (primaryOrigin) {
+    origins.add(primaryOrigin);
+  }
+
+  for (const origin of parseConfiguredWebAppOrigins(env.WEB_APP_ORIGINS)) {
+    origins.add(origin);
+  }
+
+  return [...origins];
+};
+
 const normalizeRuntimeConfig = (
   config: z.infer<typeof runtimeConfigSchema>,
 ): RuntimeConfig => {
+  const webAppOrigins = resolveConfiguredWebAppOrigins({
+    WEB_APP_ORIGIN: config.WEB_APP_ORIGIN,
+    WEB_APP_ORIGINS: config.WEB_APP_ORIGINS,
+  });
+
   return {
     ...config,
     // Prefer the explicit runtime token, but keep the shared token as a
     // quickstart-compatible fallback.
     CLOUDFLARE_API_TOKEN:
       config.CLOUDFLARE_RUNTIME_API_TOKEN ?? config.CLOUDFLARE_API_TOKEN,
-    WEB_APP_ORIGIN: toWebAppOrigin(config.WEB_APP_ORIGIN),
+    WEB_APP_ORIGIN: webAppOrigins[0],
+    WEB_APP_ORIGINS: webAppOrigins,
   };
 };
 
@@ -100,5 +144,5 @@ export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig => {
 };
 
 export const resolveConfiguredWebAppOrigin = (
-  env: Pick<WorkerEnv, "WEB_APP_ORIGIN">,
-) => toWebAppOrigin(env.WEB_APP_ORIGIN);
+  env: Pick<WorkerEnv, "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS">,
+) => resolveConfiguredWebAppOrigins(env)[0];

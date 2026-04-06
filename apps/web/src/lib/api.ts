@@ -19,7 +19,35 @@ import {
 
 import { demoApi } from "@/lib/demo-store";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const PRODUCTION_API_BASE_BY_WEB_HOST = {
+  "cfm.707979.xyz": "https://api.cfm.707979.xyz",
+  "km.707979.xyz": "https://api.km.707979.xyz",
+} as const;
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+
+export const resolveApiBase = ({
+  configuredBaseUrl = import.meta.env.VITE_API_BASE_URL,
+  currentLocation = typeof window !== "undefined" ? window.location : undefined,
+}: {
+  configuredBaseUrl?: string;
+  currentLocation?: Pick<Location, "hostname">;
+} = {}) => {
+  const mappedApiBase = currentLocation?.hostname
+    ? PRODUCTION_API_BASE_BY_WEB_HOST[
+        currentLocation.hostname as keyof typeof PRODUCTION_API_BASE_BY_WEB_HOST
+      ]
+    : undefined;
+
+  if (mappedApiBase) {
+    return mappedApiBase;
+  }
+
+  const configuredBase = configuredBaseUrl?.trim();
+  return configuredBase ? trimTrailingSlash(configuredBase) : "";
+};
+
+const API_BASE = resolveApiBase();
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 export class ApiClientError extends Error {

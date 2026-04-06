@@ -23,6 +23,24 @@ describe("cors helpers", () => {
     ).toBe("https://cfm.707979.xyz");
   });
 
+  it("allows configured alias origins from WEB_APP_ORIGINS", () => {
+    const config = parseRuntimeConfig({
+      APP_ENV: "production",
+      DEFAULT_MAILBOX_TTL_MINUTES: "60",
+      CLEANUP_BATCH_SIZE: "3",
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      SESSION_SECRET: "super-secret-session-key",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+      WEB_APP_ORIGINS: "https://cfm.707979.xyz, https://km.707979.xyz",
+    } as never);
+
+    expect(resolveAllowedCorsOrigin("https://km.707979.xyz", config)).toBe(
+      "https://km.707979.xyz",
+    );
+  });
+
   it("allows configured local preview origins outside production", () => {
     expect(
       resolveAllowedCorsOrigin("http://localhost:4173", {
@@ -60,6 +78,16 @@ describe("cors helpers", () => {
         APP_ENV: "development",
       }),
     ).toBe("http://localhost:4173");
+  });
+
+  it("allows configured alias origins when fallback CORS uses WEB_APP_ORIGINS", () => {
+    expect(
+      resolveAllowedCorsOriginFromEnv("https://km.707979.xyz", {
+        APP_ENV: "production",
+        WEB_APP_ORIGINS:
+          "https://cfm.707979.xyz, https://km.707979.xyz/workspace",
+      }),
+    ).toBe("https://km.707979.xyz");
   });
 
   it("ignores invalid WEB_APP_ORIGIN values in fallback CORS resolution", () => {
