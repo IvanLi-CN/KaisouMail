@@ -95,6 +95,20 @@ export const classifyDomainCreateState = (existing: DomainRow | null) => {
   };
 };
 
+const resolveCatalogBindingSource = (
+  existing: DomainRow | null,
+  zoneId: string,
+): DomainBindingSource => {
+  if (
+    existing?.bindingSource === "project_bind" &&
+    existing.zoneId?.trim() === zoneId
+  ) {
+    return "project_bind";
+  }
+
+  return "catalog";
+};
+
 const provisionDomain = async (
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
@@ -593,6 +607,9 @@ export const createDomain = async (
   if (!zoneId) {
     throw new ApiError(400, "zoneId is required");
   }
+  const existing = await getDomainByRootDomain(env, rootDomain, {
+    includeDeleted: true,
+  });
   await requireCatalogZone(config, rootDomain, zoneId);
   const provisionState = await resolveProvisionState(
     config,
@@ -606,7 +623,7 @@ export const createDomain = async (
   return persistManagedDomain(env, {
     rootDomain,
     zoneId,
-    bindingSource: "catalog",
+    bindingSource: resolveCatalogBindingSource(existing, zoneId),
     provisionState,
   });
 };
@@ -627,7 +644,7 @@ export const bindDomain = async (
     });
   }
 
-  if (createState.kind === "replace" && !createState.row.deletedAt) {
+  if (createState.kind === "replace") {
     const existingZoneId = createState.row.zoneId?.trim();
     if (existingZoneId) {
       try {
@@ -733,9 +750,17 @@ export const deleteDomain = async (
     includeDeleted: true,
   });
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
-  if (existing.deletedAt) return;
 
   requireProjectBoundDomain(existing);
+  if (existing.deletedAt) {
+    await requireDomainDeleteAllowed(env, existing);
+    await deleteZone(config, {
+      rootDomain: existing.rootDomain,
+      zoneId: existing.zoneId,
+    });
+    return;
+  }
+
   const deletedAt = nowIso();
   const localDelete = await softDeleteDomainLocally(db, existing, deletedAt);
 

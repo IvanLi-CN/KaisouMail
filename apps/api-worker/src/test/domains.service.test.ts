@@ -307,14 +307,14 @@ describe("domain catalog", () => {
     });
   });
 
-  it("resets binding source to catalog when re-enabling a discovered zone", async () => {
+  it("keeps project-bound source when re-enabling the same discovered zone", async () => {
     const db = createDb({
       domainRows: [
         {
           ...baseDomain,
           id: "dom_replaced",
           rootDomain: "ops.example.org",
-          zoneId: "zone_previous",
+          zoneId: "zone_available",
           bindingSource: "project_bind",
           status: "disabled",
           disabledAt: "2026-04-04T00:00:00.000Z",
@@ -341,7 +341,47 @@ describe("domain catalog", () => {
     expect(result.domain).toMatchObject({
       rootDomain: "ops.example.org",
       zoneId: "zone_available",
-      bindingSource: "catalog",
+      bindingSource: "project_bind",
+      status: "active",
+    });
+  });
+
+  it("restores a soft-deleted project-bound zone from the catalog without losing delete access", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_replaced",
+          rootDomain: "ops.example.org",
+          zoneId: "zone_available",
+          bindingSource: "project_bind",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+          deletedAt: "2026-04-04T00:01:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_available",
+        name: "ops.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await createDomain(env, runtimeConfig, {
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+    });
+
+    expect(result.domain).toMatchObject({
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+      bindingSource: "project_bind",
       status: "active",
     });
   });
@@ -591,6 +631,37 @@ describe("domain catalog", () => {
     });
     expect(db.update).toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalled();
+  });
+
+  it("retries deleting already soft-deleted project-bound domains", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_bound",
+          rootDomain: "bound.example.org",
+          zoneId: "zone_bound",
+          bindingSource: "project_bind",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+          deletedAt: "2026-04-04T00:01:00.000Z",
+        },
+      ],
+      mailboxRows: [],
+    });
+    getDb.mockReturnValue(db);
+    deleteZone.mockResolvedValue({ alreadyMissing: false });
+
+    await expect(
+      deleteDomain(env, runtimeConfig, "dom_bound"),
+    ).resolves.toBeUndefined();
+
+    expect(deleteZone).toHaveBeenCalledWith(runtimeConfig, {
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+    });
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
   });
 
   it("restores the local domain state if the Cloudflare delete fails", async () => {
