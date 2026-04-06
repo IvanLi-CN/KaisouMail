@@ -26,7 +26,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/mailboxes/:mailboxId`
 - Lightweight mailbox inventory and lifecycle management surface
 - Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace
-- API mailbox creation requires an explicit `rootDomain`; the Web console randomly preselects one active domain while still allowing manual switching
+- API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
 
 ### Domains
 - `/domains`
@@ -121,6 +121,7 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ![Workspace all mailboxes](./assets/workspace-all-mailboxes.png)
 
+PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
 
 ![Workspace mailbox creation pending state](./assets/workspace-create-pending.png)
@@ -151,8 +152,10 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### Mailbox Creation
 
-![Mailbox create card with a randomly preselected root domain](./assets/mailbox-create-unselected-domain.png)
+PR: include
+![Mailbox create card with the default random-domain placeholder selected](./assets/mailbox-create-unselected-domain.png)
 
+PR: include
 ![Mailbox create card with explicit root domain selected](./assets/mailbox-create-selected-domain.png)
 
 ### Mailbox Detail

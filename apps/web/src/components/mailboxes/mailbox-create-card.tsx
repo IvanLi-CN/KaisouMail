@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
 import {
+  buildMailboxCreateAddressExample,
+  buildMailboxCreateDomainHint,
+} from "@/components/mailboxes/mailbox-create-preview";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -32,9 +36,9 @@ export const MailboxCreateCard = ({
   metaError?: string | null;
   submitError?: string | null;
 }) => {
-  const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState(
-    domains[0] || "example.com",
-  );
+  const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState<
+    string | undefined
+  >(undefined);
 
   return (
     <Card>
@@ -57,9 +61,17 @@ export const MailboxCreateCard = ({
               <span className="ml-1 font-medium text-foreground">
                 ops.alpha
               </span>
-              。邮箱域名会从可用列表中随机预选，也可以手动切换，地址格式为
+              。
+              {buildMailboxCreateDomainHint({
+                rootDomain: selectedExampleRootDomain,
+                hasAvailableDomains: domains.length > 0,
+              })}
+              地址示例为
               <span className="ml-1 font-medium text-foreground">
-                nightly@ops.alpha.{selectedExampleRootDomain}
+                {buildMailboxCreateAddressExample({
+                  rootDomain: selectedExampleRootDomain,
+                  hasAvailableDomains: domains.length > 0,
+                })}
               </span>
               ，默认 {defaultTtlMinutes} 分钟后自动回收，最长 {maxTtlMinutes}{" "}
               分钟。
