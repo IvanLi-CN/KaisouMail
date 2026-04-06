@@ -13,6 +13,7 @@ describe("domains page view", () => {
       <MemoryRouter>
         <DomainsPageView
           domains={demoDomainCatalog}
+          isDomainLifecycleEnabled
           onBind={vi.fn()}
           onEnable={vi.fn()}
           onDisable={vi.fn()}
@@ -45,5 +46,28 @@ describe("domains page view", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText("确认删除", { selector: "button" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
+  });
+
+  it("hides Cloudflare lifecycle actions when runtime management is off", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainLifecycleEnabled={false}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "绑定新域名" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "删除域名" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -10,11 +10,13 @@ import {
   useDomainCatalogQuery,
   useRetryDomainMutation,
 } from "@/hooks/use-domains";
+import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
+  isDomainLifecycleEnabled?: boolean;
   isBindPending?: boolean;
   isEnablePending?: boolean;
   onBind: Parameters<typeof DomainBindCard>[0]["onSubmit"];
@@ -26,6 +28,7 @@ type DomainsPageViewProps = {
 
 export const DomainsPageView = ({
   domains,
+  isDomainLifecycleEnabled = true,
   isBindPending = false,
   isEnablePending = false,
   onBind,
@@ -40,9 +43,12 @@ export const DomainsPageView = ({
       description="既支持从 Cloudflare 目录启用已有 zone，也支持直接通过 Cloudflare API 绑定新域名并在项目里管理删除。"
       eyebrow="Domains"
     />
-    <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
+    {isDomainLifecycleEnabled ? (
+      <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
+    ) : null}
     <DomainTable
       domains={domains}
+      isDomainLifecycleEnabled={isDomainLifecycleEnabled}
       isEnablePending={isEnablePending}
       onEnable={onEnable}
       onDisable={onDisable}
@@ -54,6 +60,7 @@ export const DomainsPageView = ({
 
 export const DomainsPage = () => {
   const sessionQuery = useSessionQuery();
+  const metaQuery = useMetaQuery();
   const domainCatalogQuery = useDomainCatalogQuery();
   const bindDomainMutation = useBindDomainMutation();
   const createDomainMutation = useCreateDomainMutation();
@@ -73,6 +80,9 @@ export const DomainsPage = () => {
   return (
     <DomainsPageView
       domains={domainCatalogQuery.data ?? []}
+      isDomainLifecycleEnabled={
+        metaQuery.data?.cloudflareDomainLifecycleEnabled ?? false
+      }
       isBindPending={bindDomainMutation.isPending}
       isEnablePending={createDomainMutation.isPending}
       onBind={async (values) => {

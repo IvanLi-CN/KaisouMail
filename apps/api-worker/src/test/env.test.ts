@@ -126,4 +126,15 @@ describe("runtime config parsing", () => {
       }),
     ).toBeUndefined();
   });
+
+  it("parses boolean runtime flags from string env values", () => {
+    const disabled = parseRuntimeConfig(baseEnv as never);
+    const enabled = parseRuntimeConfig({
+      ...baseEnv,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "true",
+    } as never);
+
+    expect(disabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(false);
+    expect(enabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(true);
+  });
 });

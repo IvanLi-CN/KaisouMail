@@ -18,6 +18,7 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
   return c.json(
     apiMetaResponseSchema.parse({
       domains: activeRootDomains,
+      cloudflareDomainLifecycleEnabled: config.EMAIL_ROUTING_MANAGEMENT_ENABLED,
       defaultMailboxTtlMinutes: config.DEFAULT_MAILBOX_TTL_MINUTES,
       minMailboxTtlMinutes,
       maxMailboxTtlMinutes,

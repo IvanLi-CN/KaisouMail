@@ -505,6 +505,7 @@ export const demoMeta: ApiMeta = {
   domains: demoDomains
     .filter((domain) => domain.status === "active")
     .map((domain) => domain.rootDomain),
+  cloudflareDomainLifecycleEnabled: true,
   defaultMailboxTtlMinutes: 60,
   minMailboxTtlMinutes: 5,
   maxMailboxTtlMinutes: 1440,

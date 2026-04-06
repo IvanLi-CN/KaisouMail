@@ -98,6 +98,7 @@ export const DomainTable = ({
   onDelete,
   onRetry,
   isEnablePending = false,
+  isDomainLifecycleEnabled = true,
 }: {
   domains: DomainCatalogItem[];
   onEnable: (values: {
@@ -108,6 +109,7 @@ export const DomainTable = ({
   onDelete: (domainId: string) => Promise<void> | void;
   onRetry: (domainId: string) => Promise<void> | void;
   isEnablePending?: boolean;
+  isDomainLifecycleEnabled?: boolean;
 }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
@@ -172,7 +174,9 @@ export const DomainTable = ({
                 domain.projectStatus === "provisioning_error" && domain.id;
               const canDisable = domain.projectStatus === "active" && domain.id;
               const canDelete =
-                domain.bindingSource === "project_bind" && Boolean(domain.id);
+                isDomainLifecycleEnabled &&
+                domain.bindingSource === "project_bind" &&
+                Boolean(domain.id);
               const zoneId = domain.zoneId ?? "";
               const domainId = domain.id ?? "";
               const isDeleteOpen = deleteTargetId === domainId;

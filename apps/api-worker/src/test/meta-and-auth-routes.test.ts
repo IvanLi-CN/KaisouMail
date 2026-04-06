@@ -65,12 +65,14 @@ describe("meta and auth routes", () => {
     );
     const payload = (await response.json()) as {
       domains: string[];
+      cloudflareDomainLifecycleEnabled: boolean;
       defaultMailboxTtlMinutes: number;
       addressRules: { examples: string[] };
     };
 
     expect(response.status).toBe(200);
     expect(payload.domains).toContain("707979.xyz");
+    expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
     expect(payload.addressRules.examples[0]).toContain("@alpha.707979.xyz");
   });

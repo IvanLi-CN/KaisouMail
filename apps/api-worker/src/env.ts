@@ -2,13 +2,22 @@ import { z } from "zod";
 
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
 
+const envBooleanSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return value;
+}, z.boolean());
+
 const runtimeConfigSchema = z.object({
   APP_ENV: z.string().default("development"),
   MAIL_DOMAIN: z.string().min(1).optional(),
   EMAIL_WORKER_NAME: z.string().min(1).optional(),
   DEFAULT_MAILBOX_TTL_MINUTES: z.coerce.number().int().min(5).default(60),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(3),
-  EMAIL_ROUTING_MANAGEMENT_ENABLED: z.coerce.boolean().default(false),
+  EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
