@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.10.2",
+  "base_stable_version": "0.10.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-06T15:02:55Z",
+  "next_stable_version": "0.10.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "414ffa4130f60a1b6871c24aa8b758d49ccef13c",
+  "pr_number": 22,
+  "pr_title": "feat: add km domain aliases",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.10.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.10.2",
+  "target_sha": "700a3280de9a28b476f4a59f2782e0dd6dc9025b",
+  "type_label": "type:patch"
+}
