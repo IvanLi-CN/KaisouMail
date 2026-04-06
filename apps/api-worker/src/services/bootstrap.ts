@@ -123,9 +123,7 @@ export const ensureBootstrapDomains = async (
       .update(domains)
       .set({
         zoneId: nextZoneId,
-        bindingSource: "catalog",
         updatedAt: timestamp,
-        deletedAt: null,
         ...(shouldRefreshProvisionState
           ? {
               status: provisionState.status,
