@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/shared/page-header";
@@ -18,6 +18,7 @@ const meta = {
     user: demoSessionUser,
     version: demoVersion,
     onLogout: () => undefined,
+    defaultAccountPopoverOpen: false,
   },
   render: (args) => (
     <AppShell {...args}>
@@ -43,9 +44,14 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {
+export const Collapsed: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const accountTrigger = canvas.getByRole("button", {
+      name: demoSessionUser.name,
+    });
+
     await expect(
       canvas.getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
@@ -58,6 +64,63 @@ export const Default: Story = {
     await expect(
       canvas.getByRole("button", { name: "退出登录" }),
     ).toBeInTheDocument();
+    await expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      body.queryByText(demoSessionUser.email),
+    ).not.toBeInTheDocument();
+    await expect(body.queryByText(/^admin$/i)).not.toBeInTheDocument();
+
+    await userEvent.hover(accountTrigger);
+
+    await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
+    await expect(body.getByText(/^admin$/i)).toBeVisible();
+
+    await userEvent.unhover(accountTrigger);
+
+    await waitFor(() => {
+      expect(body.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    });
+
+    accountTrigger.focus();
+
+    await waitFor(() => {
+      expect(body.getByText(demoSessionUser.email)).toBeVisible();
+    });
+
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(body.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(accountTrigger);
+
+    await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
+    await expect(accountTrigger).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(
+      canvas.getByRole("heading", { name: /cloudflare 临时邮箱台/i }),
+    );
+
+    await waitFor(() => {
+      expect(body.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    });
+  },
+};
+
+export const DetailsOpen: Story = {
+  args: {
+    defaultAccountPopoverOpen: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await expect(
+      canvas.getByRole("button", { name: demoSessionUser.name }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
+    await expect(body.getByText(/^admin$/i)).toBeVisible();
   },
 };
 
