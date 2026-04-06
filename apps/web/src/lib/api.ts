@@ -1,6 +1,7 @@
 import {
   apiErrorSchema,
   apiMetaResponseSchema,
+  bindDomainRequestSchema,
   createApiKeyResponseSchema,
   createDomainRequestSchema,
   createUserResponseSchema,
@@ -287,6 +288,15 @@ export const apiClient = {
       (value) => domainSchema.parse(value),
     );
   },
+  async bindDomain(input: { rootDomain: string }) {
+    const payload = bindDomainRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.bindDomain(payload);
+    return requestJson(
+      "/api/domains/bind",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => domainSchema.parse(value),
+    );
+  },
   async disableDomain(id: string) {
     if (DEMO_MODE) return demoApi.disableDomain(id);
     return requestJson(
@@ -302,5 +312,22 @@ export const apiClient = {
       { method: "POST" },
       (value) => domainSchema.parse(value),
     );
+  },
+  async deleteDomain(id: string) {
+    if (DEMO_MODE) return demoApi.deleteDomain(id);
+    const response = await fetch(`${API_BASE}/api/domains/${id}/delete`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (response.status === 204) return;
+    const payload = await response.json();
+    const parsedError = apiErrorSchema.safeParse(payload);
+    if (parsedError.success) {
+      throw new ApiClientError(
+        parsedError.data.error,
+        parsedError.data.details ?? null,
+      );
+    }
+    throw new ApiClientError("Failed to delete domain");
   },
 };

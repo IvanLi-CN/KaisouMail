@@ -30,10 +30,34 @@ export const useCreateDomainMutation = () => {
   });
 };
 
+export const useBindDomainMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: apiClient.bindDomain,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: metaKey });
+    },
+  });
+};
+
 export const useDisableDomainMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (domainId: string) => apiClient.disableDomain(domainId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: metaKey });
+    },
+  });
+};
+
+export const useDeleteDomainMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (domainId: string) => apiClient.deleteDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
       void queryClient.invalidateQueries({ queryKey: domainCatalogKey });

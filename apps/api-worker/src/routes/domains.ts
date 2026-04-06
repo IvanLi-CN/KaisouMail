@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import {
+  bindDomainRequestSchema,
   createDomainRequestSchema,
   domainSchema,
   listDomainCatalogResponseSchema,
@@ -10,7 +11,9 @@ import { Hono } from "hono";
 import { parseRuntimeConfig } from "../env";
 import { requireAuth } from "../services/auth";
 import {
+  bindDomain,
   createDomain,
+  deleteDomain,
   disableDomain,
   listDomainCatalog,
   listDomains,
@@ -32,6 +35,17 @@ export const domainRoutes = new Hono<AppBindings>()
       }),
     ),
   )
+  .post("/bind", zValidator("json", bindDomainRequestSchema), async (c) => {
+    const result = await bindDomain(
+      c.env,
+      parseRuntimeConfig(c.env),
+      c.req.valid("json"),
+    );
+    return c.json(
+      domainSchema.parse(result.domain),
+      result.created ? 201 : 200,
+    );
+  })
   .post("/", zValidator("json", createDomainRequestSchema), async (c) => {
     const result = await createDomain(
       c.env,
@@ -56,4 +70,8 @@ export const domainRoutes = new Hono<AppBindings>()
         ),
       ),
     ),
-  );
+  )
+  .post("/:id/delete", async (c) => {
+    await deleteDomain(c.env, parseRuntimeConfig(c.env), c.req.param("id"));
+    return c.body(null, 204);
+  });

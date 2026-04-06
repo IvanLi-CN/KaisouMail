@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,24 +6,42 @@ import { demoDomainCatalog } from "@/mocks/data";
 import { DomainsPageView } from "@/pages/domains-page";
 
 describe("domains page view", () => {
-  it("renders catalog statuses and provisioning errors", () => {
+  it("renders binding controls, statuses, and delete actions", () => {
+    const onDelete = vi.fn();
+
     render(
       <MemoryRouter>
         <DomainsPageView
           domains={demoDomainCatalog}
+          onBind={vi.fn()}
           onEnable={vi.fn()}
           onDisable={vi.fn()}
+          onDelete={onDelete}
           onRetry={vi.fn()}
         />
       </MemoryRouter>,
     );
 
+    expect(
+      screen.getByRole("heading", { name: "绑定新域名" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "绑定到 Cloudflare" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("relay.example.test")).toBeInTheDocument();
+    expect(screen.getAllByText("project_bind")).toHaveLength(2);
     expect(screen.getByText("provisioning_error")).toBeInTheDocument();
     expect(screen.getByText("Zone access denied")).toBeInTheDocument();
     expect(screen.getByText("not_enabled")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "启用域名" }),
     ).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole("button", { name: "删除域名" });
+    expect(deleteButtons.length).toBeGreaterThan(0);
+    fireEvent.click(deleteButtons[0]);
+    expect(screen.getByText("确认删除 mail.example.net？")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+    expect(onDelete).toHaveBeenCalledWith("dom_secondary");
   });
 });

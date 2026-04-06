@@ -4,7 +4,7 @@
 
 1. Configure tokens in [Cloudflare Token Permissions](/cloudflare-token-permissions).
 2. Configure Worker, Pages, and web variables in [Deployment & Environment](/deployment-environment).
-3. Add the zone in Cloudflare, then enable it from `/domains` by following [Domain Catalog & Enablement](/domain-catalog-enablement).
+3. Either bind the domain directly from `/domains`, or add it in Cloudflare first and then enable it by following [Domain Catalog & Enablement](/domain-catalog-enablement).
 4. Use [API Reference](/api-reference) for endpoint discovery, then open `/api-keys/docs` inside the control plane for runtime-aware examples.
 
 ## Documentation map

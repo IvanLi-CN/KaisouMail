@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createRoutingRule } from "../services/emailRouting";
+import {
+  createRoutingRule,
+  createZone,
+  deleteZone,
+  listZones,
+} from "../services/emailRouting";
 
 const baseConfig = {
   APP_ENV: "production",
+  CLOUDFLARE_ACCOUNT_ID: "account_123",
   EMAIL_WORKER_NAME: "email-receiver-worker",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
@@ -19,6 +25,87 @@ afterEach(() => {
 });
 
 describe("email routing service", () => {
+  it("lists zones with Cloudflare status and nameservers", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "zone_123",
+              name: "relay.example.test",
+              status: "pending",
+              name_servers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(listZones(baseConfig)).resolves.toEqual([
+      {
+        id: "zone_123",
+        name: "relay.example.test",
+        status: "pending",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      },
+    ]);
+  });
+
+  it("creates a full Cloudflare zone inside the configured account", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: {
+            id: "zone_123",
+            name: "relay.example.test",
+            status: "pending",
+            name_servers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const zone = await createZone(baseConfig, "relay.example.test");
+
+    expect(zone).toEqual({
+      id: "zone_123",
+      name: "relay.example.test",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toContain('"type":"full"');
+    expect(init?.body).toContain('"id":"account_123"');
+  });
+
+  it("treats missing Cloudflare zones as already deleted", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ message: "Zone not found" }],
+          result: null,
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteZone(baseConfig, {
+        rootDomain: "relay.example.test",
+        zoneId: "zone_123",
+      }),
+    ).resolves.toEqual({ alreadyMissing: true });
+  });
+
   it("sends the configured email worker name when creating a rule", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

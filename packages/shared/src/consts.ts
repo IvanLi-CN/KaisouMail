@@ -5,6 +5,7 @@ export const domainStatuses = [
   "disabled",
   "provisioning_error",
 ] as const;
+export const domainBindingSources = ["catalog", "project_bind"] as const;
 export const domainCatalogAvailabilities = ["available", "missing"] as const;
 export const domainProjectStatuses = [
   "not_enabled",

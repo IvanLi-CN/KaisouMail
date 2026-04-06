@@ -13,6 +13,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 - Multi-user temporary mailbox management with per-user API keys
 - Multi-domain mailbox management backed by D1-stored Cloudflare zone records and real-time Cloudflare zone discovery
+- Direct domain binding that creates a Cloudflare full zone from `/domains`, plus project-bound zone deletion with soft local cleanup
 - Random or custom mailbox creation with TTL-based cleanup and optional `rootDomain` selection
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
@@ -150,10 +151,11 @@ Recommended production setup:
 ### Runtime token minimum permissions
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
-The runtime token scope must cover every mailbox domain you want the control plane to discover or enable.
+The runtime token scope must cover every mailbox domain you want the control plane to discover, bind, enable, or delete.
 
 `Zone: Zone Settings: Edit` is the permission most often missed. If a zone appears in the catalog but enabling it fails with `provisioning_error` / `Authentication error`, check that permission first and confirm the token scope covers the target zone.
 
@@ -172,6 +174,7 @@ The release and deploy workflows need:
 If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, put it in both the Worker secret and the GitHub repository secret. It must satisfy the union:
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`
@@ -209,8 +212,10 @@ Use shared-token mode only for fastest onboarding, short-lived evaluation, or lo
 - `POST /api/api-keys/:id/revoke`
 - `GET|POST /api/domains`
 - `GET /api/domains/catalog`
+- `POST /api/domains/bind`
 - `POST /api/domains/:id/retry`
 - `POST /api/domains/:id/disable`
+- `POST /api/domains/:id/delete`
 - `GET|POST /api/mailboxes`
 - `POST /api/mailboxes/ensure`
 - `GET /api/mailboxes/resolve`

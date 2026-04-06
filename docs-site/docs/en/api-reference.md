@@ -9,9 +9,11 @@ This page lists the implemented endpoints and their purpose. For request and res
 | `GET /api/meta` | read active domains, TTL, and address rules |
 | `GET /api/domains/catalog` | read Cloudflare-visible zones plus project status |
 | `GET /api/domains` | read project-managed domain records |
+| `POST /api/domains/bind` | create a Cloudflare full zone and attach it to the project |
 | `POST /api/domains` | enable a catalog domain |
 | `POST /api/domains/:id/retry` | retry a failed enablement |
 | `POST /api/domains/:id/disable` | disable a managed domain |
+| `POST /api/domains/:id/delete` | delete a project-bound Cloudflare zone and soft-delete the local record |
 
 ## Auth & API Keys
 

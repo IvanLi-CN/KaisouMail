@@ -45,7 +45,12 @@ interface DemoState {
   session: SessionResponse | null;
   apiKeys: ApiKeyRecord[];
   users: UserRecord[];
-  cloudflareZones: Array<{ id: string; rootDomain: string }>;
+  cloudflareZones: Array<{
+    id: string;
+    rootDomain: string;
+    status: string | null;
+    nameServers: string[];
+  }>;
   domains: DomainRecord[];
   mailboxes: Mailbox[];
   messages: MessageSummary[];
@@ -90,7 +95,10 @@ const buildDomainCatalog = (): DomainCatalogItem[] => {
         id: local?.id ?? null,
         rootDomain,
         zoneId: zone?.id ?? local?.zoneId ?? null,
+        bindingSource: local?.bindingSource ?? null,
         cloudflareAvailability: zone ? "available" : "missing",
+        cloudflareStatus: zone?.status ?? null,
+        nameServers: zone?.nameServers ?? [],
         projectStatus: local?.status ?? "not_enabled",
         lastProvisionError: local?.lastProvisionError ?? null,
         createdAt: local?.createdAt ?? null,
@@ -343,6 +351,7 @@ export const demoApi = {
     if (!catalogMatch) {
       throw new Error("Mailbox domain is not available in Cloudflare");
     }
+    catalogMatch.status = "active";
     const existing = state.domains.find(
       (domain) => domain.rootDomain === rootDomain,
     );
@@ -355,6 +364,7 @@ export const demoApi = {
       id: existing?.id ?? randomId("dom"),
       rootDomain,
       zoneId,
+      bindingSource: existing?.bindingSource ?? "catalog",
       status: rootDomain.includes("fail") ? "provisioning_error" : "active",
       lastProvisionError: rootDomain.includes("fail")
         ? "Zone access denied"
@@ -362,6 +372,51 @@ export const demoApi = {
       createdAt: existing?.createdAt ?? updatedAt,
       updatedAt,
       lastProvisionedAt: rootDomain.includes("fail") ? null : updatedAt,
+      disabledAt: null,
+    };
+    if (existing) {
+      Object.assign(existing, domain);
+    } else {
+      state.domains.unshift(domain);
+    }
+    syncMetaDomains();
+    return clone(domain);
+  },
+  async bindDomain(input: { rootDomain: string }) {
+    const rootDomain = input.rootDomain.trim().toLowerCase();
+    const existing = state.domains.find(
+      (domain) => domain.rootDomain === rootDomain,
+    );
+    if (existing?.status === "active") {
+      throw new Error("Mailbox domain already exists");
+    }
+
+    const createdAt = new Date().toISOString();
+    const zoneId = `zone_${rootDomain.replace(/[^a-z0-9]/g, "").slice(0, 12)}`;
+    const existingZone = state.cloudflareZones.find(
+      (zone) => zone.rootDomain === rootDomain,
+    );
+
+    if (!existingZone) {
+      state.cloudflareZones.unshift({
+        id: zoneId,
+        rootDomain,
+        status: "pending",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      });
+    }
+
+    const domain: DomainRecord = {
+      id: existing?.id ?? randomId("dom"),
+      rootDomain,
+      zoneId: existingZone?.id ?? zoneId,
+      bindingSource: "project_bind",
+      status: "provisioning_error",
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: existing?.createdAt ?? createdAt,
+      updatedAt: createdAt,
+      lastProvisionedAt: null,
       disabledAt: null,
     };
     if (existing) {
@@ -381,9 +436,37 @@ export const demoApi = {
     syncMetaDomains();
     return clone(domain);
   },
+  async deleteDomain(id: string) {
+    const domain = state.domains.find((entry) => entry.id === id);
+    if (!domain) throw new Error("Mailbox domain not found");
+    if (domain.bindingSource !== "project_bind") {
+      throw new Error("Only project-bound domains can be deleted");
+    }
+    if (
+      state.mailboxes.some(
+        (mailbox) =>
+          mailbox.rootDomain === domain.rootDomain &&
+          mailbox.status === "active",
+      )
+    ) {
+      throw new Error("Mailbox domain still has active mailboxes");
+    }
+
+    state.domains = state.domains.filter((entry) => entry.id !== id);
+    state.cloudflareZones = state.cloudflareZones.filter(
+      (zone) => zone.rootDomain !== domain.rootDomain,
+    );
+    syncMetaDomains();
+  },
   async retryDomain(id: string) {
     const domain = state.domains.find((entry) => entry.id === id);
     if (!domain) throw new Error("Mailbox domain not found");
+    const zone = state.cloudflareZones.find(
+      (entry) => entry.rootDomain === domain.rootDomain,
+    );
+    if (zone) {
+      zone.status = "active";
+    }
     domain.status = "active";
     domain.lastProvisionError = null;
     domain.disabledAt = null;

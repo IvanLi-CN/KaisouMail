@@ -107,6 +107,10 @@ export const createDomainRequestSchema = z.object({
   zoneId: z.string().min(1).max(128),
 });
 
+export const bindDomainRequestSchema = z.object({
+  rootDomain: z.string().regex(rootDomainRegex),
+});
+
 export const listMailboxesResponseSchema = z.object({
   mailboxes: z.array(mailboxSchema),
 });

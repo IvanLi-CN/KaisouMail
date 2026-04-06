@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   attachmentDispositions,
+  domainBindingSources,
   domainCatalogAvailabilities,
   domainProjectStatuses,
   domainStatuses,
@@ -14,6 +15,7 @@ export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
 export const domainStatusSchema = z.enum(domainStatuses);
+export const domainBindingSourceSchema = z.enum(domainBindingSources);
 export const domainCatalogAvailabilitySchema = z.enum(
   domainCatalogAvailabilities,
 );
@@ -83,6 +85,7 @@ export const domainSchema = z.object({
   id: z.string(),
   rootDomain: z.string(),
   zoneId: z.string().nullable(),
+  bindingSource: domainBindingSourceSchema,
   status: domainStatusSchema,
   lastProvisionError: z.string().nullable(),
   createdAt: isoDateSchema,
@@ -95,7 +98,10 @@ export const domainCatalogItemSchema = z.object({
   id: z.string().nullable(),
   rootDomain: z.string(),
   zoneId: z.string().nullable(),
+  bindingSource: domainBindingSourceSchema.nullable(),
   cloudflareAvailability: domainCatalogAvailabilitySchema,
+  cloudflareStatus: z.string().nullable(),
+  nameServers: z.array(z.string()),
   projectStatus: domainProjectStatusSchema,
   lastProvisionError: z.string().nullable(),
   createdAt: isoDateSchema.nullable(),

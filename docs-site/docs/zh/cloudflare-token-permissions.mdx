@@ -44,7 +44,9 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 运行时代码会调用：
 
 - `GET /zones`
+- `POST /zones`
 - `GET /zones/:zone_id`
+- `DELETE /zones/:zone_id`
 - `POST /zones/:zone_id/email/routing/enable`
 - `POST /zones/:zone_id/email/routing/dns`
 - `POST /zones/:zone_id/email/routing/rules`
@@ -55,6 +57,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 | 权限 | 用途 |
 | --- | --- |
 | `Zone: Zone: Read` | 列出和校验 zone |
+| `Zone: Zone: Edit` | 创建/删除项目直绑 zone |
 | `Zone: Email Routing Rules: Edit` | 创建/删除邮箱 routing rule |
 | `Zone: Zone Settings: Edit` | 启用 Email Routing |
 
@@ -83,6 +86,7 @@ Scope 要覆盖所有要接入 KaisouMail 的 zones。
 如果你选择快速上手的共享 token，它必须同时具备：
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`

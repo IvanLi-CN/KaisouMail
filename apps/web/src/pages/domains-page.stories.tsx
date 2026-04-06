@@ -11,9 +11,12 @@ const meta = {
   tags: ["autodocs"],
   args: {
     domains: demoDomainCatalog,
+    isBindPending: false,
     isEnablePending: false,
+    onBind: fn(),
     onEnable: fn(),
     onDisable: fn(),
+    onDelete: fn(),
     onRetry: fn(),
   },
   render: (args) => (
@@ -29,6 +32,19 @@ type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {};
 
+export const BindFlow: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("根域名"), "bound.example.org");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    await expect(args.onBind).toHaveBeenCalledWith({
+      rootDomain: "bound.example.org",
+    });
+  },
+};
+
 export const EnableFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
@@ -37,6 +53,22 @@ export const EnableFlow: Story = {
       rootDomain: "ops.example.org",
       zoneId: "zone_available",
     });
+  },
+};
+
+export const DeleteConfirmation: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "删除域名" }));
+    await within(canvasElement.ownerDocument.body).findByText(
+      "确认删除 mail.example.net？",
+    );
+    await userEvent.click(
+      within(canvasElement.ownerDocument.body).getByRole("button", {
+        name: "确认删除",
+      }),
+    );
+    await expect(args.onDelete).toHaveBeenCalledWith("dom_secondary");
   },
 };
 
@@ -58,7 +90,10 @@ export const MissingInCloudflare: Story = {
         id: "dom_missing",
         rootDomain: "orphaned.example.io",
         zoneId: "zone_missing",
+        bindingSource: "catalog",
         cloudflareAvailability: "missing",
+        cloudflareStatus: null,
+        nameServers: [],
         projectStatus: "disabled",
         lastProvisionError: null,
         createdAt: "2026-04-01T08:45:00.000Z",

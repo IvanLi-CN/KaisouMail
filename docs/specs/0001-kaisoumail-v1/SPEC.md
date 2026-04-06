@@ -31,7 +31,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Domains
 - `/domains`
 - Admin-only mailbox domain catalog and Cloudflare provisioning status surface
-- Discover currently manageable Cloudflare zones in real time, then enable, disable, or retry mailbox domains inside the project
+- Discover currently manageable Cloudflare zones in real time, bind new domains directly into Cloudflare, and manage enable/disable/retry/delete flows inside the project
 
 ### Messages
 - `/messages/:messageId`
@@ -53,13 +53,14 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## API Behavior
 
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, and address validation hints used by Web and automation clients
-- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability` and `projectStatus`
-- `GET|POST /api/domains` plus `POST /api/domains/:id/retry|disable` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a domain discovered in the Cloudflare catalog instead of accepting free-form manual input in the Web UI
+- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`
+- `GET|POST /api/domains` plus `POST /api/domains/bind` and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
 - `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
 - Destroyed mailboxes no longer reserve their address; the same address can be created again after destroy completes
 - Disabled mailbox domains are excluded from new mailbox creation but do not revoke previously created mailbox routing rules
+- `POST /api/domains/:id/delete` is restricted to `bindingSource=project_bind`, deletes the Cloudflare zone first, then soft-deletes the local domain record and clears cached `subdomains` rows for that domain
 - `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters; when both cursor aliases are present, the later timestamp is used as the strict lower bound
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
@@ -90,6 +91,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
+- Domains management includes a dedicated bind form plus a confirmation popover for destructive delete
 - Refresh controls must remain compact, single-line, and header-aligned; visual treatment should communicate freshness without introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
@@ -105,6 +107,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
+- 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
 - 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
 - 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
@@ -156,6 +159,10 @@ PR: include
 ### Domains
 
 ![Domains page overview](./assets/domains-page-overview.png)
+
+![Domains bind form with Cloudflare status columns](./assets/domains-bind-overview.png)
+
+![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
 ![Domains page with Cloudflare-missing domain](./assets/domains-page-missing-cloudflare.png)
 

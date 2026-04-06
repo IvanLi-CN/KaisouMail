@@ -1,8 +1,11 @@
+import { DomainBindCard } from "@/components/domains/domain-bind-card";
 import { DomainTable } from "@/components/domains/domain-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import {
+  useBindDomainMutation,
   useCreateDomainMutation,
+  useDeleteDomainMutation,
   useDisableDomainMutation,
   useDomainCatalogQuery,
   useRetryDomainMutation,
@@ -12,30 +15,38 @@ import type { DomainCatalogItem } from "@/lib/contracts";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
+  isBindPending?: boolean;
   isEnablePending?: boolean;
+  onBind: Parameters<typeof DomainBindCard>[0]["onSubmit"];
   onEnable: Parameters<typeof DomainTable>[0]["onEnable"];
-  onDisable: (domainId: string) => void;
-  onRetry: (domainId: string) => void;
+  onDisable: Parameters<typeof DomainTable>[0]["onDisable"];
+  onDelete: Parameters<typeof DomainTable>[0]["onDelete"];
+  onRetry: Parameters<typeof DomainTable>[0]["onRetry"];
 };
 
 export const DomainsPageView = ({
   domains,
+  isBindPending = false,
   isEnablePending = false,
+  onBind,
   onEnable,
   onDisable,
+  onDelete,
   onRetry,
 }: DomainsPageViewProps) => (
   <div className="space-y-6">
     <PageHeader
       title="邮箱域名"
-      description="Cloudflare 里先加域，控制台会实时发现并允许你在项目内启用、停用或重试接入。"
+      description="既支持从 Cloudflare 目录启用已有 zone，也支持直接通过 Cloudflare API 绑定新域名并在项目里管理删除。"
       eyebrow="Domains"
     />
+    <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
     <DomainTable
       domains={domains}
       isEnablePending={isEnablePending}
       onEnable={onEnable}
       onDisable={onDisable}
+      onDelete={onDelete}
       onRetry={onRetry}
     />
   </div>
@@ -44,7 +55,9 @@ export const DomainsPageView = ({
 export const DomainsPage = () => {
   const sessionQuery = useSessionQuery();
   const domainCatalogQuery = useDomainCatalogQuery();
+  const bindDomainMutation = useBindDomainMutation();
   const createDomainMutation = useCreateDomainMutation();
+  const deleteDomainMutation = useDeleteDomainMutation();
   const disableDomainMutation = useDisableDomainMutation();
   const retryDomainMutation = useRetryDomainMutation();
 
@@ -60,12 +73,23 @@ export const DomainsPage = () => {
   return (
     <DomainsPageView
       domains={domainCatalogQuery.data ?? []}
+      isBindPending={bindDomainMutation.isPending}
       isEnablePending={createDomainMutation.isPending}
+      onBind={async (values) => {
+        await bindDomainMutation.mutateAsync(values);
+      }}
       onEnable={async (values) => {
         await createDomainMutation.mutateAsync(values);
       }}
-      onDisable={(domainId) => disableDomainMutation.mutate(domainId)}
-      onRetry={(domainId) => retryDomainMutation.mutate(domainId)}
+      onDisable={async (domainId) => {
+        await disableDomainMutation.mutateAsync(domainId);
+      }}
+      onDelete={async (domainId) => {
+        await deleteDomainMutation.mutateAsync(domainId);
+      }}
+      onRetry={async (domainId) => {
+        await retryDomainMutation.mutateAsync(domainId);
+      }}
     />
   );
 };
