@@ -7,10 +7,14 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
+import {
+  buildMailboxCreateAddressExample,
+  buildMailboxCreateDomainHint,
+} from "@/components/mailboxes/mailbox-create-preview";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -105,6 +109,9 @@ export const MailWorkspace = ({
 }: MailWorkspaceProps) => {
   const selectedMessageSummary =
     messages.find((message) => message.id === selectedMessageId) ?? null;
+  const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState<
+    string | undefined
+  >(undefined);
 
   return (
     <div className="space-y-6">
@@ -153,7 +160,21 @@ export const MailWorkspace = ({
                     </p>
                     <p className="text-xs leading-5 text-muted-foreground">
                       在当前工作台里直接创建新地址。支持随机或指定用户名 /
-                      子域，创建成功后会自动切到新邮箱上下文。
+                      子域，
+                      {buildMailboxCreateDomainHint({
+                        rootDomain: selectedExampleRootDomain,
+                        hasAvailableDomains:
+                          createMailboxAction.domains.length > 0,
+                      })}
+                      示例为{" "}
+                      <span className="font-medium text-foreground">
+                        {buildMailboxCreateAddressExample({
+                          rootDomain: selectedExampleRootDomain,
+                          hasAvailableDomains:
+                            createMailboxAction.domains.length > 0,
+                        })}
+                      </span>
+                      ，创建成功后会自动切到新邮箱上下文。
                     </p>
                     {createMailboxAction.metaError ? (
                       <p className="text-xs leading-5 text-destructive">
@@ -171,6 +192,7 @@ export const MailWorkspace = ({
                     maxTtlMinutes={createMailboxAction.maxTtlMinutes}
                     submitError={createMailboxAction.error}
                     onCancel={createMailboxAction.onCancel}
+                    onDomainPreviewChange={setSelectedExampleRootDomain}
                     onSubmit={createMailboxAction.onSubmit}
                   />
                 </div>
