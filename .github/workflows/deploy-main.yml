@@ -66,6 +66,7 @@ jobs:
             release_version="${release_tag#v}"
           fi
 
+          echo "CF_MAIL_RELEASE_TAG=${release_tag}" >> "${GITHUB_ENV}"
           echo "CF_MAIL_RELEASE_VERSION=${release_version}" >> "${GITHUB_ENV}"
           echo "CF_MAIL_RELEASE_SHA=$(git rev-parse --short HEAD)" >> "${GITHUB_ENV}"
           echo "CF_MAIL_RELEASE_BRANCH=${release_branch}" >> "${GITHUB_ENV}"
@@ -127,6 +128,23 @@ jobs:
           console.log(`Verified API Worker secrets: ${required.join(", ")}`);
           NODE
 
+      - name: Detect D1 migration changes in release
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_release_tag="$(git tag --sort=-v:refname --list 'v*' | grep -Fxv "${CF_MAIL_RELEASE_TAG}" | head -n 1 || true)"
+          if [ -z "${previous_release_tag}" ]; then
+            echo "Cannot determine a previous release tag for ${CF_MAIL_RELEASE_TAG}; bootstrap or migration-bearing releases must use manual rollout." >&2
+            exit 1
+          fi
+
+          if git diff --name-only "${previous_release_tag}..HEAD" -- apps/api-worker/drizzle | grep -q .; then
+            echo "Release ${CF_MAIL_RELEASE_TAG} changes D1 migrations relative to ${previous_release_tag}; automatic rollback-backed deploy is disabled. Use the manual migration rollout path." >&2
+            exit 1
+          fi
+
+          echo "Verified ${CF_MAIL_RELEASE_TAG} has no D1 migration diff relative to ${previous_release_tag}."
+
       - name: Capture current API Worker rollback target
         shell: bash
         run: |
@@ -156,6 +174,9 @@ jobs:
 
           console.log(`API_ROLLBACK_VERSION_ID=${stable.version_id}`);
           NODE
+
+      - name: Apply D1 migrations
+        run: bun run --cwd apps/api-worker db:migrate:remote
 
       - name: Deploy Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc
@@ -243,9 +264,6 @@ jobs:
 
             sleep "$((attempt * 5))"
           done
-
-      - name: Apply D1 migrations
-        run: bun run --cwd apps/api-worker db:migrate:remote
 
       - name: Deploy Email receiver Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc

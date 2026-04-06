@@ -62,8 +62,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters; when both cursor aliases are present, the later timestamp is used as the strict lower bound
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
-- `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API before remote D1 migrations run
-- The deploy workflow blocks release promotion unless required Worker secrets exist and the freshly deployed API passes rollback-backed `/health` plus `/api/version` smoke checks for the target release SHA before remote D1 migrations; if that gate never converges, the API Worker is rolled back before Pages promotion can continue
+- `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API without depending on bootstrap side effects
+- The automatic deploy workflow only supports schema-stable releases: if the target release has a D1 migration diff, the workflow fails closed and requires manual rollout; otherwise it blocks Pages promotion unless required Worker secrets exist and rollback-backed `/health` plus `/api/version` smoke checks reach the target release SHA
 
 ## Refresh Behavior
 
@@ -100,7 +100,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
-- 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed pre-migration `/health` + `/api/version` smoke checks, and runtime config failures that stay inside the standard JSON error envelope.
+- 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
 
 ## Visual Evidence
