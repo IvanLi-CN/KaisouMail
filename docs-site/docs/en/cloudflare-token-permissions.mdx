@@ -44,7 +44,9 @@ If split-token secrets and a shared token both exist, the split-token secrets wi
 Runtime code calls:
 
 - `GET /zones`
+- `POST /zones`
 - `GET /zones/:zone_id`
+- `DELETE /zones/:zone_id`
 - `POST /zones/:zone_id/email/routing/enable`
 - `POST /zones/:zone_id/email/routing/dns`
 - `POST /zones/:zone_id/email/routing/rules`
@@ -55,6 +57,7 @@ Required permissions:
 | Permission | Purpose |
 | --- | --- |
 | `Zone: Zone: Read` | list and validate zones |
+| `Zone: Zone: Edit` | create and delete project-bound zones |
 | `Zone: Email Routing Rules: Edit` | create and delete mailbox routing rules |
 | `Zone: Zone Settings: Edit` | enable Email Routing |
 
@@ -83,6 +86,7 @@ Required permissions:
 If you use the shared quickstart token, it must include all of the following:
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`

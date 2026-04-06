@@ -15,7 +15,23 @@ export interface EmailRoutingDomain {
 export interface CloudflareZoneSummary {
   id: string;
   name: string;
+  status: string | null;
+  nameServers: string[];
 }
+
+interface CloudflareZoneResult {
+  id: string;
+  name: string;
+  status?: string | null;
+  name_servers?: string[] | null;
+}
+
+const toZoneSummary = (zone: CloudflareZoneResult): CloudflareZoneSummary => ({
+  id: zone.id,
+  name: zone.name,
+  status: zone.status ?? null,
+  nameServers: zone.name_servers ?? [],
+});
 
 const ensureManagementEnabled = (config: RuntimeConfig) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return false;
@@ -28,11 +44,31 @@ const ensureManagementEnabled = (config: RuntimeConfig) => {
   return true;
 };
 
+const requireDomainLifecycleManagement = (
+  config: RuntimeConfig,
+  operation: "binding" | "deletion",
+) => {
+  if (!ensureManagementEnabled(config)) {
+    throw new ApiError(
+      409,
+      `Cloudflare domain ${operation} requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true`,
+    );
+  }
+};
+
 const requireZoneId = (domain: EmailRoutingDomain) => {
   if (domain.zoneId) return domain.zoneId;
   throw new ApiError(
     500,
     `Domain ${domain.rootDomain} is missing a Cloudflare zone id`,
+  );
+};
+
+const requireAccountId = (config: RuntimeConfig) => {
+  if (config.CLOUDFLARE_ACCOUNT_ID) return config.CLOUDFLARE_ACCOUNT_ID;
+  throw new ApiError(
+    500,
+    "Cloudflare domain binding requires CLOUDFLARE_ACCOUNT_ID to be configured",
   );
 };
 
@@ -48,6 +84,7 @@ const cfRequest = async <T>(
   config: RuntimeConfig,
   path: string,
   init?: RequestInit,
+  options?: { ignoreStatuses?: number[] },
 ) => {
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
@@ -57,19 +94,69 @@ const cfRequest = async <T>(
       ...(init?.headers ?? {}),
     },
   });
-  const data = (await response.json()) as CloudflareEnvelope<T>;
-  if (!response.ok || !data.success) {
+
+  let data: CloudflareEnvelope<T> | null = null;
+  try {
+    data = (await response.json()) as CloudflareEnvelope<T>;
+  } catch {
+    data = null;
+  }
+
+  if (options?.ignoreStatuses?.includes(response.status)) {
+    return null;
+  }
+
+  if (!response.ok || !data?.success) {
     throw new ApiError(
       response.status || 502,
-      data.errors?.[0]?.message ?? "Cloudflare API request failed",
+      data?.errors?.[0]?.message ?? "Cloudflare API request failed",
     );
   }
+
   return data.result;
 };
 
 export const listZones = async (config: RuntimeConfig) => {
   if (!ensureManagementEnabled(config)) return [];
-  return cfRequest<CloudflareZoneSummary[]>(config, "/zones?per_page=100");
+  const result = await cfRequest<CloudflareZoneResult[]>(
+    config,
+    "/zones?per_page=100",
+  );
+  return (result ?? []).map(toZoneSummary);
+};
+
+export const createZone = async (config: RuntimeConfig, rootDomain: string) => {
+  requireDomainLifecycleManagement(config, "binding");
+  const result = await cfRequest<CloudflareZoneResult>(config, "/zones", {
+    method: "POST",
+    body: JSON.stringify({
+      account: { id: requireAccountId(config) },
+      name: rootDomain,
+      type: "full",
+    }),
+  });
+  if (!result) {
+    throw new ApiError(502, "Cloudflare API request failed");
+  }
+  return toZoneSummary(result);
+};
+
+export const deleteZone = async (
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+) => {
+  requireDomainLifecycleManagement(config, "deletion");
+  const zoneId = requireZoneId(domain);
+  const result = await cfRequest<CloudflareZoneResult>(
+    config,
+    `/zones/${zoneId}`,
+    { method: "DELETE" },
+    { ignoreStatuses: [404] },
+  );
+
+  return {
+    alreadyMissing: result === null,
+  };
 };
 
 export const ensureSubdomainEnabled = async (
@@ -107,7 +194,7 @@ export const createRoutingRule = async (
       }),
     },
   );
-  return result.id;
+  return result?.id ?? null;
 };
 
 export const deleteRoutingRule = async (

@@ -9,9 +9,11 @@
 | `GET /api/meta` | 读取 active 域名、TTL 和地址规则 |
 | `GET /api/domains/catalog` | 读取 Cloudflare 可见 zone + 项目状态 |
 | `GET /api/domains` | 读取项目内已有域记录 |
+| `POST /api/domains/bind` | 创建 Cloudflare full zone 并接入项目 |
 | `POST /api/domains` | 启用一个 catalog 域 |
 | `POST /api/domains/:id/retry` | 重试接入失败的域 |
 | `POST /api/domains/:id/disable` | 停用一个项目域 |
+| `POST /api/domains/:id/delete` | 删除项目直绑的 Cloudflare zone，并软删除本地记录 |
 
 ## Auth 与 API Keys
 

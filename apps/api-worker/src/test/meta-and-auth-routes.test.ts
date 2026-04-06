@@ -49,7 +49,7 @@ const env = {
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
   CF_ROUTE_RULESET_TAG: "kaisoumail",
-} as never;
+} as const;
 
 describe("meta and auth routes", () => {
   beforeEach(() => {
@@ -61,18 +61,39 @@ describe("meta and auth routes", () => {
     const app = createApp();
     const response = await app.fetch(
       new Request("http://localhost/api/meta"),
-      env,
+      env as never,
     );
     const payload = (await response.json()) as {
       domains: string[];
+      cloudflareDomainBindingEnabled: boolean;
+      cloudflareDomainLifecycleEnabled: boolean;
       defaultMailboxTtlMinutes: number;
       addressRules: { examples: string[] };
     };
 
     expect(response.status).toBe(200);
     expect(payload.domains).toContain("707979.xyz");
+    expect(payload.cloudflareDomainBindingEnabled).toBe(false);
+    expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
     expect(payload.addressRules.examples[0]).toContain("@alpha.707979.xyz");
+  });
+
+  it("keeps Cloudflare lifecycle actions disabled when the runtime token is missing", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/api/meta"), {
+      ...env,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "true",
+      CLOUDFLARE_ACCOUNT_ID: "account_123",
+    } as never);
+    const payload = (await response.json()) as {
+      cloudflareDomainBindingEnabled: boolean;
+      cloudflareDomainLifecycleEnabled: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.cloudflareDomainBindingEnabled).toBe(false);
+    expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
   });
 
   it("returns the unified auth failure envelope for invalid api keys", async () => {
@@ -89,7 +110,7 @@ describe("meta and auth routes", () => {
           apiKey: "cfm_demo_secret_key",
         }),
       }),
-      env,
+      env as never,
     );
 
     expect(response.status).toBe(401);
@@ -113,7 +134,7 @@ describe("meta and auth routes", () => {
           apiKey: "cfm_demo_secret_key",
         }),
       }),
-      env,
+      env as never,
     );
 
     expect(response.status).toBe(500);

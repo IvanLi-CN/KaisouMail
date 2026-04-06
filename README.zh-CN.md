@@ -13,6 +13,7 @@
 
 - 多用户临时邮箱与 API Key 管理
 - 基于 D1 的多邮箱根域管理与 Cloudflare zone 实时发现
+- `/domains` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
 - 随机或指定邮箱创建，支持多级子域
 - `GET /api/meta` 暴露 active 域名、TTL 和地址规则
 - 邮件原始内容入 R2，结构化索引入 D1
@@ -71,10 +72,11 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 ### Runtime token 最小权限
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
-scope 必须覆盖所有要接入 KaisouMail 的 zones。
+scope 必须覆盖所有要接入、绑定、启用或删除的 KaisouMail zones。
 
 其中最容易漏的是 `Zone: Zone Settings: Edit`。如果域名目录里某个 zone 明明可见，却在启用时变成 `provisioning_error / Authentication error`，优先检查这项权限和 token 的 zone 覆盖范围。
 
@@ -93,6 +95,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以在 Worker secret 和 GitHub repository secret 里都放同一个 `CLOUDFLARE_API_TOKEN`，但它必须满足并集权限：
 
 - `Zone: Zone: Read`
+- `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`

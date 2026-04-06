@@ -89,6 +89,32 @@ describe("demoApi", () => {
     expect(retried.disabledAt).toBeNull();
   });
 
+  it("binds new domains as project-bound provisioning errors until retried", async () => {
+    const bound = await demoApi.bindDomain({
+      rootDomain: "bound.example.org",
+    });
+
+    expect(bound.bindingSource).toBe("project_bind");
+    expect(bound.status).toBe("provisioning_error");
+
+    const retried = await demoApi.retryDomain(bound.id);
+    expect(retried.status).toBe("active");
+  });
+
+  it("deletes project-bound domains only when they have no non-destroyed mailboxes", async () => {
+    await expect(demoApi.deleteDomain("dom_secondary")).rejects.toThrow(
+      "Mailbox domain still has non-destroyed mailboxes",
+    );
+
+    const bound = await demoApi.bindDomain({
+      rootDomain: "cleanup.example.org",
+    });
+    await demoApi.deleteDomain(bound.id);
+
+    const domains = await demoApi.listDomains();
+    expect(domains.some((domain) => domain.id === bound.id)).toBe(false);
+  });
+
   it("creates api keys and users with an initial key", async () => {
     const apiKey = await demoApi.createApiKey({
       name: "CI Bot",

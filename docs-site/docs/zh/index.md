@@ -4,7 +4,7 @@
 
 1. 按 [Cloudflare Token 权限](/zh/cloudflare-token-permissions) 配好 token。
 2. 按 [部署与环境变量](/zh/deployment-environment) 配好 Worker、Pages 和 Web 环境变量。
-3. 在 Cloudflare 里先加域，再按 [域名目录与启用流程](/zh/domain-catalog-enablement) 到控制台 `/domains` 启用。
+3. 你可以直接在 `/domains` 里绑定新域名，或者先在 Cloudflare 里加域，再按 [域名目录与启用流程](/zh/domain-catalog-enablement) 到控制台启用。
 4. 需要接口示例时，先看 [API 参考](/zh/api-reference)，再去控制台内 `/api-keys/docs` 看当前实例的速查页。
 
 ## 文档目录

@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  bindDomain,
   createDomain,
+  deleteDomain,
   disableDomain,
   listDomainCatalog,
   listDomains,
   retryDomainProvision,
 } = vi.hoisted(() => ({
+  bindDomain: vi.fn(),
   createDomain: vi.fn(),
+  deleteDomain: vi.fn(),
   disableDomain: vi.fn(),
   listDomainCatalog: vi.fn(),
   listDomains: vi.fn(),
@@ -35,7 +39,9 @@ vi.mock("../services/domains", async () => {
   );
   return {
     ...actual,
+    bindDomain,
     createDomain,
+    deleteDomain,
     disableDomain,
     listDomainCatalog,
     listDomains,
@@ -66,7 +72,10 @@ describe("domain routes", () => {
         id: null,
         rootDomain: "ops.example.org",
         zoneId: "zone_available",
+        bindingSource: null,
         cloudflareAvailability: "available",
+        cloudflareStatus: "pending",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
         projectStatus: "not_enabled",
         lastProvisionError: null,
         createdAt: null,
@@ -89,7 +98,10 @@ describe("domain routes", () => {
           id: null,
           rootDomain: "ops.example.org",
           zoneId: "zone_available",
+          bindingSource: null,
           cloudflareAvailability: "available",
+          cloudflareStatus: "pending",
+          nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
           projectStatus: "not_enabled",
           lastProvisionError: null,
           createdAt: null,
@@ -99,5 +111,57 @@ describe("domain routes", () => {
         },
       ],
     });
+  });
+
+  it("creates project-bound domains from /api/domains/bind", async () => {
+    bindDomain.mockResolvedValue({
+      created: true,
+      domain: {
+        id: "dom_bound",
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+        bindingSource: "project_bind",
+        status: "provisioning_error",
+        lastProvisionError: "Zone is pending activation",
+        createdAt: "2026-04-06T07:00:00.000Z",
+        updatedAt: "2026-04-06T07:00:00.000Z",
+        lastProvisionedAt: null,
+        disabledAt: null,
+      },
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains/bind", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rootDomain: "bound.example.org" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "dom_bound",
+      rootDomain: "bound.example.org",
+      bindingSource: "project_bind",
+    });
+  });
+
+  it("returns 204 from /api/domains/:id/delete", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains/dom_bound/delete", {
+        method: "POST",
+      }),
+      env,
+    );
+
+    expect(deleteDomain).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      "dom_bound",
+    );
+    expect(response.status).toBe(204);
   });
 });

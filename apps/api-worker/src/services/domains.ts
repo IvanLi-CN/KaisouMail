@@ -1,8 +1,8 @@
 import { domainCatalogItemSchema, domainSchema } from "@kaisoumail/shared";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 
 import { getDb } from "../db/client";
-import { domains, type mailboxes } from "../db/schema";
+import { domains, mailboxes, subdomains } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
 import {
@@ -12,6 +12,8 @@ import {
 import { ApiError } from "../lib/errors";
 import {
   type CloudflareZoneSummary,
+  createZone,
+  deleteZone,
   type EmailRoutingDomain,
   enableDomainRouting,
   listZones,
@@ -19,9 +21,19 @@ import {
 } from "./emailRouting";
 
 export type DomainRow = typeof domains.$inferSelect;
+type SubdomainRow = typeof subdomains.$inferSelect;
 type MailboxDomainRef = Pick<
   typeof mailboxes.$inferSelect,
   "address" | "subdomain" | "domainId"
+>;
+type DomainDeleteMailboxRow = Pick<
+  typeof mailboxes.$inferSelect,
+  "id" | "address" | "subdomain" | "domainId" | "status"
+>;
+type DomainBindingSource = DomainRow["bindingSource"];
+type ManagedDomainProvisionState = Pick<
+  DomainRow,
+  "status" | "lastProvisionError" | "lastProvisionedAt"
 >;
 
 const toDomainDto = (row: DomainRow) =>
@@ -29,6 +41,7 @@ const toDomainDto = (row: DomainRow) =>
     id: row.id,
     rootDomain: row.rootDomain,
     zoneId: row.zoneId,
+    bindingSource: row.bindingSource,
     status: row.status,
     lastProvisionError: row.lastProvisionError,
     createdAt: row.createdAt,
@@ -46,7 +59,10 @@ const toDomainCatalogDto = (input: {
     id: input.row?.id ?? null,
     rootDomain: input.rootDomain,
     zoneId: input.zone?.id ?? input.row?.zoneId ?? null,
+    bindingSource: input.row?.bindingSource ?? null,
     cloudflareAvailability: input.zone ? "available" : "missing",
+    cloudflareStatus: input.zone?.status ?? null,
+    nameServers: input.zone?.nameServers ?? [],
     projectStatus: input.row?.status ?? "not_enabled",
     lastProvisionError: input.row?.lastProvisionError ?? null,
     createdAt: input.row?.createdAt ?? null,
@@ -57,6 +73,8 @@ const toDomainCatalogDto = (input: {
 
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
+const domainNotDeletedFilter = isNull(domains.deletedAt);
+
 export const classifyDomainCreateState = (existing: DomainRow | null) => {
   if (!existing) {
     return {
@@ -64,7 +82,7 @@ export const classifyDomainCreateState = (existing: DomainRow | null) => {
     };
   }
 
-  if (existing.status === "active") {
+  if (!existing.deletedAt && existing.status === "active") {
     return {
       kind: "conflict" as const,
       row: existing,
@@ -75,6 +93,20 @@ export const classifyDomainCreateState = (existing: DomainRow | null) => {
     kind: "replace" as const,
     row: existing,
   };
+};
+
+const resolveCatalogBindingSource = (
+  existing: DomainRow | null,
+  zoneId: string,
+): DomainBindingSource => {
+  if (
+    existing?.bindingSource === "project_bind" &&
+    existing.zoneId?.trim() === zoneId
+  ) {
+    return "project_bind";
+  }
+
+  return "catalog";
 };
 
 const provisionDomain = async (
@@ -103,6 +135,7 @@ const listLocalDomainRows = async (env: WorkerEnv) => {
   return db
     .select()
     .from(domains)
+    .where(domainNotDeletedFilter)
     .orderBy(...orderByRootDomain);
 };
 
@@ -111,6 +144,18 @@ const listCloudflareZonesByRootDomain = async (config: RuntimeConfig) => {
   return new Map(
     zones.map((zone) => [normalizeRootDomain(zone.name), zone] as const),
   );
+};
+
+const findCatalogZone = async (
+  config: RuntimeConfig,
+  rootDomain: string,
+  zoneId: string,
+) => {
+  if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
+
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(config);
+  const zone = zonesByRootDomain.get(rootDomain);
+  return zone && zone.id === zoneId ? zone : null;
 };
 
 const requireCatalogZone = async (
@@ -126,6 +171,328 @@ const requireCatalogZone = async (
     throw new ApiError(400, "Mailbox domain is not available in Cloudflare", {
       rootDomain,
       zoneId,
+    });
+  }
+};
+
+const isRecoverableBindProvisionError = (error: unknown) => {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 401 || error.status === 403 || error.status >= 500) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    error.status === 409 ||
+    error.status === 429 ||
+    message.includes("pending") ||
+    message.includes("activate") ||
+    message.includes("activation") ||
+    message.includes("delegat") ||
+    message.includes("nameserver") ||
+    message.includes("name server")
+  );
+};
+
+const resolveProvisionState = async (
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  options?: {
+    allowProvisioningError?: boolean | ((error: unknown) => boolean);
+  },
+): Promise<ManagedDomainProvisionState> => {
+  try {
+    return await provisionDomain(config, domain);
+  } catch (error) {
+    const allowProvisioningError =
+      typeof options?.allowProvisioningError === "function"
+        ? options.allowProvisioningError(error)
+        : (options?.allowProvisioningError ?? false);
+
+    if (!allowProvisioningError) {
+      throw error;
+    }
+
+    return {
+      status: "provisioning_error",
+      lastProvisionError:
+        error instanceof Error ? error.message : "Failed to provision domain",
+      lastProvisionedAt: null,
+    };
+  }
+};
+
+const persistBoundZone = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  input: {
+    rootDomain: string;
+    zoneId: string;
+    bindingSource: DomainBindingSource;
+  },
+) => {
+  const provisionState = await resolveProvisionState(
+    config,
+    {
+      rootDomain: input.rootDomain,
+      zoneId: input.zoneId,
+    },
+    {
+      allowProvisioningError: isRecoverableBindProvisionError,
+    },
+  );
+
+  return persistManagedDomain(env, {
+    rootDomain: input.rootDomain,
+    zoneId: input.zoneId,
+    bindingSource: input.bindingSource,
+    provisionState,
+  });
+};
+
+const createAndPersistBoundZone = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  rootDomain: string,
+) => {
+  const zone = await createZone(config, rootDomain);
+  try {
+    return await persistBoundZone(env, config, {
+      rootDomain,
+      zoneId: zone.id,
+      bindingSource: "project_bind",
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      const current = await getDomainByRootDomain(env, rootDomain, {
+        includeDeleted: true,
+      });
+      if (current && !current.deletedAt && current.zoneId === zone.id) {
+        return {
+          domain: toDomainDto(current),
+          created: false,
+        };
+      }
+    }
+
+    try {
+      await deleteZone(config, {
+        rootDomain,
+        zoneId: zone.id,
+      });
+    } catch (cleanupError) {
+      throw new ApiError(
+        502,
+        "Failed to persist bound domain and clean up Cloudflare zone",
+        {
+          rootDomain,
+          zoneId: zone.id,
+          cause: error instanceof Error ? error.message : String(error),
+          cleanupError:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError),
+        },
+      );
+    }
+
+    throw error;
+  }
+};
+
+const persistManagedDomain = async (
+  env: WorkerEnv,
+  input: {
+    rootDomain: string;
+    zoneId: string;
+    bindingSource: DomainBindingSource;
+    provisionState: ManagedDomainProvisionState;
+  },
+) => {
+  const db = getDb(env);
+  const existing = await getDomainByRootDomain(env, input.rootDomain, {
+    includeDeleted: true,
+  });
+  const createState = classifyDomainCreateState(existing);
+  if (createState.kind === "conflict") {
+    throw new ApiError(409, "Mailbox domain already exists", {
+      rootDomain: input.rootDomain,
+    });
+  }
+
+  const updatedAt = nowIso();
+
+  if (createState.kind === "replace") {
+    const next: DomainRow = {
+      ...createState.row,
+      zoneId: input.zoneId,
+      bindingSource: input.bindingSource,
+      status: input.provisionState.status,
+      lastProvisionError: input.provisionState.lastProvisionError,
+      updatedAt,
+      lastProvisionedAt: input.provisionState.lastProvisionedAt,
+      disabledAt: null,
+      deletedAt: null,
+    };
+
+    await db
+      .update(domains)
+      .set({
+        zoneId: next.zoneId,
+        bindingSource: next.bindingSource,
+        status: next.status,
+        lastProvisionError: next.lastProvisionError,
+        updatedAt: next.updatedAt,
+        lastProvisionedAt: next.lastProvisionedAt,
+        disabledAt: next.disabledAt,
+        deletedAt: next.deletedAt,
+      })
+      .where(eq(domains.id, next.id));
+
+    return {
+      domain: toDomainDto(next),
+      created: false,
+    };
+  }
+
+  const domain: DomainRow = {
+    id: existing?.id ?? randomId("dom"),
+    rootDomain: input.rootDomain,
+    zoneId: input.zoneId,
+    bindingSource: input.bindingSource,
+    status: input.provisionState.status,
+    lastProvisionError: input.provisionState.lastProvisionError,
+    createdAt: existing?.createdAt ?? updatedAt,
+    updatedAt,
+    lastProvisionedAt: input.provisionState.lastProvisionedAt,
+    disabledAt: null,
+    deletedAt: null,
+  };
+
+  await db.insert(domains).values(domain);
+  return {
+    domain: toDomainDto(domain),
+    created: true,
+  };
+};
+
+const softDeleteDomainLocally = async (
+  db: ReturnType<typeof getDb>,
+  domain: DomainRow,
+  deletedAt: string,
+) => {
+  const cachedSubdomains = await db
+    .select()
+    .from(subdomains)
+    .where(eq(subdomains.domainId, domain.id));
+  let subdomainsDeleted = false;
+
+  try {
+    await db
+      .update(domains)
+      .set({
+        status: "disabled",
+        disabledAt: domain.disabledAt ?? deletedAt,
+        updatedAt: deletedAt,
+        deletedAt,
+      })
+      .where(eq(domains.id, domain.id));
+
+    await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
+    subdomainsDeleted = true;
+  } catch (error) {
+    await restoreSoftDeletedDomainLocally(db, domain, cachedSubdomains, {
+      reinsertSubdomains: subdomainsDeleted,
+    });
+    throw error;
+  }
+
+  return {
+    cachedSubdomains,
+    deletedAt,
+  };
+};
+
+const restoreSoftDeletedDomainLocally = async (
+  db: ReturnType<typeof getDb>,
+  domain: DomainRow,
+  cachedSubdomains: SubdomainRow[],
+  options?: { reinsertSubdomains?: boolean },
+) => {
+  await db
+    .update(domains)
+    .set({
+      zoneId: domain.zoneId,
+      bindingSource: domain.bindingSource,
+      status: domain.status,
+      lastProvisionError: domain.lastProvisionError,
+      updatedAt: domain.updatedAt,
+      lastProvisionedAt: domain.lastProvisionedAt,
+      disabledAt: domain.disabledAt,
+      deletedAt: domain.deletedAt,
+    })
+    .where(eq(domains.id, domain.id));
+
+  if ((options?.reinsertSubdomains ?? true) && cachedSubdomains.length > 0) {
+    await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
+    await db.insert(subdomains).values(cachedSubdomains);
+  }
+};
+
+const mailboxReferencesDomain = (
+  mailbox: DomainDeleteMailboxRow,
+  domain: DomainRow,
+) => {
+  if (mailbox.domainId) {
+    return mailbox.domainId === domain.id;
+  }
+
+  const extractedRootDomain = extractRootDomainFromAddress(
+    mailbox.address,
+    mailbox.subdomain,
+  );
+  if (!extractedRootDomain) return false;
+  return normalizeRootDomain(extractedRootDomain) === domain.rootDomain;
+};
+
+const requireDomainDeleteAllowed = async (
+  env: WorkerEnv,
+  domain: DomainRow,
+) => {
+  const db = getDb(env);
+  const activeMailboxes = await db
+    .select({
+      id: mailboxes.id,
+      address: mailboxes.address,
+      subdomain: mailboxes.subdomain,
+      domainId: mailboxes.domainId,
+      status: mailboxes.status,
+    })
+    .from(mailboxes)
+    .where(ne(mailboxes.status, "destroyed"))
+    .orderBy(asc(mailboxes.createdAt));
+
+  const blockingMailbox = activeMailboxes.find((mailbox) =>
+    mailboxReferencesDomain(mailbox, domain),
+  );
+
+  if (blockingMailbox) {
+    throw new ApiError(
+      409,
+      "Mailbox domain still has non-destroyed mailboxes",
+      {
+        domainId: domain.id,
+        rootDomain: domain.rootDomain,
+      },
+    );
+  }
+};
+
+const requireProjectBoundDomain = (domain: DomainRow) => {
+  if (domain.bindingSource !== "project_bind") {
+    throw new ApiError(409, "Only project-bound domains can be deleted", {
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
     });
   }
 };
@@ -167,18 +534,26 @@ export const listActiveRootDomains = async (env: WorkerEnv) => {
   const rows = await db
     .select({ rootDomain: domains.rootDomain })
     .from(domains)
-    .where(eq(domains.status, "active"))
+    .where(and(domainNotDeletedFilter, eq(domains.status, "active")))
     .orderBy(...orderByRootDomain);
 
   return rows.map((row) => row.rootDomain);
 };
 
-export const getDomainById = async (env: WorkerEnv, domainId: string) => {
+export const getDomainById = async (
+  env: WorkerEnv,
+  domainId: string,
+  options?: { includeDeleted?: boolean },
+) => {
   const db = getDb(env);
   const rows = await db
     .select()
     .from(domains)
-    .where(eq(domains.id, domainId))
+    .where(
+      options?.includeDeleted
+        ? eq(domains.id, domainId)
+        : and(eq(domains.id, domainId), domainNotDeletedFilter),
+    )
     .limit(1);
   return rows[0] ?? null;
 };
@@ -186,13 +561,21 @@ export const getDomainById = async (env: WorkerEnv, domainId: string) => {
 export const getDomainByRootDomain = async (
   env: WorkerEnv,
   rootDomain: string,
+  options?: { includeDeleted?: boolean },
 ) => {
   const db = getDb(env);
   const normalizedRootDomain = normalizeRootDomain(rootDomain);
   const rows = await db
     .select()
     .from(domains)
-    .where(eq(domains.rootDomain, normalizedRootDomain))
+    .where(
+      options?.includeDeleted
+        ? eq(domains.rootDomain, normalizedRootDomain)
+        : and(
+            eq(domains.rootDomain, normalizedRootDomain),
+            domainNotDeletedFilter,
+          ),
+    )
     .limit(1);
   return rows[0] ?? null;
 };
@@ -215,7 +598,7 @@ export const pickRandomActiveDomain = async (env: WorkerEnv) => {
   const rows = await db
     .select()
     .from(domains)
-    .where(eq(domains.status, "active"))
+    .where(and(domainNotDeletedFilter, eq(domains.status, "active")))
     .orderBy(...orderByRootDomain);
 
   if (rows.length === 0) {
@@ -231,15 +614,41 @@ export const createDomain = async (
   config: RuntimeConfig,
   input: { rootDomain: string; zoneId: string },
 ) => {
-  const db = getDb(env);
   const rootDomain = normalizeRootDomain(input.rootDomain);
   const zoneId = input.zoneId.trim();
   if (!zoneId) {
     throw new ApiError(400, "zoneId is required");
   }
+  const existing = await getDomainByRootDomain(env, rootDomain, {
+    includeDeleted: true,
+  });
   await requireCatalogZone(config, rootDomain, zoneId);
+  const provisionState = await resolveProvisionState(
+    config,
+    {
+      rootDomain,
+      zoneId,
+    },
+    { allowProvisioningError: true },
+  );
 
-  const existing = await getDomainByRootDomain(env, rootDomain);
+  return persistManagedDomain(env, {
+    rootDomain,
+    zoneId,
+    bindingSource: resolveCatalogBindingSource(existing, zoneId),
+    provisionState,
+  });
+};
+
+export const bindDomain = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  input: { rootDomain: string },
+) => {
+  const rootDomain = normalizeRootDomain(input.rootDomain);
+  const existing = await getDomainByRootDomain(env, rootDomain, {
+    includeDeleted: true,
+  });
   const createState = classifyDomainCreateState(existing);
   if (createState.kind === "conflict") {
     throw new ApiError(409, "Mailbox domain already exists", {
@@ -247,68 +656,25 @@ export const createDomain = async (
     });
   }
 
-  const updatedAt = nowIso();
-  let status: DomainRow["status"] = "active";
-  let lastProvisionError: string | null = null;
-  let lastProvisionedAt: string | null = null;
-
-  try {
-    const provisioned = await provisionDomain(config, { rootDomain, zoneId });
-    status = provisioned.status;
-    lastProvisionError = provisioned.lastProvisionError;
-    lastProvisionedAt = provisioned.lastProvisionedAt;
-  } catch (error) {
-    status = "provisioning_error";
-    lastProvisionError =
-      error instanceof Error ? error.message : "Failed to provision domain";
-  }
-
   if (createState.kind === "replace") {
-    const next: DomainRow = {
-      ...createState.row,
-      zoneId,
-      status,
-      lastProvisionError,
-      updatedAt,
-      lastProvisionedAt,
-      disabledAt: null,
-    };
-
-    await db
-      .update(domains)
-      .set({
-        zoneId: next.zoneId,
-        status: next.status,
-        lastProvisionError: next.lastProvisionError,
-        updatedAt: next.updatedAt,
-        lastProvisionedAt: next.lastProvisionedAt,
-        disabledAt: next.disabledAt,
-      })
-      .where(eq(domains.id, next.id));
-
-    return {
-      domain: toDomainDto(next),
-      created: false,
-    };
+    const existingZoneId = createState.row.zoneId?.trim();
+    if (existingZoneId) {
+      const catalogZone = await findCatalogZone(
+        config,
+        rootDomain,
+        existingZoneId,
+      );
+      if (catalogZone) {
+        return await persistBoundZone(env, config, {
+          rootDomain,
+          zoneId: existingZoneId,
+          bindingSource: createState.row.bindingSource,
+        });
+      }
+    }
   }
 
-  const domain: DomainRow = {
-    id: randomId("dom"),
-    rootDomain,
-    zoneId,
-    status,
-    lastProvisionError,
-    createdAt: updatedAt,
-    updatedAt,
-    lastProvisionedAt,
-    disabledAt: null,
-  };
-
-  await db.insert(domains).values(domain);
-  return {
-    domain: toDomainDto(domain),
-    created: true,
-  };
+  return createAndPersistBoundZone(env, config, rootDomain);
 };
 
 export const retryDomainProvision = async (
@@ -324,31 +690,23 @@ export const retryDomainProvision = async (
   }
 
   const updatedAt = nowIso();
-  let status: DomainRow["status"] = "active";
-  let lastProvisionError: string | null = null;
-  let lastProvisionedAt: string | null = existing.lastProvisionedAt;
-
-  try {
-    const provisioned = await provisionDomain(config, {
+  const provisionState = await resolveProvisionState(
+    config,
+    {
       rootDomain: existing.rootDomain,
       zoneId: existing.zoneId,
-    });
-    status = provisioned.status;
-    lastProvisionError = provisioned.lastProvisionError;
-    lastProvisionedAt = provisioned.lastProvisionedAt;
-  } catch (error) {
-    status = "provisioning_error";
-    lastProvisionError =
-      error instanceof Error ? error.message : "Failed to provision domain";
-  }
+    },
+    { allowProvisioningError: true },
+  );
 
   const next = {
     ...existing,
-    status,
-    lastProvisionError,
+    status: provisionState.status,
+    lastProvisionError: provisionState.lastProvisionError,
     updatedAt,
-    lastProvisionedAt,
+    lastProvisionedAt: provisionState.lastProvisionedAt,
     disabledAt: null,
+    deletedAt: null,
   };
 
   await db
@@ -359,6 +717,7 @@ export const retryDomainProvision = async (
       updatedAt: next.updatedAt,
       lastProvisionedAt: next.lastProvisionedAt,
       disabledAt: next.disabledAt,
+      deletedAt: next.deletedAt,
     })
     .where(eq(domains.id, existing.id));
 
@@ -378,6 +737,7 @@ export const disableDomain = async (env: WorkerEnv, domainId: string) => {
     disabledAt,
     updatedAt: disabledAt,
     lastProvisionError: existing.lastProvisionError,
+    deletedAt: null,
   } satisfies DomainRow;
 
   await db
@@ -386,10 +746,78 @@ export const disableDomain = async (env: WorkerEnv, domainId: string) => {
       status: next.status,
       disabledAt: next.disabledAt,
       updatedAt: next.updatedAt,
+      deletedAt: next.deletedAt,
     })
     .where(eq(domains.id, existing.id));
 
   return toDomainDto(next);
+};
+
+export const deleteDomain = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domainId: string,
+) => {
+  const db = getDb(env);
+  const existing = await getDomainById(env, domainId, {
+    includeDeleted: true,
+  });
+  if (!existing) throw new ApiError(404, "Mailbox domain not found");
+
+  requireProjectBoundDomain(existing);
+  if (existing.deletedAt) {
+    await requireDomainDeleteAllowed(env, existing);
+    await deleteZone(config, {
+      rootDomain: existing.rootDomain,
+      zoneId: existing.zoneId,
+    });
+    return;
+  }
+
+  const deletedAt = nowIso();
+  const localDelete = await softDeleteDomainLocally(db, existing, deletedAt);
+
+  try {
+    await requireDomainDeleteAllowed(env, existing);
+  } catch (error) {
+    await restoreSoftDeletedDomainLocally(
+      db,
+      existing,
+      localDelete.cachedSubdomains,
+    );
+    throw error;
+  }
+
+  try {
+    await deleteZone(config, {
+      rootDomain: existing.rootDomain,
+      zoneId: existing.zoneId,
+    });
+  } catch (error) {
+    try {
+      await restoreSoftDeletedDomainLocally(
+        db,
+        existing,
+        localDelete.cachedSubdomains,
+      );
+    } catch (rollbackError) {
+      throw new ApiError(
+        502,
+        "Failed to delete Cloudflare zone and roll back local domain state",
+        {
+          rootDomain: existing.rootDomain,
+          zoneId: existing.zoneId,
+          cause: error instanceof Error ? error.message : String(error),
+          rollbackError:
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+        },
+      );
+    }
+
+    throw error;
+  }
 };
 
 export const resolveMailboxDomain = async (
@@ -398,7 +826,9 @@ export const resolveMailboxDomain = async (
   mailbox: MailboxDomainRef,
 ) => {
   if (mailbox.domainId) {
-    const byId = await getDomainById(env, mailbox.domainId);
+    const byId = await getDomainById(env, mailbox.domainId, {
+      includeDeleted: true,
+    });
     if (byId) return byId;
   }
 
@@ -408,23 +838,28 @@ export const resolveMailboxDomain = async (
   );
   if (!extractedRootDomain) return null;
 
-  const byRootDomain = await getDomainByRootDomain(env, extractedRootDomain);
+  const byRootDomain = await getDomainByRootDomain(env, extractedRootDomain, {
+    includeDeleted: true,
+  });
   if (byRootDomain) return byRootDomain;
 
   const legacyRootDomain = config.MAIL_DOMAIN
     ? normalizeRootDomain(config.MAIL_DOMAIN)
     : null;
   if (legacyRootDomain && extractedRootDomain === legacyRootDomain) {
+    const timestamp = nowIso();
     return {
       id: "legacy-domain",
       rootDomain: legacyRootDomain,
       zoneId: config.CLOUDFLARE_ZONE_ID ?? null,
+      bindingSource: "catalog",
       status: "active",
       lastProvisionError: null,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
+      createdAt: timestamp,
+      updatedAt: timestamp,
       lastProvisionedAt: null,
       disabledAt: null,
+      deletedAt: null,
     } satisfies DomainRow;
   }
 

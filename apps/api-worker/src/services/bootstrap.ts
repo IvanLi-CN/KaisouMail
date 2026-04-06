@@ -99,12 +99,14 @@ export const ensureBootstrapDomains = async (
       id: randomId("dom"),
       rootDomain: legacyRootDomain,
       zoneId: nextZoneId,
+      bindingSource: "catalog",
       status: provisionState.status,
       lastProvisionError: provisionState.lastProvisionError,
       createdAt: timestamp,
       updatedAt: timestamp,
       lastProvisionedAt: provisionState.lastProvisionedAt,
       disabledAt: null,
+      deletedAt: null,
     } as const);
 
   if (!existing[0]) {

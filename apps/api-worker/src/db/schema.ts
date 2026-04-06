@@ -47,16 +47,22 @@ export const domains = sqliteTable(
     id: text("id").primaryKey(),
     rootDomain: text("root_domain").notNull(),
     zoneId: text("zone_id"),
+    bindingSource: text("binding_source").notNull().default("catalog"),
     status: text("status").notNull(),
     lastProvisionError: text("last_provision_error"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     lastProvisionedAt: text("last_provisioned_at"),
     disabledAt: text("disabled_at"),
+    deletedAt: text("deleted_at"),
   },
   (table) => [
     uniqueIndex("domains_root_domain_unique").on(table.rootDomain),
-    index("domains_status_idx").on(table.status, table.rootDomain),
+    index("domains_status_idx").on(
+      table.deletedAt,
+      table.status,
+      table.rootDomain,
+    ),
   ],
 );
 
