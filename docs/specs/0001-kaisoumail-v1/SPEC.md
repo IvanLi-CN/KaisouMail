@@ -80,7 +80,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
-- Sticky top navigation with clear active state, account context, logout, and skip-to-content affordance
+- Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
@@ -95,6 +95,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
 
+## Change log
+
+- 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
+
 ## Visual Evidence
 
 Evidence is persisted with this spec and refreshed whenever the rendered control-plane surfaces change.
@@ -105,7 +109,9 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### App Shell
 
-![Top navigation shell](./assets/app-shell-top-nav.png)
+![App shell with the compact nickname-only account trigger](./assets/app-shell-account-trigger.png)
+
+![App shell with the account details popover pinned open](./assets/app-shell-account-popover.png)
 
 ### Workspace
 
