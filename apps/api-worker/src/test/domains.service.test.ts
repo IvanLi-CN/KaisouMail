@@ -330,6 +330,37 @@ describe("domain catalog", () => {
     });
   });
 
+  it("reuses existing disabled domains instead of creating a duplicate Cloudflare zone", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_disabled",
+          rootDomain: "bound.example.org",
+          zoneId: "zone_existing",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "bound.example.org",
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(result.domain).toMatchObject({
+      rootDomain: "bound.example.org",
+      zoneId: "zone_existing",
+      bindingSource: "catalog",
+      status: "active",
+    });
+  });
+
   it("keeps retryable bind failures as project-bound provisioning errors", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);
@@ -502,7 +533,47 @@ describe("domain catalog", () => {
             bindingSource: "project_bind",
           },
         ],
-        mailboxRows: [{ id: "mbx_destroying", status: "destroying" }],
+        mailboxRows: [
+          {
+            id: "mbx_destroying",
+            address: "mail@box.bound.example.org",
+            subdomain: "box",
+            domainId: "dom_bound",
+            status: "destroying",
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      deleteDomain(env, runtimeConfig, "dom_bound"),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Mailbox domain still has non-destroyed mailboxes",
+    });
+  });
+
+  it("blocks deleting domains that still have legacy mailboxes without domain ids", async () => {
+    getDb.mockReturnValue(
+      createDb({
+        domainRows: [
+          {
+            ...baseDomain,
+            id: "dom_bound",
+            rootDomain: "bound.example.org",
+            zoneId: "zone_bound",
+            bindingSource: "project_bind",
+          },
+        ],
+        mailboxRows: [
+          {
+            id: "mbx_legacy",
+            address: "mail@box.bound.example.org",
+            subdomain: "box",
+            domainId: null,
+            status: "active",
+          },
+        ],
       }),
     );
 

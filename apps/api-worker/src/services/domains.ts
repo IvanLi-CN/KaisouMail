@@ -26,6 +26,10 @@ type MailboxDomainRef = Pick<
   typeof mailboxes.$inferSelect,
   "address" | "subdomain" | "domainId"
 >;
+type DomainDeleteMailboxRow = Pick<
+  typeof mailboxes.$inferSelect,
+  "id" | "address" | "subdomain" | "domainId" | "status"
+>;
 type DomainBindingSource = DomainRow["bindingSource"];
 type ManagedDomainProvisionState = Pick<
   DomainRow,
@@ -331,6 +335,24 @@ const restoreSoftDeletedDomainLocally = async (
   }
 };
 
+const mailboxReferencesDomain = (
+  mailbox: DomainDeleteMailboxRow,
+  domain: DomainRow,
+) => {
+  if (mailbox.domainId) {
+    return mailbox.domainId === domain.id;
+  }
+
+  const extractedRootDomain = extractRootDomainFromAddress(
+    mailbox.address,
+    mailbox.subdomain,
+  );
+  return (
+    Boolean(extractedRootDomain) &&
+    normalizeRootDomain(extractedRootDomain) === domain.rootDomain
+  );
+};
+
 const requireDomainDeleteAllowed = async (
   env: WorkerEnv,
   domain: DomainRow,
@@ -344,14 +366,22 @@ const requireDomainDeleteAllowed = async (
 
   const db = getDb(env);
   const activeMailboxes = await db
-    .select({ id: mailboxes.id })
+    .select({
+      id: mailboxes.id,
+      address: mailboxes.address,
+      subdomain: mailboxes.subdomain,
+      domainId: mailboxes.domainId,
+      status: mailboxes.status,
+    })
     .from(mailboxes)
-    .where(
-      and(eq(mailboxes.domainId, domain.id), ne(mailboxes.status, "destroyed")),
-    )
-    .limit(1);
+    .where(ne(mailboxes.status, "destroyed"))
+    .orderBy(asc(mailboxes.createdAt));
 
-  if (activeMailboxes[0]) {
+  const blockingMailbox = activeMailboxes.find((mailbox) =>
+    mailboxReferencesDomain(mailbox, domain),
+  );
+
+  if (blockingMailbox) {
     throw new ApiError(
       409,
       "Mailbox domain still has non-destroyed mailboxes",
@@ -516,6 +546,38 @@ export const bindDomain = async (
   if (createState.kind === "conflict") {
     throw new ApiError(409, "Mailbox domain already exists", {
       rootDomain,
+    });
+  }
+
+  if (createState.kind === "replace" && !createState.row.deletedAt) {
+    const zoneId = createState.row.zoneId?.trim();
+    if (!zoneId) {
+      throw new ApiError(
+        409,
+        "Mailbox domain already exists but cannot be rebound without a Cloudflare zone",
+        {
+          rootDomain,
+          domainId: createState.row.id,
+        },
+      );
+    }
+
+    const provisionState = await resolveProvisionState(
+      config,
+      {
+        rootDomain,
+        zoneId,
+      },
+      {
+        allowProvisioningError: isRecoverableBindProvisionError,
+      },
+    );
+
+    return persistManagedDomain(env, {
+      rootDomain,
+      zoneId,
+      bindingSource: createState.row.bindingSource,
+      provisionState,
     });
   }
 
