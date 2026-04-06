@@ -113,7 +113,8 @@ Worker 侧重点变量：
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
-- `WEB_APP_ORIGIN`
+- `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
+- `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
 
 Web 侧重点变量：
 
@@ -122,6 +123,7 @@ Web 侧重点变量：
 - `VITE_DOCS_SITE_ORIGIN`
 
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
+`WEB_APP_ORIGINS` 应与所有线上控制台域名保持一致；这样当控制台从不同别名域访问时，前端就能优先命中同族 API 域名，而 `VITE_API_BASE_URL` 继续作为本地和预览环境的回退值。
 
 ## 发布工作流门禁
 
@@ -133,3 +135,29 @@ Web 侧重点变量：
 - Cloudflare Pages：登录后的控制台
 - Cloudflare Workers：API 与收信 Worker
 - GitHub Pages：公开文档站 + Storybook 组合站点
+
+## 部署检查清单
+
+1. 在 Cloudflare 中创建一次 `kaisoumail` Pages 项目
+2. 给 Pages 绑定一个或多个控制台域名（例如 `cfm.example.com`、`km.example.com`），同时给 API Worker 绑定对应的 API 自定义域（例如 `api.cfm.example.com`、`api.km.example.com`）
+3. 配置 Worker runtime secret `SESSION_SECRET`；只有在你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 做首次管理员引导时，才再配置 `BOOTSTRAP_ADMIN_API_KEY`
+4. 把 `EMAIL_WORKER_NAME` 指向收信 Worker 脚本
+5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`
+6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=kaisoumail`、`VITE_API_BASE_URL=<你的 canonical API 域名>`
+7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
+8. 如果是从历史单域实例升级，首次部署时保留 `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID`，让 bootstrap 回填初始 `domains` 记录
+9. 第一次生产 API 发布仍需手动 bootstrap；之后保持至少一个 100% stable 的 API 版本，workflow 才能在 smoke 失败时自动回滚
+10. 推送到 `main` 触发 deploy workflow
+11. 推送文档或 Storybook 变更到 `main` 刷新 GitHub Pages 公开站点
+
+## 域名拓扑示例
+
+- 控制台别名：
+  - `https://cfm.example.com`
+  - `https://km.example.com`
+- API 别名：
+  - `https://api.cfm.example.com`
+  - `https://api.km.example.com`
+- 应用内管理的邮箱根域：
+  - `707979.xyz`
+  - `mail.example.net`
