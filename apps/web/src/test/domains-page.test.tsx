@@ -10,6 +10,8 @@ const domainsHookState = {
   error: null as Error | null,
   refetch: vi.fn(),
   role: "admin" as "admin" | "member",
+  cloudflareDomainBindingEnabled: true,
+  cloudflareDomainLifecycleEnabled: true,
 };
 
 vi.mock("@/hooks/use-session", () => ({
@@ -23,21 +25,39 @@ vi.mock("@/hooks/use-session", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-meta", () => ({
+  useMetaQuery: () => ({
+    data: {
+      cloudflareDomainBindingEnabled:
+        domainsHookState.cloudflareDomainBindingEnabled,
+      cloudflareDomainLifecycleEnabled:
+        domainsHookState.cloudflareDomainLifecycleEnabled,
+    },
+  }),
+}));
+
 vi.mock("@/hooks/use-domains", () => ({
   useDomainCatalogQuery: () => ({
     data: domainsHookState.catalog,
     error: domainsHookState.error,
     refetch: domainsHookState.refetch,
   }),
+  useBindDomainMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
   useCreateDomainMutation: () => ({
     isPending: false,
     mutateAsync: vi.fn(),
   }),
   useDisableDomainMutation: () => ({
-    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+  }),
+  useDeleteDomainMutation: () => ({
+    mutateAsync: vi.fn(),
   }),
   useRetryDomainMutation: () => ({
-    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
   }),
 }));
 
@@ -46,6 +66,8 @@ afterEach(() => {
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
   domainsHookState.role = "admin";
+  domainsHookState.cloudflareDomainBindingEnabled = true;
+  domainsHookState.cloudflareDomainLifecycleEnabled = true;
 });
 
 describe("domains page view", () => {
@@ -128,8 +150,10 @@ describe("domains page view", () => {
             details: '{"error":"Authentication error"}',
           }}
           onReload={vi.fn()}
+          onBind={vi.fn()}
           onEnable={vi.fn()}
           onDisable={vi.fn()}
+          onDelete={vi.fn()}
           onRetry={vi.fn()}
         />
       </MemoryRouter>,

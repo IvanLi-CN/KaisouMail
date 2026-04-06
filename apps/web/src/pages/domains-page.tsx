@@ -1,3 +1,5 @@
+import { RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import { DomainBindCard } from "@/components/domains/domain-bind-card";
 import { DomainTable } from "@/components/domains/domain-table";
 import {
@@ -19,8 +21,6 @@ import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
 import { getErrorDetails } from "@/lib/error-utils";
 import { appRoutes } from "@/lib/routes";
-import { RefreshCw } from "lucide-react";
-import { Link } from "react-router-dom";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
