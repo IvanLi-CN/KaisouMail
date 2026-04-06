@@ -347,10 +347,8 @@ const mailboxReferencesDomain = (
     mailbox.address,
     mailbox.subdomain,
   );
-  return (
-    Boolean(extractedRootDomain) &&
-    normalizeRootDomain(extractedRootDomain) === domain.rootDomain
-  );
+  if (!extractedRootDomain) return false;
+  return normalizeRootDomain(extractedRootDomain) === domain.rootDomain;
 };
 
 const requireDomainDeleteAllowed = async (
