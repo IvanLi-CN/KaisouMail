@@ -3,8 +3,12 @@ import { Hono } from "hono";
 import type { ZodIssue } from "zod";
 
 import { getDb } from "./db/client";
-import { resolveConfiguredWebAppOrigin, safeParseRuntimeConfig } from "./env";
-import { applyCorsHeaders, resolveAllowedCorsOrigin } from "./lib/cors";
+import { safeParseRuntimeConfig } from "./env";
+import {
+  applyCorsHeaders,
+  resolveAllowedCorsOrigin,
+  resolveAllowedCorsOriginFromEnv,
+} from "./lib/cors";
 import { ApiError, buildApiErrorPayload } from "./lib/errors";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
@@ -22,14 +26,7 @@ import type { AppBindings } from "./types";
 const resolveFallbackCorsOrigin = (
   requestOrigin: string | undefined,
   env: AppBindings["Bindings"],
-) => {
-  const configuredOrigin = resolveConfiguredWebAppOrigin(env);
-  if (!requestOrigin || !configuredOrigin) {
-    return null;
-  }
-
-  return requestOrigin === configuredOrigin ? configuredOrigin : null;
-};
+) => resolveAllowedCorsOriginFromEnv(requestOrigin, env);
 
 const buildInternalErrorResponse = (
   allowHeaders: string,
@@ -72,6 +69,16 @@ export const createApp = () => {
         c.req.header("Access-Control-Request-Headers") ??
         "Content-Type, Authorization";
       const allowedOrigin = resolveFallbackCorsOrigin(requestOrigin, c.env);
+
+      if (c.req.method === "OPTIONS" && c.req.path.startsWith("/api/")) {
+        const headers = new Headers();
+        applyCorsHeaders(headers, allowedOrigin, allowHeaders);
+        return new Response(null, {
+          status: allowedOrigin ? 204 : 403,
+          headers,
+        });
+      }
+
       return buildInternalErrorResponse(allowHeaders, allowedOrigin);
     }
 

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { parseRuntimeConfig } from "../env";
-import { applyCorsHeaders, resolveAllowedCorsOrigin } from "../lib/cors";
+import {
+  applyCorsHeaders,
+  resolveAllowedCorsOrigin,
+  resolveAllowedCorsOriginFromEnv,
+} from "../lib/cors";
 
 describe("cors helpers", () => {
   it("allows the configured production web origin", () => {
@@ -48,6 +52,23 @@ describe("cors helpers", () => {
     expect(resolveAllowedCorsOrigin("https://cfm.707979.xyz", config)).toBe(
       "https://cfm.707979.xyz",
     );
+  });
+
+  it("keeps localhost preview CORS when runtime config is invalid", () => {
+    expect(
+      resolveAllowedCorsOriginFromEnv("http://localhost:4173", {
+        APP_ENV: "development",
+      }),
+    ).toBe("http://localhost:4173");
+  });
+
+  it("ignores invalid WEB_APP_ORIGIN values in fallback CORS resolution", () => {
+    expect(
+      resolveAllowedCorsOriginFromEnv("https://cfm.707979.xyz", {
+        APP_ENV: "production",
+        WEB_APP_ORIGIN: "not-a-valid-url",
+      }),
+    ).toBeNull();
   });
 
   it("rejects unrelated origins", () => {

@@ -56,9 +56,17 @@ jobs:
             checked_out_sha="$(git rev-parse HEAD)"
             release_branch="${{ inputs.release_branch || 'main' }}"
 
-            if [ -n "${requested_release_sha}" ] && [ "${requested_release_sha}" != "${checked_out_sha}" ]; then
-              echo "workflow_dispatch release_sha ${requested_release_sha} does not match the checked-out commit ${checked_out_sha}." >&2
-              exit 1
+            if [ -n "${requested_release_sha}" ]; then
+              requested_release_commit="$(git rev-parse --verify "${requested_release_sha}^{commit}" 2>/dev/null || true)"
+              if [ -z "${requested_release_commit}" ]; then
+                echo "workflow_dispatch release_sha ${requested_release_sha} does not resolve to a fetched commit." >&2
+                exit 1
+              fi
+
+              if [ "${requested_release_commit}" != "${checked_out_sha}" ]; then
+                echo "workflow_dispatch release_sha ${requested_release_sha} resolves to ${requested_release_commit}, but checkout resolved to ${checked_out_sha}." >&2
+                exit 1
+              fi
             fi
 
             if [ -n "${requested_release_tag}" ]; then
@@ -130,9 +138,19 @@ jobs:
           secrets_json="$(bunx wrangler secret list --config apps/api-worker/wrangler.jsonc --format json)"
           export SECRETS_JSON="${secrets_json}"
           node <<'NODE'
+          const fs = require("node:fs");
+
           const secrets = JSON.parse(process.env.SECRETS_JSON ?? "[]");
           const names = new Set(secrets.map((secret) => secret.name));
+          const wranglerConfig = JSON.parse(
+            fs.readFileSync("apps/api-worker/wrangler.jsonc", "utf8"),
+          );
           const required = ["SESSION_SECRET"];
+
+          if (typeof wranglerConfig?.vars?.BOOTSTRAP_ADMIN_EMAIL === "string" && wranglerConfig.vars.BOOTSTRAP_ADMIN_EMAIL.trim()) {
+            required.push("BOOTSTRAP_ADMIN_API_KEY");
+          }
+
           const missing = required.filter((name) => !names.has(name));
 
           if (missing.length > 0) {
@@ -152,32 +170,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_tags=()
-          while IFS= read -r tag; do
-            release_tags+=("${tag}")
-          done < <(git tag --sort=v:refname --list 'v*')
-          previous_release_tag=""
-          found_target="false"
+          target_commit="$(git rev-parse --verify "${CF_MAIL_RELEASE_TAG}^{commit}" 2>/dev/null || true)"
 
-          for index in "${!release_tags[@]}"; do
-            if [ "${release_tags[$index]}" != "${CF_MAIL_RELEASE_TAG}" ]; then
-              continue
-            fi
-
-            found_target="true"
-            if [ "$index" -gt 0 ]; then
-              previous_release_tag="${release_tags[$((index - 1))]}"
-            fi
-            break
-          done
-
-          if [ "${found_target}" != "true" ]; then
+          if [ -z "${target_commit}" ]; then
             echo "Release tag ${CF_MAIL_RELEASE_TAG} is not present in the fetched v* tag set; automatic deploy requires a tagged release commit." >&2
             exit 1
           fi
 
+          previous_release_tag="$(git describe --first-parent --tags --abbrev=0 --match 'v*' --exclude '*-rc.*' "${target_commit}^" 2>/dev/null || true)"
+
           if [ -z "${previous_release_tag}" ]; then
-            echo "Cannot determine a previous release tag for ${CF_MAIL_RELEASE_TAG}; bootstrap or migration-bearing releases must use manual rollout." >&2
+            echo "Cannot determine a previous release tag on the same lineage for ${CF_MAIL_RELEASE_TAG}; bootstrap or migration-bearing releases must use manual rollout." >&2
             exit 1
           fi
 
@@ -186,7 +189,7 @@ jobs:
             exit 1
           fi
 
-          echo "Verified ${CF_MAIL_RELEASE_TAG} has no D1 migration diff relative to ${previous_release_tag}."
+          echo "Verified ${CF_MAIL_RELEASE_TAG} has no D1 migration diff relative to ${previous_release_tag} on the same lineage."
 
       - name: Capture current API Worker rollback target
         shell: bash

@@ -193,4 +193,63 @@ describe("meta and auth routes", () => {
       details: null,
     });
   });
+
+  it("keeps localhost preview CORS on /api/version when SESSION_SECRET is missing", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/version", {
+        headers: {
+          origin: "http://localhost:4173",
+          "Access-Control-Request-Headers": "Content-Type",
+        },
+      }),
+      {
+        APP_ENV: "development",
+        DEFAULT_MAILBOX_TTL_MINUTES: "60",
+        CLEANUP_BATCH_SIZE: "3",
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+        BOOTSTRAP_ADMIN_NAME: "Ivan",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
+      } as never,
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:4173",
+    );
+    await expect(response.json()).resolves.toEqual({
+      error: "Internal server error",
+      details: null,
+    });
+  });
+
+  it("answers API preflight even when runtime config is invalid", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/version", {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://localhost:4173",
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "Authorization",
+        },
+      }),
+      {
+        APP_ENV: "development",
+        DEFAULT_MAILBOX_TTL_MINUTES: "60",
+        CLEANUP_BATCH_SIZE: "3",
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+        BOOTSTRAP_ADMIN_NAME: "Ivan",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
+      } as never,
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:4173",
+    );
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "Authorization",
+    );
+  });
 });
