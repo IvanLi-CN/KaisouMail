@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.10.1",
+  "base_stable_version": "0.10.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-06T12:14:35Z",
+  "next_stable_version": "0.10.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "b2e71007cee19028a2ff454f2761fbf01bf3594c",
+  "pr_number": 20,
+  "pr_title": "fix: harden production deploy config gates",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.10.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.10.1",
+  "target_sha": "cb1950676281f59035df1ca98ced62ad79819e6c",
+  "type_label": "type:patch"
+}
