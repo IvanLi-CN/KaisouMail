@@ -24,6 +24,18 @@ describe("demoApi", () => {
     expect(destroyed.routingRuleId).toBeNull();
   });
 
+  it("creates a mailbox with a random active domain when rootDomain is omitted", async () => {
+    const meta = await demoApi.getMeta();
+    const created = await demoApi.createMailbox({
+      localPart: "randomized",
+      subdomain: "ops.alpha",
+      expiresInMinutes: 60,
+    });
+
+    expect(meta.domains).toContain(created.rootDomain);
+    expect(created.address).toBe(`randomized@ops.alpha.${created.rootDomain}`);
+  });
+
   it("reuses active mailboxes through ensure and recreates destroyed addresses", async () => {
     const reused = await demoApi.ensureMailbox({
       address: "build@alpha.relay.example.test",

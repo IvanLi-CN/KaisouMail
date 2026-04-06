@@ -332,6 +332,10 @@ export const ToolbarCreateFlow: Story = {
     await expect(
       canvas.getByText("在当前工作台里直接创建新地址。"),
     ).toBeInTheDocument();
+    await expect(
+      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+    ).toBeInTheDocument();
+    await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
     await userEvent.keyboard("{Escape}");
     await expect(canvas.queryByLabelText("用户名")).not.toBeInTheDocument();
@@ -343,6 +347,9 @@ export const ToolbarCreateFlow: Story = {
       canvas.getByLabelText("邮箱域名"),
       "mail.example.net",
     );
+    await expect(
+      canvas.getByText("nightly@ops.alpha.mail.example.net"),
+    ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
     await expect(
@@ -363,6 +370,13 @@ export const ToolbarCreateFlow: Story = {
 
 export const CreatePopoverOpen: Story = {
   render: () => <WorkspaceStoryHarness initialCreateOpen />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+    ).toBeInTheDocument();
+    await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
+  },
 };
 
 export const CreatePending: Story = {

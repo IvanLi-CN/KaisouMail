@@ -22,4 +22,24 @@ describe("MailboxCreateCard", () => {
     expect(screen.getByLabelText("子域名")).toBeEnabled();
     expect(screen.getByLabelText("生命周期（分钟）")).toBeEnabled();
   });
+
+  it("does not promise random allocation when no active domains are available", () => {
+    render(
+      <MailboxCreateCard
+        onSubmit={vi.fn()}
+        domains={[]}
+        defaultTtlMinutes={60}
+        maxTtlMinutes={1440}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        /当前没有 active 邮箱域名可供分配；启用域名后才能创建邮箱。/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("nightly@ops.alpha.<启用后可用的域名>"),
+    ).toBeInTheDocument();
+  });
 });
