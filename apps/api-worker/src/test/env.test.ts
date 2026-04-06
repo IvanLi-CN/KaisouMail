@@ -4,6 +4,7 @@ import {
   parseRuntimeConfig,
   REQUIRED_RUNTIME_SECRETS,
   resolveConfiguredWebAppOrigin,
+  resolveConfiguredWebAppOrigins,
   safeParseRuntimeConfig,
 } from "../env";
 
@@ -85,6 +86,16 @@ describe("runtime config parsing", () => {
     ).toBe("https://cfm.707979.xyz");
   });
 
+  it("normalizes WEB_APP_ORIGINS into a de-duplicated origin list", () => {
+    expect(
+      resolveConfiguredWebAppOrigins({
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz/login",
+        WEB_APP_ORIGINS:
+          "https://km.707979.xyz/workspace, https://cfm.707979.xyz, not-a-valid-url",
+      }),
+    ).toEqual(["https://cfm.707979.xyz", "https://km.707979.xyz"]);
+  });
+
   it("stores WEB_APP_ORIGIN as a normalized origin in runtime config", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
@@ -92,6 +103,20 @@ describe("runtime config parsing", () => {
     } as never);
 
     expect(config.WEB_APP_ORIGIN).toBe("https://cfm.707979.xyz");
+  });
+
+  it("stores WEB_APP_ORIGINS as normalized origins in runtime config", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz/workspace",
+      WEB_APP_ORIGINS: "https://cfm.707979.xyz, https://km.707979.xyz/login",
+    } as never);
+
+    expect(config.WEB_APP_ORIGIN).toBe("https://cfm.707979.xyz");
+    expect(config.WEB_APP_ORIGINS).toEqual([
+      "https://cfm.707979.xyz",
+      "https://km.707979.xyz",
+    ]);
   });
 
   it("ignores an invalid WEB_APP_ORIGIN when computing fallback CORS", () => {

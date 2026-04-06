@@ -120,7 +120,8 @@ The Worker expects these bindings and variables:
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
 - `CF_ROUTE_RULESET_TAG`
-- `WEB_APP_ORIGIN` (production control-plane origin; the only trusted browser origin outside local preview)
+- `WEB_APP_ORIGIN` (legacy primary control-plane origin for single-origin compatibility)
+- `WEB_APP_ORIGINS` (comma-separated trusted control-plane origins when multiple production aliases stay live)
 
 ### Legacy bootstrap vars
 
@@ -130,6 +131,7 @@ The Worker expects these bindings and variables:
 These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
+For multi-alias production rollouts, keep `WEB_APP_ORIGINS` in sync with every live control-plane domain; the web client can then prefer the matching API alias per hostname while `VITE_API_BASE_URL` remains the canonical fallback for local and preview hosts.
 
 ## Cloudflare API Tokens
 
@@ -278,12 +280,12 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 ## Deployment checklist
 
 1. Create the Pages project `kaisoumail` once in Cloudflare
-2. Bind your control-plane origin (for example `cfm.example.com`) to Pages
+2. Bind one or more control-plane origins (for example `cfm.example.com` and `km.example.com`) to Pages, and attach the matching API custom domains (for example `api.cfm.example.com` and `api.km.example.com`) to the API Worker
 3. Set the Worker runtime secret `SESSION_SECRET`, and only add `BOOTSTRAP_ADMIN_API_KEY` when you also set `BOOTSTRAP_ADMIN_EMAIL` for first-admin bootstrap
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`
-6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your api origin>`
-7. Set `WEB_APP_ORIGIN=<your pages origin>`
+6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your canonical api origin>`
+7. Set `WEB_APP_ORIGINS=<comma-separated pages origins>` and optionally keep `WEB_APP_ORIGIN=<your primary pages origin>` for legacy single-origin compatibility
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
 9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can auto-rollback failed smoke checks
 10. Push to `main` to trigger the deploy workflow
@@ -300,8 +302,12 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 ## Domain topology example
 
-- Web UI: `https://cfm.example.com`
-- Worker API: `https://api.cfm.example.com`
+- Web UI aliases:
+  - `https://cfm.example.com`
+  - `https://km.example.com`
+- Worker API aliases:
+  - `https://api.cfm.example.com`
+  - `https://api.km.example.com`
 - Mail root domains managed in-app:
   - `707979.xyz`
   - `mail.example.net`

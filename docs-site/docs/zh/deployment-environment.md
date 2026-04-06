@@ -31,7 +31,8 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | 首个管理员邮箱 |
 | `BOOTSTRAP_ADMIN_NAME` | 首个管理员名称 |
 | `CF_ROUTE_RULESET_TAG` | Worker route 管理标记 |
-| `WEB_APP_ORIGIN` | 控制台来源；生产环境必须填对 |
+| `WEB_APP_ORIGIN` | 历史单来源兼容时使用的主控制台来源 |
+| `WEB_APP_ORIGINS` | 需要同时保留多个生产控制台域名时使用的逗号分隔来源列表 |
 
 ## 单域历史实例升级时才会用到
 
@@ -46,11 +47,17 @@
 
 | 名称 | 用途 |
 | --- | --- |
-| `VITE_API_BASE_URL` | 控制台请求 API 的基地址 |
+| `VITE_API_BASE_URL` | 控制台请求 API 的 canonical / fallback 基地址 |
 | `VITE_DEMO_MODE` | 本地演示模式 |
 | `VITE_DOCS_SITE_ORIGIN` | 控制台里跳到公开文档站和公开 Storybook 的地址 |
 
 如果 `VITE_DOCS_SITE_ORIGIN` 不填，控制台仍能用站内速查页，但不会显示公开站入口。
+如果当前控制台域名命中已知生产别名（例如 `cfm.707979.xyz` 或 `km.707979.xyz`），前端会优先改用同族 API 别名；其余环境继续回退到 `VITE_API_BASE_URL`。
+
+## 生产别名示例
+
+- 控制台：`https://cfm.707979.xyz`、`https://km.707979.xyz`
+- API：`https://api.cfm.707979.xyz`、`https://api.km.707979.xyz`
 
 ## 发布工作流安全门禁
 
