@@ -102,6 +102,31 @@ jobs:
 
           echo "CLOUDFLARE_API_TOKEN=${token}" >> "${GITHUB_ENV}"
 
+      - name: Verify API Worker required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          secrets_json="$(bunx wrangler secret list --config apps/api-worker/wrangler.jsonc --format json)"
+          export SECRETS_JSON="${secrets_json}"
+          node <<'NODE'
+          const secrets = JSON.parse(process.env.SECRETS_JSON ?? "[]");
+          const names = new Set(secrets.map((secret) => secret.name));
+          const required = ["SESSION_SECRET"];
+          const missing = required.filter((name) => !names.has(name));
+
+          if (missing.length > 0) {
+            console.error(
+              `Missing required API Worker secrets: ${missing.join(", ")}`,
+            );
+            console.error(
+              "Set them in Cloudflare before deploying, for example with `wrangler secret put <NAME>`.",
+            );
+            process.exit(1);
+          }
+
+          console.log(`Verified API Worker secrets: ${required.join(", ")}`);
+          NODE
+
       - name: Apply D1 migrations
         run: bun run --cwd apps/api-worker db:migrate:remote
 
@@ -110,6 +135,78 @@ jobs:
 
       - name: Deploy Email receiver Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc
+
+      - name: Smoke test deployed API Worker
+        shell: bash
+        env:
+          API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          api_base_url="${API_BASE_URL%/}"
+          if [ -z "${api_base_url}" ]; then
+            echo "Missing VITE_API_BASE_URL for deploy smoke gate" >&2
+            exit 1
+          fi
+
+          health_file="${RUNNER_TEMP}/api-health.json"
+          version_file="${RUNNER_TEMP}/api-version.json"
+
+          for attempt in 1 2 3 4 5 6; do
+            health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
+            version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+
+            export HEALTH_CODE="${health_code}"
+            export VERSION_CODE="${version_code}"
+            export HEALTH_FILE="${health_file}"
+            export VERSION_FILE="${version_file}"
+            export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
+
+            if node <<'NODE'
+            const fs = require("node:fs");
+
+            const healthCode = process.env.HEALTH_CODE;
+            const versionCode = process.env.VERSION_CODE;
+            const expectedSha = process.env.EXPECTED_SHA;
+
+            if (healthCode !== "200" || versionCode !== "200") {
+              console.error(
+                `Unexpected status codes: /health=${healthCode}, /api/version=${versionCode}`,
+              );
+              process.exit(1);
+            }
+
+            const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, "utf8"));
+            const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
+
+            if (health?.ok !== true) {
+              console.error(`Unexpected /health payload: ${JSON.stringify(health)}`);
+              process.exit(1);
+            }
+
+            if (version?.commitSha !== expectedSha) {
+              console.error(
+                `Expected deployed commit ${expectedSha}, received ${version?.commitSha ?? "<missing>"}`,
+              );
+              process.exit(1);
+            }
+
+            console.log(`Smoke gate passed for deployed commit ${version.commitSha}`);
+            NODE
+            then
+              exit 0
+            fi
+
+            echo "Deploy smoke gate attempt ${attempt} not ready yet; retrying..."
+            echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
+            echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+
+            if [ "${attempt}" -eq 6 ]; then
+              echo "Deployed API Worker failed smoke gate after ${attempt} attempts" >&2
+              exit 1
+            fi
+
+            sleep "$((attempt * 5))"
+          done
 
       - name: Build web app
         run: bun run --cwd apps/web build

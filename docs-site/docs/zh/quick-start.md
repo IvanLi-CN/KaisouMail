@@ -18,7 +18,7 @@ cp apps/web/.env.example apps/web/.env
 
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
-  - `BOOTSTRAP_ADMIN_API_KEY`
+  - `BOOTSTRAP_ADMIN_API_KEY`（可选；仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
   - `WEB_APP_ORIGIN`
 - `apps/web/.env`
   - `VITE_API_BASE_URL`

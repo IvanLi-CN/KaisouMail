@@ -42,6 +42,7 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
     permissions: [
       ["帐户", "D1", "编辑"],
       ["帐户", "Workers 脚本", "编辑"],
+      ["帐户", "Workers R2 存储", "编辑"],
       ["帐户", "Cloudflare Pages", "编辑"],
       ["区域", "Workers Routes", "编辑"],
     ],
@@ -61,6 +62,7 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
       ["区域", "Zone Settings", "编辑"],
       ["帐户", "D1", "编辑"],
       ["帐户", "Workers 脚本", "编辑"],
+      ["帐户", "Workers R2 存储", "编辑"],
       ["帐户", "Cloudflare Pages", "编辑"],
       ["区域", "Workers Routes", "编辑"],
     ],

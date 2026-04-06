@@ -27,6 +27,9 @@
       "preview_bucket_name": "kaisoumail-bucket-preview"
     }
   ],
+  "secrets": {
+    "required": ["SESSION_SECRET"]
+  },
   "vars": {
     "APP_ENV": "production",
     "MAIL_DOMAIN": "707979.xyz",

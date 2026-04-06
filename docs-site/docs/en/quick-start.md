@@ -18,7 +18,7 @@ Minimum variables:
 
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
-  - `BOOTSTRAP_ADMIN_API_KEY`
+  - `BOOTSTRAP_ADMIN_API_KEY` (optional; only if `BOOTSTRAP_ADMIN_EMAIL` is set for first-admin bootstrap)
   - `WEB_APP_ORIGIN`
 - `apps/web/.env`
   - `VITE_API_BASE_URL`

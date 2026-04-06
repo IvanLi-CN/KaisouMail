@@ -122,4 +122,52 @@ describe("meta and auth routes", () => {
       details: null,
     });
   });
+
+  it("returns a stable 500 envelope for /health when SESSION_SECRET is missing", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/health"), {
+      APP_ENV: "development",
+      DEFAULT_MAILBOX_TTL_MINUTES: "60",
+      CLEANUP_BATCH_SIZE: "3",
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+    } as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "Internal server error",
+      details: null,
+    });
+  });
+
+  it("returns a stable 500 envelope plus conservative CORS for /api/version when config is missing", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/version", {
+        headers: {
+          origin: "https://cfm.707979.xyz",
+          "Access-Control-Request-Headers": "Content-Type",
+        },
+      }),
+      {
+        APP_ENV: "production",
+        DEFAULT_MAILBOX_TTL_MINUTES: "60",
+        CLEANUP_BATCH_SIZE: "3",
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+        BOOTSTRAP_ADMIN_NAME: "Ivan",
+        CF_ROUTE_RULESET_TAG: "kaisoumail",
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz/workspace",
+      } as never,
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://cfm.707979.xyz",
+    );
+    await expect(response.json()).resolves.toEqual({
+      error: "Internal server error",
+      details: null,
+    });
+  });
 });

@@ -12,7 +12,12 @@
 | 名称 | 用途 |
 | --- | --- |
 | `SESSION_SECRET` | 会话签名 |
-| `BOOTSTRAP_ADMIN_API_KEY` | 首次引导管理员 API Key |
+
+## 仅首次引导时才需要的 Worker secret
+
+| 名称 | 用途 |
+| --- | --- |
+| `BOOTSTRAP_ADMIN_API_KEY` | 首次引导管理员 API Key；仅当同时设置 `BOOTSTRAP_ADMIN_EMAIL` 时才需要 |
 
 ## Worker 运行变量
 

@@ -5,7 +5,9 @@
     "types": ["vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@kaisoumail/shared": ["../../packages/shared/src/index.ts"],
+      "@kaisoumail/shared/*": ["../../packages/shared/src/*"]
     }
   },
   "include": [

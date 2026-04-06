@@ -12,7 +12,12 @@
 | Name | Purpose |
 | --- | --- |
 | `SESSION_SECRET` | session signing |
-| `BOOTSTRAP_ADMIN_API_KEY` | initial admin bootstrap key |
+
+## Optional bootstrap-only Worker secrets
+
+| Name | Purpose |
+| --- | --- |
+| `BOOTSTRAP_ADMIN_API_KEY` | first admin bootstrap key; only needed when `BOOTSTRAP_ADMIN_EMAIL` is also set |
 
 ## Worker runtime variables
 

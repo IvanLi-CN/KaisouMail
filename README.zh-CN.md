@@ -84,6 +84,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -96,6 +97,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -106,7 +108,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 Worker 侧重点变量：
 
 - `SESSION_SECRET`
-- `BOOTSTRAP_ADMIN_API_KEY`
+- `BOOTSTRAP_ADMIN_API_KEY`（仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
