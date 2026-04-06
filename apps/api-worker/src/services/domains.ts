@@ -196,6 +196,72 @@ const resolveProvisionState = async (
   }
 };
 
+const persistBoundZone = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  input: {
+    rootDomain: string;
+    zoneId: string;
+    bindingSource: DomainBindingSource;
+  },
+) => {
+  const provisionState = await resolveProvisionState(
+    config,
+    {
+      rootDomain: input.rootDomain,
+      zoneId: input.zoneId,
+    },
+    {
+      allowProvisioningError: isRecoverableBindProvisionError,
+    },
+  );
+
+  return persistManagedDomain(env, {
+    rootDomain: input.rootDomain,
+    zoneId: input.zoneId,
+    bindingSource: input.bindingSource,
+    provisionState,
+  });
+};
+
+const createAndPersistBoundZone = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  rootDomain: string,
+) => {
+  const zone = await createZone(config, rootDomain);
+  try {
+    return await persistBoundZone(env, config, {
+      rootDomain,
+      zoneId: zone.id,
+      bindingSource: "project_bind",
+    });
+  } catch (error) {
+    try {
+      await deleteZone(config, {
+        rootDomain,
+        zoneId: zone.id,
+      });
+    } catch (cleanupError) {
+      throw new ApiError(
+        502,
+        "Failed to persist bound domain and clean up Cloudflare zone",
+        {
+          rootDomain,
+          zoneId: zone.id,
+          cause: error instanceof Error ? error.message : String(error),
+          cleanupError:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError),
+        },
+      );
+    }
+
+    throw error;
+  }
+};
+
 const persistManagedDomain = async (
   env: WorkerEnv,
   input: {
@@ -548,80 +614,23 @@ export const bindDomain = async (
   }
 
   if (createState.kind === "replace" && !createState.row.deletedAt) {
-    const zoneId = createState.row.zoneId?.trim();
-    if (!zoneId) {
-      throw new ApiError(
-        409,
-        "Mailbox domain already exists but cannot be rebound without a Cloudflare zone",
-        {
+    const existingZoneId = createState.row.zoneId?.trim();
+    if (existingZoneId) {
+      try {
+        return await persistBoundZone(env, config, {
           rootDomain,
-          domainId: createState.row.id,
-        },
-      );
+          zoneId: existingZoneId,
+          bindingSource: createState.row.bindingSource,
+        });
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) {
+          throw error;
+        }
+      }
     }
-
-    const provisionState = await resolveProvisionState(
-      config,
-      {
-        rootDomain,
-        zoneId,
-      },
-      {
-        allowProvisioningError: isRecoverableBindProvisionError,
-      },
-    );
-
-    return persistManagedDomain(env, {
-      rootDomain,
-      zoneId,
-      bindingSource: createState.row.bindingSource,
-      provisionState,
-    });
   }
 
-  const zone = await createZone(config, rootDomain);
-  try {
-    const provisionState = await resolveProvisionState(
-      config,
-      {
-        rootDomain,
-        zoneId: zone.id,
-      },
-      {
-        allowProvisioningError: isRecoverableBindProvisionError,
-      },
-    );
-
-    return await persistManagedDomain(env, {
-      rootDomain,
-      zoneId: zone.id,
-      bindingSource: "project_bind",
-      provisionState,
-    });
-  } catch (error) {
-    try {
-      await deleteZone(config, {
-        rootDomain,
-        zoneId: zone.id,
-      });
-    } catch (cleanupError) {
-      throw new ApiError(
-        502,
-        "Failed to persist bound domain and clean up Cloudflare zone",
-        {
-          rootDomain,
-          zoneId: zone.id,
-          cause: error instanceof Error ? error.message : String(error),
-          cleanupError:
-            cleanupError instanceof Error
-              ? cleanupError.message
-              : String(cleanupError),
-        },
-      );
-    }
-
-    throw error;
-  }
+  return createAndPersistBoundZone(env, config, rootDomain);
 };
 
 export const retryDomainProvision = async (

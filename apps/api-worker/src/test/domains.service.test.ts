@@ -361,6 +361,45 @@ describe("domain catalog", () => {
     });
   });
 
+  it("creates a fresh Cloudflare zone when a stale disabled domain points to a missing zone", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_disabled",
+          rootDomain: "bound.example.org",
+          zoneId: "zone_stale",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    validateZoneAccess
+      .mockRejectedValueOnce(new ApiError(404, "Zone not found"))
+      .mockResolvedValueOnce(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "bound.example.org",
+    });
+
+    expect(createZone).toHaveBeenCalledWith(runtimeConfig, "bound.example.org");
+    expect(result.domain).toMatchObject({
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      bindingSource: "project_bind",
+      status: "active",
+    });
+  });
+
   it("keeps retryable bind failures as project-bound provisioning errors", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);
