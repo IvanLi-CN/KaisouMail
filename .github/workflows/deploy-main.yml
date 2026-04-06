@@ -132,13 +132,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          previous_release_tag="$(git tag --sort=-v:refname --list 'v*' | grep -Fxv "${CF_MAIL_RELEASE_TAG}" | head -n 1 || true)"
+          release_tags=()
+          while IFS= read -r tag; do
+            release_tags+=("${tag}")
+          done < <(git tag --sort=v:refname --list 'v*')
+          previous_release_tag=""
+          found_target="false"
+
+          for index in "${!release_tags[@]}"; do
+            if [ "${release_tags[$index]}" != "${CF_MAIL_RELEASE_TAG}" ]; then
+              continue
+            fi
+
+            found_target="true"
+            if [ "$index" -gt 0 ]; then
+              previous_release_tag="${release_tags[$((index - 1))]}"
+            fi
+            break
+          done
+
+          if [ "${found_target}" != "true" ]; then
+            echo "Release tag ${CF_MAIL_RELEASE_TAG} is not present in the fetched v* tag set; automatic deploy requires a tagged release commit." >&2
+            exit 1
+          fi
+
           if [ -z "${previous_release_tag}" ]; then
             echo "Cannot determine a previous release tag for ${CF_MAIL_RELEASE_TAG}; bootstrap or migration-bearing releases must use manual rollout." >&2
             exit 1
           fi
 
-          if git diff --name-only "${previous_release_tag}..HEAD" -- apps/api-worker/drizzle | grep -q .; then
+          if git diff --name-only "${previous_release_tag}..${CF_MAIL_RELEASE_TAG}" -- apps/api-worker/drizzle | grep -q .; then
             echo "Release ${CF_MAIL_RELEASE_TAG} changes D1 migrations relative to ${previous_release_tag}; automatic rollback-backed deploy is disabled. Use the manual migration rollout path." >&2
             exit 1
           fi
