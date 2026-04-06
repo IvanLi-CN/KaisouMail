@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,8 +6,8 @@ import { demoDomainCatalog } from "@/mocks/data";
 import { DomainsPageView } from "@/pages/domains-page";
 
 describe("domains page view", () => {
-  it("renders binding controls, statuses, and delete actions", () => {
-    const onDelete = vi.fn();
+  it("renders binding controls, statuses, and delete actions", async () => {
+    const onDelete = vi.fn(async () => undefined);
 
     render(
       <MemoryRouter>
@@ -40,8 +40,10 @@ describe("domains page view", () => {
     const deleteButtons = screen.getAllByRole("button", { name: "删除域名" });
     expect(deleteButtons.length).toBeGreaterThan(0);
     fireEvent.click(deleteButtons[0]);
-    expect(screen.getByText("确认删除 mail.example.net？")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
-    expect(onDelete).toHaveBeenCalledWith("dom_secondary");
+    expect(
+      await screen.findByText("确认删除 mail.example.net？"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("确认删除", { selector: "button" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
   });
 });

@@ -237,6 +237,18 @@ const createAndPersistBoundZone = async (
       bindingSource: "project_bind",
     });
   } catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      const current = await getDomainByRootDomain(env, rootDomain, {
+        includeDeleted: true,
+      });
+      if (current && !current.deletedAt && current.zoneId === zone.id) {
+        return {
+          domain: toDomainDto(current),
+          created: false,
+        };
+      }
+    }
+
     try {
       await deleteZone(config, {
         rootDomain,
@@ -421,13 +433,6 @@ const requireDomainDeleteAllowed = async (
   env: WorkerEnv,
   domain: DomainRow,
 ) => {
-  if (domain.bindingSource !== "project_bind") {
-    throw new ApiError(409, "Only project-bound domains can be deleted", {
-      domainId: domain.id,
-      rootDomain: domain.rootDomain,
-    });
-  }
-
   const db = getDb(env);
   const activeMailboxes = await db
     .select({
@@ -454,6 +459,15 @@ const requireDomainDeleteAllowed = async (
         rootDomain: domain.rootDomain,
       },
     );
+  }
+};
+
+const requireProjectBoundDomain = (domain: DomainRow) => {
+  if (domain.bindingSource !== "project_bind") {
+    throw new ApiError(409, "Only project-bound domains can be deleted", {
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
+    });
   }
 };
 
@@ -721,9 +735,20 @@ export const deleteDomain = async (
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
   if (existing.deletedAt) return;
 
-  await requireDomainDeleteAllowed(env, existing);
+  requireProjectBoundDomain(existing);
   const deletedAt = nowIso();
   const localDelete = await softDeleteDomainLocally(db, existing, deletedAt);
+
+  try {
+    await requireDomainDeleteAllowed(env, existing);
+  } catch (error) {
+    await restoreSoftDeletedDomainLocally(
+      db,
+      existing,
+      localDelete.cachedSubdomains,
+    );
+    throw error;
+  }
 
   try {
     await deleteZone(config, {

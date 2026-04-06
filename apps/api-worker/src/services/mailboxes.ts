@@ -113,6 +113,62 @@ const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
   }
 };
 
+const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
+  new ApiError(409, "Mailbox domain is no longer available", {
+    domainId,
+    rootDomain,
+  });
+
+const insertMailboxIfDomainStillActive = async (
+  env: WorkerEnv,
+  created: {
+    id: string;
+    userId: string;
+    domainId: string;
+    localPart: string;
+    subdomain: string;
+    address: string;
+    routingRuleId: string | null;
+    status: string;
+    createdAt: string;
+    expiresAt: string;
+    destroyedAt: string | null;
+  },
+  rootDomain: string,
+) => {
+  const result = await env.DB.prepare(
+    `INSERT INTO mailboxes (
+      id, user_id, domain_id, local_part, subdomain, address,
+      routing_rule_id, status, created_at, expires_at, destroyed_at
+    )
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    WHERE EXISTS (
+      SELECT 1
+      FROM domains
+      WHERE id = ? AND status = 'active' AND deleted_at IS NULL
+    )`,
+  )
+    .bind(
+      created.id,
+      created.userId,
+      created.domainId,
+      created.localPart,
+      created.subdomain,
+      created.address,
+      created.routingRuleId,
+      created.status,
+      created.createdAt,
+      created.expiresAt,
+      created.destroyedAt,
+      created.domainId,
+    )
+    .run();
+
+  if ((result.meta?.changes ?? 0) !== 1) {
+    throw domainNoLongerAvailableError(created.domainId, rootDomain);
+  }
+};
+
 export const resolveRequestedMailboxAddress = (
   input:
     | { address: string; expiresInMinutes?: number }
@@ -306,6 +362,19 @@ export const createMailboxForUser = async (
     Date.now() + expiresInMinutes * 60_000,
   ).toISOString();
 
+  const currentDomainRows = await db
+    .select({
+      id: domains.id,
+      status: domains.status,
+    })
+    .from(domains)
+    .where(eq(domains.id, domain.id))
+    .limit(1);
+  const currentDomain = currentDomainRows[0];
+  if (!currentDomain || currentDomain.status !== "active") {
+    throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
+  }
+
   if (!knownSubdomain[0]) {
     await ensureSubdomainEnabled(config, domain, subdomain);
   }
@@ -314,24 +383,6 @@ export const createMailboxForUser = async (
     domain,
     mailboxAddress.address,
   );
-
-  if (knownSubdomain[0]) {
-    await db
-      .update(subdomains)
-      .set({ lastUsedAt: now })
-      .where(eq(subdomains.id, knownSubdomain[0].id));
-  } else {
-    await db.insert(subdomains).values({
-      id: randomId("sub"),
-      domainId: domain.id,
-      name: subdomain,
-      enabledAt: now,
-      lastUsedAt: now,
-      metadata: JSON.stringify({
-        mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
-      }),
-    });
-  }
 
   const created = {
     id: randomId("mbx"),
@@ -347,7 +398,38 @@ export const createMailboxForUser = async (
     destroyedAt: null,
   } as const;
 
-  await db.insert(mailboxes).values(created);
+  try {
+    await insertMailboxIfDomainStillActive(env, created, domain.rootDomain);
+
+    if (knownSubdomain[0]) {
+      await db
+        .update(subdomains)
+        .set({ lastUsedAt: now })
+        .where(eq(subdomains.id, knownSubdomain[0].id));
+    } else {
+      await db.insert(subdomains).values({
+        id: randomId("sub"),
+        domainId: domain.id,
+        name: subdomain,
+        enabledAt: now,
+        lastUsedAt: now,
+        metadata: JSON.stringify({
+          mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
+        }),
+      });
+    }
+  } catch (error) {
+    if (routingRuleId) {
+      try {
+        await deleteRoutingRule(config, domain, routingRuleId);
+      } catch {
+        // Ignore cleanup failures here; the primary error is the mailbox
+        // creation race or write failure that caused the insert to abort.
+      }
+    }
+    throw error;
+  }
+
   return toMailboxDto(
     {
       ...created,

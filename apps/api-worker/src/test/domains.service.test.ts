@@ -111,6 +111,46 @@ const createDb = (options?: {
   };
 };
 
+const createSequencedDb = (options?: {
+  domainRows?: unknown[][];
+  mailboxRows?: unknown[][];
+}) => {
+  const domainRows = [...(options?.domainRows ?? [[]])];
+  const mailboxRows = [...(options?.mailboxRows ?? [[]])];
+
+  const nextRowsForTable = (table: unknown) => {
+    const queue =
+      table === domains ? domainRows : table === mailboxes ? mailboxRows : [[]];
+    if (queue.length > 1) {
+      return queue.shift() ?? [];
+    }
+    return queue[0] ?? [];
+  };
+
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn((table: unknown) => ({
+        orderBy: vi.fn(async () => nextRowsForTable(table)),
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => nextRowsForTable(table)),
+          orderBy: vi.fn(async () => nextRowsForTable(table)),
+        })),
+      })),
+    })),
+    insert: vi.fn(() => ({
+      values: vi.fn(async () => undefined),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn(() => ({
+        where: vi.fn(async () => undefined),
+      })),
+    })),
+    delete: vi.fn(() => ({
+      where: vi.fn(async () => undefined),
+    })),
+  };
+};
+
 describe("domain create state", () => {
   it("creates a new record when the root domain is unknown", () => {
     expect(classifyDomainCreateState(null)).toEqual({ kind: "create" });
@@ -400,6 +440,40 @@ describe("domain catalog", () => {
     });
   });
 
+  it("keeps a concurrently persisted zone instead of deleting it during bind cleanup", async () => {
+    const winningDomain = {
+      ...baseDomain,
+      id: "dom_bound",
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      bindingSource: "project_bind",
+    };
+    const db = createSequencedDb({
+      domainRows: [[], [winningDomain]],
+    });
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "bound.example.org",
+    });
+
+    expect(result.domain).toMatchObject({
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      bindingSource: "project_bind",
+      status: "active",
+    });
+    expect(deleteZone).not.toHaveBeenCalled();
+  });
+
   it("keeps retryable bind failures as project-bound provisioning errors", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);
@@ -561,28 +635,27 @@ describe("domain catalog", () => {
   });
 
   it("blocks deleting domains that still have non-destroyed mailboxes", async () => {
-    getDb.mockReturnValue(
-      createDb({
-        domainRows: [
-          {
-            ...baseDomain,
-            id: "dom_bound",
-            rootDomain: "bound.example.org",
-            zoneId: "zone_bound",
-            bindingSource: "project_bind",
-          },
-        ],
-        mailboxRows: [
-          {
-            id: "mbx_destroying",
-            address: "mail@box.bound.example.org",
-            subdomain: "box",
-            domainId: "dom_bound",
-            status: "destroying",
-          },
-        ],
-      }),
-    );
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_bound",
+          rootDomain: "bound.example.org",
+          zoneId: "zone_bound",
+          bindingSource: "project_bind",
+        },
+      ],
+      mailboxRows: [
+        {
+          id: "mbx_destroying",
+          address: "mail@box.bound.example.org",
+          subdomain: "box",
+          domainId: "dom_bound",
+          status: "destroying",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
 
     await expect(
       deleteDomain(env, runtimeConfig, "dom_bound"),
@@ -590,6 +663,8 @@ describe("domain catalog", () => {
       status: 409,
       message: "Mailbox domain still has non-destroyed mailboxes",
     });
+    expect(db.update).toHaveBeenCalledTimes(2);
+    expect(deleteZone).not.toHaveBeenCalled();
   });
 
   it("blocks deleting domains that still have legacy mailboxes without domain ids", async () => {
