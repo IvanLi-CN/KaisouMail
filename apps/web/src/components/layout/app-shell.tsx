@@ -171,10 +171,6 @@ export const AppShell = ({
               />
             </div>
           </div>
-
-          <div className="rounded-xl border border-border bg-card/70 px-3 py-3 text-xs text-muted-foreground">
-            <p>Manage inbox lifecycle, messages, and API access.</p>
-          </div>
         </div>
       </header>
 

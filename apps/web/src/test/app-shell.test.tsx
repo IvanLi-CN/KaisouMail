@@ -31,6 +31,9 @@ describe("AppShell", () => {
     expect(
       within(footer).getByText(projectMeta.projectName),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Manage inbox lifecycle, messages, and API access."),
+    ).not.toBeInTheDocument();
 
     const repositoryLink = within(footer).getByRole("link", {
       name: projectMeta.repositoryLabel,

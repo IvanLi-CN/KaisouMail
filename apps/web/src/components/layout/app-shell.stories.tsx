@@ -90,6 +90,9 @@ export const FooterMetadata: Story = {
       }),
     ).toHaveAttribute("href", projectMeta.versionUrl);
     await expect(
+      canvas.queryByText("Manage inbox lifecycle, messages, and API access."),
+    ).not.toBeInTheDocument();
+    await expect(
       canvas.queryByText(demoVersion.commitSha),
     ).not.toBeInTheDocument();
     await expect(

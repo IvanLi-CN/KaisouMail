@@ -82,7 +82,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
 - Sticky top navigation with clear active state, account context, logout, and skip-to-content affordance
-- Authenticated AppShell keeps the top summary strip product-focused while repository, developer, and runtime-version metadata live in a true footer that stays at the bottom of short pages
+- Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
@@ -101,6 +101,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
 - 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
+- 2026-04-06: Removed the remaining authenticated summary strip so the AppShell header stays focused on navigation and account context only.
 
 ## Visual Evidence
 
