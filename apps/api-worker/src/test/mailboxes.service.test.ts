@@ -238,7 +238,14 @@ describe("mailbox service helpers", () => {
       deletedAt: null,
     } as const;
     const db = createMailboxDb({
-      domainRows: [{ id: domain.id, status: "active" }],
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
       mailboxRows: [],
       subdomainRows: [],
       subdomainInsertError: new Error("subdomain write failed"),
@@ -276,5 +283,55 @@ describe("mailbox service helpers", () => {
       "rule_new",
     );
     expect(db.delete).toHaveBeenCalledWith(mailboxes);
+  });
+
+  it("aborts mailbox creation when the domain row has been rebound to another zone", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: "zone_rebound",
+          deletedAt: null,
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+
+    await expect(
+      createMailboxForUser(
+        {
+          DB: {
+            prepare: vi.fn(),
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          localPart: "build",
+          subdomain: "ops",
+          rootDomain: domain.rootDomain,
+        },
+      ),
+    ).rejects.toThrow("Mailbox domain is no longer available");
+
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
   });
 });

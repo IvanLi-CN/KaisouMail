@@ -373,12 +373,19 @@ export const createMailboxForUser = async (
     .select({
       id: domains.id,
       status: domains.status,
+      zoneId: domains.zoneId,
+      deletedAt: domains.deletedAt,
     })
     .from(domains)
     .where(eq(domains.id, domain.id))
     .limit(1);
   const currentDomain = currentDomainRows[0];
-  if (!currentDomain || currentDomain.status !== "active") {
+  if (
+    !currentDomain ||
+    currentDomain.status !== "active" ||
+    currentDomain.deletedAt ||
+    currentDomain.zoneId !== domain.zoneId
+  ) {
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
 
