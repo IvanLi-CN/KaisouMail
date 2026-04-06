@@ -1,6 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
+Last: 2026-04-06
 
 ## Objective
 
@@ -81,6 +82,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
 - Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
+- Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
@@ -98,6 +100,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
+- 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
+- 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
+- 2026-04-06: Removed the remaining authenticated summary strip so the AppShell header stays focused on navigation and account context only.
 
 ## Visual Evidence
 
@@ -112,6 +117,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ![App shell with the compact nickname-only account trigger](./assets/app-shell-account-trigger.png)
 
 ![App shell with the account details popover pinned open](./assets/app-shell-account-popover.png)
+
+![Authenticated AppShell footer metadata](./assets/app-shell-footer.png)
 
 ### Workspace
 
