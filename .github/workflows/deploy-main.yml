@@ -198,8 +198,27 @@ jobs:
           console.log(`API_ROLLBACK_VERSION_ID=${stable.version_id}`);
           NODE
 
-      - name: Apply D1 migrations
-        run: bun run --cwd apps/api-worker db:migrate:remote
+      - name: Verify no pending remote D1 migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          pending_migrations_output="$(bunx wrangler d1 migrations list kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc)"
+
+          case "${pending_migrations_output}" in
+            *"✅ No migrations to apply!"*)
+              echo "Verified remote D1 has no pending migrations."
+              ;;
+            *"Migrations to be applied:"*)
+              printf '%s\n' "${pending_migrations_output}"
+              echo "Remote D1 still has unapplied migrations; automatic rollback-backed deploy requires zero pending remote migrations. Use the manual migration rollout path." >&2
+              exit 1
+              ;;
+            *)
+              printf '%s\n' "${pending_migrations_output}"
+              echo "Unable to confirm remote D1 migration state; automatic rollback-backed deploy fails closed until the migration state is reviewed manually." >&2
+              exit 1
+              ;;
+          esac
 
       - name: Deploy Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc

@@ -55,8 +55,8 @@ If `VITE_DOCS_SITE_ORIGIN` is empty, the in-app quick reference still works, but
 ## Deploy workflow safety rails
 
 - The production deploy workflow captures the current 100%-stable API Worker version before publishing a new API release
-- It fails closed when the target release includes a D1 migration diff, because rollback-backed automation only supports schema-stable releases
-- For schema-stable releases, the workflow uses rollback-backed `/health` + `/api/version` smoke checks before it can continue to Pages promotion
+- It fails closed when the target release includes a D1 migration diff, or when remote D1 still has pending migrations, because rollback-backed automation only supports schema-stable releases with a clean remote migration state
+- For schema-stable releases with zero pending remote migrations, the workflow uses rollback-backed `/health` + `/api/version` smoke checks before it can continue to Pages promotion
 - Because the workflow also fails closed without a rollback target, bootstrap the very first production API release manually
 
 ## Public GitHub Pages site

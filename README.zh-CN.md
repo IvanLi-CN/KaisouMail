@@ -125,7 +125,7 @@ Web 侧重点变量：
 
 ## 发布工作流门禁
 
-- 主发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本；只有 release 不包含 D1 migration diff 时，才允许走 rollback-backed 的自动发布路径
+- 主发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本；只有 release 不包含 D1 migration diff 且远端 D1 没有 pending migration 时，才允许走 rollback-backed 的自动发布路径
 - 因为要保留可回滚目标，首次生产 API 发布需要手动 bootstrap；自动发布从第二次开始使用
 
 ## 发布面
