@@ -27,6 +27,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import type { SessionUser, VersionInfo } from "@/lib/contracts";
+import { projectMeta } from "@/lib/project-meta";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -88,6 +89,20 @@ export const AppShell = ({
 }>) => {
   const location = useLocation();
   const pathname = location.pathname === "/" ? "/workspace" : location.pathname;
+  const footerLinks = [
+    {
+      href: projectMeta.repositoryUrl,
+      label: projectMeta.repositoryLabel,
+    },
+    {
+      href: projectMeta.developerUrl,
+      label: projectMeta.developerName,
+    },
+    {
+      href: projectMeta.versionUrl,
+      label: `Version ${version?.version ?? "dev"}`,
+    },
+  ] as const;
   const accountPopoverId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -212,7 +227,7 @@ export const AppShell = ({
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col bg-background">
       <a
         href="#app-main"
         className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:text-foreground"
@@ -230,7 +245,7 @@ export const AppShell = ({
                 </span>
                 <span>
                   <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
-                    KaisouMail
+                    {projectMeta.projectName}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     Temporary inbox control plane
@@ -383,24 +398,40 @@ export const AppShell = ({
               />
             </div>
           </div>
-
-          <div className="flex flex-col gap-2 rounded-xl border border-border bg-card/70 px-3 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>Manage inbox lifecycle, messages, and API access.</p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <span>Version {version?.version ?? "dev"}</span>
-              <span>{version?.commitSha ?? "local"}</span>
-              <span>{version?.branch ?? "main"}</span>
-            </div>
-          </div>
         </div>
       </header>
 
       <main
         id="app-main"
-        className="mx-auto min-w-0 max-w-[1520px] space-y-6 px-4 py-6 lg:px-6 xl:px-8"
+        className="mx-auto min-w-0 w-full max-w-[1520px] flex-1 space-y-6 px-4 py-6 lg:px-6 xl:px-8"
       >
         {children}
       </main>
+
+      <footer className="border-t border-border bg-background/95">
+        <div className="mx-auto flex max-w-[1520px] flex-col gap-3 px-4 py-4 text-xs text-muted-foreground lg:px-6 xl:px-8 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
+              {projectMeta.projectName}
+            </p>
+            <p>{`Temporary inbox control plane · ${projectMeta.license} licensed`}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {footerLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

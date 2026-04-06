@@ -226,3 +226,42 @@ jobs:
 
       - name: Run Playwright smoke
         run: bun run test:e2e
+
+  quality:
+    name: quality
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs:
+      - lint-and-format
+      - typecheck
+      - unit-tests
+      - storybook-build
+      - docs-build
+      - worker-build
+      - web-build
+      - playwright-smoke
+    steps:
+      - name: Verify upstream CI results
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          non_success = {
+              name: payload.get("result", "unknown")
+              for name, payload in needs.items()
+              if payload.get("result") != "success"
+          }
+
+          if non_success:
+              print("quality gate blocked by upstream jobs:", non_success)
+              sys.exit(1)
+
+          print("quality gate passed")
+          PY
