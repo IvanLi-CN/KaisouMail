@@ -14,14 +14,17 @@ import type { AppBindings } from "../types";
 export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
   const config = parseRuntimeConfig(c.env);
   const activeRootDomains = await listActiveRootDomains(c.env);
+  const hasCloudflareApiToken = Boolean(config.CLOUDFLARE_API_TOKEN);
 
   return c.json(
     apiMetaResponseSchema.parse({
       domains: activeRootDomains,
       cloudflareDomainBindingEnabled:
         config.EMAIL_ROUTING_MANAGEMENT_ENABLED &&
+        hasCloudflareApiToken &&
         Boolean(config.CLOUDFLARE_ACCOUNT_ID),
-      cloudflareDomainLifecycleEnabled: config.EMAIL_ROUTING_MANAGEMENT_ENABLED,
+      cloudflareDomainLifecycleEnabled:
+        config.EMAIL_ROUTING_MANAGEMENT_ENABLED && hasCloudflareApiToken,
       defaultMailboxTtlMinutes: config.DEFAULT_MAILBOX_TTL_MINUTES,
       minMailboxTtlMinutes,
       maxMailboxTtlMinutes,

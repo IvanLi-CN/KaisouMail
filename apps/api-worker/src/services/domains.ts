@@ -146,6 +146,18 @@ const listCloudflareZonesByRootDomain = async (config: RuntimeConfig) => {
   );
 };
 
+const findCatalogZone = async (
+  config: RuntimeConfig,
+  rootDomain: string,
+  zoneId: string,
+) => {
+  if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
+
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(config);
+  const zone = zonesByRootDomain.get(rootDomain);
+  return zone && zone.id === zoneId ? zone : null;
+};
+
 const requireCatalogZone = async (
   config: RuntimeConfig,
   rootDomain: string,
@@ -647,16 +659,17 @@ export const bindDomain = async (
   if (createState.kind === "replace") {
     const existingZoneId = createState.row.zoneId?.trim();
     if (existingZoneId) {
-      try {
+      const catalogZone = await findCatalogZone(
+        config,
+        rootDomain,
+        existingZoneId,
+      );
+      if (catalogZone) {
         return await persistBoundZone(env, config, {
           rootDomain,
           zoneId: existingZoneId,
           bindingSource: createState.row.bindingSource,
         });
-      } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 404) {
-          throw error;
-        }
       }
     }
   }

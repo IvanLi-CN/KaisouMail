@@ -425,6 +425,14 @@ describe("domain catalog", () => {
       ],
     });
     getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_existing",
+        name: "bound.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
     validateZoneAccess.mockResolvedValue(undefined);
     enableDomainRouting.mockResolvedValue(undefined);
 
@@ -441,7 +449,7 @@ describe("domain catalog", () => {
     });
   });
 
-  it("creates a fresh Cloudflare zone when a stale disabled domain points to a missing zone", async () => {
+  it("creates a fresh Cloudflare zone when a stale disabled domain no longer matches the catalog", async () => {
     const db = createDb({
       domainRows: [
         {
@@ -456,9 +464,15 @@ describe("domain catalog", () => {
       ],
     });
     getDb.mockReturnValue(db);
-    validateZoneAccess
-      .mockRejectedValueOnce(new ApiError(404, "Zone not found"))
-      .mockResolvedValueOnce(undefined);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_unrelated",
+        name: "other.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
     enableDomainRouting.mockResolvedValue(undefined);
     createZone.mockResolvedValue({
       id: "zone_bound",
@@ -472,6 +486,7 @@ describe("domain catalog", () => {
     });
 
     expect(createZone).toHaveBeenCalledWith(runtimeConfig, "bound.example.org");
+    expect(validateZoneAccess).toHaveBeenCalledTimes(1);
     expect(result.domain).toMatchObject({
       rootDomain: "bound.example.org",
       zoneId: "zone_bound",
