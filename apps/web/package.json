@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "sh -c 'vite --host 0.0.0.0 --port ${PORT:-4173}'",
-    "check": "biome check src .storybook vite.config.ts tailwind.config.ts components.json playwright.config.ts",
+    "check": "biome check src functions .storybook vite.config.ts tailwind.config.ts wrangler.jsonc public/_routes.json components.json playwright.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "build": "vite build",
