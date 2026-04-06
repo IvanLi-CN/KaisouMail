@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_sha || 'main' }}
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || inputs.release_sha || 'main' }}
 
       - name: Fetch release tags
         run: git fetch --tags origin
@@ -51,10 +51,30 @@ jobs:
             release_version="${release_tag#v}"
             release_branch="${{ github.event.release.target_commitish || 'main' }}"
           else
-            release_tag="${{ inputs.release_tag }}"
+            requested_release_tag="${{ inputs.release_tag }}"
+            requested_release_sha="${{ inputs.release_sha }}"
+            checked_out_sha="$(git rev-parse HEAD)"
             release_branch="${{ inputs.release_branch || 'main' }}"
 
-            if [ -z "${release_tag}" ]; then
+            if [ -n "${requested_release_sha}" ] && [ "${requested_release_sha}" != "${checked_out_sha}" ]; then
+              echo "workflow_dispatch release_sha ${requested_release_sha} does not match the checked-out commit ${checked_out_sha}." >&2
+              exit 1
+            fi
+
+            if [ -n "${requested_release_tag}" ]; then
+              tag_commit_sha="$(git rev-parse --verify "${requested_release_tag}^{commit}" 2>/dev/null || true)"
+              if [ -z "${tag_commit_sha}" ]; then
+                echo "workflow_dispatch release_tag ${requested_release_tag} does not resolve to a fetched commit." >&2
+                exit 1
+              fi
+
+              if [ "${tag_commit_sha}" != "${checked_out_sha}" ]; then
+                echo "workflow_dispatch release_tag ${requested_release_tag} points at ${tag_commit_sha}, but checkout resolved to ${checked_out_sha}; deploy inputs must reference the same release." >&2
+                exit 1
+              fi
+
+              release_tag="${requested_release_tag}"
+            else
               release_tag="$(git tag --points-at HEAD --list 'v*' | sort -V | tail -n 1)"
             fi
 
