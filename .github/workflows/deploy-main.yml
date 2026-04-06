@@ -145,10 +145,17 @@ jobs:
           const wranglerConfig = JSON.parse(
             fs.readFileSync("apps/api-worker/wrangler.jsonc", "utf8"),
           );
-          const required = ["SESSION_SECRET"];
+          const required = Array.isArray(wranglerConfig?.secrets?.required)
+            ? wranglerConfig.secrets.required.filter(
+                (name) => typeof name === "string" && name.trim().length > 0,
+              )
+            : [];
 
-          if (typeof wranglerConfig?.vars?.BOOTSTRAP_ADMIN_EMAIL === "string" && wranglerConfig.vars.BOOTSTRAP_ADMIN_EMAIL.trim()) {
-            required.push("BOOTSTRAP_ADMIN_API_KEY");
+          if (required.length === 0) {
+            console.error(
+              "apps/api-worker/wrangler.jsonc must declare at least one required runtime secret in secrets.required.",
+            );
+            process.exit(1);
           }
 
           const missing = required.filter((name) => !names.has(name));
@@ -271,45 +278,40 @@ jobs:
             export VERSION_FILE="${version_file}"
             export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
 
-            if node <<'NODE'
-            const fs = require("node:fs");
+            if node -e '
+              const fs = require("node:fs");
 
-            const healthCode = process.env.HEALTH_CODE;
-            const versionCode = process.env.VERSION_CODE;
-            const expectedSha = process.env.EXPECTED_SHA;
+              const healthCode = process.env.HEALTH_CODE;
+              const versionCode = process.env.VERSION_CODE;
+              const expectedSha = process.env.EXPECTED_SHA;
 
-            if (versionCode !== "200") {
-              console.error(
-                `Unexpected status code: /api/version=${versionCode}`,
-              );
-              process.exit(1);
-            }
+              if (versionCode !== "200") {
+                console.error(`Unexpected status code: /api/version=${versionCode}`);
+                process.exit(1);
+              }
 
-            const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
+              const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
 
-            if (healthCode !== "200") {
-              console.error(
-                `Unexpected status code: /health=${healthCode}`,
-              );
-              process.exit(1);
-            }
+              if (healthCode !== "200") {
+                console.error(`Unexpected status code: /health=${healthCode}`);
+                process.exit(1);
+              }
 
-            const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, "utf8"));
-            if (health?.ok !== true) {
-              console.error(`Unexpected /health payload: ${JSON.stringify(health)}`);
-              process.exit(1);
-            }
+              const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, "utf8"));
+              if (health?.ok !== true) {
+                console.error(`Unexpected /health payload: ${JSON.stringify(health)}`);
+                process.exit(1);
+              }
 
-            if (version?.commitSha !== expectedSha) {
-              console.error(
-                `Expected deployed commit ${expectedSha}, received ${version?.commitSha ?? "<missing>"}`,
-              );
-              process.exit(1);
-            }
+              if (version?.commitSha !== expectedSha) {
+                console.error(
+                  `Expected deployed commit ${expectedSha}, received ${version?.commitSha ?? "<missing>"}`,
+                );
+                process.exit(1);
+              }
 
-            console.log(`Smoke gate passed for deployed commit ${version.commitSha}`);
-            NODE
-            then
+              console.log(`Smoke gate passed for deployed commit ${version.commitSha}`);
+            '; then
               exit 0
             fi
 
