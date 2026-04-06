@@ -126,6 +126,7 @@ export const ErrorState = ({
   const TitleTag = layout === "fullScreen" ? "h1" : "h2";
   const iconSizeClassName =
     layout === "fullScreen" ? "h-7 w-7 sm:h-8 sm:w-8" : "h-6 w-6";
+  const usesRecoveryRail = layout === "fullScreen";
 
   return (
     <div
@@ -162,9 +163,7 @@ export const ErrorState = ({
         <div
           className={cn(
             "relative grid",
-            layout === "fullScreen"
-              ? "lg:grid-cols-[minmax(0,1fr)_320px]"
-              : "xl:grid-cols-[minmax(0,1fr)_280px]",
+            usesRecoveryRail ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "",
           )}
         >
           <div className={cn("relative", layout === "fullScreen" ? "" : "")}>
@@ -241,56 +240,105 @@ export const ErrorState = ({
                     </div>
                   </details>
                 ) : null}
+
+                {!usesRecoveryRail ? (
+                  <div className="rounded-2xl border border-border/70 bg-background/25 p-4 sm:p-5">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Recovery
+                        </p>
+                        <div
+                          className={cn(
+                            "rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+                            resolvedVariant.railClassName,
+                          )}
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            Status
+                          </p>
+                          <div className="mt-3 flex flex-wrap items-end gap-3">
+                            <span className="font-mono text-3xl font-semibold tracking-[-0.08em] text-foreground">
+                              {resolvedVariant.status}
+                            </span>
+                            <span className="pb-1 text-sm text-muted-foreground">
+                              {resolvedVariant.tone}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          Recommended next step
+                        </p>
+                        <ul className="space-y-3">
+                          {resolvedVariant.points.map((point) => (
+                            <li
+                              key={point}
+                              className="flex items-start gap-3 text-sm leading-6 text-muted-foreground"
+                            >
+                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                              <span>{point}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
 
-          <aside className="relative border-t border-border/70 bg-background/20 lg:border-t-0 lg:border-l lg:bg-background/30">
-            <div className="flex h-full flex-col justify-between p-6 sm:p-7">
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Recovery
-                  </p>
-                  <div
-                    className={cn(
-                      "rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
-                      resolvedVariant.railClassName,
-                    )}
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Status
+          {usesRecoveryRail ? (
+            <aside className="relative border-t border-border/70 bg-background/20 lg:border-t-0 lg:border-l lg:bg-background/30">
+              <div className="flex h-full flex-col justify-between p-6 sm:p-7">
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Recovery
                     </p>
-                    <div className="mt-3 flex items-end gap-3">
-                      <span className="font-mono text-3xl font-semibold tracking-[-0.08em] text-foreground">
-                        {resolvedVariant.status}
-                      </span>
-                      <span className="pb-1 text-sm text-muted-foreground">
-                        {resolvedVariant.tone}
-                      </span>
+                    <div
+                      className={cn(
+                        "rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
+                        resolvedVariant.railClassName,
+                      )}
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Status
+                      </p>
+                      <div className="mt-3 flex items-end gap-3">
+                        <span className="font-mono text-3xl font-semibold tracking-[-0.08em] text-foreground">
+                          {resolvedVariant.status}
+                        </span>
+                        <span className="pb-1 text-sm text-muted-foreground">
+                          {resolvedVariant.tone}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    Recommended next step
-                  </p>
-                  <ul className="space-y-3">
-                    {resolvedVariant.points.map((point) => (
-                      <li
-                        key={point}
-                        className="flex items-start gap-3 text-sm leading-6 text-muted-foreground"
-                      >
-                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="space-y-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Recommended next step
+                    </p>
+                    <ul className="space-y-3">
+                      {resolvedVariant.points.map((point) => (
+                        <li
+                          key={point}
+                          className="flex items-start gap-3 text-sm leading-6 text-muted-foreground"
+                        >
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
-          </aside>
+            </aside>
+          ) : null}
         </div>
       </section>
     </div>
