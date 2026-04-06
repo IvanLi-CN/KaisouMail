@@ -76,9 +76,19 @@ export const createApp = () => {
     }
 
     c.set("runtimeConfig", runtimeConfigResult.config);
+    await next();
+  });
+
+  app.use("*", async (c, next) => {
+    if (c.req.path === "/health" || c.req.path === "/api/version") {
+      await next();
+      return;
+    }
+
     const db = getDb(c.env);
-    await ensureBootstrapAdmin(db, runtimeConfigResult.config);
-    await ensureBootstrapDomains(db, runtimeConfigResult.config);
+    const runtimeConfig = c.get("runtimeConfig");
+    await ensureBootstrapAdmin(db, runtimeConfig);
+    await ensureBootstrapDomains(db, runtimeConfig);
     await next();
   });
 
@@ -116,7 +126,10 @@ export const createApp = () => {
   app.route("/api/mailboxes", mailboxRoutes);
   app.route("/api/messages", messageRoutes);
   app.route("/api/users", userRoutes);
-  app.get("/health", (c) => c.json({ ok: true }));
+  app.get("/health", async (c) => {
+    await c.env.DB.prepare("select 1").first();
+    return c.json({ ok: true });
+  });
 
   app.onError((error, c) => {
     const runtimeConfig = c.get("runtimeConfig");

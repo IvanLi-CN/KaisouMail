@@ -271,7 +271,7 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
-- Keep one existing 100%-stable API Worker deployment available as the rollback target; the workflow rolls the API Worker back automatically if the post-deploy smoke gate never reaches the target release SHA
+- Keep one existing 100%-stable API Worker deployment available as the rollback target; the workflow runs rollback-backed API smoke checks before remote D1 migrations and rolls the API Worker back automatically if that gate never reaches the target release SHA
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
 

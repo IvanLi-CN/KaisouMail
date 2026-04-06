@@ -123,6 +123,29 @@ describe("meta and auth routes", () => {
     });
   });
 
+  it("returns ok from /health when runtime config is valid", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/health"), {
+      APP_ENV: "development",
+      MAIL_DOMAIN: "707979.xyz",
+      CLOUDFLARE_ZONE_ID: "zone_legacy",
+      DEFAULT_MAILBOX_TTL_MINUTES: "60",
+      CLEANUP_BATCH_SIZE: "3",
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      SESSION_SECRET: "super-secret-session-key",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+      DB: {
+        prepare: () => ({
+          first: async () => ({ ok: 1 }),
+        }),
+      },
+    } as never);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
   it("returns a stable 500 envelope for /health when SESSION_SECRET is missing", async () => {
     const app = createApp();
     const response = await app.fetch(new Request("http://localhost/health"), {

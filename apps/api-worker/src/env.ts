@@ -48,6 +48,18 @@ export type RuntimeConfigParseResult =
   | { success: true; config: RuntimeConfig }
   | { success: false; issues: z.ZodIssue[] };
 
+const toWebAppOrigin = (value: string | undefined) => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+};
+
 const normalizeRuntimeConfig = (
   config: z.infer<typeof runtimeConfigSchema>,
 ): RuntimeConfig => {
@@ -57,6 +69,7 @@ const normalizeRuntimeConfig = (
     // quickstart-compatible fallback.
     CLOUDFLARE_API_TOKEN:
       config.CLOUDFLARE_RUNTIME_API_TOKEN ?? config.CLOUDFLARE_API_TOKEN,
+    WEB_APP_ORIGIN: toWebAppOrigin(config.WEB_APP_ORIGIN),
   };
 };
 
@@ -88,14 +101,4 @@ export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig => {
 
 export const resolveConfiguredWebAppOrigin = (
   env: Pick<WorkerEnv, "WEB_APP_ORIGIN">,
-) => {
-  if (!env.WEB_APP_ORIGIN) {
-    return undefined;
-  }
-
-  try {
-    return new URL(env.WEB_APP_ORIGIN).origin;
-  } catch {
-    return undefined;
-  }
-};
+) => toWebAppOrigin(env.WEB_APP_ORIGIN);

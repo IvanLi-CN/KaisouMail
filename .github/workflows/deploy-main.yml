@@ -157,9 +157,6 @@ jobs:
           console.log(`API_ROLLBACK_VERSION_ID=${stable.version_id}`);
           NODE
 
-      - name: Apply D1 migrations
-        run: bun run --cwd apps/api-worker db:migrate:remote
-
       - name: Deploy Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc
 
@@ -195,16 +192,23 @@ jobs:
             const versionCode = process.env.VERSION_CODE;
             const expectedSha = process.env.EXPECTED_SHA;
 
-            if (healthCode !== "200" || versionCode !== "200") {
+            if (versionCode !== "200") {
               console.error(
-                `Unexpected status codes: /health=${healthCode}, /api/version=${versionCode}`,
+                `Unexpected status code: /api/version=${versionCode}`,
+              );
+              process.exit(1);
+            }
+
+            const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
+
+            if (healthCode !== "200") {
+              console.error(
+                `Unexpected status code: /health=${healthCode}`,
               );
               process.exit(1);
             }
 
             const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, "utf8"));
-            const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
-
             if (health?.ok !== true) {
               console.error(`Unexpected /health payload: ${JSON.stringify(health)}`);
               process.exit(1);
@@ -239,6 +243,9 @@ jobs:
 
             sleep "$((attempt * 5))"
           done
+
+      - name: Apply D1 migrations
+        run: bun run --cwd apps/api-worker db:migrate:remote
 
       - name: Deploy Email receiver Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc

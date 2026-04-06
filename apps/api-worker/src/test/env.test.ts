@@ -85,6 +85,15 @@ describe("runtime config parsing", () => {
     ).toBe("https://cfm.707979.xyz");
   });
 
+  it("stores WEB_APP_ORIGIN as a normalized origin in runtime config", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz/workspace",
+    } as never);
+
+    expect(config.WEB_APP_ORIGIN).toBe("https://cfm.707979.xyz");
+  });
+
   it("ignores an invalid WEB_APP_ORIGIN when computing fallback CORS", () => {
     expect(
       resolveConfiguredWebAppOrigin({

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { parseRuntimeConfig } from "../env";
 import { applyCorsHeaders, resolveAllowedCorsOrigin } from "../lib/cors";
 
 describe("cors helpers", () => {
@@ -30,6 +31,23 @@ describe("cors helpers", () => {
         CF_ROUTE_RULESET_TAG: "kaisoumail",
       }),
     ).toBe("http://localhost:4173");
+  });
+
+  it("allows production requests when WEB_APP_ORIGIN includes a path", () => {
+    const config = parseRuntimeConfig({
+      APP_ENV: "production",
+      DEFAULT_MAILBOX_TTL_MINUTES: "60",
+      CLEANUP_BATCH_SIZE: "3",
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      SESSION_SECRET: "super-secret-session-key",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz/workspace",
+    } as never);
+
+    expect(resolveAllowedCorsOrigin("https://cfm.707979.xyz", config)).toBe(
+      "https://cfm.707979.xyz",
+    );
   });
 
   it("rejects unrelated origins", () => {
