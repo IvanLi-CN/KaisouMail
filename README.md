@@ -99,7 +99,10 @@ The Worker expects these bindings and variables:
 ### Required secrets
 
 - `SESSION_SECRET`
-- `BOOTSTRAP_ADMIN_API_KEY`
+
+### Optional bootstrap secrets
+
+- `BOOTSTRAP_ADMIN_API_KEY` (only needed when `BOOTSTRAP_ADMIN_EMAIL` is also set to auto-create the first admin)
 
 ### Optional live-management secrets
 
@@ -158,6 +161,7 @@ The release and deploy workflows need:
 
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -170,6 +174,7 @@ If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, put it in both the 
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -266,6 +271,7 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
+- Keep one existing 100%-stable API Worker deployment available as the rollback target; the automatic deploy path only runs when the release has no D1 migration diff and remote D1 has no pending migrations, and in that case it uses rollback-backed API smoke checks before Pages promotion
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
 
@@ -273,14 +279,15 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 1. Create the Pages project `kaisoumail` once in Cloudflare
 2. Bind your control-plane origin (for example `cfm.example.com`) to Pages
-3. Set Worker secrets (`SESSION_SECRET`, `BOOTSTRAP_ADMIN_API_KEY`, and either `CLOUDFLARE_RUNTIME_API_TOKEN` or the shared `CLOUDFLARE_API_TOKEN`)
+3. Set the Worker runtime secret `SESSION_SECRET`, and only add `BOOTSTRAP_ADMIN_API_KEY` when you also set `BOOTSTRAP_ADMIN_EMAIL` for first-admin bootstrap
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
-5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`)
+5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your api origin>`
 7. Set `WEB_APP_ORIGIN=<your pages origin>`
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
-9. Push to `main` to trigger the deploy workflow
-10. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
+9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can auto-rollback failed smoke checks
+10. Push to `main` to trigger the deploy workflow
+11. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
 
 ## Worker topology
 

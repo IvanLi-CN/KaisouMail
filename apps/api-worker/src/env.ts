@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
+
 const runtimeConfigSchema = z.object({
   APP_ENV: z.string().default("development"),
   MAIL_DOMAIN: z.string().min(1).optional(),
@@ -42,13 +44,61 @@ export interface WorkerEnv {
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 
-export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig => {
-  const config = runtimeConfigSchema.parse(env);
+export type RuntimeConfigParseResult =
+  | { success: true; config: RuntimeConfig }
+  | { success: false; issues: z.ZodIssue[] };
+
+const toWebAppOrigin = (value: string | undefined) => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+const normalizeRuntimeConfig = (
+  config: z.infer<typeof runtimeConfigSchema>,
+): RuntimeConfig => {
   return {
     ...config,
     // Prefer the explicit runtime token, but keep the shared token as a
     // quickstart-compatible fallback.
     CLOUDFLARE_API_TOKEN:
       config.CLOUDFLARE_RUNTIME_API_TOKEN ?? config.CLOUDFLARE_API_TOKEN,
+    WEB_APP_ORIGIN: toWebAppOrigin(config.WEB_APP_ORIGIN),
   };
 };
+
+export const safeParseRuntimeConfig = (
+  env: WorkerEnv,
+): RuntimeConfigParseResult => {
+  const result = runtimeConfigSchema.safeParse(env);
+  if (!result.success) {
+    return {
+      success: false,
+      issues: result.error.issues,
+    };
+  }
+
+  return {
+    success: true,
+    config: normalizeRuntimeConfig(result.data),
+  };
+};
+
+export const parseRuntimeConfig = (env: WorkerEnv): RuntimeConfig => {
+  const result = safeParseRuntimeConfig(env);
+  if (!result.success) {
+    throw new z.ZodError(result.issues);
+  }
+
+  return result.config;
+};
+
+export const resolveConfiguredWebAppOrigin = (
+  env: Pick<WorkerEnv, "WEB_APP_ORIGIN">,
+) => toWebAppOrigin(env.WEB_APP_ORIGIN);

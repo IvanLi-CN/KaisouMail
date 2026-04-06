@@ -84,6 +84,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -96,6 +97,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 - `Zone: Zone Settings: Edit`
 - `Account: D1: Edit`
 - `Account: Workers Scripts: Edit`
+- `Account: Workers R2 Storage: Edit`
 - `Account: Cloudflare Pages: Edit`
 - `Zone: Workers Routes: Edit`
 
@@ -106,7 +108,7 @@ scope 必须覆盖所有要接入 KaisouMail 的 zones。
 Worker 侧重点变量：
 
 - `SESSION_SECRET`
-- `BOOTSTRAP_ADMIN_API_KEY`
+- `BOOTSTRAP_ADMIN_API_KEY`（仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
@@ -120,6 +122,11 @@ Web 侧重点变量：
 - `VITE_DOCS_SITE_ORIGIN`
 
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
+
+## 发布工作流门禁
+
+- 主发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本；只有 release 不包含 D1 migration diff 且远端 D1 没有 pending migration 时，才允许走 rollback-backed 的自动发布路径
+- 因为要保留可回滚目标，首次生产 API 发布需要手动 bootstrap；自动发布从第二次开始使用
 
 ## 发布面
 

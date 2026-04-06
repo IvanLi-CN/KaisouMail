@@ -12,7 +12,12 @@
 | Name | Purpose |
 | --- | --- |
 | `SESSION_SECRET` | session signing |
-| `BOOTSTRAP_ADMIN_API_KEY` | initial admin bootstrap key |
+
+## Optional bootstrap-only Worker secrets
+
+| Name | Purpose |
+| --- | --- |
+| `BOOTSTRAP_ADMIN_API_KEY` | first admin bootstrap key; only needed when `BOOTSTRAP_ADMIN_EMAIL` is also set |
 
 ## Worker runtime variables
 
@@ -46,6 +51,13 @@ Do not treat these as long-term configuration for new instances.
 | `VITE_DOCS_SITE_ORIGIN` | public docs and Storybook origin used by the control plane |
 
 If `VITE_DOCS_SITE_ORIGIN` is empty, the in-app quick reference still works, but public docs links are hidden.
+
+## Deploy workflow safety rails
+
+- The production deploy workflow captures the current 100%-stable API Worker version before publishing a new API release
+- It fails closed when the target release includes a D1 migration diff, or when remote D1 still has pending migrations, because rollback-backed automation only supports schema-stable releases with a clean remote migration state
+- For schema-stable releases with zero pending remote migrations, the workflow uses rollback-backed `/health` + `/api/version` smoke checks before it can continue to Pages promotion
+- Because the workflow also fails closed without a rollback target, bootstrap the very first production API release manually
 
 ## Public GitHub Pages site
 

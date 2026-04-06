@@ -12,7 +12,12 @@
 | 名称 | 用途 |
 | --- | --- |
 | `SESSION_SECRET` | 会话签名 |
-| `BOOTSTRAP_ADMIN_API_KEY` | 首次引导管理员 API Key |
+
+## 仅首次引导时才需要的 Worker secret
+
+| 名称 | 用途 |
+| --- | --- |
+| `BOOTSTRAP_ADMIN_API_KEY` | 首次引导管理员 API Key；仅当同时设置 `BOOTSTRAP_ADMIN_EMAIL` 时才需要 |
 
 ## Worker 运行变量
 
@@ -46,6 +51,13 @@
 | `VITE_DOCS_SITE_ORIGIN` | 控制台里跳到公开文档站和公开 Storybook 的地址 |
 
 如果 `VITE_DOCS_SITE_ORIGIN` 不填，控制台仍能用站内速查页，但不会显示公开站入口。
+
+## 发布工作流安全门禁
+
+- 生产发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本，再发布新的 API 版本
+- 如果目标 release 包含 D1 migration diff，或远端 D1 仍有 pending migration，workflow 会直接 fail closed，因为 rollback-backed 自动发布只支持远端 migration 状态干净的 schema-stable release
+- 对于远端没有 pending migration 的 schema-stable release，workflow 会先跑 rollback-backed 的 `/health` + `/api/version` smoke 检查，再决定是否继续 Pages 发布
+- 因为 workflow 没有回滚目标时也会 fail closed，所以第一次生产 API 发布需要手动 bootstrap
 
 ## GitHub Pages 公开站点
 
