@@ -52,6 +52,12 @@
 
 如果 `VITE_DOCS_SITE_ORIGIN` 不填，控制台仍能用站内速查页，但不会显示公开站入口。
 
+## 发布工作流安全门禁
+
+- 生产发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本，再发布新的 API 版本
+- 如果 post-deploy 的 `/health` 或 `/api/version` smoke 检查始终达不到目标 release SHA，workflow 会先回滚 API Worker，再阻断后续 Pages 发布
+- 因为 workflow 没有回滚目标时会 fail closed，所以第一次生产 API 发布需要手动 bootstrap
+
 ## GitHub Pages 公开站点
 
 `docs-pages` workflow 会发布三个公开入口：

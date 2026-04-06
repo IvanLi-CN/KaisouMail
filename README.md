@@ -271,6 +271,7 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
+- Keep one existing 100%-stable API Worker deployment available as the rollback target; the workflow rolls the API Worker back automatically if the post-deploy smoke gate never reaches the target release SHA
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
 
@@ -284,8 +285,9 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your api origin>`
 7. Set `WEB_APP_ORIGIN=<your pages origin>`
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
-9. Push to `main` to trigger the deploy workflow
-10. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
+9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can auto-rollback failed smoke checks
+10. Push to `main` to trigger the deploy workflow
+11. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
 
 ## Worker topology
 

@@ -62,7 +62,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters; when both cursor aliases are present, the later timestamp is used as the strict lower bound
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
-- The deploy workflow blocks release promotion unless required Worker secrets exist and the freshly deployed API passes `/health` plus `/api/version` smoke checks for the target release SHA
+- The deploy workflow blocks release promotion unless required Worker secrets exist and the freshly deployed API passes `/health` plus `/api/version` smoke checks for the target release SHA; if that post-deploy gate never converges, the API Worker is rolled back before Pages promotion can continue
 
 ## Refresh Behavior
 
@@ -99,7 +99,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
-- 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, post-deploy `/health` + `/api/version` smoke checks, and runtime config failures that stay inside the standard JSON error envelope.
+- 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed post-deploy `/health` + `/api/version` smoke checks, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
 
 ## Visual Evidence

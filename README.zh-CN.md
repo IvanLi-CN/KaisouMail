@@ -123,6 +123,11 @@ Web 侧重点变量：
 
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
 
+## 发布工作流门禁
+
+- 主发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本，post-deploy smoke gate 失败时会自动回滚 API Worker
+- 因为要保留可回滚目标，首次生产 API 发布需要手动 bootstrap；自动发布从第二次开始使用
+
 ## 发布面
 
 - Cloudflare Pages：登录后的控制台

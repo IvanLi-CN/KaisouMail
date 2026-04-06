@@ -127,14 +127,41 @@ jobs:
           console.log(`Verified API Worker secrets: ${required.join(", ")}`);
           NODE
 
+      - name: Capture current API Worker rollback target
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployments_json="$(bunx wrangler deployments list --config apps/api-worker/wrangler.jsonc --json)"
+          export DEPLOYMENTS_JSON="${deployments_json}"
+          node <<'NODE' | tee -a "${GITHUB_ENV}"
+          const deployments = JSON.parse(process.env.DEPLOYMENTS_JSON ?? "[]");
+          const latest = [...deployments]
+            .sort((a, b) => a.created_on.localeCompare(b.created_on))
+            .at(-1);
+
+          if (!latest) {
+            console.error(
+              "Automated deploy requires an existing stable API deployment so failed smoke checks can roll back safely. Bootstrap the first production release manually.",
+            );
+            process.exit(1);
+          }
+
+          const stable = latest.versions?.find((version) => version.percentage === 100);
+          if (!stable?.version_id) {
+            console.error(
+              "Current API deployment does not expose a single 100% stable version, so the workflow cannot capture a safe rollback target.",
+            );
+            process.exit(1);
+          }
+
+          console.log(`API_ROLLBACK_VERSION_ID=${stable.version_id}`);
+          NODE
+
       - name: Apply D1 migrations
         run: bun run --cwd apps/api-worker db:migrate:remote
 
       - name: Deploy Worker
         run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc
-
-      - name: Deploy Email receiver Worker
-        run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc
 
       - name: Smoke test deployed API Worker
         shell: bash
@@ -202,11 +229,19 @@ jobs:
 
             if [ "${attempt}" -eq 6 ]; then
               echo "Deployed API Worker failed smoke gate after ${attempt} attempts" >&2
+              echo "Rolling API Worker back to ${API_ROLLBACK_VERSION_ID}" >&2
+              bunx wrangler rollback "${API_ROLLBACK_VERSION_ID}" \
+                --config apps/api-worker/wrangler.jsonc \
+                --message "Rollback failed deploy smoke gate for ${CF_MAIL_RELEASE_SHA}" \
+                --yes
               exit 1
             fi
 
             sleep "$((attempt * 5))"
           done
+
+      - name: Deploy Email receiver Worker
+        run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc
 
       - name: Build web app
         run: bun run --cwd apps/web build
