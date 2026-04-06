@@ -19,7 +19,7 @@ describe("ErrorState", () => {
     expect(
       screen.getByRole("heading", { name: "页面渲染异常已被拦截" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("查看技术详情")).toBeInTheDocument();
+    expect(screen.getByText("诊断信息")).toBeInTheDocument();
     expect(screen.getByText(/trace_demo/i)).toBeInTheDocument();
   });
 });

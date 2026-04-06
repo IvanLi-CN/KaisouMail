@@ -60,7 +60,7 @@ export const FatalWithDetails: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByText("查看技术详情"));
+    await userEvent.click(canvas.getByText("诊断信息"));
     await expect(canvas.getByText(/trace_demo_404/i)).toBeInTheDocument();
   },
 };
