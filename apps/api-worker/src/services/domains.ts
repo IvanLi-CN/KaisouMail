@@ -1,5 +1,5 @@
 import { domainCatalogItemSchema, domainSchema } from "@kaisoumail/shared";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, ne } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import { domains, mailboxes, subdomains } from "../db/schema";
@@ -249,15 +249,19 @@ const requireDomainDeleteAllowed = async (
     .select({ id: mailboxes.id })
     .from(mailboxes)
     .where(
-      and(eq(mailboxes.domainId, domain.id), eq(mailboxes.status, "active")),
+      and(eq(mailboxes.domainId, domain.id), ne(mailboxes.status, "destroyed")),
     )
     .limit(1);
 
   if (activeMailboxes[0]) {
-    throw new ApiError(409, "Mailbox domain still has active mailboxes", {
-      domainId: domain.id,
-      rootDomain: domain.rootDomain,
-    });
+    throw new ApiError(
+      409,
+      "Mailbox domain still has non-destroyed mailboxes",
+      {
+        domainId: domain.id,
+        rootDomain: domain.rootDomain,
+      },
+    );
   }
 };
 
@@ -413,11 +417,36 @@ export const bindDomain = async (
   }
 
   const zone = await createZone(config, rootDomain);
-  return persistManagedDomain(env, config, {
-    rootDomain,
-    zoneId: zone.id,
-    bindingSource: "project_bind",
-  });
+  try {
+    return await persistManagedDomain(env, config, {
+      rootDomain,
+      zoneId: zone.id,
+      bindingSource: "project_bind",
+    });
+  } catch (error) {
+    try {
+      await deleteZone(config, {
+        rootDomain,
+        zoneId: zone.id,
+      });
+    } catch (cleanupError) {
+      throw new ApiError(
+        502,
+        "Failed to persist bound domain and clean up Cloudflare zone",
+        {
+          rootDomain,
+          zoneId: zone.id,
+          cause: error instanceof Error ? error.message : String(error),
+          cleanupError:
+            cleanupError instanceof Error
+              ? cleanupError.message
+              : String(cleanupError),
+        },
+      );
+    }
+
+    throw error;
+  }
 };
 
 export const retryDomainProvision = async (

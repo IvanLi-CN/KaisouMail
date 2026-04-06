@@ -289,6 +289,38 @@ describe("domain catalog", () => {
     });
   });
 
+  it("cleans up the Cloudflare zone when bind persistence fails", async () => {
+    const db = {
+      ...createDb(),
+      insert: vi.fn(() => ({
+        values: vi.fn(async () => {
+          throw new Error("D1 write failed");
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+    deleteZone.mockResolvedValue({ alreadyMissing: false });
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "bound.example.org",
+      }),
+    ).rejects.toThrow("D1 write failed");
+
+    expect(deleteZone).toHaveBeenCalledWith(runtimeConfig, {
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+    });
+  });
+
   it("soft deletes project-bound domains after removing the Cloudflare zone", async () => {
     const db = createDb({
       domainRows: [
@@ -332,7 +364,7 @@ describe("domain catalog", () => {
     });
   });
 
-  it("blocks deleting domains that still have active mailboxes", async () => {
+  it("blocks deleting domains that still have non-destroyed mailboxes", async () => {
     getDb.mockReturnValue(
       createDb({
         domainRows: [
@@ -344,7 +376,7 @@ describe("domain catalog", () => {
             bindingSource: "project_bind",
           },
         ],
-        mailboxRows: [{ id: "mbx_active" }],
+        mailboxRows: [{ id: "mbx_destroying", status: "destroying" }],
       }),
     );
 
@@ -352,7 +384,7 @@ describe("domain catalog", () => {
       deleteDomain(env, runtimeConfig, "dom_bound"),
     ).rejects.toMatchObject({
       status: 409,
-      message: "Mailbox domain still has active mailboxes",
+      message: "Mailbox domain still has non-destroyed mailboxes",
     });
   });
 });

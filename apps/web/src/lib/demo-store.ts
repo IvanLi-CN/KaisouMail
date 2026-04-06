@@ -446,10 +446,10 @@ export const demoApi = {
       state.mailboxes.some(
         (mailbox) =>
           mailbox.rootDomain === domain.rootDomain &&
-          mailbox.status === "active",
+          mailbox.status !== "destroyed",
       )
     ) {
-      throw new Error("Mailbox domain still has active mailboxes");
+      throw new Error("Mailbox domain still has non-destroyed mailboxes");
     }
 
     state.domains = state.domains.filter((entry) => entry.id !== id);
