@@ -31,7 +31,8 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | first admin email |
 | `BOOTSTRAP_ADMIN_NAME` | first admin display name |
 | `CF_ROUTE_RULESET_TAG` | Worker route management tag |
-| `WEB_APP_ORIGIN` | trusted browser origin for the control plane |
+| `WEB_APP_ORIGIN` | legacy primary browser origin used for single-origin compatibility |
+| `WEB_APP_ORIGINS` | comma-separated browser origins to trust when multiple production aliases stay live |
 
 ## Legacy single-domain upgrade variables
 
@@ -46,11 +47,17 @@ Do not treat these as long-term configuration for new instances.
 
 | Name | Purpose |
 | --- | --- |
-| `VITE_API_BASE_URL` | control-plane API base URL |
+| `VITE_API_BASE_URL` | canonical / fallback control-plane API base URL |
 | `VITE_DEMO_MODE` | local demo mode |
 | `VITE_DOCS_SITE_ORIGIN` | public docs and Storybook origin used by the control plane |
 
 If `VITE_DOCS_SITE_ORIGIN` is empty, the in-app quick reference still works, but public docs links are hidden.
+When the control plane runs from a known production alias such as `cfm.707979.xyz` or `km.707979.xyz`, the web app prefers the matching API alias automatically; other environments still fall back to `VITE_API_BASE_URL`.
+
+## Production alias example
+
+- Web: `https://cfm.707979.xyz`, `https://km.707979.xyz`
+- API: `https://api.cfm.707979.xyz`, `https://api.km.707979.xyz`
 
 ## Deploy workflow safety rails
 
