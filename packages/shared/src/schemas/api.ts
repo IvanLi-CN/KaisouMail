@@ -148,6 +148,7 @@ export const messageDetailResponseSchema = z.object({
 
 export const apiMetaResponseSchema = z.object({
   domains: z.array(z.string().regex(rootDomainRegex)),
+  cloudflareDomainBindingEnabled: z.boolean(),
   cloudflareDomainLifecycleEnabled: z.boolean(),
   defaultMailboxTtlMinutes: z
     .number()

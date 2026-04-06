@@ -11,6 +11,7 @@ const meta = {
   tags: ["autodocs"],
   args: {
     domains: demoDomainCatalog,
+    isDomainBindingEnabled: true,
     isDomainLifecycleEnabled: true,
     isBindPending: false,
     isEnablePending: false,
@@ -108,6 +109,7 @@ export const MissingInCloudflare: Story = {
 
 export const LifecycleManagementDisabled: Story = {
   args: {
+    isDomainBindingEnabled: false,
     isDomainLifecycleEnabled: false,
   },
 };

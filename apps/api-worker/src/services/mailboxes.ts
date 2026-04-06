@@ -169,6 +169,13 @@ const insertMailboxIfDomainStillActive = async (
   }
 };
 
+const rollbackMailboxInsert = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+) => {
+  await db.delete(mailboxes).where(eq(mailboxes.id, mailboxId));
+};
+
 export const resolveRequestedMailboxAddress = (
   input:
     | { address: string; expiresInMinutes?: number }
@@ -398,8 +405,10 @@ export const createMailboxForUser = async (
     destroyedAt: null,
   } as const;
 
+  let mailboxInserted = false;
   try {
     await insertMailboxIfDomainStillActive(env, created, domain.rootDomain);
+    mailboxInserted = true;
 
     if (knownSubdomain[0]) {
       await db
@@ -419,6 +428,15 @@ export const createMailboxForUser = async (
       });
     }
   } catch (error) {
+    let rollbackError: unknown = null;
+    if (mailboxInserted) {
+      try {
+        await rollbackMailboxInsert(db, created.id);
+      } catch (cleanupError) {
+        rollbackError = cleanupError;
+      }
+    }
+
     if (routingRuleId) {
       try {
         await deleteRoutingRule(config, domain, routingRuleId);
@@ -427,6 +445,23 @@ export const createMailboxForUser = async (
         // creation race or write failure that caused the insert to abort.
       }
     }
+
+    if (rollbackError) {
+      throw new ApiError(
+        502,
+        "Failed to roll back mailbox after subdomain persistence failure",
+        {
+          mailboxId: created.id,
+          address: created.address,
+          cause: error instanceof Error ? error.message : String(error),
+          rollbackError:
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError),
+        },
+      );
+    }
+
     throw error;
   }
 

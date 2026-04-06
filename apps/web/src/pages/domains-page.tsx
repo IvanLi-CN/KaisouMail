@@ -16,6 +16,7 @@ import type { DomainCatalogItem } from "@/lib/contracts";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
+  isDomainBindingEnabled?: boolean;
   isDomainLifecycleEnabled?: boolean;
   isBindPending?: boolean;
   isEnablePending?: boolean;
@@ -28,6 +29,7 @@ type DomainsPageViewProps = {
 
 export const DomainsPageView = ({
   domains,
+  isDomainBindingEnabled = true,
   isDomainLifecycleEnabled = true,
   isBindPending = false,
   isEnablePending = false,
@@ -43,7 +45,7 @@ export const DomainsPageView = ({
       description="既支持从 Cloudflare 目录启用已有 zone，也支持直接通过 Cloudflare API 绑定新域名并在项目里管理删除。"
       eyebrow="Domains"
     />
-    {isDomainLifecycleEnabled ? (
+    {isDomainBindingEnabled ? (
       <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
     ) : null}
     <DomainTable
@@ -80,6 +82,9 @@ export const DomainsPage = () => {
   return (
     <DomainsPageView
       domains={domainCatalogQuery.data ?? []}
+      isDomainBindingEnabled={
+        metaQuery.data?.cloudflareDomainBindingEnabled ?? false
+      }
       isDomainLifecycleEnabled={
         metaQuery.data?.cloudflareDomainLifecycleEnabled ?? false
       }

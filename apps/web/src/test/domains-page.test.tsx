@@ -13,6 +13,7 @@ describe("domains page view", () => {
       <MemoryRouter>
         <DomainsPageView
           domains={demoDomainCatalog}
+          isDomainBindingEnabled
           isDomainLifecycleEnabled
           onBind={vi.fn()}
           onEnable={vi.fn()}
@@ -53,6 +54,7 @@ describe("domains page view", () => {
       <MemoryRouter>
         <DomainsPageView
           domains={demoDomainCatalog}
+          isDomainBindingEnabled={false}
           isDomainLifecycleEnabled={false}
           onBind={vi.fn()}
           onEnable={vi.fn()}
