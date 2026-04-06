@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "../lib/errors";
+
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
@@ -289,6 +291,65 @@ describe("domain catalog", () => {
     });
   });
 
+  it("keeps retryable bind failures as project-bound provisioning errors", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockRejectedValue(
+      new ApiError(409, "Zone is pending activation"),
+    );
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "bound.example.org",
+    });
+
+    expect(result.domain).toMatchObject({
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      status: "provisioning_error",
+      lastProvisionError: "Zone is pending activation",
+    });
+    expect(deleteZone).not.toHaveBeenCalled();
+  });
+
+  it("rolls back bound zones when initial provisioning fails fatally", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockRejectedValue(
+      new ApiError(
+        500,
+        "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+      ),
+    );
+    deleteZone.mockResolvedValue({ alreadyMissing: false });
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "bound.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 500,
+      message:
+        "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+    });
+
+    expect(deleteZone).toHaveBeenCalledWith(runtimeConfig, {
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+    });
+  });
+
   it("cleans up the Cloudflare zone when bind persistence fails", async () => {
     const db = {
       ...createDb(),
@@ -347,6 +408,32 @@ describe("domain catalog", () => {
     });
     expect(db.update).toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalled();
+  });
+
+  it("restores the local domain state if the Cloudflare delete fails", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_bound",
+          rootDomain: "bound.example.org",
+          zoneId: "zone_bound",
+          bindingSource: "project_bind",
+        },
+      ],
+      mailboxRows: [],
+    });
+    getDb.mockReturnValue(db);
+    deleteZone.mockRejectedValue(new ApiError(502, "Cloudflare unavailable"));
+
+    await expect(
+      deleteDomain(env, runtimeConfig, "dom_bound"),
+    ).rejects.toMatchObject({
+      status: 502,
+      message: "Cloudflare unavailable",
+    });
+
+    expect(db.update).toHaveBeenCalledTimes(2);
   });
 
   it("blocks deleting catalog domains", async () => {
