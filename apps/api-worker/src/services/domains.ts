@@ -277,6 +277,7 @@ const softDeleteDomainLocally = async (
     .select()
     .from(subdomains)
     .where(eq(subdomains.domainId, domain.id));
+  let subdomainsDeleted = false;
 
   try {
     await db
@@ -290,8 +291,11 @@ const softDeleteDomainLocally = async (
       .where(eq(domains.id, domain.id));
 
     await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
+    subdomainsDeleted = true;
   } catch (error) {
-    await restoreSoftDeletedDomainLocally(db, domain, cachedSubdomains);
+    await restoreSoftDeletedDomainLocally(db, domain, cachedSubdomains, {
+      reinsertSubdomains: subdomainsDeleted,
+    });
     throw error;
   }
 
@@ -305,6 +309,7 @@ const restoreSoftDeletedDomainLocally = async (
   db: ReturnType<typeof getDb>,
   domain: DomainRow,
   cachedSubdomains: SubdomainRow[],
+  options?: { reinsertSubdomains?: boolean },
 ) => {
   await db
     .update(domains)
@@ -320,7 +325,8 @@ const restoreSoftDeletedDomainLocally = async (
     })
     .where(eq(domains.id, domain.id));
 
-  if (cachedSubdomains.length > 0) {
+  if ((options?.reinsertSubdomains ?? true) && cachedSubdomains.length > 0) {
+    await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
     await db.insert(subdomains).values(cachedSubdomains);
   }
 };
@@ -480,9 +486,6 @@ export const createDomain = async (
     throw new ApiError(400, "zoneId is required");
   }
   await requireCatalogZone(config, rootDomain, zoneId);
-  const existing = await getDomainByRootDomain(env, rootDomain, {
-    includeDeleted: true,
-  });
   const provisionState = await resolveProvisionState(
     config,
     {
@@ -495,8 +498,7 @@ export const createDomain = async (
   return persistManagedDomain(env, {
     rootDomain,
     zoneId,
-    bindingSource:
-      existing && !existing.deletedAt ? existing.bindingSource : "catalog",
+    bindingSource: "catalog",
     provisionState,
   });
 };

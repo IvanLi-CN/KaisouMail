@@ -267,6 +267,45 @@ describe("domain catalog", () => {
     });
   });
 
+  it("resets binding source to catalog when re-enabling a discovered zone", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_replaced",
+          rootDomain: "ops.example.org",
+          zoneId: "zone_previous",
+          bindingSource: "project_bind",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_available",
+        name: "ops.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await createDomain(env, runtimeConfig, {
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+    });
+
+    expect(result.domain).toMatchObject({
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+      bindingSource: "catalog",
+      status: "active",
+    });
+  });
+
   it("creates a project-bound domain through Cloudflare bind", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);
