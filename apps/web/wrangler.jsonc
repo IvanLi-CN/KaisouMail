@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "cf-mail",
+  "compatibility_date": "2026-04-07",
+  "pages_build_output_dir": "./dist",
+  "services": [
+    {
+      "binding": "API",
+      "service": "kaisoumail-api"
+    }
+  ]
+}
