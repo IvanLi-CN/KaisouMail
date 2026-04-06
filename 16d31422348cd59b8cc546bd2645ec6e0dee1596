@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.9.0",
+  "base_stable_version": "0.8.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-06T05:34:05Z",
+  "next_stable_version": "0.9.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "33d691799c868525299ab08325c9631a6f882594",
+  "pr_number": 17,
+  "pr_title": "feat: compact app shell account trigger",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.9.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.9.0",
+  "target_sha": "16d31422348cd59b8cc546bd2645ec6e0dee1596",
+  "type_label": "type:minor"
+}
