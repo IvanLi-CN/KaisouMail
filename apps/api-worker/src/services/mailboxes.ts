@@ -237,6 +237,17 @@ const rollbackMailboxInsert = async (
   await db.delete(mailboxes).where(eq(mailboxes.id, mailboxId));
 };
 
+const updateMailboxRoutingRule = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+  routingRuleId: string | null,
+) => {
+  await db
+    .update(mailboxes)
+    .set({ routingRuleId })
+    .where(eq(mailboxes.id, mailboxId));
+};
+
 export const resolveRequestedMailboxAddress = (
   input:
     | { address: string; expiresInMinutes?: number }
@@ -429,8 +440,6 @@ export const createMailboxForUser = async (
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
 
-  const enabledSubdomainsThisRun = new Set<string>();
-
   for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
     let mailboxAddress: Awaited<ReturnType<typeof resolveCreateMailboxAddress>>;
     try {
@@ -470,16 +479,6 @@ export const createMailboxForUser = async (
       Date.now() + expiresInMinutes * 60_000,
     ).toISOString();
 
-    if (!knownSubdomain[0] && !enabledSubdomainsThisRun.has(subdomain)) {
-      await ensureSubdomainEnabled(config, domain, subdomain);
-      enabledSubdomainsThisRun.add(subdomain);
-    }
-    const routingRuleId = await createRoutingRule(
-      config,
-      domain,
-      mailboxAddress.address,
-    );
-
     const created = {
       id: randomId("mbx"),
       userId: user.id,
@@ -487,7 +486,7 @@ export const createMailboxForUser = async (
       localPart,
       subdomain,
       address: mailboxAddress.address,
-      routingRuleId,
+      routingRuleId: null,
       status: "active",
       createdAt: now,
       expiresAt,
@@ -495,6 +494,7 @@ export const createMailboxForUser = async (
     } as const;
 
     let mailboxInserted = false;
+    let routingRuleId: string | null = null;
     try {
       await insertMailboxIfDomainStillActive(
         env,
@@ -503,6 +503,20 @@ export const createMailboxForUser = async (
         domain.rootDomain,
       );
       mailboxInserted = true;
+
+      if (!knownSubdomain[0]) {
+        await ensureSubdomainEnabled(config, domain, subdomain);
+      }
+
+      routingRuleId = await createRoutingRule(
+        config,
+        domain,
+        mailboxAddress.address,
+      );
+
+      if (routingRuleId) {
+        await updateMailboxRoutingRule(db, created.id, routingRuleId);
+      }
 
       if (knownSubdomain[0]) {
         await db
@@ -525,6 +539,7 @@ export const createMailboxForUser = async (
       return toMailboxDto(
         {
           ...created,
+          routingRuleId,
           rootDomain: domain.rootDomain,
         },
         null,

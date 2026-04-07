@@ -79,8 +79,14 @@ describe("email helpers", () => {
 
   it("generates readable mailbox subdomains and retry fallbacks", () => {
     expect(generateRealisticMailboxSubdomain({ rng: () => 0 })).toBe("mail");
-    expect(generateRealisticMailboxSubdomain({ rng: () => 0.6 })).toBe(
-      "support.desk",
+    const previewRngValues = [0.6, 0];
+    expect(
+      generateRealisticMailboxSubdomain({
+        rng: () => previewRngValues.shift() ?? 0,
+      }),
+    ).toBe("desk.hub");
+    expect(generateRealisticMailboxSubdomain({ rng: () => 0.7 })).toBe(
+      "status.mail",
     );
 
     const fallbackLocalPart = generateRealisticMailboxLocalPart({

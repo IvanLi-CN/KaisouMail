@@ -446,9 +446,7 @@ describe("mailbox service helpers", () => {
     getDb.mockReturnValue(db);
     requireActiveDomainByRootDomain.mockResolvedValue(domain);
     ensureSubdomainEnabled.mockResolvedValue(undefined);
-    createRoutingRule
-      .mockResolvedValueOnce("rule_race_1")
-      .mockResolvedValueOnce("rule_race_2");
+    createRoutingRule.mockResolvedValueOnce("rule_race_2");
 
     const run = vi
       .fn()
@@ -478,29 +476,26 @@ describe("mailbox service helpers", () => {
       );
 
       expect(created.address).toBe("ava-lin00@mail00.707979.xyz");
+      expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+      expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "mail00",
+      );
+      expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
         runtimeConfig,
         domain,
-        "ava-lin@mail.707979.xyz",
-      );
-      expect(createRoutingRule).toHaveBeenNthCalledWith(
-        2,
-        runtimeConfig,
-        domain,
         "ava-lin00@mail00.707979.xyz",
       );
-      expect(deleteRoutingRule).toHaveBeenCalledWith(
-        runtimeConfig,
-        domain,
-        "rule_race_1",
-      );
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
     } finally {
       Math.random = originalRandom;
     }
   });
 
-  it("does not re-enable the same subdomain when retrying a generated local-part collision", async () => {
+  it("only enables the committed retry subdomain when a generated local-part collision retries", async () => {
     const originalRandom = Math.random;
     Math.random = () => 0;
 
@@ -586,9 +581,7 @@ describe("mailbox service helpers", () => {
     getDb.mockReturnValue(db);
     requireActiveDomainByRootDomain.mockResolvedValue(domain);
     ensureSubdomainEnabled.mockResolvedValue(undefined);
-    createRoutingRule
-      .mockResolvedValueOnce("rule_retry_1")
-      .mockResolvedValueOnce("rule_retry_2");
+    createRoutingRule.mockResolvedValueOnce("rule_retry_2");
 
     const run = vi
       .fn()
@@ -625,23 +618,14 @@ describe("mailbox service helpers", () => {
         domain,
         "ops.alpha",
       );
+      expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
         runtimeConfig,
         domain,
-        "ava-lin@ops.alpha.707979.xyz",
-      );
-      expect(createRoutingRule).toHaveBeenNthCalledWith(
-        2,
-        runtimeConfig,
-        domain,
         "ava-lin00@ops.alpha.707979.xyz",
       );
-      expect(deleteRoutingRule).toHaveBeenCalledWith(
-        runtimeConfig,
-        domain,
-        "rule_retry_1",
-      );
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
     } finally {
       Math.random = originalRandom;
     }
@@ -822,7 +806,7 @@ describe("mailbox service helpers", () => {
       "build",
       "ops",
       "build@ops.707979.xyz",
-      "rule_new",
+      null,
       "active",
       expect.any(String),
       expect.any(String),
@@ -830,11 +814,9 @@ describe("mailbox service helpers", () => {
       domain.id,
       domain.zoneId,
     );
-    expect(deleteRoutingRule).toHaveBeenCalledWith(
-      runtimeConfig,
-      domain,
-      "rule_new",
-    );
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(deleteRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalledWith(mailboxes);
   });
 });

@@ -4,9 +4,11 @@ export type MailboxRandomSource = () => number;
 
 export const generatedMailboxMaxAttempts = 8;
 
+const mailboxPreviewSubdomainLabels = ["desk", "hub"] as const;
+
 export const mailboxPreviewExample = {
   localPart: "ava-lin",
-  subdomain: "desk.hub",
+  subdomain: mailboxPreviewSubdomainLabels.join("."),
 } as const;
 
 const mailboxExampleSeeds = [
@@ -72,6 +74,7 @@ const singleLabelMailboxSubdomains = [
 ] as const;
 
 const multiLabelMailboxSubdomains = [
+  mailboxPreviewSubdomainLabels,
   ["ops", "alpha"],
   ["team", "hub"],
   ["desk", "mail"],
