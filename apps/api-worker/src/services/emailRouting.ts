@@ -92,8 +92,9 @@ const requireEmailWorkerName = (config: RuntimeConfig) => {
 const hasOnlyMissingRoutingRuleErrors = (
   errors: CloudflareError[] | undefined,
 ) =>
-  Boolean(errors?.length) &&
-  errors?.every((error) => /rule not found/i.test(error.message));
+  errors?.length
+    ? errors.every((error) => /rule not found/i.test(error.message))
+    : false;
 
 const cfRequest = async <T>(
   config: RuntimeConfig,
