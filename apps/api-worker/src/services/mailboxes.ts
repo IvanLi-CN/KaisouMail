@@ -4,7 +4,7 @@ import {
   generateRealisticMailboxSubdomain,
   mailboxSchema,
 } from "@kaisoumail/shared";
-import { and, desc, eq, inArray, lte, ne, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
@@ -42,8 +42,6 @@ import {
 type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
-const mailboxProvisioningStatus = "provisioning";
-const mailboxProvisioningTimeoutMs = 5 * 60_000;
 
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
@@ -112,6 +110,13 @@ const listMailboxesByAddress = async (env: WorkerEnv, address: string) => {
     .orderBy(desc(mailboxes.createdAt));
 };
 
+const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
+  const rows = await listMailboxesByAddress(env, address);
+  if (rows.some((row) => row.status !== "destroyed")) {
+    throw new ApiError(409, "Mailbox already exists");
+  }
+};
+
 const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
   new ApiError(409, "Mailbox domain is no longer available", {
     domainId,
@@ -135,72 +140,14 @@ const isMailboxAddressConflictError = (error: unknown) => {
   );
 };
 
-const isStaleProvisioningMailbox = (
-  row: MailboxRow,
-  staleBefore = new Date(Date.now() - mailboxProvisioningTimeoutMs),
-) =>
-  row.status === mailboxProvisioningStatus &&
-  new Date(row.createdAt).getTime() <= staleBefore.getTime();
-
-const cleanupProvisioningMailbox = async (
-  env: WorkerEnv,
-  config: RuntimeConfig,
-  row: MailboxRow,
-) => {
-  const db = getDb(env);
-
-  if (row.routingRuleId) {
-    const domain = await resolveMailboxDomain(env, config, row);
-    if (!domain) {
-      return false;
-    }
-
-    try {
-      await deleteRoutingRule(config, domain, row.routingRuleId);
-    } catch {
-      return false;
-    }
-  }
-
-  await rollbackMailboxInsert(db, row.id);
-  return true;
-};
-
-const ensureAddressAvailable = async (
-  env: WorkerEnv,
-  config: RuntimeConfig,
-  address: string,
-) => {
-  const staleBefore = new Date(Date.now() - mailboxProvisioningTimeoutMs);
-  const rows = await listMailboxesByAddress(env, address);
-  const staleProvisioningRows = rows.filter((row) =>
-    isStaleProvisioningMailbox(row, staleBefore),
-  );
-
-  for (const row of staleProvisioningRows) {
-    await cleanupProvisioningMailbox(env, config, row);
-  }
-
-  const remainingRows =
-    staleProvisioningRows.length > 0
-      ? await listMailboxesByAddress(env, address)
-      : rows;
-
-  if (remainingRows.some((row) => row.status !== "destroyed")) {
-    throw new ApiError(409, "Mailbox already exists");
-  }
-};
-
 const resolveCreateMailboxAddress = async ({
   env,
-  config,
   localPart,
   subdomain,
   rootDomain,
   attempt = 0,
 }: {
   env: WorkerEnv;
-  config: RuntimeConfig;
   localPart?: string;
   subdomain?: string;
   rootDomain: string;
@@ -224,7 +171,7 @@ const resolveCreateMailboxAddress = async ({
     rootDomain,
   );
 
-  await ensureAddressAvailable(env, config, mailboxAddress.address);
+  await ensureAddressAvailable(env, mailboxAddress.address);
   return mailboxAddress;
 };
 
@@ -426,20 +373,11 @@ export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
   const db = getDb(env);
   const rows =
     user.role === "admin"
-      ? await db
-          .select()
-          .from(mailboxes)
-          .where(ne(mailboxes.status, mailboxProvisioningStatus))
-          .orderBy(desc(mailboxes.createdAt))
+      ? await db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt))
       : await db
           .select()
           .from(mailboxes)
-          .where(
-            and(
-              eq(mailboxes.userId, user.id),
-              ne(mailboxes.status, mailboxProvisioningStatus),
-            ),
-          )
+          .where(eq(mailboxes.userId, user.id))
           .orderBy(desc(mailboxes.createdAt));
 
   return attachLastReceivedAt(env, rows);
@@ -458,9 +396,6 @@ export const getMailboxForUser = async (
     .limit(1);
   const row = rows[0];
   if (!row) throw new ApiError(404, "Mailbox not found");
-  if (row.status === mailboxProvisioningStatus) {
-    throw new ApiError(404, "Mailbox not found");
-  }
   if (row.userId !== user.id && user.role !== "admin") {
     throw new ApiError(403, "Forbidden");
   }
@@ -520,7 +455,6 @@ export const createMailboxForUser = async (
     try {
       mailboxAddress = await resolveCreateMailboxAddress({
         env,
-        config,
         localPart: input.localPart,
         subdomain: input.subdomain,
         rootDomain: domain.rootDomain,
@@ -563,7 +497,7 @@ export const createMailboxForUser = async (
       subdomain,
       address: mailboxAddress.address,
       routingRuleId: null,
-      status: mailboxProvisioningStatus,
+      status: "destroying",
       createdAt: now,
       expiresAt,
       destroyedAt: null,
@@ -825,21 +759,10 @@ export const listExpiredMailboxIds = async (
 ) => {
   const db = getDb(env);
   const now = nowIso();
-  const staleProvisioningCutoff = new Date(
-    Date.now() - mailboxProvisioningTimeoutMs,
-  ).toISOString();
   const rows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
-    .where(
-      or(
-        and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)),
-        and(
-          eq(mailboxes.status, mailboxProvisioningStatus),
-          lte(mailboxes.createdAt, staleProvisioningCutoff),
-        ),
-      ),
-    )
+    .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
     .orderBy(mailboxes.expiresAt)
     .limit(config.CLEANUP_BATCH_SIZE);
 

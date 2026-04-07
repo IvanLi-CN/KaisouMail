@@ -54,8 +54,6 @@ import { domains, mailboxes, subdomains } from "../db/schema";
 import {
   classifyMailboxAddressState,
   createMailboxForUser,
-  getMailboxForUser,
-  listMailboxesForUser,
   resolveRequestedMailboxAddress,
 } from "../services/mailboxes";
 
@@ -185,12 +183,12 @@ describe("mailbox service helpers", () => {
     expect(result.kind).toBe("create");
   });
 
-  it("treats a provisioning mailbox as a conflict until creation finishes", () => {
+  it("treats a mailbox that is still destroying as a conflict", () => {
     const result = classifyMailboxAddressState(
       [
         {
           ...baseMailbox,
-          status: "provisioning",
+          status: "destroying",
           routingRuleId: null,
         },
       ],
@@ -198,181 +196,6 @@ describe("mailbox service helpers", () => {
     );
 
     expect(result.kind).toBe("conflict");
-  });
-
-  it("hides provisioning mailboxes from list responses", async () => {
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn((table: unknown) => {
-          if (table === mailboxes) {
-            return {
-              where: vi.fn(() => ({
-                orderBy: vi.fn(async () => []),
-              })),
-              orderBy: vi.fn(async () => []),
-            };
-          }
-
-          return {
-            where: vi.fn(() => ({
-              limit: vi.fn(async () => []),
-              orderBy: vi.fn(async () => []),
-            })),
-            orderBy: vi.fn(async () => []),
-          };
-        }),
-      })),
-    };
-    getDb.mockReturnValue(db);
-
-    const rows = await listMailboxesForUser({} as never, memberUser);
-
-    expect(rows).toEqual([]);
-  });
-
-  it("treats provisioning mailboxes as not found by id", async () => {
-    const db = createMailboxDb({
-      mailboxRows: [
-        {
-          ...baseMailbox,
-          status: "provisioning",
-          routingRuleId: null,
-        },
-      ],
-    });
-    getDb.mockReturnValue(db);
-
-    await expect(
-      getMailboxForUser({} as never, memberUser, baseMailbox.id),
-    ).rejects.toThrow("Mailbox not found");
-  });
-
-  it("reclaims stale provisioning mailboxes before creating the same address", async () => {
-    const domain = {
-      id: "dom_primary",
-      rootDomain: "707979.xyz",
-      zoneId: "zone_primary",
-      bindingSource: "catalog",
-      status: "active",
-      lastProvisionError: null,
-      createdAt: "2026-04-03T12:00:00.000Z",
-      updatedAt: "2026-04-03T12:00:00.000Z",
-      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
-      disabledAt: null,
-      deletedAt: null,
-    } as const;
-    const staleProvisioningMailbox = {
-      ...baseMailbox,
-      localPart: "build",
-      subdomain: "ops",
-      address: "build@ops.707979.xyz",
-      routingRuleId: "rule_stale",
-      status: "provisioning",
-      createdAt: "2026-04-03T12:00:00.000Z",
-    } as const;
-    const baseDb = createMailboxDb({
-      domainRows: [
-        {
-          id: domain.id,
-          status: "active",
-          zoneId: domain.zoneId,
-          deletedAt: null,
-        },
-      ],
-      subdomainRows: [],
-    });
-    const mailboxLookupRows = [[staleProvisioningMailbox], []];
-    const db = {
-      ...baseDb,
-      select: vi.fn(() => ({
-        from: vi.fn((table: unknown) => {
-          if (table === mailboxes) {
-            return {
-              where: vi.fn(() => ({
-                limit: vi.fn(async () => []),
-                orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
-              })),
-              orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
-            };
-          }
-
-          if (table === domains) {
-            return {
-              where: vi.fn(() => ({
-                limit: vi.fn(async () => [
-                  {
-                    id: domain.id,
-                    status: "active",
-                    zoneId: domain.zoneId,
-                    deletedAt: null,
-                  },
-                ]),
-                orderBy: vi.fn(async () => []),
-              })),
-              orderBy: vi.fn(async () => []),
-            };
-          }
-
-          if (table === subdomains) {
-            return {
-              where: vi.fn(() => ({
-                limit: vi.fn(async () => []),
-                orderBy: vi.fn(async () => []),
-              })),
-              orderBy: vi.fn(async () => []),
-            };
-          }
-
-          return {
-            where: vi.fn(() => ({
-              limit: vi.fn(async () => []),
-              orderBy: vi.fn(async () => []),
-            })),
-            orderBy: vi.fn(async () => []),
-          };
-        }),
-      })),
-    };
-
-    getDb.mockReturnValue(db);
-    requireActiveDomainByRootDomain.mockResolvedValue(domain);
-    resolveMailboxDomain.mockResolvedValue(domain);
-    deleteRoutingRule.mockResolvedValue(undefined);
-    ensureSubdomainEnabled.mockResolvedValue(undefined);
-    createRoutingRule.mockResolvedValue("rule_new");
-
-    const env = {
-      DB: {
-        prepare: vi.fn(() => ({
-          bind: vi.fn(() => ({
-            run: vi.fn(async () => ({
-              meta: {
-                changes: 1,
-              },
-            })),
-          })),
-        })),
-      },
-    } as never;
-
-    const created = await createMailboxForUser(env, runtimeConfig, memberUser, {
-      localPart: "build",
-      subdomain: "ops",
-      rootDomain: domain.rootDomain,
-    });
-
-    expect(deleteRoutingRule).toHaveBeenCalledWith(
-      runtimeConfig,
-      domain,
-      "rule_stale",
-    );
-    expect(db.delete).toHaveBeenCalledWith(mailboxes);
-    expect(createRoutingRule).toHaveBeenCalledWith(
-      runtimeConfig,
-      domain,
-      "build@ops.707979.xyz",
-    );
-    expect(created.address).toBe("build@ops.707979.xyz");
   });
 
   it("parses an ensured address against the configured root domain", () => {
@@ -1001,7 +824,7 @@ describe("mailbox service helpers", () => {
       "ops",
       "build@ops.707979.xyz",
       null,
-      "provisioning",
+      "destroying",
       expect.any(String),
       expect.any(String),
       null,
