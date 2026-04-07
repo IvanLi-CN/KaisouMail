@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.14.0",
+  "base_stable_version": "0.13.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-07T12:42:33Z",
+  "next_stable_version": "0.14.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "b191a1c7c5d11385f46bd074ee934ef23e418300",
+  "pr_number": 26,
+  "pr_title": "feat: refine responsive shell layout and workspace copy",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.14.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.14.0",
+  "target_sha": "b7ea8c77c6a06437d827555b9c09d2eaab532dd8",
+  "type_label": "type:minor"
+}
