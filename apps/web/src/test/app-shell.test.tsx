@@ -13,6 +13,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
 
+const accountDetailsButtonName = `${demoSessionUser.name} 账号详情`;
+
 const renderAppShell = (props: Partial<ComponentProps<typeof AppShell>> = {}) =>
   render(
     <MemoryRouter initialEntries={["/workspace"]}>
@@ -54,14 +56,20 @@ afterEach(() => {
 });
 
 describe("AppShell account trigger", () => {
-  it("shows only the nickname in the header until preview is opened", () => {
+  it("keeps header utilities compact until account preview is opened", () => {
     renderAppShell();
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     expect(trigger).toBeInTheDocument();
+    expect(screen.queryByText(demoSessionUser.name)).not.toBeInTheDocument();
     expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
     expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
 
     fireEvent.mouseEnter(trigger);
 
@@ -72,7 +80,9 @@ describe("AppShell account trigger", () => {
   it("supports focus preview plus pinned toggle and escape close", async () => {
     renderAppShell();
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     fireEvent.focus(trigger);
     expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
@@ -101,7 +111,9 @@ describe("AppShell account trigger", () => {
       expect(matchMediaMock).toHaveBeenCalled();
     });
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     fireEvent.mouseEnter(trigger);
     expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();

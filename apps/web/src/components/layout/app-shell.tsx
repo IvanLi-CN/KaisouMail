@@ -1,6 +1,5 @@
 import {
   BriefcaseBusiness,
-  ChevronDown,
   Globe,
   KeyRound,
   LayoutPanelTop,
@@ -136,7 +135,7 @@ const renderNavLink = ({
   const baseClassName =
     layout === "mobile"
       ? "flex w-full items-center gap-3 rounded-xl border border-white/8 bg-background/45 px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      : "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+      : "inline-flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
     <Link
@@ -381,7 +380,7 @@ export const AppShell = ({
 
               <nav
                 aria-label="主导航"
-                className="hidden min-w-0 flex-1 flex-wrap items-center gap-2 lg:flex"
+                className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:flex lg:flex-nowrap"
               >
                 {visibleNavItems.map((item) =>
                   renderNavLink({
@@ -394,7 +393,7 @@ export const AppShell = ({
             </div>
 
             <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto lg:ml-0 lg:w-auto lg:flex-nowrap">
-              <div className="hidden items-center gap-2 lg:flex">
+              <div className="hidden shrink-0 items-center gap-2 lg:flex">
                 <Popover
                   open={isAccountPopoverOpen}
                   onOpenChange={(nextOpen) => {
@@ -406,11 +405,12 @@ export const AppShell = ({
                   <PopoverAnchor asChild>
                     <button
                       ref={triggerRef}
+                      aria-label={`${user.name} 账号详情`}
                       aria-controls={accountPopoverId}
                       aria-expanded={isAccountPopoverOpen}
                       aria-haspopup="dialog"
                       className={cn(
-                        "inline-flex min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-[12rem]",
+                        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         isAccountPopoverOpen
                           ? "bg-card/95 text-foreground"
                           : "text-muted-foreground hover:border-border/80 hover:text-foreground",
@@ -423,22 +423,13 @@ export const AppShell = ({
                       onMouseLeave={scheduleAccountPreviewClose}
                       type="button"
                     >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <ShieldCheck
-                          aria-hidden
-                          className="h-4 w-4 shrink-0 text-primary"
-                        />
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {user.name}
-                        </span>
-                      </span>
-                      <ChevronDown
+                      <ShieldCheck
                         aria-hidden
                         className={cn(
-                          "h-4 w-4 shrink-0 transition-transform duration-200",
+                          "h-4 w-4 shrink-0 transition-colors duration-200",
                           isAccountPopoverOpen
-                            ? "rotate-180 text-foreground"
-                            : "text-muted-foreground",
+                            ? "text-foreground"
+                            : "text-primary",
                         )}
                       />
                     </button>
@@ -468,9 +459,9 @@ export const AppShell = ({
 
                 <ActionButton
                   density="dense"
+                  forceIconOnly
                   icon={LogOut}
                   label="退出登录"
-                  labelVisibility="desktop"
                   onClick={onLogout}
                   priority="secondary"
                   variant="outline"

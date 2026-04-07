@@ -46,6 +46,7 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+const accountDetailsButtonName = `${demoSessionUser.name} 账号详情`;
 
 export const ResponsiveCanvas: Story = {};
 
@@ -55,7 +56,7 @@ export const DesktopInlineNav: Story = {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const accountTrigger = canvas.getByRole("button", {
-      name: demoSessionUser.name,
+      name: accountDetailsButtonName,
     });
 
     await expect(
@@ -74,6 +75,9 @@ export const DesktopInlineNav: Story = {
       canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
     await expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      canvas.queryByText(demoSessionUser.name),
+    ).not.toBeInTheDocument();
     await expect(
       body.queryByText(demoSessionUser.email),
     ).not.toBeInTheDocument();
@@ -108,6 +112,9 @@ export const TabletInlineNav: Story = {
   globals: projectViewportGlobals.tablet,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const accountTrigger = canvas.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     await expect(
       canvas.getByRole("navigation", { name: "主导航" }),
@@ -118,8 +125,12 @@ export const TabletInlineNav: Story = {
     await expect(
       canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
+    await expect(accountTrigger).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", { name: demoSessionUser.name }),
+      canvas.queryByText(demoSessionUser.name),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "退出登录" }),
     ).toBeInTheDocument();
   },
 };
@@ -200,7 +211,7 @@ export const DetailsOpen: Story = {
     const body = within(canvasElement.ownerDocument.body);
 
     await expect(
-      canvas.getByRole("button", { name: demoSessionUser.name }),
+      canvas.getByRole("button", { name: accountDetailsButtonName }),
     ).toHaveAttribute("aria-expanded", "true");
     await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
     await expect(body.getByText(/^admin$/i)).toBeVisible();
