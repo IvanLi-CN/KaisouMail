@@ -430,7 +430,10 @@ export const ToolbarCreateFlow: Story = {
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
-    await userEvent.keyboard("{Escape}");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "取消" }));
     await expect(canvas.queryByLabelText("用户名")).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));

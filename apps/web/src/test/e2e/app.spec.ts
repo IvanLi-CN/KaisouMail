@@ -26,9 +26,15 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await expect(page.getByLabel("用户名")).toBeVisible();
   await expect(page.getByLabel("邮箱域名")).toHaveValue("");
+  const createHelpButton = page.getByRole("button", {
+    name: "查看邮箱创建说明",
+  });
+  await expect(createHelpButton).toBeVisible();
+  await createHelpButton.click();
   await expect(page.getByText(randomPreviewAddress)).toBeVisible();
+  await createHelpButton.click();
 
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "取消" }).click();
   await expect(page.getByLabel("用户名")).toHaveCount(0);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
@@ -49,7 +55,9 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("用户名").fill(manualMailboxLocalPart);
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByLabel("邮箱域名").selectOption("mail.example.net");
+  await createHelpButton.click();
   await expect(page.getByText(selectedDomainPreviewAddress)).toBeVisible();
+  await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
   const mailboxRow = page.getByRole("button", {
