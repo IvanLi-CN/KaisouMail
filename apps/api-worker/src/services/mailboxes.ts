@@ -123,56 +123,56 @@ const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
     rootDomain,
   });
 
+const isMailboxAddressConflictError = (error: unknown) => {
+  if (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.message === "Mailbox already exists"
+  ) {
+    return true;
+  }
+
+  if (!(error instanceof Error)) return false;
+
+  return (
+    error.message.includes("UNIQUE constraint failed: mailboxes.address") ||
+    error.message.includes("mailboxes_address_unique")
+  );
+};
+
 const resolveCreateMailboxAddress = async ({
   env,
   localPart,
   subdomain,
   rootDomain,
+  attempt = 0,
 }: {
   env: WorkerEnv;
   localPart?: string;
   subdomain?: string;
   rootDomain: string;
+  attempt?: number;
 }) => {
   const normalizedLocalPart = localPart ? normalizeLabel(localPart) : undefined;
   const normalizedSubdomain = subdomain ? normalizeLabel(subdomain) : undefined;
-  const canRetry = !normalizedLocalPart || !normalizedSubdomain;
+  const nextLocalPart =
+    normalizedLocalPart ??
+    generateRealisticMailboxLocalPart({
+      attempt,
+    });
+  const nextSubdomain =
+    normalizedSubdomain ??
+    generateRealisticMailboxSubdomain({
+      attempt,
+    });
+  const mailboxAddress = buildMailboxAddress(
+    nextLocalPart,
+    nextSubdomain,
+    rootDomain,
+  );
 
-  for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
-    const nextLocalPart =
-      normalizedLocalPart ??
-      generateRealisticMailboxLocalPart({
-        attempt,
-      });
-    const nextSubdomain =
-      normalizedSubdomain ??
-      generateRealisticMailboxSubdomain({
-        attempt,
-      });
-    const mailboxAddress = buildMailboxAddress(
-      nextLocalPart,
-      nextSubdomain,
-      rootDomain,
-    );
-
-    try {
-      await ensureAddressAvailable(env, mailboxAddress.address);
-      return mailboxAddress;
-    } catch (error) {
-      if (
-        canRetry &&
-        error instanceof ApiError &&
-        error.status === 409 &&
-        attempt < generatedMailboxMaxAttempts - 1
-      ) {
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new ApiError(409, "Mailbox already exists");
+  await ensureAddressAvailable(env, mailboxAddress.address);
+  return mailboxAddress;
 };
 
 const insertMailboxIfDomainStillActive = async (
@@ -407,26 +407,7 @@ export const createMailboxForUser = async (
     : await pickRandomActiveDomain(env);
   const expiresInMinutes =
     input.expiresInMinutes ?? config.DEFAULT_MAILBOX_TTL_MINUTES;
-  const mailboxAddress = await resolveCreateMailboxAddress({
-    env,
-    localPart: input.localPart,
-    subdomain: input.subdomain,
-    rootDomain: domain.rootDomain,
-  });
-  const { localPart, subdomain } = mailboxAddress;
-
-  const knownSubdomain = await db
-    .select()
-    .from(subdomains)
-    .where(
-      and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
-    )
-    .limit(1);
-
-  const now = nowIso();
-  const expiresAt = new Date(
-    Date.now() + expiresInMinutes * 60_000,
-  ).toISOString();
+  const canRetryGeneratedAddress = !input.localPart || !input.subdomain;
 
   const currentDomainRows = await db
     .select({
@@ -448,101 +429,154 @@ export const createMailboxForUser = async (
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
 
-  if (!knownSubdomain[0]) {
-    await ensureSubdomainEnabled(config, domain, subdomain);
-  }
-  const routingRuleId = await createRoutingRule(
-    config,
-    domain,
-    mailboxAddress.address,
-  );
-
-  const created = {
-    id: randomId("mbx"),
-    userId: user.id,
-    domainId: domain.id,
-    localPart,
-    subdomain,
-    address: mailboxAddress.address,
-    routingRuleId,
-    status: "active",
-    createdAt: now,
-    expiresAt,
-    destroyedAt: null,
-  } as const;
-
-  let mailboxInserted = false;
-  try {
-    await insertMailboxIfDomainStillActive(
-      env,
-      created,
-      domain.zoneId,
-      domain.rootDomain,
-    );
-    mailboxInserted = true;
-
-    if (knownSubdomain[0]) {
-      await db
-        .update(subdomains)
-        .set({ lastUsedAt: now })
-        .where(eq(subdomains.id, knownSubdomain[0].id));
-    } else {
-      await db.insert(subdomains).values({
-        id: randomId("sub"),
-        domainId: domain.id,
-        name: subdomain,
-        enabledAt: now,
-        lastUsedAt: now,
-        metadata: JSON.stringify({
-          mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
-        }),
+  for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
+    let mailboxAddress: Awaited<ReturnType<typeof resolveCreateMailboxAddress>>;
+    try {
+      mailboxAddress = await resolveCreateMailboxAddress({
+        env,
+        localPart: input.localPart,
+        subdomain: input.subdomain,
+        rootDomain: domain.rootDomain,
+        attempt,
       });
-    }
-  } catch (error) {
-    let rollbackError: unknown = null;
-    if (mailboxInserted) {
-      try {
-        await rollbackMailboxInsert(db, created.id);
-      } catch (cleanupError) {
-        rollbackError = cleanupError;
+    } catch (error) {
+      if (isMailboxAddressConflictError(error)) {
+        if (
+          canRetryGeneratedAddress &&
+          attempt < generatedMailboxMaxAttempts - 1
+        ) {
+          continue;
+        }
+
+        throw new ApiError(409, "Mailbox already exists");
       }
+
+      throw error;
     }
 
-    if (routingRuleId) {
-      try {
-        await deleteRoutingRule(config, domain, routingRuleId);
-      } catch {
-        // Ignore cleanup failures here; the primary error is the mailbox
-        // creation race or write failure that caused the insert to abort.
-      }
-    }
+    const { localPart, subdomain } = mailboxAddress;
+    const knownSubdomain = await db
+      .select()
+      .from(subdomains)
+      .where(
+        and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
+      )
+      .limit(1);
 
-    if (rollbackError) {
-      throw new ApiError(
-        502,
-        "Failed to roll back mailbox after subdomain persistence failure",
-        {
-          mailboxId: created.id,
-          address: created.address,
-          cause: error instanceof Error ? error.message : String(error),
-          rollbackError:
-            rollbackError instanceof Error
-              ? rollbackError.message
-              : String(rollbackError),
-        },
+    const now = nowIso();
+    const expiresAt = new Date(
+      Date.now() + expiresInMinutes * 60_000,
+    ).toISOString();
+
+    if (!knownSubdomain[0]) {
+      await ensureSubdomainEnabled(config, domain, subdomain);
+    }
+    const routingRuleId = await createRoutingRule(
+      config,
+      domain,
+      mailboxAddress.address,
+    );
+
+    const created = {
+      id: randomId("mbx"),
+      userId: user.id,
+      domainId: domain.id,
+      localPart,
+      subdomain,
+      address: mailboxAddress.address,
+      routingRuleId,
+      status: "active",
+      createdAt: now,
+      expiresAt,
+      destroyedAt: null,
+    } as const;
+
+    let mailboxInserted = false;
+    try {
+      await insertMailboxIfDomainStillActive(
+        env,
+        created,
+        domain.zoneId,
+        domain.rootDomain,
       );
-    }
+      mailboxInserted = true;
 
-    throw error;
+      if (knownSubdomain[0]) {
+        await db
+          .update(subdomains)
+          .set({ lastUsedAt: now })
+          .where(eq(subdomains.id, knownSubdomain[0].id));
+      } else {
+        await db.insert(subdomains).values({
+          id: randomId("sub"),
+          domainId: domain.id,
+          name: subdomain,
+          enabledAt: now,
+          lastUsedAt: now,
+          metadata: JSON.stringify({
+            mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
+          }),
+        });
+      }
+
+      return toMailboxDto(
+        {
+          ...created,
+          rootDomain: domain.rootDomain,
+        },
+        null,
+      );
+    } catch (error) {
+      let rollbackError: unknown = null;
+      if (mailboxInserted) {
+        try {
+          await rollbackMailboxInsert(db, created.id);
+        } catch (cleanupError) {
+          rollbackError = cleanupError;
+        }
+      }
+
+      if (routingRuleId) {
+        try {
+          await deleteRoutingRule(config, domain, routingRuleId);
+        } catch {
+          // Ignore cleanup failures here; the primary error is the mailbox
+          // creation race or write failure that caused the insert to abort.
+        }
+      }
+
+      if (rollbackError) {
+        throw new ApiError(
+          502,
+          "Failed to roll back mailbox after subdomain persistence failure",
+          {
+            mailboxId: created.id,
+            address: created.address,
+            cause: error instanceof Error ? error.message : String(error),
+            rollbackError:
+              rollbackError instanceof Error
+                ? rollbackError.message
+                : String(rollbackError),
+          },
+        );
+      }
+
+      if (isMailboxAddressConflictError(error)) {
+        if (
+          canRetryGeneratedAddress &&
+          attempt < generatedMailboxMaxAttempts - 1
+        ) {
+          continue;
+        }
+
+        throw new ApiError(409, "Mailbox already exists");
+      }
+
+      throw error;
+    }
   }
 
-  return toMailboxDto(
-    {
-      ...created,
-      rootDomain: domain.rootDomain,
-    },
-    null,
-  );
+  throw new ApiError(409, "Mailbox already exists");
 };
 
 export const ensureMailboxForUser = async (
