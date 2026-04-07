@@ -37,6 +37,20 @@ type ApiKeysPageViewProps = {
   passkeyError?: string | null;
   passkeyPending?: boolean;
   latestSecret?: string | null;
+  error?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+  } | null;
+  passkeyLoadError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+  } | null;
+  onRetry?: () => void;
+  onRetryPasskeys?: () => void;
   onActiveTabChange: (tab: IdentityAuthTab) => void;
   onCreate: Parameters<typeof ApiKeyTable>[0]["onCreate"];
   onRevoke: Parameters<typeof ApiKeyTable>[0]["onRevoke"];
@@ -52,6 +66,10 @@ export const ApiKeysPageView = ({
   passkeyError,
   passkeyPending,
   latestSecret,
+  error = null,
+  passkeyLoadError = null,
+  onRetry,
+  onRetryPasskeys,
   onActiveTabChange,
   onCreate,
   onRevoke,
@@ -99,14 +117,36 @@ export const ApiKeysPageView = ({
             </TabsContent>
 
             <TabsContent value="passkey" className="mt-0">
-              <PasskeyTable
-                passkeys={passkeys}
-                passkeySupported={passkeySupported}
-                isPending={passkeyPending}
-                error={passkeyError}
-                onCreate={onCreatePasskey}
-                onRevoke={onRevokePasskey}
-              />
+              {passkeyLoadError ? (
+                <ErrorState
+                  variant={passkeyLoadError.variant}
+                  title={passkeyLoadError.title}
+                  description={passkeyLoadError.description}
+                  details={passkeyLoadError.details}
+                  primaryAction={
+                    onRetryPasskeys ? (
+                      <Button onClick={onRetryPasskeys}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        重新加载 Passkeys
+                      </Button>
+                    ) : undefined
+                  }
+                  secondaryAction={
+                    <Button asChild variant="outline">
+                      <Link to={appRoutes.apiKeysDocs}>查看对接文档</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <PasskeyTable
+                  passkeys={passkeys}
+                  passkeySupported={passkeySupported}
+                  isPending={passkeyPending}
+                  error={passkeyError}
+                  onCreate={onCreatePasskey}
+                  onRevoke={onRevokePasskey}
+                />
+              )}
             </TabsContent>
           </div>
         </div>
@@ -125,6 +165,8 @@ export const ApiKeysPage = () => {
   const passkeySupported = usePasskeySupport();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const hasApiKeysData = apiKeysQuery.data !== undefined;
+  const hasPasskeysData = passkeysQuery.data !== undefined;
   const [latestSecret, setLatestSecret] = useState<string | null>(
     () => queryClient.getQueryData<string>(latestApiKeySecretQueryKey) ?? null,
   );
@@ -161,6 +203,32 @@ export const ApiKeysPage = () => {
       }
       passkeyPending={createPasskeyMutation.isPending}
       latestSecret={latestSecret}
+      error={
+        apiKeysQuery.error && !hasApiKeysData
+          ? {
+              variant: "recoverable",
+              title: "API Keys 暂时加载失败",
+              description: "暂时无法获取密钥列表，请重新加载后再试。",
+              details: getErrorDetails(apiKeysQuery.error),
+            }
+          : null
+      }
+      passkeyLoadError={
+        passkeysQuery.error && !hasPasskeysData
+          ? {
+              variant: "recoverable",
+              title: "Passkeys 暂时加载失败",
+              description: "暂时无法获取 Passkey 列表，请重新加载后再试。",
+              details: getErrorDetails(passkeysQuery.error),
+            }
+          : null
+      }
+      onRetry={() => {
+        void apiKeysQuery.refetch();
+      }}
+      onRetryPasskeys={() => {
+        void passkeysQuery.refetch();
+      }}
       onActiveTabChange={(tab) => {
         setSearchParams((current) => {
           const next = new URLSearchParams(current);

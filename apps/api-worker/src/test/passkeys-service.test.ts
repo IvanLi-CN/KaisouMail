@@ -109,6 +109,48 @@ describe("passkey service", () => {
     );
   });
 
+  it("excludes revoked passkeys from the registration exclude list", async () => {
+    generateRegistrationOptions.mockResolvedValue({
+      challenge: "registration_options",
+    });
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: async () => [
+            {
+              credentialId: "credential_active",
+              revokedAt: null,
+              transportsJson: JSON.stringify(["internal"]),
+            },
+            {
+              credentialId: "credential_revoked",
+              revokedAt: "2026-04-07T00:00:00.000Z",
+              transportsJson: JSON.stringify(["usb"]),
+            },
+          ],
+        }),
+      }),
+    });
+
+    await createPasskeyRegistrationOptionsForUser(
+      {} as never,
+      baseConfig,
+      createRequest({ origin: "https://cfm.707979.xyz" }),
+      authUser,
+      "Laptop",
+    );
+
+    expect(generateRegistrationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        excludeCredentials: [
+          expect.objectContaining({
+            id: "credential_active",
+          }),
+        ],
+      }),
+    );
+  });
+
   it("uses the current request origin when generating authentication options", async () => {
     generateAuthenticationOptions.mockResolvedValue({
       challenge: "authentication_options",
@@ -254,6 +296,84 @@ describe("passkey service", () => {
       message: "Passkey already registered",
       status: 409,
     });
+  });
+
+  it("re-enables a revoked credential when it is registered again", async () => {
+    verifyRegistrationResponse.mockResolvedValue({
+      verified: true,
+      registrationInfo: {
+        credential: {
+          id: "credential_revoked",
+          publicKey: new Uint8Array([1, 2, 3]),
+          counter: 4,
+        },
+        credentialDeviceType: "multiDevice",
+        credentialBackedUp: true,
+      },
+    });
+    const updates: unknown[] = [];
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () =>
+            createAwaitableQuery([
+              {
+                id: "psk_revoked",
+                userId: authUser.id,
+                revokedAt: "2026-04-07T00:00:00.000Z",
+              },
+            ]),
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => ({
+          where: async () => {
+            updates.push(values);
+          },
+        }),
+      }),
+      insert: () => ({
+        values: vi.fn(),
+      }),
+    });
+
+    const registrationCookie =
+      "kaisoumail_passkey_registration=" +
+      encodeURIComponent(
+        await (await import("../lib/crypto")).signPayload(
+          {
+            kind: "registration",
+            challenge: "reenable_challenge",
+            name: "MacBook Pro",
+            userId: authUser.id,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + 300,
+          },
+          baseConfig.SESSION_SECRET,
+        ),
+      );
+
+    const result = await verifyPasskeyRegistrationForUser(
+      {} as never,
+      baseConfig,
+      createRequest({ cookie: registrationCookie }),
+      authUser,
+      {
+        id: "credential_revoked",
+        rawId: "credential_revoked",
+        response: {
+          attestationObject: "attestation",
+          clientDataJSON: "client-data",
+          transports: ["internal"],
+        },
+        clientExtensionResults: {},
+        type: "public-key",
+      } as RegistrationResponseJSON,
+    );
+
+    expect(result.passkey.id).toBe("psk_revoked");
+    expect(result.passkey.revokedAt).toBeNull();
+    expect(updates).toHaveLength(1);
   });
 
   it("rejects registration when verification fails", async () => {

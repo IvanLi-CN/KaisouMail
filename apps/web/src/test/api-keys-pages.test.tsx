@@ -27,13 +27,27 @@ import {
 const sessionHookState = {
   user: demoSessionUser,
 };
+const apiKeysHookState = {
+  data: demoApiKeys as typeof demoApiKeys | undefined,
+  error: null as Error | null,
+  refetch: vi.fn(),
+};
+const passkeysHookState = {
+  data: demoPasskeys as typeof demoPasskeys | undefined,
+  error: null as Error | null,
+  refetch: vi.fn(),
+};
 
 const docsLinks = buildPublicDocsLinks(
   "https://ivanli-cn.github.io/KaisouMail",
 );
 
 vi.mock("@/hooks/use-api-keys", () => ({
-  useApiKeysQuery: () => ({ data: demoApiKeys }),
+  useApiKeysQuery: () => ({
+    data: apiKeysHookState.data,
+    error: apiKeysHookState.error,
+    refetch: apiKeysHookState.refetch,
+  }),
   useCreateApiKeyMutation: () => ({
     mutateAsync: vi.fn(),
   }),
@@ -50,7 +64,11 @@ vi.mock("@/hooks/use-meta", () => ({
 }));
 
 vi.mock("@/hooks/use-passkeys", () => ({
-  usePasskeysQuery: () => ({ data: demoPasskeys }),
+  usePasskeysQuery: () => ({
+    data: passkeysHookState.data,
+    error: passkeysHookState.error,
+    refetch: passkeysHookState.refetch,
+  }),
   useCreatePasskeyMutation: () => ({
     mutateAsync: vi.fn(),
     error: null,
@@ -70,6 +88,12 @@ vi.mock("@/hooks/use-session", () => ({
 
 afterEach(() => {
   sessionHookState.user = demoSessionUser;
+  apiKeysHookState.data = demoApiKeys;
+  apiKeysHookState.error = null;
+  apiKeysHookState.refetch.mockReset();
+  passkeysHookState.data = demoPasskeys;
+  passkeysHookState.error = null;
+  passkeysHookState.refetch.mockReset();
 });
 
 const createQueryClient = () =>
@@ -252,5 +276,44 @@ describe("api key integration docs", () => {
     expect(
       screen.getByText("cfm_full_secret_returned_once"),
     ).toBeInTheDocument();
+  });
+
+  it("shows a recoverable error on the Passkey tab when the list cannot load", async () => {
+    passkeysHookState.data = undefined;
+    passkeysHookState.error = new Error("Passkey backend offline");
+
+    const queryClient = createQueryClient();
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
+        <AppShell
+          user={demoSessionUser}
+          version={demoVersion}
+          onLogout={vi.fn()}
+        >
+          <Routes>
+            <Route
+              path="/"
+              element={<Navigate to={appRoutes.apiKeys} replace />}
+            />
+            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
+            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+          </Routes>
+        </AppShell>
+      </MemoryRouter>,
+      queryClient,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Passkeys 暂时加载失败",
+        level: 2,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("当前还没有注册任何 passkey。"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "重新加载 Passkeys" }));
+    expect(passkeysHookState.refetch).toHaveBeenCalledTimes(1);
   });
 });

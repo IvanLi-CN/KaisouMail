@@ -266,6 +266,7 @@ export const createPasskeyRegistrationOptionsForUser = async (
   const rows = await db
     .select({
       credentialId: passkeys.credentialId,
+      revokedAt: passkeys.revokedAt,
       transportsJson: passkeys.transportsJson,
     })
     .from(passkeys)
@@ -278,18 +279,20 @@ export const createPasskeyRegistrationOptionsForUser = async (
     userDisplayName: user.name,
     userID: encoder.encode(user.id),
     attestationType: "none",
-    excludeCredentials: rows.map((row) => ({
-      id: row.credentialId,
-      transports: JSON.parse(row.transportsJson) as (
-        | "ble"
-        | "cable"
-        | "hybrid"
-        | "internal"
-        | "nfc"
-        | "smart-card"
-        | "usb"
-      )[],
-    })),
+    excludeCredentials: rows
+      .filter((row) => !row.revokedAt)
+      .map((row) => ({
+        id: row.credentialId,
+        transports: JSON.parse(row.transportsJson) as (
+          | "ble"
+          | "cable"
+          | "hybrid"
+          | "internal"
+          | "nfc"
+          | "smart-card"
+          | "usb"
+        )[],
+      })),
     authenticatorSelection: {
       residentKey: "required",
       userVerification: "required",
@@ -355,20 +358,27 @@ export const verifyPasskeyRegistrationForUser = async (
 
   const db = getDb(env);
   const existing = await db
-    .select({ id: passkeys.id })
+    .select({
+      id: passkeys.id,
+      revokedAt: passkeys.revokedAt,
+      userId: passkeys.userId,
+    })
     .from(passkeys)
     .where(
       eq(passkeys.credentialId, verification.registrationInfo.credential.id),
     )
     .limit(1);
-  if (existing[0]) {
+  const existingRecord = existing[0];
+  if (
+    existingRecord &&
+    (!existingRecord.revokedAt || existingRecord.userId !== user.id)
+  ) {
     throw new ApiError(409, "Passkey already registered");
   }
 
   const createdAt = nowIso();
   const transports = response.response.transports ?? [];
-  const record = {
-    id: randomId("psk"),
+  const baseRecord = {
     userId: user.id,
     name: challenge.name,
     credentialId: verification.registrationInfo.credential.id,
@@ -384,7 +394,19 @@ export const verifyPasskeyRegistrationForUser = async (
     revokedAt: null,
   } as const;
 
-  await db.insert(passkeys).values(record);
+  const record = {
+    id: existingRecord?.id ?? randomId("psk"),
+    ...baseRecord,
+  } as const;
+
+  if (existingRecord) {
+    await db
+      .update(passkeys)
+      .set(baseRecord)
+      .where(eq(passkeys.id, existingRecord.id));
+  } else {
+    await db.insert(passkeys).values(record);
+  }
 
   return {
     passkey: mapPasskeyRow(record),
