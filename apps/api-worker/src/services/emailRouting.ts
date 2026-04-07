@@ -204,9 +204,14 @@ export const deleteRoutingRule = async (
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  await cfRequest(config, `/zones/${zoneId}/email/routing/rules/${ruleId}`, {
-    method: "DELETE",
-  });
+  await cfRequest(
+    config,
+    `/zones/${zoneId}/email/routing/rules/${ruleId}`,
+    {
+      method: "DELETE",
+    },
+    { ignoreStatuses: [404] },
+  );
 };
 
 export const validateZoneAccess = async (
