@@ -116,7 +116,7 @@ export const MailboxDetailPage = () => {
               priority="primary"
               variant="destructive"
               onClick={() => destroyMailboxMutation.mutate(mailboxId)}
-              disabled={mailboxQuery.data.status !== "active"}
+              disabled={mailboxQuery.data.status === "destroyed"}
             />
           </div>
         }
