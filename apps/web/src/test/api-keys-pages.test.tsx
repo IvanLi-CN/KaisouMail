@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 import {
   demoApiKeys,
   demoMeta,
+  demoPasskeys,
   demoSessionUser,
   demoVersion,
 } from "@/mocks/data";
@@ -17,7 +18,11 @@ import {
   ApiKeysDocsPage,
   ApiKeysDocsPageView,
 } from "@/pages/api-keys-docs-page";
-import { ApiKeysPage, ApiKeysPageView } from "@/pages/api-keys-page";
+import {
+  ApiKeysPage,
+  ApiKeysPageView,
+  type IdentityAuthTab,
+} from "@/pages/api-keys-page";
 
 const sessionHookState = {
   user: demoSessionUser,
@@ -44,6 +49,19 @@ vi.mock("@/hooks/use-meta", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-passkeys", () => ({
+  usePasskeysQuery: () => ({ data: demoPasskeys }),
+  useCreatePasskeyMutation: () => ({
+    mutateAsync: vi.fn(),
+    error: null,
+    isPending: false,
+  }),
+  useRevokePasskeyMutation: () => ({
+    mutate: vi.fn(),
+  }),
+  usePasskeySupport: () => true,
+}));
+
 vi.mock("@/hooks/use-session", () => ({
   useSessionQuery: () => ({
     data: sessionHookState.user ? { user: sessionHookState.user } : null,
@@ -66,6 +84,31 @@ const createQueryClient = () =>
 const renderWithQueryClient = (ui: ReactNode, queryClient: QueryClient) =>
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 
+const ApiKeysPageViewHarness = ({
+  defaultTab = "api-keys",
+}: {
+  defaultTab?: IdentityAuthTab;
+}) => {
+  const [activeTab, setActiveTab] = useState<IdentityAuthTab>(defaultTab);
+
+  return (
+    <ApiKeysPageView
+      apiKeys={demoApiKeys}
+      passkeys={demoPasskeys}
+      activeTab={activeTab}
+      passkeySupported
+      passkeyError={null}
+      passkeyPending={false}
+      latestSecret={null}
+      onCreate={vi.fn()}
+      onRevoke={vi.fn()}
+      onActiveTabChange={setActiveTab}
+      onCreatePasskey={vi.fn()}
+      onRevokePasskey={vi.fn()}
+    />
+  );
+};
+
 const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
   renderWithQueryClient(
     <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
@@ -77,14 +120,7 @@ const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
           />
           <Route
             path={appRoutes.apiKeys}
-            element={
-              <ApiKeysPageView
-                apiKeys={demoApiKeys}
-                latestSecret={null}
-                onCreate={vi.fn()}
-                onRevoke={vi.fn()}
-              />
-            }
+            element={<ApiKeysPageViewHarness />}
           />
           <Route
             path={appRoutes.apiKeysDocs}
@@ -99,6 +135,36 @@ const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
   );
 
 describe("api key integration docs", () => {
+  it("switches between API Keys and Passkey tabs on the identity page", async () => {
+    renderApiKeysRoutes();
+
+    const passkeyTab = screen.getByRole("tab", { name: /Passkey/i });
+
+    expect(
+      screen.getByRole("heading", { name: "身份认证", level: 1 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /API Keys/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
+    ).toBeInTheDocument();
+
+    fireEvent.mouseDown(passkeyTab);
+    fireEvent.click(passkeyTab);
+
+    await waitFor(() => {
+      expect(passkeyTab).toHaveAttribute("aria-selected", "true");
+    });
+    expect(
+      screen.getByRole("heading", { name: "注册 Passkey", level: 2 }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "已注册 Passkeys", level: 2 }),
+    ).toBeInTheDocument();
+  });
+
   it("renders the api keys header CTA and navigates to the docs page", async () => {
     renderApiKeysRoutes();
 
@@ -109,8 +175,8 @@ describe("api key integration docs", () => {
         screen.getByRole("heading", { name: "API 对接速查", level: 1 }),
       ).toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "API Keys" })).toHaveClass(
-      "bg-secondary/90",
+    expect(screen.getByRole("link", { name: "身份认证" })).toHaveClass(
+      "bg-secondary",
     );
     expect(screen.getByText("Session Auth")).toBeInTheDocument();
     expect(screen.getByText("/api/api-keys/:id/revoke")).toBeInTheDocument();
@@ -177,10 +243,10 @@ describe("api key integration docs", () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("link", { name: "回到 API Keys" }));
+    fireEvent.click(screen.getByRole("link", { name: "回到身份认证" }));
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "API Keys", level: 1 }),
+        screen.getByRole("heading", { name: "身份认证", level: 1 }),
       ).toBeInTheDocument();
     });
     expect(

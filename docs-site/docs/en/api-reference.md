@@ -19,9 +19,15 @@ This page lists the implemented endpoints and their purpose. For request and res
 
 | Endpoint | Purpose |
 | --- | --- |
+| `POST /api/auth/passkey/options` | create a browser passkey login challenge |
+| `POST /api/auth/passkey/verify` | verify a passkey login and issue a session |
 | `GET /api/auth/session` | read the current session |
 | `POST /api/auth/session` | exchange an API key for a browser session |
 | `DELETE /api/auth/session` | sign out |
+| `GET /api/passkeys` | list passkeys for the current user |
+| `POST /api/passkeys/registration/options` | create a passkey registration challenge |
+| `POST /api/passkeys/registration/verify` | save a verified passkey credential |
+| `DELETE /api/passkeys/:id` | revoke a passkey |
 | `GET /api/api-keys` | list API keys |
 | `POST /api/api-keys` | create an API key |
 | `POST /api/api-keys/:id/revoke` | revoke an API key |

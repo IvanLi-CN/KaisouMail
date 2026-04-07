@@ -35,13 +35,20 @@ type EndpointGroup = {
 
 const quickstartSteps = [
   "在 `/api-keys` 页面创建一把新的 API Key，并保存好返回时展示的完整 secret。",
+  "需要浏览器便捷登录时，先在同页注册一个 passkey；之后登录页可直接走 passkey 完成会话恢复。",
   "自动化或 Agent 调用受保护接口时，直接发送 `Authorization: Bearer <API_KEY>`。",
-  "浏览器场景先调用 `POST /api/auth/session` 交换 `kaisoumail_session` cookie，再用同一会话访问后续接口。",
+  "浏览器回退场景仍可调用 `POST /api/auth/session` 交换 `kaisoumail_session` cookie，再用同一会话访问后续接口。",
   "邮箱地址规则、可用域名、默认 TTL 与上限 TTL 可先通过 `GET /api/meta` 获取，避免在客户端硬编码猜测。",
-  "需要撤销凭证时调用 `POST /api/api-keys/:id/revoke`，已撤销 Key 会保留审计记录，但不能继续鉴权。",
+  "需要撤销凭证时，可调用 `DELETE /api/passkeys/:id` 或 `POST /api/api-keys/:id/revoke`；撤销记录会保留审计信息，但不能继续鉴权。",
 ] as const;
 
 const authModes = [
+  {
+    title: "Browser Passkey",
+    description: "适合控制台用户，直接在浏览器里完成 WebAuthn 登录。",
+    detail:
+      "先在已登录会话里通过 `/api/passkeys/registration/*` 注册 passkey，之后登录页会调用 `/api/auth/passkey/options` + `/api/auth/passkey/verify` 直接换取同一个 `kaisoumail_session`。",
+  },
   {
     title: "Automation / Agent",
     description: "适合脚本、CI、Agent 与后端服务。",
@@ -149,8 +156,56 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     },
     {
       title: "Session Auth",
-      description: "API Key 可以直接用于自动化，也可以先交换成浏览器 session。",
+      description:
+        "浏览器支持 passkey 直登，也保留 API Key → session cookie 回退链路。",
       endpoints: [
+        {
+          method: "POST",
+          path: "/api/auth/passkey/options",
+          summary: "生成 discoverable passkey 登录 challenge。",
+          auth: "无需预先登录",
+          responseBody: `{
+  "challenge": "<base64url>",
+  "rpId": "cfm.example.com",
+  "userVerification": "required"
+}`,
+          notes: [
+            "接口会同步下发短时效、HttpOnly 的 passkey challenge cookie。",
+            "`rpId` 固定取 `WEB_APP_ORIGIN.hostname`，`expectedOrigin` 固定校验 `WEB_APP_ORIGIN`。",
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/auth/passkey/verify",
+          summary: "校验浏览器返回的 passkey assertion 并签发 session cookie。",
+          auth: "无需预先登录",
+          requestBody: `{
+  "response": {
+    "id": "<credential-id>",
+    "rawId": "<credential-id>",
+    "response": {
+      "authenticatorData": "<base64url>",
+      "clientDataJSON": "<base64url>",
+      "signature": "<base64url>"
+    },
+    "clientExtensionResults": {},
+    "type": "public-key"
+  }
+}`,
+          responseBody: `{
+  "user": {
+    "id": "usr_xxx",
+    "email": "owner@example.com",
+    "name": "Ivan Owner",
+    "role": "admin"
+  },
+  "authenticatedAt": "2026-04-03T12:00:00.000Z"
+}`,
+          notes: [
+            "成功时会同时清掉 challenge cookie 并写入 `kaisoumail_session`。",
+            "已撤销或不存在的 credential 会返回统一 `{ error, details }` 失败包。",
+          ],
+        },
         {
           method: "POST",
           path: "/api/auth/session",
@@ -201,6 +256,98 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "成功时返回 `204 No Content`。",
             "接口会下发过期的 `kaisoumail_session` cookie，用于浏览器退出登录。",
+          ],
+        },
+      ],
+    },
+    {
+      title: "Passkey Management",
+      description: "已登录用户可以注册、列出和撤销自己的 passkeys。",
+      endpoints: [
+        {
+          method: "GET",
+          path: "/api/passkeys",
+          summary: "列出当前用户的 passkeys。",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
+          responseBody: `{
+  "passkeys": [
+    {
+      "id": "psk_xxx",
+      "name": "MacBook Pro",
+      "credentialId": "<credential-id>",
+      "deviceType": "multiDevice",
+      "backedUp": true,
+      "transports": ["internal", "hybrid"],
+      "createdAt": "2026-04-03T12:00:00.000Z",
+      "lastUsedAt": "2026-04-03T12:20:00.000Z",
+      "revokedAt": null
+    }
+  ]
+}`,
+          notes: [
+            "列表只返回当前用户自己的 passkeys，不提供跨用户管理。",
+            "返回字段由 `passkeySchema` 定义，便于 UI 显示设备类型、备份状态与审计时间戳。",
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/passkeys/registration/options",
+          summary: "为当前登录用户生成 passkey 注册 challenge。",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
+          requestBody: `{
+  "name": "MacBook Pro"
+}`,
+          responseBody: `{
+  "challenge": "<base64url>",
+  "rp": { "name": "KaisouMail", "id": "cfm.example.com" }
+}`,
+          notes: [
+            "成功时会写入短时效、HttpOnly 的注册 challenge cookie。",
+            "设备名称要求 1-64 字符，并会随 challenge 一起签名保存，verify 时直接落库。",
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/passkeys/registration/verify",
+          summary: "校验 passkey attestation 并保存凭证。",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
+          requestBody: `{
+  "response": {
+    "id": "<credential-id>",
+    "rawId": "<credential-id>",
+    "response": {
+      "attestationObject": "<base64url>",
+      "clientDataJSON": "<base64url>",
+      "transports": ["internal"]
+    },
+    "clientExtensionResults": {},
+    "type": "public-key"
+  }
+}`,
+          responseBody: `{
+  "id": "psk_xxx",
+  "name": "MacBook Pro",
+  "credentialId": "<credential-id>",
+  "deviceType": "multiDevice",
+  "backedUp": true,
+  "transports": ["internal"],
+  "createdAt": "2026-04-03T12:00:00.000Z",
+  "lastUsedAt": null,
+  "revokedAt": null
+}`,
+          notes: [
+            "重复 credential 会返回 `409`，避免同一 passkey 被重复注册。",
+            "成功时会清掉注册 challenge cookie，并返回脱敏后的 passkey 记录。",
+          ],
+        },
+        {
+          method: "DELETE",
+          path: "/api/passkeys/:id",
+          summary: "撤销指定 passkey。",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
+          notes: [
+            "成功时返回 `204 No Content`。",
+            "撤销只作用于当前用户自己的 passkey；撤销后记录仍保留 `revokedAt` 供审计使用。",
           ],
         },
       ],
@@ -657,7 +804,7 @@ const ApiKeysDocsPageView = ({
               </Button>
             ) : null}
             <Button asChild variant="outline">
-              <Link to={appRoutes.apiKeys}>回到 API Keys</Link>
+              <Link to={appRoutes.apiKeys}>回到身份认证</Link>
             </Button>
           </div>
         }
@@ -668,8 +815,8 @@ const ApiKeysDocsPageView = ({
           <CardHeader>
             <CardTitle>接入概览</CardTitle>
             <CardDescription>
-              当前项目支持两种鉴权入口：直接 Bearer API Key，或先用 API Key
-              交换浏览器 session cookie。
+              当前项目支持三种入口：浏览器 passkey、直接 Bearer API Key，以及
+              API Key → 浏览器 session cookie 回退链路。
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -703,6 +850,12 @@ const ApiKeysDocsPageView = ({
               <p className="mt-2">
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：
                 <code className="ml-1">{overviewAddressExample}</code>
+              </p>
+              <p className="mt-2">
+                passkey 相关 challenge 与验证都依赖{" "}
+                <code className="ml-1">WEB_APP_ORIGIN</code>；它既决定 WebAuthn
+                的 <code>expectedOrigin</code>，也决定 <code>rpId</code>
+                应该绑定到哪个 host。
               </p>
               <p className="mt-2">
                 项目同时支持拆分 token 和共享 token：运行时优先读取{" "}

@@ -11,12 +11,20 @@ import {
   listDomainsResponseSchema,
   listMailboxesResponseSchema,
   listMessagesResponseSchema,
+  listPasskeysResponseSchema,
   listUsersResponseSchema,
   mailboxSchema,
   messageDetailResponseSchema,
+  passkeySchema,
   sessionResponseSchema,
   versionResponseSchema,
 } from "@kaisoumail/shared";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+} from "@simplewebauthn/browser";
 
 import { demoApi } from "@/lib/demo-store";
 
@@ -104,6 +112,20 @@ export const apiClient = {
     return requestJson(
       "/api/auth/session",
       { method: "POST", body: JSON.stringify({ apiKey }) },
+      (value) => sessionResponseSchema.parse(value),
+    );
+  },
+  async createPasskeyAuthenticationOptions() {
+    return requestJson(
+      "/api/auth/passkey/options",
+      { method: "POST" },
+      (value) => value as PublicKeyCredentialRequestOptionsJSON,
+    );
+  },
+  async verifyPasskeyAuthentication(response: AuthenticationResponseJSON) {
+    return requestJson(
+      "/api/auth/passkey/verify",
+      { method: "POST", body: JSON.stringify({ response }) },
       (value) => sessionResponseSchema.parse(value),
     );
   },
@@ -224,6 +246,45 @@ export const apiClient = {
       (value) => listApiKeysResponseSchema.parse(value),
     );
     return payload.apiKeys;
+  },
+  async listPasskeys() {
+    if (DEMO_MODE) return demoApi.listPasskeys();
+    const payload = await requestJson(
+      "/api/passkeys",
+      { method: "GET" },
+      (value) => listPasskeysResponseSchema.parse(value),
+    );
+    return payload.passkeys;
+  },
+  async createPasskeyRegistrationOptions(name: string) {
+    return requestJson(
+      "/api/passkeys/registration/options",
+      { method: "POST", body: JSON.stringify({ name }) },
+      (value) => value as PublicKeyCredentialCreationOptionsJSON,
+    );
+  },
+  async verifyPasskeyRegistration(response: RegistrationResponseJSON) {
+    return requestJson(
+      "/api/passkeys/registration/verify",
+      { method: "POST", body: JSON.stringify({ response }) },
+      (value) => passkeySchema.parse(value),
+    );
+  },
+  async revokePasskey(id: string) {
+    if (DEMO_MODE) return demoApi.revokePasskey(id);
+    const response = await fetch(`${API_BASE}/api/passkeys/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new Error("Passkey revoke failed");
+    }
+  },
+  async loginWithPasskeyDemo() {
+    return demoApi.loginWithPasskey();
+  },
+  async registerPasskeyDemo(name: string) {
+    return demoApi.registerPasskey(name);
   },
   async createApiKey(input: { name: string; scopes: string[] }) {
     if (DEMO_MODE) return demoApi.createApiKey(input);

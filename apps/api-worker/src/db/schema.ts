@@ -41,6 +41,30 @@ export const apiKeys = sqliteTable(
   ],
 );
 
+export const passkeys = sqliteTable(
+  "passkeys",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    credentialId: text("credential_id").notNull(),
+    publicKeyB64u: text("public_key_b64u").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
+    transportsJson: text("transports_json").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("passkeys_credential_id_unique").on(table.credentialId),
+    index("passkeys_user_idx").on(table.userId),
+  ],
+);
+
 export const domains = sqliteTable(
   "domains",
   {

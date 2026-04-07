@@ -19,7 +19,7 @@ Minimum variables:
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY` (optional; only if `BOOTSTRAP_ADMIN_EMAIL` is set for first-admin bootstrap)
-  - `WEB_APP_ORIGIN`
+  - `WEB_APP_ORIGIN` (required for browser passkeys because it drives WebAuthn origin + RP ID)
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -43,6 +43,11 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 - Worker API: `http://127.0.0.1:8787`
 - Public docs: `http://127.0.0.1:56007`
 - Storybook: `http://127.0.0.1:6006`
+
+## Login options
+
+- Browser users can register a passkey inside `/api-keys` after their first sign-in
+- Automation and recovery flows should keep using API Keys
 
 ## Production surfaces
 

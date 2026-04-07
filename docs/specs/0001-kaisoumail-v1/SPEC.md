@@ -5,13 +5,13 @@ Last: 2026-04-07
 
 ## Objective
 
-Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-oriented web console for login, mailbox lifecycle management, message inspection, API key management, and multi-user administration.
+Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-oriented web console for passkey/API-key login, mailbox lifecycle management, message inspection, API key management, and multi-user administration.
 
 ## Product Surfaces
 
 ### Auth
 - `/login`
-- API key based sign-in that exchanges credentials for a browser session
+- Passkey-first browser sign-in with API key fallback that exchanges credentials for the same browser session cookie
 
 ### Workspace
 - `/workspace`
@@ -44,9 +44,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Security
 - `/api-keys`
 - `/api-keys/docs`
-- Create and revoke API keys for automation and browser sign-in
+- Identity-auth hub that splits browser Passkey management from automation-facing API key inventory while keeping both on the same route
+- Register, list, and revoke passkeys for browser sign-in while keeping API keys for automation, recovery, and browser fallback
 - The Web console keeps revoked keys in the inventory for audit, sorts the list by most recent use, and paginates the table in 10-row pages
-- Protected in-app quick reference for human operators and Agents, covering runtime metadata, session exchange, API key lifecycle, mailbox lookup/create endpoints, and message polling endpoints
+- Protected in-app quick reference for human operators and Agents, covering runtime metadata, passkey/session exchange, API key lifecycle, mailbox lookup/create endpoints, and message polling endpoints
 
 ### Public Docs
 - GitHub Pages public docs site
@@ -55,6 +56,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## API Behavior
 
+- `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against `WEB_APP_ORIGIN`, then issues the same `kaisoumail_session` cookie used by the API key exchange flow
+- `GET /api/passkeys` plus `POST /api/passkeys/registration/options|verify` and `DELETE /api/passkeys/:id` manage per-user passkeys with revocation-aware audit history
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, and address validation hints used by Web and automation clients
 - `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`
 - `GET|POST /api/domains` plus `POST /api/domains/bind` and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
@@ -91,7 +94,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
-- Responsive authenticated header keeps the brand and inline primary navigation from `lg+`, while sub-`lg` layouts collapse account context, navigation, and logout into a right-side drawer so the mobile header stays single-row
+- Login keeps a prominent passkey CTA with explicit API key fallback in the same card, and the identity-auth page uses explicit `API Keys` / `Passkey` tabs instead of stacking both inventories together
+- Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
 - On desktop three-pane layouts, long mailbox/message datasets stay inside pane-local scroll containers; the page itself should not grow purely because a rail becomes very long
@@ -115,15 +119,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
-- 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
-- 2026-04-07: Tightened the responsive shell again so inline navigation stays single-row on wide tablets, collapsed desktop account/logout utilities to icon-only actions, and hid the workspace summary sentence on phone-sized layouts to preserve vertical space.
-- 2026-04-07: Simplified user-facing copy across the authenticated shell and control-plane pages, kept the mobile drawer focused on account/navigation/logout only, moved longer mailbox-creation guidance behind a contextual help popover, and refreshed responsive evidence against the canonical phone/tablet/desktop Storybook viewports.
-- 2026-04-07: Removed the redundant inline helper copy from the mailbox address form so the create surface keeps explanation at the header level only, then refreshed the stored visual evidence.
-- 2026-04-07: Replaced legacy `mail-*` / `box-*` default mailbox generation with a shared realistic mixed-pool alias generator, added bounded retry/fallback behavior for generated collisions, and refreshed Web/runtime example surfaces plus visual evidence to match.
-- 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
-- 2026-04-07: Reworked the authenticated shell and `/workspace` layout into a responsive `mobile 1-column / tablet 2-pane / desktop 3-pane` system, moved inline primary navigation next to the site title from `lg+`, and routed narrow screens through a right-side drawer that also carries account details and logout.
-- 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
-- 2026-04-07: Production deployment now auto-applies remote D1 migrations, re-validates the pending remote migration set at deploy time, gates API promotion on preview plus production smoke checks, records an explicit D1 Time Travel restore anchor for incidents, runs the rollback-backed production smoke before any trigger changes, validates every routable API URL again after trigger application, halts for manual trigger inspection when trigger application or post-trigger smoke fails, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy so migrated schemas are never paired with an older Worker by accident.
+- 2026-04-07: Renamed the `/api-keys` control-plane surface to an identity-auth page, added explicit `API Keys` / `Passkey` tabs, and refreshed the page evidence to show each tab separately.
+- 2026-04-06: Added passkey registration and passkey-based browser sign-in alongside the existing API key session exchange, expanded the `/api-keys` security surface with passkey management, and refreshed the in-app/public auth reference docs.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
@@ -138,7 +135,7 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### Auth
 
-![Login card with KaisouMail branding](./assets/login-card-kaisoumail.png)
+![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
 ### App Shell
 
@@ -209,9 +206,15 @@ PR: include
 
 ![Mailbox detail page](./assets/mailbox-detail.png)
 
-### API Key Management
+### Identity Auth
 
-![API keys page with recent-use sorting and pagination](./assets/api-keys-page-docs-entry.png)
+![Identity auth page with the API Keys tab selected](./assets/api-keys-page-docs-entry.png)
+
+![Identity auth page with the Passkey tab selected](./assets/api-keys-page-passkey-tab.png)
+
+![Identity auth tabs component with the API Keys tab selected](./assets/identity-auth-tabs-api-keys-story.png)
+
+![Identity auth tabs component with the Passkey tab selected](./assets/identity-auth-tabs-passkey-story.png)
 
 ### Integration Reference
 

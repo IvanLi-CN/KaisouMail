@@ -1,5 +1,6 @@
 import { buildRealisticMailboxAddressExamples } from "@kaisoumail/shared";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { type ComponentProps, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
@@ -10,11 +11,12 @@ import { appRoutes } from "@/lib/routes";
 import {
   demoApiKeys,
   demoMeta,
+  demoPasskeys,
   demoSessionUser,
   demoVersion,
 } from "@/mocks/data";
 import { ApiKeysDocsPageView } from "@/pages/api-keys-docs-page";
-import { ApiKeysPageView } from "@/pages/api-keys-page";
+import { ApiKeysPageView, type IdentityAuthTab } from "@/pages/api-keys-page";
 
 const PathnameBadge = () => {
   const location = useLocation();
@@ -44,12 +46,36 @@ const docsReferenceLinks = buildPublicDocsLinks(
   "https://ivanli-cn.github.io/KaisouMail",
 );
 
+const InteractiveApiKeysPageView = ({
+  defaultTab = "api-keys",
+  ...props
+}: Omit<
+  ComponentProps<typeof ApiKeysPageView>,
+  "activeTab" | "onActiveTabChange"
+> & {
+  defaultTab?: IdentityAuthTab;
+}) => {
+  const [activeTab, setActiveTab] = useState<IdentityAuthTab>(defaultTab);
+
+  return (
+    <ApiKeysPageView
+      {...props}
+      activeTab={activeTab}
+      onActiveTabChange={setActiveTab}
+    />
+  );
+};
+
 const RouteFlowHarness = ({
   latestSecret = null,
   meta = demoMeta,
+  passkeySupported = true,
+  defaultTab = "api-keys",
 }: {
   latestSecret?: string | null;
   meta?: ApiMeta;
+  passkeySupported?: boolean;
+  defaultTab?: IdentityAuthTab;
 }) => (
   <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
     <div className="space-y-4">
@@ -59,11 +85,18 @@ const RouteFlowHarness = ({
         <Route
           path={appRoutes.apiKeys}
           element={
-            <ApiKeysPageView
+            <InteractiveApiKeysPageView
               apiKeys={demoApiKeys}
+              passkeys={demoPasskeys}
+              defaultTab={defaultTab}
+              passkeySupported={passkeySupported}
+              passkeyError={null}
+              passkeyPending={false}
               latestSecret={latestSecret}
               onCreate={fn()}
               onRevoke={fn()}
+              onCreatePasskey={fn()}
+              onRevokePasskey={fn()}
             />
           }
         />
@@ -79,14 +112,22 @@ const RouteFlowHarness = ({
 );
 
 const meta = {
-  title: "Pages/Api Keys",
+  title: "Pages/Identity Auth",
   component: ApiKeysPageView,
   tags: ["autodocs"],
   args: {
     apiKeys: demoApiKeys,
+    passkeys: demoPasskeys,
+    activeTab: "api-keys",
+    passkeySupported: true,
+    passkeyError: null,
+    passkeyPending: false,
     latestSecret: null,
     onCreate: fn(),
     onRevoke: fn(),
+    onActiveTabChange: fn(),
+    onCreatePasskey: fn(),
+    onRevokePasskey: fn(),
   },
 } satisfies Meta<typeof ApiKeysPageView>;
 
@@ -103,15 +144,21 @@ const getRenderedKeyNames = (canvas: ReturnType<typeof within>) =>
       return nameCell?.querySelector("p")?.textContent ?? "";
     });
 
-export const Overview: Story = {};
+export const Overview: Story = {
+  render: (args) => <InteractiveApiKeysPageView {...args} />,
+};
 
 export const PaginatedFlow: Story = {
+  render: (args) => <InteractiveApiKeysPageView {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     await expect(
-      canvas.getByRole("heading", { name: "API Keys", level: 1 }),
+      canvas.getByRole("heading", { name: "身份认证", level: 1 }),
     ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("tab", { name: /API Keys/i }),
+    ).toHaveAttribute("aria-selected", "true");
     await expect(canvas.getByText("第 1 / 2 页")).toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: "上一页" })).toBeDisabled();
     expect(getRenderedKeyNames(canvas)).toEqual([
@@ -139,29 +186,29 @@ export const PaginatedFlow: Story = {
 };
 
 export const WithLatestSecret: Story = {
+  render: (args) => <InteractiveApiKeysPageView {...args} />,
   args: {
     latestSecret: "cfm_full_secret_returned_once",
   },
 };
 
-export const LoadError: Story = {
-  args: {
-    apiKeys: [],
-    error: {
-      variant: "recoverable",
-      title: "API Keys 暂时加载失败",
-      description: "暂时无法获取密钥列表，请重新加载后再试。",
-      details:
-        '{\n  "error": "Request failed",\n  "details": "keys service unavailable"\n}',
-    },
-    onRetry: fn(),
-  },
-  play: async ({ canvasElement, args }) => {
+export const PasskeyTab: Story = {
+  render: (args) => (
+    <InteractiveApiKeysPageView {...args} defaultTab="passkey" />
+  ),
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole("button", { name: "重新加载 API Keys" }),
+
+    await expect(canvas.getByRole("tab", { name: /Passkey/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
-    await expect(args.onRetry).toHaveBeenCalled();
+    await expect(
+      canvas.getByRole("heading", { name: "注册 Passkey", level: 2 }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("heading", { name: "已注册 Passkeys", level: 2 }),
+    ).toBeInTheDocument();
   },
 };
 
@@ -171,12 +218,24 @@ export const RouteFlow: Story = {
     const canvas = within(canvasElement);
 
     await expect(
-      canvas.getByRole("heading", { name: "API Keys", level: 1 }),
+      canvas.getByRole("heading", { name: "身份认证", level: 1 }),
     ).toBeInTheDocument();
     await expect(canvas.getByText(/Path · \/api-keys/i)).toBeInTheDocument();
-    await expect(canvas.getByRole("link", { name: "API Keys" })).toHaveClass(
+    await expect(canvas.getByRole("link", { name: "身份认证" })).toHaveClass(
       /bg-secondary/,
     );
+    await expect(
+      canvas.getByRole("tab", { name: /API Keys/i }),
+    ).toHaveAttribute("aria-selected", "true");
+
+    await userEvent.click(canvas.getByRole("tab", { name: /Passkey/i }));
+    await expect(canvas.getByRole("tab", { name: /Passkey/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.getByRole("heading", { name: "注册 Passkey", level: 2 }),
+    ).toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole("link", { name: "对接文档" }));
 
@@ -189,18 +248,36 @@ export const RouteFlow: Story = {
       canvas.getByText(/Path · \/api-keys\/docs/i),
     ).toBeInTheDocument();
     await expect(canvas.getByText("API Key Lifecycle")).toBeInTheDocument();
-    await expect(canvas.getByRole("link", { name: "API Keys" })).toHaveClass(
+    await expect(canvas.getByRole("link", { name: "身份认证" })).toHaveClass(
       /bg-secondary/,
     );
 
-    await userEvent.click(canvas.getByRole("link", { name: "回到 API Keys" }));
+    await userEvent.click(canvas.getByRole("link", { name: "回到身份认证" }));
 
     await waitFor(async () => {
       await expect(
-        canvas.getByRole("heading", { name: "API Keys", level: 1 }),
+        canvas.getByRole("heading", { name: "身份认证", level: 1 }),
       ).toBeInTheDocument();
     });
     await expect(canvas.getByText(/Path · \/api-keys/i)).toBeInTheDocument();
+  },
+};
+
+export const RouteFlowPasskey: Story = {
+  render: () => <RouteFlowHarness defaultTab="passkey" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.getByRole("heading", { name: "身份认证", level: 1 }),
+    ).toBeInTheDocument();
+    await expect(canvas.getByRole("tab", { name: /Passkey/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.getByRole("heading", { name: "注册 Passkey", level: 2 }),
+    ).toBeInTheDocument();
   },
 };
 
@@ -227,5 +304,20 @@ export const DocsReference: Story = {
     await expect(
       canvas.getByRole("link", { name: "公开文档站" }),
     ).toHaveAttribute("href", "https://ivanli-cn.github.io/KaisouMail/zh/");
+  },
+};
+
+export const PasskeyUnsupported: Story = {
+  render: () => (
+    <RouteFlowHarness passkeySupported={false} defaultTab="passkey" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole("button", { name: "当前浏览器不支持 Passkey" }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByText("当前浏览器或上下文不支持 passkey 注册。"),
+    ).toBeInTheDocument();
   },
 };

@@ -11,6 +11,7 @@ import type {
   Mailbox,
   MessageDetail,
   MessageSummary,
+  PasskeyRecord,
   SessionUser,
   UserRecord,
   VersionInfo,
@@ -161,6 +162,42 @@ export const demoApiKeys: ApiKeyRecord[] = [
     createdAt: "2026-04-01T08:10:00.000Z",
     lastUsedAt: null,
     revokedAt: null,
+  },
+];
+
+export const demoPasskeys: PasskeyRecord[] = [
+  {
+    id: "psk_macbook",
+    name: "MacBook Pro",
+    credentialId: "credential_macbook_demo",
+    deviceType: "multiDevice",
+    backedUp: true,
+    transports: ["internal", "hybrid"],
+    createdAt: "2026-04-04T08:00:00.000Z",
+    lastUsedAt: "2026-04-05T09:30:00.000Z",
+    revokedAt: null,
+  },
+  {
+    id: "psk_yubikey",
+    name: "YubiKey 5C",
+    credentialId: "credential_yubikey_demo",
+    deviceType: "singleDevice",
+    backedUp: false,
+    transports: ["usb", "nfc"],
+    createdAt: "2026-04-03T12:20:00.000Z",
+    lastUsedAt: null,
+    revokedAt: null,
+  },
+  {
+    id: "psk_old_phone",
+    name: "Old iPhone passkey",
+    credentialId: "credential_old_phone_demo",
+    deviceType: "multiDevice",
+    backedUp: true,
+    transports: ["hybrid"],
+    createdAt: "2026-04-02T09:10:00.000Z",
+    lastUsedAt: "2026-04-02T10:00:00.000Z",
+    revokedAt: "2026-04-04T11:10:00.000Z",
   },
 ];
 

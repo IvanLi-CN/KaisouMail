@@ -19,7 +19,7 @@ cp apps/web/.env.example apps/web/.env
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY`（可选；仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
-  - `WEB_APP_ORIGIN`
+  - `WEB_APP_ORIGIN`（passkey 必需；它决定 WebAuthn 的 origin 与 RP ID）
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -43,6 +43,11 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 - API Worker：`http://127.0.0.1:8787`
 - 公开文档：`http://127.0.0.1:56007`
 - Storybook：`http://127.0.0.1:6006`
+
+## 登录方式
+
+- 浏览器用户首次登录后，可在 `/api-keys` 页面注册 passkey，后续直接在登录页用 passkey 登录
+- 自动化与应急恢复流程继续使用 API Key
 
 ## 生产发布面
 
