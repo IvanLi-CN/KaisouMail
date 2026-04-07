@@ -4,7 +4,7 @@ import {
   generateRealisticMailboxSubdomain,
   mailboxSchema,
 } from "@kaisoumail/shared";
-import { and, desc, eq, inArray, lte, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, ne, or } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
@@ -43,6 +43,7 @@ type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 const mailboxProvisioningStatus = "provisioning";
+const mailboxProvisioningTimeoutMs = 5 * 60_000;
 
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
@@ -111,13 +112,6 @@ const listMailboxesByAddress = async (env: WorkerEnv, address: string) => {
     .orderBy(desc(mailboxes.createdAt));
 };
 
-const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
-  const rows = await listMailboxesByAddress(env, address);
-  if (rows.some((row) => row.status !== "destroyed")) {
-    throw new ApiError(409, "Mailbox already exists");
-  }
-};
-
 const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
   new ApiError(409, "Mailbox domain is no longer available", {
     domainId,
@@ -141,14 +135,72 @@ const isMailboxAddressConflictError = (error: unknown) => {
   );
 };
 
+const isStaleProvisioningMailbox = (
+  row: MailboxRow,
+  staleBefore = new Date(Date.now() - mailboxProvisioningTimeoutMs),
+) =>
+  row.status === mailboxProvisioningStatus &&
+  new Date(row.createdAt).getTime() <= staleBefore.getTime();
+
+const cleanupProvisioningMailbox = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  row: MailboxRow,
+) => {
+  const db = getDb(env);
+
+  if (row.routingRuleId) {
+    const domain = await resolveMailboxDomain(env, config, row);
+    if (!domain) {
+      return false;
+    }
+
+    try {
+      await deleteRoutingRule(config, domain, row.routingRuleId);
+    } catch {
+      return false;
+    }
+  }
+
+  await rollbackMailboxInsert(db, row.id);
+  return true;
+};
+
+const ensureAddressAvailable = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  address: string,
+) => {
+  const staleBefore = new Date(Date.now() - mailboxProvisioningTimeoutMs);
+  const rows = await listMailboxesByAddress(env, address);
+  const staleProvisioningRows = rows.filter((row) =>
+    isStaleProvisioningMailbox(row, staleBefore),
+  );
+
+  for (const row of staleProvisioningRows) {
+    await cleanupProvisioningMailbox(env, config, row);
+  }
+
+  const remainingRows =
+    staleProvisioningRows.length > 0
+      ? await listMailboxesByAddress(env, address)
+      : rows;
+
+  if (remainingRows.some((row) => row.status !== "destroyed")) {
+    throw new ApiError(409, "Mailbox already exists");
+  }
+};
+
 const resolveCreateMailboxAddress = async ({
   env,
+  config,
   localPart,
   subdomain,
   rootDomain,
   attempt = 0,
 }: {
   env: WorkerEnv;
+  config: RuntimeConfig;
   localPart?: string;
   subdomain?: string;
   rootDomain: string;
@@ -172,7 +224,7 @@ const resolveCreateMailboxAddress = async ({
     rootDomain,
   );
 
-  await ensureAddressAvailable(env, mailboxAddress.address);
+  await ensureAddressAvailable(env, config, mailboxAddress.address);
   return mailboxAddress;
 };
 
@@ -238,14 +290,24 @@ const rollbackMailboxInsert = async (
   await db.delete(mailboxes).where(eq(mailboxes.id, mailboxId));
 };
 
-const activateMailbox = async (
+const updateMailboxRoutingRule = async (
   db: ReturnType<typeof getDb>,
   mailboxId: string,
   routingRuleId: string | null,
 ) => {
   await db
     .update(mailboxes)
-    .set({ routingRuleId, status: "active" })
+    .set({ routingRuleId })
+    .where(eq(mailboxes.id, mailboxId));
+};
+
+const activateMailbox = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+) => {
+  await db
+    .update(mailboxes)
+    .set({ status: "active" })
     .where(eq(mailboxes.id, mailboxId));
 };
 
@@ -458,6 +520,7 @@ export const createMailboxForUser = async (
     try {
       mailboxAddress = await resolveCreateMailboxAddress({
         env,
+        config,
         localPart: input.localPart,
         subdomain: input.subdomain,
         rootDomain: domain.rootDomain,
@@ -527,6 +590,10 @@ export const createMailboxForUser = async (
         mailboxAddress.address,
       );
 
+      if (routingRuleId) {
+        await updateMailboxRoutingRule(db, created.id, routingRuleId);
+      }
+
       if (knownSubdomain[0]) {
         await db
           .update(subdomains)
@@ -545,7 +612,7 @@ export const createMailboxForUser = async (
         });
       }
 
-      await activateMailbox(db, created.id, routingRuleId);
+      await activateMailbox(db, created.id);
 
       return toMailboxDto(
         {
@@ -758,10 +825,21 @@ export const listExpiredMailboxIds = async (
 ) => {
   const db = getDb(env);
   const now = nowIso();
+  const staleProvisioningCutoff = new Date(
+    Date.now() - mailboxProvisioningTimeoutMs,
+  ).toISOString();
   const rows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
-    .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
+    .where(
+      or(
+        and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)),
+        and(
+          eq(mailboxes.status, mailboxProvisioningStatus),
+          lte(mailboxes.createdAt, staleProvisioningCutoff),
+        ),
+      ),
+    )
     .orderBy(mailboxes.expiresAt)
     .limit(config.CLEANUP_BATCH_SIZE);
 
