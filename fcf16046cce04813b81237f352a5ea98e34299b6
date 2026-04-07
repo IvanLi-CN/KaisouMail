@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.12.0",
+  "base_stable_version": "0.11.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-07T02:55:31Z",
+  "next_stable_version": "0.12.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "1da3c6bf60517b4e0254ca2269e9915ea6e4b7e8",
+  "pr_number": 23,
+  "pr_title": "feat(web): add branded route and page error states",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.12.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.12.0",
+  "target_sha": "fcf16046cce04813b81237f352a5ea98e34299b6",
+  "type_label": "type:minor"
+}
