@@ -52,6 +52,12 @@ const baseConfig = {
   WEB_APP_ORIGINS: ["https://cfm.707979.xyz", "https://km.707979.xyz"],
 } satisfies RuntimeConfig;
 
+const withConfig = (overrides: Partial<RuntimeConfig>) =>
+  ({
+    ...baseConfig,
+    ...overrides,
+  }) satisfies RuntimeConfig;
+
 const authUser = {
   id: "usr_owner",
   email: "owner@example.com",
@@ -167,6 +173,80 @@ describe("passkey service", () => {
         userVerification: "required",
       }),
     );
+  });
+
+  it("uses localhost as the RP ID for single-origin local development", async () => {
+    generateAuthenticationOptions.mockResolvedValue({
+      challenge: "authentication_options",
+    });
+
+    await createPasskeyAuthenticationOptions(
+      withConfig({
+        WEB_APP_ORIGIN: "http://localhost:4173",
+        WEB_APP_ORIGINS: ["http://localhost:4173"],
+      }),
+      createRequest({ origin: "http://localhost:4173" }),
+    );
+
+    expect(generateAuthenticationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpID: "localhost",
+      }),
+    );
+  });
+
+  it("rejects IP literal passkey origins", async () => {
+    await expect(
+      createPasskeyAuthenticationOptions(
+        withConfig({
+          WEB_APP_ORIGIN: "http://127.0.0.1:4173",
+          WEB_APP_ORIGINS: ["http://127.0.0.1:4173"],
+        }),
+        createRequest({ origin: "http://127.0.0.1:4173" }),
+      ),
+    ).rejects.toMatchObject({
+      message: "Passkey auth is not configured",
+      details:
+        "Configured origins must use localhost or a domain name for passkeys",
+    });
+  });
+
+  it("derives a shared RP ID without falling back to a public suffix", async () => {
+    generateAuthenticationOptions.mockResolvedValue({
+      challenge: "authentication_options",
+    });
+
+    await createPasskeyAuthenticationOptions(
+      withConfig({
+        WEB_APP_ORIGIN: "https://app.example.co.uk",
+        WEB_APP_ORIGINS: [
+          "https://app.example.co.uk",
+          "https://login.example.co.uk",
+        ],
+      }),
+      createRequest({ origin: "https://login.example.co.uk" }),
+    );
+
+    expect(generateAuthenticationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpID: "example.co.uk",
+      }),
+    );
+  });
+
+  it("rejects multi-origin passkey setups that only share a public suffix", async () => {
+    await expect(
+      createPasskeyAuthenticationOptions(
+        withConfig({
+          WEB_APP_ORIGIN: "https://app.foo.co.uk",
+          WEB_APP_ORIGINS: ["https://app.foo.co.uk", "https://login.bar.co.uk"],
+        }),
+        createRequest({ origin: "https://login.bar.co.uk" }),
+      ),
+    ).rejects.toMatchObject({
+      message: "Passkey auth is not configured",
+      details: "Configured origins must share a non-public RP ID suffix",
+    });
   });
 
   it("persists a verified registration", async () => {

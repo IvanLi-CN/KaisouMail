@@ -20,6 +20,7 @@
     "drizzle-orm": "^0.44.7",
     "hono": "^4.10.2",
     "postal-mime": "^2.4.4",
+    "tldts": "^7.0.28",
     "zod": "^4.3.6"
   },
   "devDependencies": {

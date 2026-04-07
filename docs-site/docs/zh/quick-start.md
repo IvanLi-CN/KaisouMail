@@ -19,8 +19,8 @@ cp apps/web/.env.example apps/web/.env
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY`（可选；仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
-  - `WEB_APP_ORIGIN`（passkey 必需；它提供主 WebAuthn 可信来源，单来源时也直接决定 RP ID）
-  - `WEB_APP_ORIGINS`（可选；如果要同时保留多个生产控制台域名给 passkey 使用，并共享一套 RP ID 后缀，就在这里补充）
+  - `WEB_APP_ORIGIN`（passkey 必需；它提供主 WebAuthn 可信来源，单来源时也直接决定 RP ID；本地调试 passkey 时必须使用 `http://localhost:4173`，不要用 IP 字面量）
+  - `WEB_APP_ORIGINS`（可选；如果要同时保留多个生产控制台域名给 passkey 使用，并共享一套非 public suffix 的 RP ID 后缀，就在这里补充）
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -40,15 +40,16 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## 本地访问地址
 
-- 控制台：`http://127.0.0.1:4173`
-- API Worker：`http://127.0.0.1:8787`
-- 公开文档：`http://127.0.0.1:56007`
-- Storybook：`http://127.0.0.1:6006`
+- 控制台：`http://localhost:4173`
+- API Worker：`http://localhost:8787`
+- 公开文档：`http://localhost:56007`
+- Storybook：`http://localhost:6006`
 
 ## 登录方式
 
 - 浏览器用户首次登录后，可在 `/api-keys` 页面注册 passkey，后续直接在登录页用 passkey 登录
 - 自动化与应急恢复流程继续使用 API Key
+- 本地验 passkey 时，请从 `localhost` 打开控制台，不要用 `127.0.0.1`
 
 ## 生产发布面
 

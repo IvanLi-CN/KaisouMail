@@ -10,6 +10,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { and, eq, isNull } from "drizzle-orm";
+import { getPublicSuffix, parse as parseHostname } from "tldts";
 import type { z } from "zod";
 
 import { getDb } from "../db/client";
@@ -86,32 +87,93 @@ const serializeExpiredCookie = (name: string, secure: boolean) => {
 const pickExpectedValue = (values: string[]) =>
   values.length === 1 ? values[0] : values;
 
-const resolveSharedRpId = (origins: string[]) => {
-  const hostLabels = origins.map((origin) =>
-    new URL(origin).hostname.split("."),
-  );
-  const shortestLength = Math.min(...hostLabels.map((labels) => labels.length));
-  const sharedLabels: string[] = [];
+const isIpLiteralHost = (hostname: string) => parseHostname(hostname).isIp;
 
-  for (let offset = 1; offset <= shortestLength; offset += 1) {
-    const label = hostLabels[0]?.at(-offset);
-    if (!label) break;
-    if (hostLabels.every((labels) => labels.at(-offset) === label)) {
-      sharedLabels.unshift(label);
-      continue;
-    }
-    break;
+const isPublicSuffixHost = (hostname: string) =>
+  hostname !== "localhost" && getPublicSuffix(hostname) === hostname;
+
+const isSupportedRpIdHost = (hostname: string) => {
+  if (hostname === "localhost") {
+    return true;
   }
 
-  if (sharedLabels.length < 2) {
+  if (isIpLiteralHost(hostname) || !hostname.includes(".")) {
+    return false;
+  }
+
+  return !isPublicSuffixHost(hostname);
+};
+
+const isRpIdCandidateAllowedForHosts = (candidate: string, hosts: string[]) => {
+  if (!isSupportedRpIdHost(candidate)) {
+    return false;
+  }
+
+  if (candidate === "localhost") {
+    return hosts.every((host) => host === "localhost");
+  }
+
+  return hosts.every(
+    (host) =>
+      isSupportedRpIdHost(host) &&
+      (host === candidate || host.endsWith(`.${candidate}`)),
+  );
+};
+
+const resolveSingleOriginRpId = (origin: string) => {
+  const hostname = new URL(origin).hostname;
+
+  if (hostname === "localhost") {
+    return hostname;
+  }
+
+  if (isIpLiteralHost(hostname)) {
     throw new ApiError(
       503,
       "Passkey auth is not configured",
-      "Configured origins must share a common RP ID suffix",
+      "Configured origins must use localhost or a domain name for passkeys",
     );
   }
 
-  return sharedLabels.join(".");
+  if (!isSupportedRpIdHost(hostname)) {
+    throw new ApiError(
+      503,
+      "Passkey auth is not configured",
+      "Configured origins must resolve to a non-public domain for passkeys",
+    );
+  }
+
+  return hostname;
+};
+
+const resolveSharedRpId = (origins: string[]) => {
+  const hosts = origins.map((origin) => new URL(origin).hostname);
+  const firstHost = hosts[0];
+  if (!firstHost) {
+    throw new ApiError(503, "Passkey auth is not configured");
+  }
+
+  if (hosts.some((host) => isIpLiteralHost(host))) {
+    throw new ApiError(
+      503,
+      "Passkey auth is not configured",
+      "Configured origins must use localhost or a domain name for passkeys",
+    );
+  }
+
+  const hostLabels = firstHost.split(".");
+  for (const [index] of hostLabels.entries()) {
+    const candidate = hostLabels.slice(index).join(".");
+    if (isRpIdCandidateAllowedForHosts(candidate, hosts)) {
+      return candidate;
+    }
+  }
+
+  throw new ApiError(
+    503,
+    "Passkey auth is not configured",
+    "Configured origins must share a non-public RP ID suffix",
+  );
 };
 
 const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
@@ -131,7 +193,7 @@ const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
   ];
   const rpID =
     origins.length === 1
-      ? new URL(origins[0]).hostname
+      ? resolveSingleOriginRpId(origins[0])
       : resolveSharedRpId(origins);
 
   return {
