@@ -429,6 +429,8 @@ export const createMailboxForUser = async (
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
 
+  const enabledSubdomainsThisRun = new Set<string>();
+
   for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
     let mailboxAddress: Awaited<ReturnType<typeof resolveCreateMailboxAddress>>;
     try {
@@ -468,8 +470,9 @@ export const createMailboxForUser = async (
       Date.now() + expiresInMinutes * 60_000,
     ).toISOString();
 
-    if (!knownSubdomain[0]) {
+    if (!knownSubdomain[0] && !enabledSubdomainsThisRun.has(subdomain)) {
       await ensureSubdomainEnabled(config, domain, subdomain);
+      enabledSubdomainsThisRun.add(subdomain);
     }
     const routingRuleId = await createRoutingRule(
       config,

@@ -500,6 +500,153 @@ describe("mailbox service helpers", () => {
     }
   });
 
+  it("does not re-enable the same subdomain when retrying a generated local-part collision", async () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const baseDb = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      subdomainRows: [],
+    });
+
+    const mailboxLookupRows = [[], []];
+
+    const db = {
+      ...baseDb,
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+              })),
+              orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+            };
+          }
+
+          if (table === domains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: domain.id,
+                    status: "active",
+                    zoneId: domain.zoneId,
+                    deletedAt: null,
+                  },
+                ]),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          if (table === subdomains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+              orderBy: vi.fn(async () => []),
+            })),
+            orderBy: vi.fn(async () => []),
+          };
+        }),
+      })),
+    };
+
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule
+      .mockResolvedValueOnce("rule_retry_1")
+      .mockResolvedValueOnce("rule_retry_2");
+
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("UNIQUE constraint failed: mailboxes.address"),
+      )
+      .mockResolvedValueOnce({
+        meta: {
+          changes: 1,
+        },
+      });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+
+    try {
+      const created = await createMailboxForUser(
+        {
+          DB: {
+            prepare,
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          subdomain: "ops.alpha",
+          rootDomain: domain.rootDomain,
+        },
+      );
+
+      expect(created.address).toBe("ava-lin00@ops.alpha.707979.xyz");
+      expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+      expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "ops.alpha",
+      );
+      expect(createRoutingRule).toHaveBeenNthCalledWith(
+        1,
+        runtimeConfig,
+        domain,
+        "ava-lin@ops.alpha.707979.xyz",
+      );
+      expect(createRoutingRule).toHaveBeenNthCalledWith(
+        2,
+        runtimeConfig,
+        domain,
+        "ava-lin00@ops.alpha.707979.xyz",
+      );
+      expect(deleteRoutingRule).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "rule_retry_1",
+      );
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
   it("rolls back a created mailbox when subdomain persistence fails", async () => {
     const domain = {
       id: "dom_primary",
