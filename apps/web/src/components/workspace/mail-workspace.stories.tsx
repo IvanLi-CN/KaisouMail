@@ -333,7 +333,7 @@ export const ToolbarCreateFlow: Story = {
       canvas.getByText("在当前工作台里直接创建新地址。"),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText("ava-lin@desk.hub.<随机 active 域名>"),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
@@ -373,7 +373,7 @@ export const CreatePopoverOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText("ava-lin@desk.hub.<随机 active 域名>"),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
   },

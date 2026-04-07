@@ -22,7 +22,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await expect(page.getByLabel("用户名")).toBeVisible();
   await expect(page.getByLabel("邮箱域名")).toHaveValue("");
   await expect(
-    page.getByText("nightly@ops.alpha.<随机 active 域名>"),
+    page.getByText("ava-lin@desk.hub.<随机 active 域名>"),
   ).toBeVisible();
 
   await page.keyboard.press("Escape");

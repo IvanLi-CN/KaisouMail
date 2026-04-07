@@ -1,4 +1,9 @@
-import { mailboxSchema } from "@kaisoumail/shared";
+import {
+  generatedMailboxMaxAttempts,
+  generateRealisticMailboxLocalPart,
+  generateRealisticMailboxSubdomain,
+  mailboxSchema,
+} from "@kaisoumail/shared";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
 
 import { getDb } from "../db/client";
@@ -19,7 +24,6 @@ import {
   normalizeMailboxAddress,
   normalizeRootDomain,
   parseMailboxAddressAgainstDomains,
-  randomLabel,
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
@@ -118,6 +122,58 @@ const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
     domainId,
     rootDomain,
   });
+
+const resolveCreateMailboxAddress = async ({
+  env,
+  localPart,
+  subdomain,
+  rootDomain,
+}: {
+  env: WorkerEnv;
+  localPart?: string;
+  subdomain?: string;
+  rootDomain: string;
+}) => {
+  const normalizedLocalPart = localPart ? normalizeLabel(localPart) : undefined;
+  const normalizedSubdomain = subdomain ? normalizeLabel(subdomain) : undefined;
+  const canRetry = !normalizedLocalPart || !normalizedSubdomain;
+
+  for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
+    const nextLocalPart =
+      normalizedLocalPart ??
+      generateRealisticMailboxLocalPart({
+        attempt,
+      });
+    const nextSubdomain =
+      normalizedSubdomain ??
+      generateRealisticMailboxSubdomain({
+        attempt,
+      });
+    const mailboxAddress = buildMailboxAddress(
+      nextLocalPart,
+      nextSubdomain,
+      rootDomain,
+    );
+
+    try {
+      await ensureAddressAvailable(env, mailboxAddress.address);
+      return mailboxAddress;
+    } catch (error) {
+      if (
+        canRetry &&
+        error instanceof ApiError &&
+        error.status === 409 &&
+        attempt < generatedMailboxMaxAttempts - 1
+      ) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new ApiError(409, "Mailbox already exists");
+};
 
 const insertMailboxIfDomainStillActive = async (
   env: WorkerEnv,
@@ -349,15 +405,15 @@ export const createMailboxForUser = async (
   const domain = input.rootDomain
     ? await requireActiveDomainByRootDomain(env, input.rootDomain)
     : await pickRandomActiveDomain(env);
-  const localPart = normalizeLabel(input.localPart ?? randomLabel("mail"));
-  const subdomain = normalizeLabel(input.subdomain ?? randomLabel("box"));
   const expiresInMinutes =
     input.expiresInMinutes ?? config.DEFAULT_MAILBOX_TTL_MINUTES;
-  const mailboxAddress = buildMailboxAddress(
-    localPart,
-    subdomain,
-    domain.rootDomain,
-  );
+  const mailboxAddress = await resolveCreateMailboxAddress({
+    env,
+    localPart: input.localPart,
+    subdomain: input.subdomain,
+    rootDomain: domain.rootDomain,
+  });
+  const { localPart, subdomain } = mailboxAddress;
 
   const knownSubdomain = await db
     .select()
@@ -366,8 +422,6 @@ export const createMailboxForUser = async (
       and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
     )
     .limit(1);
-
-  await ensureAddressAvailable(env, mailboxAddress.address);
 
   const now = nowIso();
   const expiresAt = new Date(

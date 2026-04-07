@@ -34,7 +34,7 @@ describe("mailboxes page view", () => {
     ) as HTMLSelectElement;
     expect(rootDomainField.value).toBe("");
     expect(
-      screen.getByText(/nightly@ops\.alpha\.<随机 active 域名>/i),
+      screen.getByText(/ava-lin@desk\.hub\.<随机 active 域名>/i),
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("60")).toBeInTheDocument();
   });

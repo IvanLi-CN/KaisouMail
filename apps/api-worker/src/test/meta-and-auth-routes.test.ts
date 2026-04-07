@@ -76,7 +76,7 @@ describe("meta and auth routes", () => {
     expect(payload.cloudflareDomainBindingEnabled).toBe(false);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
-    expect(payload.addressRules.examples[0]).toContain("@alpha.707979.xyz");
+    expect(payload.addressRules.examples[0]).toContain("@desk.hub.707979.xyz");
   });
 
   it("keeps Cloudflare lifecycle actions disabled when the runtime token is missing", async () => {

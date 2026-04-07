@@ -39,7 +39,7 @@ describe("MailboxCreateCard", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("nightly@ops.alpha.<启用后可用的域名>"),
+      screen.getByText("ava-lin@desk.hub.<启用后可用的域名>"),
     ).toBeInTheDocument();
   });
 });

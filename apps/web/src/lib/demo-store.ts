@@ -1,3 +1,10 @@
+import {
+  buildRealisticMailboxAddressExamples,
+  generatedMailboxMaxAttempts,
+  generateRealisticMailboxLocalPart,
+  generateRealisticMailboxSubdomain,
+} from "@kaisoumail/shared";
+
 import type {
   ApiKeyRecord,
   ApiMeta,
@@ -29,6 +36,7 @@ const clone = <T>(value: T): T => structuredClone(value);
 const randomId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
+const normalizeLabel = (value: string) => value.trim().toLowerCase();
 const buildAddress = (
   localPart: string,
   subdomain: string,
@@ -113,9 +121,51 @@ const syncMetaDomains = () => {
   state.meta.domains = state.domains
     .filter((entry) => entry.status === "active")
     .map((entry) => entry.rootDomain);
-  state.meta.addressRules.examples = state.meta.domains
-    .slice(0, 2)
-    .flatMap((entry) => [`build@alpha.${entry}`, `spec@ops.alpha.${entry}`]);
+  state.meta.addressRules.examples = buildRealisticMailboxAddressExamples(
+    state.meta.domains,
+  );
+};
+
+const findAvailableMailboxCandidate = ({
+  localPart,
+  subdomain,
+  rootDomain,
+}: {
+  localPart?: string;
+  subdomain?: string;
+  rootDomain: string;
+}) => {
+  const normalizedLocalPart = localPart ? normalizeLabel(localPart) : undefined;
+  const normalizedSubdomain = subdomain ? normalizeLabel(subdomain) : undefined;
+
+  for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
+    const nextLocalPart =
+      normalizedLocalPart ??
+      generateRealisticMailboxLocalPart({
+        attempt,
+      });
+    const nextSubdomain =
+      normalizedSubdomain ??
+      generateRealisticMailboxSubdomain({
+        attempt,
+      });
+    const address = buildAddress(nextLocalPart, nextSubdomain, rootDomain);
+
+    if (
+      !state.mailboxes.some(
+        (mailbox) =>
+          mailbox.address === address && mailbox.status !== "destroyed",
+      )
+    ) {
+      return {
+        localPart: nextLocalPart,
+        subdomain: nextSubdomain,
+        address,
+      };
+    }
+  }
+
+  throw new Error("Mailbox already exists");
 };
 
 export const demoApi = {
@@ -168,21 +218,11 @@ export const demoApi = {
     if (!state.meta.domains.includes(rootDomain)) {
       throw new Error("Mailbox domain is not enabled");
     }
-    const localPart =
-      input.localPart?.trim() ||
-      `mail-${Math.random().toString(36).slice(2, 8)}`;
-    const subdomain =
-      input.subdomain?.trim() ||
-      `box-${Math.random().toString(36).slice(2, 8)}`;
-    const address = buildAddress(localPart, subdomain, rootDomain);
-    if (
-      state.mailboxes.some(
-        (mailbox) =>
-          mailbox.address === address && mailbox.status !== "destroyed",
-      )
-    ) {
-      throw new Error("Mailbox already exists");
-    }
+    const { localPart, subdomain, address } = findAvailableMailboxCandidate({
+      localPart: input.localPart,
+      subdomain: input.subdomain,
+      rootDomain,
+    });
     const createdAt = new Date().toISOString();
     const mailbox: Mailbox = {
       id: randomId("mbx"),
@@ -217,8 +257,8 @@ export const demoApi = {
       "address" in input
         ? normalizeAddress(input.address)
         : buildAddress(
-            input.localPart.trim(),
-            input.subdomain.trim(),
+            normalizeLabel(input.localPart),
+            normalizeLabel(input.subdomain),
             (
               input.rootDomain?.trim().toLowerCase() ??
               pickRandomRootDomain(state.meta.domains)

@@ -37,7 +37,7 @@ export const RandomDefault: Story = {
       ).selected,
     ).toBe(true);
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText("ava-lin@desk.hub.<随机 active 域名>"),
     ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
@@ -90,5 +90,11 @@ export const CustomDomain: Story = {
     domains: ["mail.example.net", "ops.example.org"],
     defaultTtlMinutes: 120,
     maxTtlMinutes: 720,
+  },
+};
+
+export const NoActiveDomains: Story = {
+  args: {
+    domains: [],
   },
 };

@@ -1,3 +1,4 @@
+import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
 import { BookOpenText, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/shared/page-header";
@@ -627,7 +628,9 @@ const ApiKeysDocsPageView = ({
   docsLinks?: PublicDocsLinks | null;
 }) => {
   const endpointGroups = buildEndpointGroups(meta);
-  const overviewAddressExample = "build@alpha.mail.example.net";
+  const overviewAddressExample =
+    meta.addressRules.examples[0] ??
+    buildRealisticMailboxAddressExample("mail.example.net");
   const errorContract = `{
   "error": "Authentication required",
   "details": null
