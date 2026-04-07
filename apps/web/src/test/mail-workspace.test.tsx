@@ -74,7 +74,7 @@ describe("MailWorkspace", () => {
     expect(onCancel).not.toHaveBeenCalled();
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("");
     expect(
-      screen.getByText(/nightly@ops\.alpha\.<随机 active 域名>/i),
+      screen.getByText(/ava-lin@desk\.hub\.<随机 active 域名>/i),
     ).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByLabelText("用户名"), {

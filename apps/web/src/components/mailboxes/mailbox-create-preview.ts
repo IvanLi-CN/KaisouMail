@@ -1,3 +1,5 @@
+import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
+
 export const RANDOM_ROOT_DOMAIN_OPTION_LABEL = "随机";
 export const RANDOM_ROOT_DOMAIN_EXAMPLE = "<随机 active 域名>";
 export const UNAVAILABLE_ROOT_DOMAIN_EXAMPLE = "<启用后可用的域名>";
@@ -11,13 +13,12 @@ export const buildMailboxCreateAddressExample = ({
   rootDomain,
   hasAvailableDomains = true,
 }: MailboxCreatePreviewOptions) =>
-  rootDomain
-    ? `nightly@ops.alpha.${rootDomain}`
-    : `nightly@ops.alpha.${
-        hasAvailableDomains
-          ? RANDOM_ROOT_DOMAIN_EXAMPLE
-          : UNAVAILABLE_ROOT_DOMAIN_EXAMPLE
-      }`;
+  buildRealisticMailboxAddressExample(
+    rootDomain ||
+      (hasAvailableDomains
+        ? RANDOM_ROOT_DOMAIN_EXAMPLE
+        : UNAVAILABLE_ROOT_DOMAIN_EXAMPLE),
+  );
 
 export const buildMailboxCreateDomainHint = ({
   rootDomain,

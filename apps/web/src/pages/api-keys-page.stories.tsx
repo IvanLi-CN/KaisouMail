@@ -1,3 +1,4 @@
+import { buildRealisticMailboxAddressExamples } from "@kaisoumail/shared";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
@@ -32,10 +33,10 @@ const docsReferenceMeta: ApiMeta = {
   domains: ["mail.example.net", "ops.example.org"],
   addressRules: {
     ...demoMeta.addressRules,
-    examples: [
-      "build@alpha.mail.example.net",
-      "spec@ops.alpha.ops.example.org",
-    ],
+    examples: buildRealisticMailboxAddressExamples([
+      "mail.example.net",
+      "ops.example.org",
+    ]),
   },
 };
 

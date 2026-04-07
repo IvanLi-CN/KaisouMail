@@ -1,8 +1,13 @@
+import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
 import { expect, test } from "@playwright/test";
 
 test("demo console login and workspace mail flow", async ({ page }) => {
   const mailboxLocalPart = `e2e${Date.now().toString().slice(-6)}`;
   const manualMailboxLocalPart = `pick${Date.now().toString().slice(-6)}`;
+  const randomPreviewAddress =
+    buildRealisticMailboxAddressExample("<随机 active 域名>");
+  const selectedDomainPreviewAddress =
+    buildRealisticMailboxAddressExample("mail.example.net");
   const randomMailboxAddress = new RegExp(
     `${mailboxLocalPart}@ops\\.alpha\\.(relay\\.example\\.test|mail\\.example\\.net)`,
   );
@@ -21,9 +26,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await expect(page.getByLabel("用户名")).toBeVisible();
   await expect(page.getByLabel("邮箱域名")).toHaveValue("");
-  await expect(
-    page.getByText("nightly@ops.alpha.<随机 active 域名>"),
-  ).toBeVisible();
+  await expect(page.getByText(randomPreviewAddress)).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(page.getByLabel("用户名")).toHaveCount(0);
@@ -46,9 +49,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("用户名").fill(manualMailboxLocalPart);
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByLabel("邮箱域名").selectOption("mail.example.net");
-  await expect(
-    page.getByText("nightly@ops.alpha.mail.example.net"),
-  ).toBeVisible();
+  await expect(page.getByText(selectedDomainPreviewAddress)).toBeVisible();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
   const mailboxRow = page.getByRole("button", {

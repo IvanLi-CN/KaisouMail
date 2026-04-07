@@ -2,7 +2,10 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { MailboxCreateCard } from "@/components/mailboxes/mailbox-create-card";
-import { RANDOM_ROOT_DOMAIN_OPTION_LABEL } from "@/components/mailboxes/mailbox-create-preview";
+import {
+  buildMailboxCreateAddressExample,
+  RANDOM_ROOT_DOMAIN_OPTION_LABEL,
+} from "@/components/mailboxes/mailbox-create-preview";
 
 const meta = {
   title: "Mailboxes/MailboxCreateCard",
@@ -25,6 +28,7 @@ type Story = StoryObj<typeof meta>;
 export const RandomDefault: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const randomDomainPreviewAddress = buildMailboxCreateAddressExample({});
     const rootDomainField = canvas.getByLabelText(
       "邮箱域名",
     ) as HTMLSelectElement;
@@ -37,7 +41,7 @@ export const RandomDefault: Story = {
       ).selected,
     ).toBe(true);
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText(randomDomainPreviewAddress),
     ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
@@ -50,6 +54,9 @@ export const ManualDomainSelected: Story = {
   args: {},
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const selectedDomainPreviewAddress = buildMailboxCreateAddressExample({
+      rootDomain: "mail.example.net",
+    });
     await userEvent.type(canvas.getByLabelText("用户名"), "nightly");
     await userEvent.type(canvas.getByLabelText("子域名"), "ops.alpha");
     await userEvent.selectOptions(
@@ -57,7 +64,7 @@ export const ManualDomainSelected: Story = {
       "mail.example.net",
     );
     await expect(
-      canvas.getByText("nightly@ops.alpha.mail.example.net"),
+      canvas.getByText(selectedDomainPreviewAddress),
     ).toBeInTheDocument();
     await userEvent.clear(canvas.getByLabelText("生命周期（分钟）"));
     await userEvent.type(canvas.getByLabelText("生命周期（分钟）"), "90");
@@ -90,5 +97,11 @@ export const CustomDomain: Story = {
     domains: ["mail.example.net", "ops.example.org"],
     defaultTtlMinutes: 120,
     maxTtlMinutes: 720,
+  },
+};
+
+export const NoActiveDomains: Story = {
+  args: {
+    domains: [],
   },
 };

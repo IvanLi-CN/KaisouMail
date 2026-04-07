@@ -1,4 +1,12 @@
-import { createMailboxRequestSchema } from "@kaisoumail/shared";
+import {
+  buildRealisticMailboxAddressExamples,
+  createMailboxRequestSchema,
+  generatedMailboxMaxAttempts,
+  generateRealisticMailboxLocalPart,
+  generateRealisticMailboxSubdomain,
+  mailboxLocalPartRegex,
+  mailboxSubdomainRegex,
+} from "@kaisoumail/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -60,6 +68,49 @@ describe("email helpers", () => {
         expiresInMinutes: 60,
       }),
     ).toThrow();
+  });
+
+  it("generates readable mailbox local parts without legacy prefixes", () => {
+    expect(generateRealisticMailboxLocalPart({ rng: () => 0 })).toBe("ava-lin");
+    expect(generateRealisticMailboxLocalPart({ rng: () => 0.95 })).toBe(
+      "welcome-ops",
+    );
+  });
+
+  it("generates readable mailbox subdomains and retry fallbacks", () => {
+    expect(generateRealisticMailboxSubdomain({ rng: () => 0 })).toBe("mail");
+    const previewRngValues = [0.6, 0];
+    expect(
+      generateRealisticMailboxSubdomain({
+        rng: () => previewRngValues.shift() ?? 0,
+      }),
+    ).toBe("desk.hub");
+    expect(generateRealisticMailboxSubdomain({ rng: () => 0.7 })).toBe(
+      "status.mail",
+    );
+
+    const fallbackLocalPart = generateRealisticMailboxLocalPart({
+      attempt: generatedMailboxMaxAttempts - 1,
+      rng: () => 0,
+    });
+    const fallbackSubdomain = generateRealisticMailboxSubdomain({
+      attempt: generatedMailboxMaxAttempts - 1,
+      rng: () => 0,
+    });
+
+    expect(fallbackLocalPart).toBe("hello0000");
+    expect(fallbackSubdomain).toBe("mail0000");
+    expect(mailboxLocalPartRegex.test(fallbackLocalPart)).toBe(true);
+    expect(mailboxSubdomainRegex.test(fallbackSubdomain)).toBe(true);
+  });
+
+  it("builds stable realistic address examples for docs and runtime metadata", () => {
+    expect(
+      buildRealisticMailboxAddressExamples(["relay.example.test"]),
+    ).toEqual([
+      "ava-lin@desk.hub.relay.example.test",
+      "hello@ops.alpha.relay.example.test",
+    ]);
   });
 
   it("extracts preview text from plain text first", () => {

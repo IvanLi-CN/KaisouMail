@@ -183,6 +183,21 @@ describe("mailbox service helpers", () => {
     expect(result.kind).toBe("create");
   });
 
+  it("treats a mailbox that is still destroying as a conflict", () => {
+    const result = classifyMailboxAddressState(
+      [
+        {
+          ...baseMailbox,
+          status: "destroying",
+          routingRuleId: null,
+        },
+      ],
+      memberUser,
+    );
+
+    expect(result.kind).toBe("conflict");
+  });
+
   it("parses an ensured address against the configured root domain", () => {
     expect(
       resolveRequestedMailboxAddress(
@@ -218,6 +233,416 @@ describe("mailbox service helpers", () => {
         rootDomain: "mail.example.net",
         address: "build@ops.alpha.mail.example.net",
       });
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  it("retries generated mailbox candidates when the first readable address is already taken", async () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const baseDb = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      subdomainRows: [],
+    });
+
+    const mailboxLookupRows = [
+      [
+        {
+          ...baseMailbox,
+          localPart: "ava-lin",
+          subdomain: "mail",
+          address: "ava-lin@mail.707979.xyz",
+        },
+      ],
+      [],
+    ];
+
+    const db = {
+      ...baseDb,
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+              })),
+              orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+            };
+          }
+
+          if (table === domains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: domain.id,
+                    status: "active",
+                    zoneId: domain.zoneId,
+                    deletedAt: null,
+                  },
+                ]),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          if (table === subdomains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+              orderBy: vi.fn(async () => []),
+            })),
+            orderBy: vi.fn(async () => []),
+          };
+        }),
+      })),
+    };
+
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_retry");
+
+    const bind = vi.fn(() => ({
+      run: vi.fn(async () => ({
+        meta: {
+          changes: 1,
+        },
+      })),
+    }));
+    const prepare = vi.fn(() => ({ bind }));
+
+    try {
+      const created = await createMailboxForUser(
+        {
+          DB: {
+            prepare,
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          rootDomain: domain.rootDomain,
+        },
+      );
+
+      expect(created.address).toBe("ava-lin00@mail00.707979.xyz");
+      expect(createRoutingRule).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "ava-lin00@mail00.707979.xyz",
+      );
+      expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "mail00",
+      );
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  it("retries generated mailbox candidates when the insert loses the uniqueness race", async () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const baseDb = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      subdomainRows: [],
+    });
+
+    const mailboxLookupRows = [[], []];
+
+    const db = {
+      ...baseDb,
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+              })),
+              orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+            };
+          }
+
+          if (table === domains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: domain.id,
+                    status: "active",
+                    zoneId: domain.zoneId,
+                    deletedAt: null,
+                  },
+                ]),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          if (table === subdomains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+              orderBy: vi.fn(async () => []),
+            })),
+            orderBy: vi.fn(async () => []),
+          };
+        }),
+      })),
+    };
+
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValueOnce("rule_race_2");
+
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("UNIQUE constraint failed: mailboxes.address"),
+      )
+      .mockResolvedValueOnce({
+        meta: {
+          changes: 1,
+        },
+      });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+
+    try {
+      const created = await createMailboxForUser(
+        {
+          DB: {
+            prepare,
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          rootDomain: domain.rootDomain,
+        },
+      );
+
+      expect(created.address).toBe("ava-lin00@mail00.707979.xyz");
+      expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+      expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "mail00",
+      );
+      expect(db.update).toHaveBeenCalledWith(mailboxes);
+      expect(createRoutingRule).toHaveBeenCalledTimes(1);
+      expect(createRoutingRule).toHaveBeenNthCalledWith(
+        1,
+        runtimeConfig,
+        domain,
+        "ava-lin00@mail00.707979.xyz",
+      );
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
+    } finally {
+      Math.random = originalRandom;
+    }
+  });
+
+  it("only enables the committed retry subdomain when a generated local-part collision retries", async () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const baseDb = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      subdomainRows: [],
+    });
+
+    const mailboxLookupRows = [[], []];
+
+    const db = {
+      ...baseDb,
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+              })),
+              orderBy: vi.fn(async () => mailboxLookupRows.shift() ?? []),
+            };
+          }
+
+          if (table === domains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: domain.id,
+                    status: "active",
+                    zoneId: domain.zoneId,
+                    deletedAt: null,
+                  },
+                ]),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          if (table === subdomains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+              orderBy: vi.fn(async () => []),
+            })),
+            orderBy: vi.fn(async () => []),
+          };
+        }),
+      })),
+    };
+
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValueOnce("rule_retry_2");
+
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("UNIQUE constraint failed: mailboxes.address"),
+      )
+      .mockResolvedValueOnce({
+        meta: {
+          changes: 1,
+        },
+      });
+    const bind = vi.fn(() => ({ run }));
+    const prepare = vi.fn(() => ({ bind }));
+
+    try {
+      const created = await createMailboxForUser(
+        {
+          DB: {
+            prepare,
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          subdomain: "ops.alpha",
+          rootDomain: domain.rootDomain,
+        },
+      );
+
+      expect(created.address).toBe("ava-lin00@ops.alpha.707979.xyz");
+      expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+      expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        runtimeConfig,
+        domain,
+        "ops.alpha",
+      );
+      expect(db.update).toHaveBeenCalledWith(mailboxes);
+      expect(createRoutingRule).toHaveBeenCalledTimes(1);
+      expect(createRoutingRule).toHaveBeenNthCalledWith(
+        1,
+        runtimeConfig,
+        domain,
+        "ava-lin00@ops.alpha.707979.xyz",
+      );
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
     } finally {
       Math.random = originalRandom;
     }
@@ -398,19 +823,17 @@ describe("mailbox service helpers", () => {
       "build",
       "ops",
       "build@ops.707979.xyz",
-      "rule_new",
-      "active",
+      null,
+      "destroying",
       expect.any(String),
       expect.any(String),
       null,
       domain.id,
       domain.zoneId,
     );
-    expect(deleteRoutingRule).toHaveBeenCalledWith(
-      runtimeConfig,
-      domain,
-      "rule_new",
-    );
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(deleteRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalledWith(mailboxes);
   });
 });
