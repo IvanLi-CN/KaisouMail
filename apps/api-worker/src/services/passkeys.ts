@@ -83,20 +83,73 @@ const serializeExpiredCookie = (name: string, secure: boolean) => {
   return parts.join("; ");
 };
 
+const pickExpectedValue = (values: string[]) =>
+  values.length === 1 ? values[0] : values;
+
 const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
-  if (!config.WEB_APP_ORIGIN) {
+  const configuredOrigins =
+    config.WEB_APP_ORIGINS && config.WEB_APP_ORIGINS.length > 0
+      ? config.WEB_APP_ORIGINS
+      : config.WEB_APP_ORIGIN
+        ? [config.WEB_APP_ORIGIN]
+        : [];
+
+  if (configuredOrigins.length === 0) {
     throw new ApiError(503, "Passkey auth is not configured");
   }
 
-  const origin = new URL(config.WEB_APP_ORIGIN);
+  const origins = [
+    ...new Set(configuredOrigins.map((origin) => new URL(origin).origin)),
+  ];
+  const rpIDs = [...new Set(origins.map((origin) => new URL(origin).hostname))];
 
   return {
-    expectedOrigin: origin.origin,
-    rpID: origin.hostname,
+    expectedOrigin: pickExpectedValue(origins),
+    expectedRPID: pickExpectedValue(rpIDs),
+    origins,
+    rpIDs,
     rpName: PASSKEY_RP_NAME,
     secure: config.APP_ENV === "production",
   };
 };
+
+const resolvePasskeyRequestConfig = (
+  config: RuntimeConfig,
+  request: Request,
+) => {
+  const runtime = resolvePasskeyRuntimeConfig(config);
+  const requestOriginHeader = request.headers.get("origin")?.trim();
+
+  if (!requestOriginHeader) {
+    if (runtime.origins.length === 1 && runtime.rpIDs.length === 1) {
+      return {
+        ...runtime,
+        rpID: runtime.rpIDs[0],
+      };
+    }
+
+    throw new ApiError(400, "Passkey origin is not allowed");
+  }
+
+  let requestOrigin: string;
+  try {
+    requestOrigin = new URL(requestOriginHeader).origin;
+  } catch {
+    throw new ApiError(400, "Passkey origin is not allowed");
+  }
+
+  if (!runtime.origins.includes(requestOrigin)) {
+    throw new ApiError(400, "Passkey origin is not allowed");
+  }
+
+  return {
+    ...runtime,
+    rpID: new URL(requestOrigin).hostname,
+  };
+};
+
+const toApiErrorDetails = (error: unknown) =>
+  error instanceof Error ? error.message : null;
 
 const issueChallengeCookie = async (
   config: RuntimeConfig,
@@ -201,6 +254,7 @@ export const listPasskeysForUser = async (env: WorkerEnv, userId: string) => {
 export const createPasskeyRegistrationOptionsForUser = async (
   env: WorkerEnv,
   config: RuntimeConfig,
+  request: Request,
   user: AuthUser,
   name: string,
 ): Promise<{
@@ -208,7 +262,7 @@ export const createPasskeyRegistrationOptionsForUser = async (
   options: PublicKeyCredentialCreationOptionsJSON;
 }> => {
   const db = getDb(env);
-  const { rpID, rpName } = resolvePasskeyRuntimeConfig(config);
+  const { rpID, rpName } = resolvePasskeyRequestConfig(config, request);
   const rows = await db
     .select({
       credentialId: passkeys.credentialId,
@@ -273,14 +327,28 @@ export const verifyPasskeyRegistrationForUser = async (
     throw new ApiError(400, "Passkey challenge is missing or expired");
   }
 
-  const { expectedOrigin, rpID, secure } = resolvePasskeyRuntimeConfig(config);
-  const verification = await verifyRegistrationResponse({
-    response,
-    expectedChallenge: challenge.challenge,
-    expectedOrigin,
-    expectedRPID: rpID,
-    requireUserVerification: true,
-  });
+  const { expectedOrigin, expectedRPID, secure } =
+    resolvePasskeyRuntimeConfig(config);
+  const verification = await (async () => {
+    try {
+      return await verifyRegistrationResponse({
+        response,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin,
+        expectedRPID,
+        requireUserVerification: true,
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(
+        400,
+        "Passkey registration failed",
+        toApiErrorDetails(error),
+      );
+    }
+  })();
   if (!verification.verified || !verification.registrationInfo) {
     throw new ApiError(400, "Passkey registration failed");
   }
@@ -326,11 +394,12 @@ export const verifyPasskeyRegistrationForUser = async (
 
 export const createPasskeyAuthenticationOptions = async (
   config: RuntimeConfig,
+  request: Request,
 ): Promise<{
   cookie: string;
   options: PublicKeyCredentialRequestOptionsJSON;
 }> => {
-  const { rpID } = resolvePasskeyRuntimeConfig(config);
+  const { rpID } = resolvePasskeyRequestConfig(config, request);
   const options = await generateAuthenticationOptions({
     rpID,
     userVerification: "required",
@@ -360,7 +429,8 @@ export const verifyPasskeyAuthentication = async (
     PASSKEY_AUTHENTICATION_COOKIE,
     "authentication",
   );
-  const { expectedOrigin, rpID, secure } = resolvePasskeyRuntimeConfig(config);
+  const { expectedOrigin, expectedRPID, secure } =
+    resolvePasskeyRuntimeConfig(config);
   const db = getDb(env);
 
   const rows = await db
@@ -387,26 +457,35 @@ export const verifyPasskeyAuthentication = async (
     throw new ApiError(401, "Invalid passkey");
   }
 
-  const verification = await verifyAuthenticationResponse({
-    response,
-    expectedChallenge: challenge.challenge,
-    expectedOrigin,
-    expectedRPID: rpID,
-    credential: {
-      id: row.credentialId,
-      publicKey: fromBase64Url(row.publicKeyB64u),
-      counter: row.counter,
-      transports: JSON.parse(row.transportsJson) as (
-        | "ble"
-        | "cable"
-        | "hybrid"
-        | "internal"
-        | "nfc"
-        | "smart-card"
-        | "usb"
-      )[],
-    },
-  });
+  const verification = await (async () => {
+    try {
+      return await verifyAuthenticationResponse({
+        response,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin,
+        expectedRPID,
+        credential: {
+          id: row.credentialId,
+          publicKey: fromBase64Url(row.publicKeyB64u),
+          counter: row.counter,
+          transports: JSON.parse(row.transportsJson) as (
+            | "ble"
+            | "cable"
+            | "hybrid"
+            | "internal"
+            | "nfc"
+            | "smart-card"
+            | "usb"
+          )[],
+        },
+      });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(401, "Invalid passkey", toApiErrorDetails(error));
+    }
+  })();
 
   if (!verification.verified) {
     throw new ApiError(401, "Invalid passkey");

@@ -171,7 +171,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "接口会同步下发短时效、HttpOnly 的 passkey challenge cookie。",
-            "`rpId` 固定取 `WEB_APP_ORIGIN.hostname`，`expectedOrigin` 固定校验 `WEB_APP_ORIGIN`。",
+            "`rpId` 会跟随当前控制台 origin 的 host；验证阶段会接受 `WEB_APP_ORIGIN` 与 `WEB_APP_ORIGINS` 里配置的全部可信 origin / RP host。",
           ],
         },
         {
@@ -852,10 +852,11 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">{overviewAddressExample}</code>
               </p>
               <p className="mt-2">
-                passkey 相关 challenge 与验证都依赖{" "}
-                <code className="ml-1">WEB_APP_ORIGIN</code>；它既决定 WebAuthn
-                的 <code>expectedOrigin</code>，也决定 <code>rpId</code>
-                应该绑定到哪个 host。
+                passkey 相关 challenge 与验证依赖控制台 origin 配置集：
+                <code className="ml-1">WEB_APP_ORIGIN</code> 提供主来源，
+                <code className="ml-1">WEB_APP_ORIGINS</code> 可扩展额外可信
+                WebAuthn origin；接口会按当前请求 origin 选择对应的
+                <code>rpId</code> host。
               </p>
               <p className="mt-2">
                 项目同时支持拆分 token 和共享 token：运行时优先读取{" "}

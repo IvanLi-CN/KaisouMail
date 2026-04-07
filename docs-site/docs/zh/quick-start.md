@@ -19,7 +19,8 @@ cp apps/web/.env.example apps/web/.env
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY`（可选；仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
-  - `WEB_APP_ORIGIN`（passkey 必需；它决定 WebAuthn 的 origin 与 RP ID）
+  - `WEB_APP_ORIGIN`（passkey 必需；它提供主 WebAuthn 可信来源）
+  - `WEB_APP_ORIGINS`（可选；如果要同时保留多个生产控制台域名给 passkey 使用，就在这里补充）
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 

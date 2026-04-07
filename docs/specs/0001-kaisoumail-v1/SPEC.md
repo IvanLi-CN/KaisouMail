@@ -56,7 +56,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## API Behavior
 
-- `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against `WEB_APP_ORIGIN`, then issues the same `kaisoumail_session` cookie used by the API key exchange flow
+- `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against the configured control-plane origin set (`WEB_APP_ORIGIN` + `WEB_APP_ORIGINS`), then issues the same `kaisoumail_session` cookie used by the API key exchange flow
 - `GET /api/passkeys` plus `POST /api/passkeys/registration/options|verify` and `DELETE /api/passkeys/:id` manage per-user passkeys with revocation-aware audit history
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, and address validation hints used by Web and automation clients
 - `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`

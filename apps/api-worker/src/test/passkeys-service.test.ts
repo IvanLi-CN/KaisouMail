@@ -34,6 +34,8 @@ vi.mock("../db/client", () => ({
 }));
 
 import {
+  createPasskeyAuthenticationOptions,
+  createPasskeyRegistrationOptionsForUser,
   verifyPasskeyAuthentication,
   verifyPasskeyRegistrationForUser,
 } from "../services/passkeys";
@@ -47,6 +49,7 @@ const baseConfig = {
   SESSION_SECRET: "super-secret-session-key",
   CF_ROUTE_RULESET_TAG: "kaisoumail",
   WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+  WEB_APP_ORIGINS: ["https://cfm.707979.xyz", "https://km.707979.xyz"],
 } satisfies RuntimeConfig;
 
 const authUser = {
@@ -56,10 +59,17 @@ const authUser = {
   role: "admin",
 } as const;
 
-const createCookieRequest = (cookie: string) =>
+const createRequest = ({
+  cookie,
+  origin,
+}: {
+  cookie?: string;
+  origin?: string;
+} = {}) =>
   new Request("https://api.example.test", {
     headers: {
-      cookie,
+      ...(cookie ? { cookie } : {}),
+      ...(origin ? { origin } : {}),
     },
   });
 
@@ -70,6 +80,51 @@ const createAwaitableQuery = <T>(rows: T[]) => ({
 describe("passkey service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("uses the current request origin when generating registration options", async () => {
+    generateRegistrationOptions.mockResolvedValue({
+      challenge: "registration_options",
+    });
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+    });
+
+    await createPasskeyRegistrationOptionsForUser(
+      {} as never,
+      baseConfig,
+      createRequest({ origin: "https://km.707979.xyz" }),
+      authUser,
+      "Laptop",
+    );
+
+    expect(generateRegistrationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpID: "km.707979.xyz",
+      }),
+    );
+  });
+
+  it("uses the current request origin when generating authentication options", async () => {
+    generateAuthenticationOptions.mockResolvedValue({
+      challenge: "authentication_options",
+    });
+
+    await createPasskeyAuthenticationOptions(
+      baseConfig,
+      createRequest({ origin: "https://km.707979.xyz" }),
+    );
+
+    expect(generateAuthenticationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpID: "km.707979.xyz",
+        userVerification: "required",
+      }),
+    );
   });
 
   it("persists a verified registration", async () => {
@@ -119,7 +174,7 @@ describe("passkey service", () => {
     const result = await verifyPasskeyRegistrationForUser(
       {} as never,
       baseConfig,
-      createCookieRequest(registrationCookie),
+      createRequest({ cookie: registrationCookie }),
       authUser,
       {
         id: "credential_123",
@@ -182,7 +237,7 @@ describe("passkey service", () => {
       verifyPasskeyRegistrationForUser(
         {} as never,
         baseConfig,
-        createCookieRequest(registrationCookie),
+        createRequest({ cookie: registrationCookie }),
         authUser,
         {
           id: "credential_dup",
@@ -225,7 +280,7 @@ describe("passkey service", () => {
       verifyPasskeyRegistrationForUser(
         {} as never,
         baseConfig,
-        createCookieRequest(registrationCookie),
+        createRequest({ cookie: registrationCookie }),
         authUser,
         {
           id: "credential_bad",
@@ -239,6 +294,48 @@ describe("passkey service", () => {
         } as RegistrationResponseJSON,
       ),
     ).rejects.toMatchObject({
+      message: "Passkey registration failed",
+      status: 400,
+    });
+  });
+
+  it("maps registration verification exceptions to a 400 api error", async () => {
+    verifyRegistrationResponse.mockRejectedValue(new Error("Origin mismatch"));
+    const registrationCookie =
+      "kaisoumail_passkey_registration=" +
+      encodeURIComponent(
+        await (await import("../lib/crypto")).signPayload(
+          {
+            kind: "registration",
+            challenge: "exception_registration",
+            name: "Broken",
+            userId: authUser.id,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + 300,
+          },
+          baseConfig.SESSION_SECRET,
+        ),
+      );
+
+    await expect(
+      verifyPasskeyRegistrationForUser(
+        {} as never,
+        baseConfig,
+        createRequest({ cookie: registrationCookie }),
+        authUser,
+        {
+          id: "credential_bad",
+          rawId: "credential_bad",
+          response: {
+            attestationObject: "attestation",
+            clientDataJSON: "client-data",
+          },
+          clientExtensionResults: {},
+          type: "public-key",
+        } as RegistrationResponseJSON,
+      ),
+    ).rejects.toMatchObject({
+      details: "Origin mismatch",
       message: "Passkey registration failed",
       status: 400,
     });
@@ -304,7 +401,7 @@ describe("passkey service", () => {
     const result = await verifyPasskeyAuthentication(
       {} as never,
       baseConfig,
-      createCookieRequest(authCookie),
+      createRequest({ cookie: authCookie }),
       {
         id: "credential_auth",
         rawId: "credential_auth",
@@ -351,7 +448,7 @@ describe("passkey service", () => {
       verifyPasskeyAuthentication(
         {} as never,
         baseConfig,
-        createCookieRequest(authCookie),
+        createRequest({ cookie: authCookie }),
         {
           id: "missing_credential",
           rawId: "missing_credential",
@@ -365,6 +462,69 @@ describe("passkey service", () => {
         } as AuthenticationResponseJSON,
       ),
     ).rejects.toMatchObject({
+      message: "Invalid passkey",
+      status: 401,
+    });
+  });
+
+  it("maps authentication verification exceptions to a 401 api error", async () => {
+    verifyAuthenticationResponse.mockRejectedValue(new Error("Bad signature"));
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          innerJoin: () => ({
+            where: () =>
+              createAwaitableQuery([
+                {
+                  userId: authUser.id,
+                  passkeyId: "psk_1",
+                  credentialId: "credential_auth",
+                  publicKeyB64u: "AQID",
+                  counter: 1,
+                  transportsJson: JSON.stringify(["internal"]),
+                  email: authUser.email,
+                  name: authUser.name,
+                  role: authUser.role,
+                },
+              ]),
+          }),
+        }),
+      }),
+    });
+
+    const authCookie =
+      "kaisoumail_passkey_authentication=" +
+      encodeURIComponent(
+        await (await import("../lib/crypto")).signPayload(
+          {
+            kind: "authentication",
+            challenge: "auth_exception",
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + 300,
+          },
+          baseConfig.SESSION_SECRET,
+        ),
+      );
+
+    await expect(
+      verifyPasskeyAuthentication(
+        {} as never,
+        baseConfig,
+        createRequest({ cookie: authCookie }),
+        {
+          id: "credential_auth",
+          rawId: "credential_auth",
+          response: {
+            authenticatorData: "auth-data",
+            clientDataJSON: "client-data",
+            signature: "signature",
+          },
+          clientExtensionResults: {},
+          type: "public-key",
+        } as AuthenticationResponseJSON,
+      ),
+    ).rejects.toMatchObject({
+      details: "Bad signature",
       message: "Invalid passkey",
       status: 401,
     });

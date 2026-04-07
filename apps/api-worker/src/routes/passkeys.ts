@@ -38,6 +38,7 @@ export const passkeyRoutes = new Hono<AppBindings>()
       const result = await createPasskeyRegistrationOptionsForUser(
         c.env,
         c.get("runtimeConfig"),
+        c.req.raw,
         c.get("authUser"),
         c.req.valid("json").name.trim(),
       );

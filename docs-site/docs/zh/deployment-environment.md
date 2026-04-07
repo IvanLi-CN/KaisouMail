@@ -31,7 +31,8 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | 首个管理员邮箱 |
 | `BOOTSTRAP_ADMIN_NAME` | 首个管理员名称 |
 | `CF_ROUTE_RULESET_TAG` | Worker route 管理标记 |
-| `WEB_APP_ORIGIN` | 控制台来源；生产环境必须填对，同时也是 passkey 的 WebAuthn origin / RP host 来源 |
+| `WEB_APP_ORIGIN` | 历史单来源兼容时使用的主控制台来源；passkey 会把它当作主 WebAuthn 可信来源回退值 |
+| `WEB_APP_ORIGINS` | 需要同时保留多个生产控制台域名时使用的逗号分隔来源列表；passkey 校验会接受这里全部可信 origin / RP host |
 
 ## 单域历史实例升级时才会用到
 

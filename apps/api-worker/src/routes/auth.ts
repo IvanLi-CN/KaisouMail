@@ -62,7 +62,7 @@ export const authRoutes = new Hono<AppBindings>()
   )
   .post("/passkey/options", async (c) => {
     const config = parseRuntimeConfig(c.env);
-    const result = await createPasskeyAuthenticationOptions(config);
+    const result = await createPasskeyAuthenticationOptions(config, c.req.raw);
     c.header("Set-Cookie", result.cookie);
     return c.json(result.options);
   })

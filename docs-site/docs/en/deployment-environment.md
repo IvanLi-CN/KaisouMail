@@ -31,7 +31,8 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | first admin email |
 | `BOOTSTRAP_ADMIN_NAME` | first admin display name |
 | `CF_ROUTE_RULESET_TAG` | Worker route management tag |
-| `WEB_APP_ORIGIN` | trusted browser origin for the control plane; also the WebAuthn expected origin and RP host source for passkeys |
+| `WEB_APP_ORIGIN` | legacy primary browser origin used for single-origin compatibility; passkeys use it as the primary trusted WebAuthn origin fallback |
+| `WEB_APP_ORIGINS` | comma-separated browser origins to trust when multiple production aliases stay live; passkey verification accepts every configured origin / RP host in this set |
 
 ## Legacy single-domain upgrade variables
 
