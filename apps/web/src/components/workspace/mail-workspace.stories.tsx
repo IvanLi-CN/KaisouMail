@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { buildMailboxCreateAddressExample } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
@@ -327,13 +328,17 @@ export const ToolbarCreateFlow: Story = {
   render: () => <WorkspaceStoryHarness />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const randomDomainPreviewAddress = buildMailboxCreateAddressExample({});
+    const selectedDomainPreviewAddress = buildMailboxCreateAddressExample({
+      rootDomain: "mail.example.net",
+    });
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
     await expect(
       canvas.getByText("在当前工作台里直接创建新地址。"),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText("ava-lin@desk.hub.<随机 active 域名>"),
+      canvas.getByText(randomDomainPreviewAddress),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
@@ -348,7 +353,7 @@ export const ToolbarCreateFlow: Story = {
       "mail.example.net",
     );
     await expect(
-      canvas.getByText("nightly@ops.alpha.mail.example.net"),
+      canvas.getByText(selectedDomainPreviewAddress),
     ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
@@ -373,7 +378,7 @@ export const CreatePopoverOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByText("ava-lin@desk.hub.<随机 active 域名>"),
+      canvas.getByText(buildMailboxCreateAddressExample({})),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
   },
