@@ -162,7 +162,7 @@ describe("email routing service", () => {
       new Response(
         JSON.stringify({
           success: false,
-          errors: [{ message: "Rule not found" }],
+          errors: [{ code: 1002, message: "Rule not found" }],
           result: null,
         }),
         { status: 404, headers: { "content-type": "application/json" } },
@@ -179,5 +179,32 @@ describe("email routing service", () => {
         "rule_missing",
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("does not swallow zone-level 404s when deleting a routing rule", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ code: 7003, message: "No route for the URI" }],
+          result: null,
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteRoutingRule(
+        baseConfig,
+        {
+          rootDomain: "relay.example.test",
+          zoneId: "zone_stale",
+        },
+        "rule_123",
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: "No route for the URI",
+    });
   });
 });
