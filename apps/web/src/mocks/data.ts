@@ -1,4 +1,7 @@
-import { versionInfo } from "@kaisoumail/shared";
+import {
+  buildRealisticMailboxAddressExamples,
+  versionInfo,
+} from "@kaisoumail/shared";
 
 import type {
   ApiKeyRecord,
@@ -515,6 +518,10 @@ export const demoMeta: ApiMeta = {
     localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",
     subdomainPattern:
       "^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$",
-    examples: [primaryMailboxAddress, "spec@ops.alpha.mail.example.net"],
+    examples: buildRealisticMailboxAddressExamples(
+      demoDomains
+        .filter((domain) => domain.status === "active")
+        .map((domain) => domain.rootDomain),
+    ),
   },
 };

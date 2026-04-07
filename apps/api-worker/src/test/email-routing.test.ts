@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createRoutingRule,
   createZone,
+  deleteRoutingRule,
   deleteZone,
   listZones,
 } from "../services/emailRouting";
@@ -153,6 +154,57 @@ describe("email routing service", () => {
       status: 500,
       message:
         "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+    });
+  });
+
+  it("treats missing routing rules as already deleted", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ code: 1002, message: "Rule not found" }],
+          result: null,
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteRoutingRule(
+        baseConfig,
+        {
+          rootDomain: "relay.example.test",
+          zoneId: "zone_123",
+        },
+        "rule_missing",
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not swallow zone-level 404s when deleting a routing rule", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: false,
+          errors: [{ code: 7003, message: "No route for the URI" }],
+          result: null,
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteRoutingRule(
+        baseConfig,
+        {
+          rootDomain: "relay.example.test",
+          zoneId: "zone_stale",
+        },
+        "rule_123",
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: "No route for the URI",
     });
   });
 });

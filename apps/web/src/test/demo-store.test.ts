@@ -1,3 +1,7 @@
+import {
+  mailboxLocalPartRegex,
+  mailboxSubdomainRegex,
+} from "@kaisoumail/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { demoApi } from "@/lib/demo-store";
@@ -34,6 +38,33 @@ describe("demoApi", () => {
 
     expect(meta.domains).toContain(created.rootDomain);
     expect(created.address).toBe(`randomized@ops.alpha.${created.rootDomain}`);
+  });
+
+  it("retries generated mailbox candidates and keeps them readable", async () => {
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    try {
+      await demoApi.createMailbox({
+        localPart: "ava-lin",
+        subdomain: "mail",
+        rootDomain: "relay.example.test",
+        expiresInMinutes: 60,
+      });
+
+      const created = await demoApi.createMailbox({
+        rootDomain: "relay.example.test",
+        expiresInMinutes: 60,
+      });
+
+      expect(created.address).toBe("ava-lin00@mail00.relay.example.test");
+      expect(created.localPart).toMatch(mailboxLocalPartRegex);
+      expect(created.subdomain).toMatch(mailboxSubdomainRegex);
+      expect(created.localPart).not.toMatch(/^mail-/);
+      expect(created.subdomain).not.toMatch(/^box-/);
+    } finally {
+      Math.random = originalRandom;
+    }
   });
 
   it("reuses active mailboxes through ensure and recreates destroyed addresses", async () => {

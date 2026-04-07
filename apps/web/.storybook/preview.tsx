@@ -7,17 +7,23 @@ import "../src/index.css";
 
 const preview: Preview = {
   decorators: [
-    (Story) => (
+    (Story, context) => (
       <TooltipProvider
         delayDuration={400}
         disableHoverableContent
         skipDelayDuration={200}
       >
-        <MemoryRouter>
+        {context.parameters.disableMemoryRouter ? (
           <div className="min-h-screen bg-background px-6 py-8 text-foreground">
             <Story />
           </div>
-        </MemoryRouter>
+        ) : (
+          <MemoryRouter>
+            <div className="min-h-screen bg-background px-6 py-8 text-foreground">
+              <Story />
+            </div>
+          </MemoryRouter>
+        )}
       </TooltipProvider>
     ),
   ],

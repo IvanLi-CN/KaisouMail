@@ -29,6 +29,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Lightweight mailbox inventory and lifecycle management surface
 - Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace
 - API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
+- When `localPart` and/or `subdomain` are omitted, generated mailbox aliases come from a readable mixed pool instead of machine-looking `mail-*` / `box-*` prefixes, and collisions retry within a bounded attempt budget before falling back to a short natural suffix
 
 ### Domains
 - `/domains`
@@ -58,6 +59,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`
 - `GET|POST /api/domains` plus `POST /api/domains/bind` and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
 - `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side
+- Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
 - Destroyed mailboxes no longer reserve their address; the same address can be created again after destroy completes
@@ -101,6 +103,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
 - Icon-only actions use a mature third-party tooltip with long-press / hover reveal and collision-aware floating placement
+- Route 404、权限拒绝、资源不存在、可恢复查询失败与未捕获渲染异常必须共用一套品牌化暗色错误体验；错误态不得伪装成空状态
+- 嵌入页面主体的错误态（如工作台内联 404 / pane failure）使用单栏堆叠布局；仅路由级全屏错误页允许使用更宽的恢复信息布局
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
 - Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
@@ -111,6 +115,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
+- 2026-04-07: Removed the redundant inline helper copy from the mailbox address form so the create surface keeps explanation at the header level only, then refreshed the stored visual evidence.
+- 2026-04-07: Replaced legacy `mail-*` / `box-*` default mailbox generation with a shared realistic mixed-pool alias generator, added bounded retry/fallback behavior for generated collisions, and refreshed Web/runtime example surfaces plus visual evidence to match.
+- 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
@@ -118,6 +125,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
 - 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
 - 2026-04-06: Removed the remaining authenticated summary strip so the AppShell header stays focused on navigation and account context only.
+- 2026-04-06: Replaced the default React Router error UI with branded fatal / not-found states, added recoverable page-level data-failure surfaces, and aligned workspace pane failures with the same dark error system.
 
 ## Visual Evidence
 
@@ -157,6 +165,18 @@ PR: include
 ### UI Primitives
 
 ![Action button intent showcase](./assets/action-button-intent-showcase.png)
+
+### Error States
+
+![Route fatal error fallback](./assets/error-route-fatal.png)
+
+![Route not found page](./assets/error-route-not-found.png)
+
+![Permission denied surface](./assets/error-permission-state.png)
+
+![Mailboxes page recoverable list failure](./assets/error-mailboxes-list-failure.png)
+
+![Workspace inline message-not-found pane](./assets/error-workspace-reader-not-found.png)
 
 ### Mailboxes
 

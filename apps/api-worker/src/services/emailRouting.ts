@@ -1,9 +1,18 @@
 import type { RuntimeConfig } from "../env";
 import { ApiError } from "../lib/errors";
 
+interface CloudflareError {
+  code?: number;
+  message: string;
+  documentation_url?: string;
+  source?: {
+    pointer?: string;
+  };
+}
+
 interface CloudflareEnvelope<T> {
   success: boolean;
-  errors: Array<{ message: string }>;
+  errors: CloudflareError[];
   result: T;
 }
 
@@ -80,11 +89,24 @@ const requireEmailWorkerName = (config: RuntimeConfig) => {
   );
 };
 
+const hasOnlyMissingRoutingRuleErrors = (
+  errors: CloudflareError[] | undefined,
+) =>
+  errors?.length
+    ? errors.every((error) => /rule not found/i.test(error.message))
+    : false;
+
 const cfRequest = async <T>(
   config: RuntimeConfig,
   path: string,
   init?: RequestInit,
-  options?: { ignoreStatuses?: number[] },
+  options?: {
+    ignoreStatuses?: number[];
+    ignoreWhen?: (context: {
+      response: Response;
+      data: CloudflareEnvelope<T> | null;
+    }) => boolean;
+  },
 ) => {
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
@@ -100,6 +122,10 @@ const cfRequest = async <T>(
     data = (await response.json()) as CloudflareEnvelope<T>;
   } catch {
     data = null;
+  }
+
+  if (options?.ignoreWhen?.({ response, data })) {
+    return null;
   }
 
   if (options?.ignoreStatuses?.includes(response.status)) {
@@ -204,9 +230,18 @@ export const deleteRoutingRule = async (
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  await cfRequest(config, `/zones/${zoneId}/email/routing/rules/${ruleId}`, {
-    method: "DELETE",
-  });
+  await cfRequest(
+    config,
+    `/zones/${zoneId}/email/routing/rules/${ruleId}`,
+    {
+      method: "DELETE",
+    },
+    {
+      ignoreWhen: ({ response, data }) =>
+        response.status === 404 &&
+        hasOnlyMissingRoutingRuleErrors(data?.errors),
+    },
+  );
 };
 
 export const validateZoneAccess = async (

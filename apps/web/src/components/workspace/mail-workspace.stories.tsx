@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
+import { buildMailboxCreateAddressExample } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
@@ -441,13 +442,17 @@ export const ToolbarCreateFlow: Story = {
   render: () => <WorkspaceStoryHarness />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const randomDomainPreviewAddress = buildMailboxCreateAddressExample({});
+    const selectedDomainPreviewAddress = buildMailboxCreateAddressExample({
+      rootDomain: "mail.example.net",
+    });
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
     await expect(
       canvas.getByText("在当前工作台里直接创建新地址。"),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText(randomDomainPreviewAddress),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
@@ -462,7 +467,7 @@ export const ToolbarCreateFlow: Story = {
       "mail.example.net",
     );
     await expect(
-      canvas.getByText("nightly@ops.alpha.mail.example.net"),
+      canvas.getByText(selectedDomainPreviewAddress),
     ).toBeInTheDocument();
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
@@ -487,7 +492,7 @@ export const CreatePopoverOpen: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.getByText("nightly@ops.alpha.<随机 active 域名>"),
+      canvas.getByText(buildMailboxCreateAddressExample({})),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
   },
@@ -622,5 +627,60 @@ export const DesktopVirtualizedLongLists: Story = {
         name: /mailbox-159@ops\.alpha\.relay\.example\.test/i,
       }),
     );
+  },
+};
+
+export const MailboxPaneError: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    mailboxesError: {
+      variant: "recoverable",
+      title: "邮箱列表暂时不可用",
+      description: "左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。",
+      details: `{
+  "error": "Request failed",
+  "details": "mailboxes offline"
+}`,
+      onRetry: fn(),
+    },
+    visibleMailboxes: [],
+    mailboxMessageCounts: new Map(),
+  },
+};
+
+export const MessagePaneError: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    messagesError: {
+      variant: "recoverable",
+      title: "邮件流加载失败",
+      description: "当前邮箱范围内的邮件流没有成功返回。",
+      details: `{
+  "error": "Request failed",
+  "details": "messages offline"
+}`,
+      onRetry: fn(),
+    },
+    messages: [],
+    selectedMessageId: null,
+    selectedMessage: null,
+    messageDetailHref: null,
+  },
+};
+
+export const ReaderNotFound: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    messageError: {
+      variant: "not-found",
+      title: "这封邮件已经不可见了",
+      description: "邮件正文可能已经被清理，或者当前会话不再拥有访问权限。",
+      details: `{
+  "error": "Message not found",
+  "details": null
+}`,
+      onRetry: fn(),
+    },
+    selectedMessage: null,
   },
 };

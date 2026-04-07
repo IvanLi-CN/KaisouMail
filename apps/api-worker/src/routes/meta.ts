@@ -1,5 +1,6 @@
 import {
   apiMetaResponseSchema,
+  buildRealisticMailboxAddressExamples,
   mailboxLocalPartRegex,
   mailboxSubdomainRegex,
   maxMailboxTtlMinutes,
@@ -32,12 +33,7 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
         format: "localPart@subdomain.rootDomain",
         localPartPattern: mailboxLocalPartRegex.source,
         subdomainPattern: mailboxSubdomainRegex.source,
-        examples: activeRootDomains
-          .slice(0, 2)
-          .flatMap((rootDomain) => [
-            `build@alpha.${rootDomain}`,
-            `spec@ops.alpha.${rootDomain}`,
-          ]),
+        examples: buildRealisticMailboxAddressExamples(activeRootDomains),
       },
     }),
   );

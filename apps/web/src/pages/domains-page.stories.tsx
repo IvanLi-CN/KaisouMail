@@ -113,3 +113,25 @@ export const LifecycleManagementDisabled: Story = {
     isDomainLifecycleEnabled: false,
   },
 };
+
+export const CatalogLoadError: Story = {
+  args: {
+    domains: [],
+    error: {
+      variant: "recoverable",
+      title: "域名目录暂时加载失败",
+      description:
+        "Cloudflare 域名目录目前不可用，控制台不会把它误判成空列表。",
+      details:
+        '{\n  "error": "Authentication error",\n  "details": "Token missing Zone:Read"\n}',
+    },
+    onReload: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "重新加载域名目录" }),
+    );
+    await expect(args.onReload).toHaveBeenCalled();
+  },
+};

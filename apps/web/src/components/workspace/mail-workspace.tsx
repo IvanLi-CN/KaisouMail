@@ -17,6 +17,10 @@ import {
 } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  ErrorState,
+  type ErrorStateVariant,
+} from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +45,14 @@ const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
   { label: "创建时间", value: "created" },
 ];
 
+type WorkspacePaneError = {
+  variant: ErrorStateVariant;
+  title: string;
+  description: string;
+  details?: string | null;
+  onRetry?: () => void;
+};
+
 type MailWorkspaceProps = {
   createMailboxAction: {
     defaultTtlMinutes: number;
@@ -60,6 +72,9 @@ type MailWorkspaceProps = {
       expiresInMinutes: number;
     }) => Promise<void> | void;
   };
+  mailboxesError?: WorkspacePaneError | null;
+  messagesError?: WorkspacePaneError | null;
+  messageError?: WorkspacePaneError | null;
   highlightedMailboxId?: string | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
@@ -87,6 +102,9 @@ type MailWorkspaceProps = {
 
 export const MailWorkspace = ({
   createMailboxAction,
+  mailboxesError = null,
+  messagesError = null,
+  messageError = null,
   highlightedMailboxId = null,
   visibleMailboxes,
   totalMailboxCount,
@@ -124,6 +142,83 @@ export const MailWorkspace = ({
   const selectedMessageIndex = messages.findIndex(
     (message) => message.id === selectedMessageId,
   );
+
+  const renderMailboxError = () => (
+    <ErrorState
+      variant={mailboxesError?.variant ?? "recoverable"}
+      title={mailboxesError?.title ?? "邮箱列表暂时不可用"}
+      description={mailboxesError?.description ?? "请稍后重试。"}
+      details={mailboxesError?.details}
+      primaryAction={
+        mailboxesError?.onRetry ? (
+          <Button onClick={mailboxesError.onRetry}>重新加载邮箱列表</Button>
+        ) : undefined
+      }
+    />
+  );
+
+  const renderMessagesError = () => (
+    <ErrorState
+      variant={messagesError?.variant ?? "recoverable"}
+      title={messagesError?.title ?? "邮件流加载失败"}
+      description={messagesError?.description ?? "请稍后重试。"}
+      details={messagesError?.details}
+      primaryAction={
+        messagesError?.onRetry ? (
+          <Button onClick={messagesError.onRetry}>重新加载邮件列表</Button>
+        ) : undefined
+      }
+    />
+  );
+
+  const renderMessagePaneContent = () => {
+    if (isMessageLoading && selectedMessageSummary) {
+      return (
+        <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
+          正在加载《{selectedMessageSummary.subject}》的正文…
+        </div>
+      );
+    }
+
+    if (messageError) {
+      return (
+        <ErrorState
+          variant={messageError.variant}
+          title={messageError.title}
+          description={messageError.description}
+          details={messageError.details}
+          primaryAction={
+            messageError.onRetry ? (
+              <Button onClick={messageError.onRetry}>重新加载邮件正文</Button>
+            ) : undefined
+          }
+          secondaryAction={
+            messageDetailHref ? (
+              <Button asChild variant="outline">
+                <Link to={messageDetailHref}>打开独立详情页</Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      );
+    }
+
+    if (selectedMessage) {
+      return (
+        <MessageReaderPane
+          message={selectedMessage}
+          rawUrl={selectedMessage.rawDownloadPath}
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        title="还没有选中邮件"
+        description="从中栏点一封邮件，右边就会直接展开正文与附件信息。"
+      />
+    );
+  };
 
   return (
     <div className="space-y-6 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:gap-6 xl:space-y-0">
@@ -316,6 +411,16 @@ export const MailWorkspace = ({
                 <div className="mx-3 mt-2 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                   正在加载邮箱列表…
                 </div>
+              ) : mailboxesError ? (
+                <div className="mx-3 mt-3 xl:min-h-0 xl:flex-1">
+                  {isDesktopThreePane ? (
+                    <PaneScrollbar className="h-full" contentClassName="pb-2">
+                      {renderMailboxError()}
+                    </PaneScrollbar>
+                  ) : (
+                    renderMailboxError()
+                  )}
+                </div>
               ) : visibleMailboxes.length > 0 ? (
                 <div className="mt-3 xl:min-h-0 xl:flex-1">
                   <VirtualizedPaneList
@@ -432,6 +537,16 @@ export const MailWorkspace = ({
                 <div className="mx-3 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                   正在加载邮件列表…
                 </div>
+              ) : messagesError ? (
+                <div className="mx-3 xl:min-h-0 xl:flex-1">
+                  {isDesktopThreePane ? (
+                    <PaneScrollbar className="h-full" contentClassName="pb-2">
+                      {renderMessagesError()}
+                    </PaneScrollbar>
+                  ) : (
+                    renderMessagesError()
+                  )}
+                </div>
               ) : messages.length > 0 ? (
                 <div className="xl:min-h-0 xl:flex-1">
                   <VirtualizedPaneList
@@ -530,40 +645,10 @@ export const MailWorkspace = ({
             <div className="py-3 xl:min-h-0 xl:flex-1">
               {isDesktopThreePane ? (
                 <PaneScrollbar className="h-full" contentClassName="pb-2 pl-3">
-                  {isMessageLoading && selectedMessageSummary ? (
-                    <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                      正在加载《{selectedMessageSummary.subject}》的正文…
-                    </div>
-                  ) : selectedMessage ? (
-                    <MessageReaderPane
-                      message={selectedMessage}
-                      rawUrl={selectedMessage.rawDownloadPath}
-                    />
-                  ) : (
-                    <EmptyState
-                      title="还没有选中邮件"
-                      description="从中栏点一封邮件，右边就会直接展开正文与附件信息。"
-                    />
-                  )}
+                  {renderMessagePaneContent()}
                 </PaneScrollbar>
               ) : (
-                <div className="px-3">
-                  {isMessageLoading && selectedMessageSummary ? (
-                    <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                      正在加载《{selectedMessageSummary.subject}》的正文…
-                    </div>
-                  ) : selectedMessage ? (
-                    <MessageReaderPane
-                      message={selectedMessage}
-                      rawUrl={selectedMessage.rawDownloadPath}
-                    />
-                  ) : (
-                    <EmptyState
-                      title="还没有选中邮件"
-                      description="从中栏点一封邮件，右边就会直接展开正文与附件信息。"
-                    />
-                  )}
-                </div>
+                <div className="px-3">{renderMessagePaneContent()}</div>
               )}
             </div>
           </div>

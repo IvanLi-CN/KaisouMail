@@ -121,7 +121,7 @@ export const MailboxList = ({
                   size="sm"
                   variant="destructive"
                   onClick={() => onDestroy(mailbox.id)}
-                  disabled={mailbox.status !== "active"}
+                  disabled={mailbox.status === "destroyed"}
                   tooltip={`销毁 ${mailbox.address}`}
                 />
               ) : null}
