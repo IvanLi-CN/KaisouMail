@@ -468,3 +468,51 @@ export const RefreshingWorkspace: Story = {
     ),
   },
 };
+
+export const MailboxPaneError: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    mailboxesError: {
+      variant: "recoverable",
+      title: "邮箱列表暂时不可用",
+      description: "左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "mailboxes offline"\n}',
+      onRetry: fn(),
+    },
+    visibleMailboxes: [],
+    mailboxMessageCounts: new Map(),
+  },
+};
+
+export const MessagePaneError: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    messagesError: {
+      variant: "recoverable",
+      title: "邮件流加载失败",
+      description: "当前邮箱范围内的邮件流没有成功返回。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "messages offline"\n}',
+      onRetry: fn(),
+    },
+    messages: [],
+    selectedMessageId: null,
+    selectedMessage: null,
+    messageDetailHref: null,
+  },
+};
+
+export const ReaderNotFound: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    messageError: {
+      variant: "not-found",
+      title: "这封邮件已经不可见了",
+      description: "邮件正文可能已经被清理，或者当前会话不再拥有访问权限。",
+      details: '{\n  "error": "Message not found",\n  "details": null\n}',
+      onRetry: fn(),
+    },
+    selectedMessage: null,
+  },
+};

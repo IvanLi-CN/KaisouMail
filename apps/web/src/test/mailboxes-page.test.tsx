@@ -38,4 +38,33 @@ describe("mailboxes page view", () => {
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("60")).toBeInTheDocument();
   });
+
+  it("shows a list error instead of pretending there are no mailboxes", () => {
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={demoMeta}
+          listError={{
+            variant: "recoverable",
+            title: "邮箱列表加载失败",
+            description: "当前邮箱存续数据不可用。",
+            details: '{"error":"Request failed"}',
+          }}
+          mailboxes={[]}
+          messageStatsByMailbox={new Map()}
+          onRetryList={vi.fn()}
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "邮箱列表加载失败" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "重新加载邮箱列表" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("暂无邮箱")).not.toBeInTheDocument();
+  });
 });

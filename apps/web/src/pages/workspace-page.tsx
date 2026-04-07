@@ -24,6 +24,7 @@ import {
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import { ApiClientError } from "@/lib/api";
+import { getErrorDetails, isNotFoundError } from "@/lib/error-utils";
 import { markMessageAsRead } from "@/lib/message-read-state";
 import {
   resolveLatestRefreshAt,
@@ -225,6 +226,10 @@ export const WorkspacePage = () => {
     allMessagesQuery.isFetching ||
     messagesQuery.isFetching ||
     messageDetailQuery.isFetching;
+  const hasMetaData = metaQuery.data !== undefined;
+  const hasMailboxesData = mailboxesQuery.data !== undefined;
+  const hasMessagesData = messagesQuery.data !== undefined;
+  const hasMessageDetailData = messageDetailQuery.data !== undefined;
 
   useEffect(() => {
     markMessageAsRead(messageDetailQuery.data?.id);
@@ -309,7 +314,51 @@ export const WorkspacePage = () => {
   );
 
   const workspaceMetaError =
-    metaQuery.error instanceof Error ? metaQuery.error.message : null;
+    metaQuery.error instanceof Error && !hasMetaData
+      ? metaQuery.error.message
+      : null;
+  const mailboxesPaneError =
+    mailboxesQuery.error && !hasMailboxesData
+      ? {
+          variant: "recoverable" as const,
+          title: "邮箱列表暂时不可用",
+          description:
+            "工作台左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。请重新刷新后再继续筛选邮箱。",
+          details: getErrorDetails(mailboxesQuery.error),
+          onRetry: handleRefresh,
+        }
+      : null;
+  const messagesPaneError =
+    messagesQuery.error && !hasMessagesData
+      ? {
+          variant: "recoverable" as const,
+          title: "邮件流加载失败",
+          description:
+            "当前邮箱范围内的邮件流没有成功返回，所以中栏不会继续伪装成“没有邮件”。",
+          details: getErrorDetails(messagesQuery.error),
+          onRetry: handleRefresh,
+        }
+      : null;
+  const messagePaneError =
+    messageDetailQuery.error && !hasMessageDetailData
+      ? isNotFoundError(messageDetailQuery.error)
+        ? {
+            variant: "not-found" as const,
+            title: "这封邮件已经不可见了",
+            description:
+              "邮件正文可能已经被清理，或者当前会话不再拥有访问权限。你可以重新选择中栏里的其他邮件继续查看。",
+            details: getErrorDetails(messageDetailQuery.error),
+            onRetry: () => void messageDetailQuery.refetch(),
+          }
+        : {
+            variant: "recoverable" as const,
+            title: "邮件正文加载失败",
+            description:
+              "右栏正文和附件没有成功拉取，所以这里不会继续停留在卡住的加载状态。",
+            details: getErrorDetails(messageDetailQuery.error),
+            onRetry: () => void messageDetailQuery.refetch(),
+          }
+      : null;
 
   return (
     <MailWorkspace
@@ -329,6 +378,9 @@ export const WorkspacePage = () => {
         onOpen: handleOpenCreateMailbox,
         onSubmit: handleCreateMailbox,
       }}
+      mailboxesError={mailboxesPaneError}
+      messagesError={messagesPaneError}
+      messageError={messagePaneError}
       highlightedMailboxId={highlightedMailboxId}
       visibleMailboxes={visibleMailboxes}
       totalMailboxCount={mailboxes.length}

@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-06
+Last: 2026-04-07
 
 ## Objective
 
@@ -96,6 +96,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
 - Icon-only actions use a mature third-party tooltip with long-press / hover reveal and collision-aware floating placement
+- Route 404、权限拒绝、资源不存在、可恢复查询失败与未捕获渲染异常必须共用一套品牌化暗色错误体验；错误态不得伪装成空状态
+- 嵌入页面主体的错误态（如工作台内联 404 / pane failure）使用单栏堆叠布局；仅路由级全屏错误页允许使用更宽的恢复信息布局
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
 - Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
@@ -105,6 +107,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
@@ -112,6 +115,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-06: Added an authenticated AppShell footer for repository/developer/version metadata, removed duplicate runtime noise from the top summary strip, and aligned the repo with an MIT license declaration.
 - 2026-04-06: Synced the spec after review-only version metadata cleanup; footer layout, links, and visual acceptance remain unchanged.
 - 2026-04-06: Removed the remaining authenticated summary strip so the AppShell header stays focused on navigation and account context only.
+- 2026-04-06: Replaced the default React Router error UI with branded fatal / not-found states, added recoverable page-level data-failure surfaces, and aligned workspace pane failures with the same dark error system.
 
 ## Visual Evidence
 
@@ -149,6 +153,18 @@ PR: include
 ### UI Primitives
 
 ![Action button intent showcase](./assets/action-button-intent-showcase.png)
+
+### Error States
+
+![Route fatal error fallback](./assets/error-route-fatal.png)
+
+![Route not found page](./assets/error-route-not-found.png)
+
+![Permission denied surface](./assets/error-permission-state.png)
+
+![Mailboxes page recoverable list failure](./assets/error-mailboxes-list-failure.png)
+
+![Workspace inline message-not-found pane](./assets/error-workspace-reader-not-found.png)
 
 ### Mailboxes
 
