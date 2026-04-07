@@ -17,6 +17,10 @@ import {
 } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  ErrorState,
+  type ErrorStateVariant,
+} from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +60,27 @@ type MailWorkspaceProps = {
       expiresInMinutes: number;
     }) => Promise<void> | void;
   };
+  mailboxesError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+    onRetry?: () => void;
+  } | null;
+  messagesError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+    onRetry?: () => void;
+  } | null;
+  messageError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+    onRetry?: () => void;
+  } | null;
   highlightedMailboxId?: string | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
@@ -83,6 +108,9 @@ type MailWorkspaceProps = {
 
 export const MailWorkspace = ({
   createMailboxAction,
+  mailboxesError = null,
+  messagesError = null,
+  messageError = null,
   highlightedMailboxId = null,
   visibleMailboxes,
   totalMailboxCount,
@@ -305,6 +333,20 @@ export const MailWorkspace = ({
                   <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                     正在加载邮箱列表…
                   </div>
+                ) : mailboxesError ? (
+                  <ErrorState
+                    variant={mailboxesError.variant}
+                    title={mailboxesError.title}
+                    description={mailboxesError.description}
+                    details={mailboxesError.details}
+                    primaryAction={
+                      mailboxesError.onRetry ? (
+                        <Button onClick={mailboxesError.onRetry}>
+                          重新加载邮箱列表
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : visibleMailboxes.length > 0 ? (
                   visibleMailboxes.map((mailbox) => {
                     const isActive = selectedMailboxId === mailbox.id;
@@ -405,6 +447,20 @@ export const MailWorkspace = ({
                 <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                   正在加载邮件列表…
                 </div>
+              ) : messagesError ? (
+                <ErrorState
+                  variant={messagesError.variant}
+                  title={messagesError.title}
+                  description={messagesError.description}
+                  details={messagesError.details}
+                  primaryAction={
+                    messagesError.onRetry ? (
+                      <Button onClick={messagesError.onRetry}>
+                        重新加载邮件列表
+                      </Button>
+                    ) : undefined
+                  }
+                />
               ) : messages.length > 0 ? (
                 <div className="space-y-2">
                   {messages.map((message) => {
@@ -488,6 +544,27 @@ export const MailWorkspace = ({
                 <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                   正在加载《{selectedMessageSummary.subject}》的正文…
                 </div>
+              ) : messageError ? (
+                <ErrorState
+                  variant={messageError.variant}
+                  title={messageError.title}
+                  description={messageError.description}
+                  details={messageError.details}
+                  primaryAction={
+                    messageError.onRetry ? (
+                      <Button onClick={messageError.onRetry}>
+                        重新加载邮件正文
+                      </Button>
+                    ) : undefined
+                  }
+                  secondaryAction={
+                    messageDetailHref ? (
+                      <Button asChild variant="outline">
+                        <Link to={messageDetailHref}>打开独立详情页</Link>
+                      </Button>
+                    ) : undefined
+                  }
+                />
               ) : selectedMessage ? (
                 <MessageReaderPane
                   message={selectedMessage}

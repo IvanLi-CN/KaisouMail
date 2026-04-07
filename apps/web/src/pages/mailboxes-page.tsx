@@ -6,8 +6,13 @@ import { MailboxCreateCard } from "@/components/mailboxes/mailbox-create-card";
 import { MailboxList } from "@/components/mailboxes/mailbox-list";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  ErrorState,
+  type ErrorStateVariant,
+} from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -25,8 +30,10 @@ import { messageKeys, useMessagesQuery } from "@/hooks/use-messages";
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import type { ApiMeta, Mailbox } from "@/lib/contracts";
+import { getErrorDetails } from "@/lib/error-utils";
 import { useReadMessageIds } from "@/lib/message-read-state";
 import { resolveLatestRefreshAt } from "@/lib/message-refresh";
+import { appRoutes } from "@/lib/routes";
 
 const buildMailboxMessageStats = (
   mailboxIds: string[],
@@ -56,10 +63,24 @@ const buildMailboxMessageStats = (
 type MailboxesPageViewProps = {
   meta: ApiMeta | null;
   isMetaLoading?: boolean;
+  createError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+  } | null;
+  listError?: {
+    variant: ErrorStateVariant;
+    title: string;
+    description: string;
+    details?: string | null;
+  } | null;
   mailboxes: Mailbox[];
   messageStatsByMailbox: Map<string, { unread: number; total: number }>;
   isCreatePending?: boolean;
   refreshAction?: ReactNode;
+  onRetryCreate?: () => void;
+  onRetryList?: () => void;
   onCreate: Parameters<typeof MailboxCreateCard>[0]["onSubmit"];
   onDestroy: (mailboxId: string) => void;
 };
@@ -67,10 +88,14 @@ type MailboxesPageViewProps = {
 export const MailboxesPageView = ({
   meta,
   isMetaLoading = false,
+  createError = null,
+  listError = null,
   mailboxes,
   messageStatsByMailbox,
   isCreatePending = false,
   refreshAction,
+  onRetryCreate,
+  onRetryList,
   onCreate,
   onDestroy,
 }: MailboxesPageViewProps) => (
@@ -96,7 +121,29 @@ export const MailboxesPageView = ({
       }
     />
 
-    {meta ? (
+    {createError ? (
+      <Card>
+        <CardHeader>
+          <CardTitle>创建邮箱</CardTitle>
+          <CardDescription>
+            创建入口需要先读取运行时域名和 TTL 规则。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ErrorState
+            variant={createError.variant}
+            title={createError.title}
+            description={createError.description}
+            details={createError.details}
+            primaryAction={
+              onRetryCreate ? (
+                <Button onClick={onRetryCreate}>重新加载邮箱规则</Button>
+              ) : undefined
+            }
+          />
+        </CardContent>
+      </Card>
+    ) : meta ? (
       <MailboxCreateCard
         domains={meta.domains}
         defaultTtlMinutes={meta.defaultMailboxTtlMinutes}
@@ -130,7 +177,24 @@ export const MailboxesPageView = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {mailboxes.length > 0 ? (
+        {listError ? (
+          <ErrorState
+            variant={listError.variant}
+            title={listError.title}
+            description={listError.description}
+            details={listError.details}
+            primaryAction={
+              onRetryList ? (
+                <Button onClick={onRetryList}>重新加载邮箱列表</Button>
+              ) : undefined
+            }
+            secondaryAction={
+              <Button asChild variant="outline">
+                <Link to={appRoutes.workspace}>打开邮件工作台</Link>
+              </Button>
+            }
+          />
+        ) : mailboxes.length > 0 ? (
           <MailboxList
             mailboxes={mailboxes}
             messageStatsByMailbox={messageStatsByMailbox}
@@ -170,11 +234,35 @@ export const MailboxesPage = () => {
     manualRefresh.isRefreshing ||
     mailboxesQuery.isFetching ||
     messagesQuery.isFetching;
+  const hasMetaData = metaQuery.data !== undefined;
+  const hasMailboxesData = mailboxesQuery.data !== undefined;
 
   return (
     <MailboxesPageView
       meta={metaQuery.data ?? null}
       isMetaLoading={metaQuery.isLoading}
+      createError={
+        metaQuery.error && !hasMetaData
+          ? {
+              variant: "recoverable",
+              title: "邮箱规则暂时加载失败",
+              description:
+                "域名与 TTL 元数据还没拿到，所以创建入口不会被误渲染成空表单。先重新加载一次，再继续创建邮箱。",
+              details: getErrorDetails(metaQuery.error),
+            }
+          : null
+      }
+      listError={
+        mailboxesQuery.error && !hasMailboxesData
+          ? {
+              variant: "recoverable",
+              title: "邮箱列表加载失败",
+              description:
+                "当前邮箱存续数据不可用，所以控制台不会把它误判成“暂无邮箱”。你可以重新刷新，或先回到工作台处理其他操作。",
+              details: getErrorDetails(mailboxesQuery.error),
+            }
+          : null
+      }
       mailboxes={mailboxesQuery.data ?? []}
       messageStatsByMailbox={buildMailboxMessageStats(
         (mailboxesQuery.data ?? []).map((mailbox) => mailbox.id),
@@ -190,6 +278,12 @@ export const MailboxesPage = () => {
           density="default"
         />
       }
+      onRetryCreate={() => {
+        void metaQuery.refetch();
+      }}
+      onRetryList={() => {
+        void manualRefresh.refresh();
+      }}
       onCreate={async (values) => {
         await createMailboxMutation.mutateAsync(values);
       }}

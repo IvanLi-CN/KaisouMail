@@ -144,6 +144,27 @@ export const WithLatestSecret: Story = {
   },
 };
 
+export const LoadError: Story = {
+  args: {
+    apiKeys: [],
+    error: {
+      variant: "recoverable",
+      title: "API Keys 暂时加载失败",
+      description: "密钥列表现在不可用，所以控制台不会把它显示成空表。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "keys service unavailable"\n}',
+    },
+    onRetry: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "重新加载 API Keys" }),
+    );
+    await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
 export const RouteFlow: Story = {
   render: () => <RouteFlowHarness />,
   play: async ({ canvasElement }) => {
