@@ -60,7 +60,9 @@ export const passkeys = sqliteTable(
     revokedAt: text("revoked_at"),
   },
   (table) => [
-    uniqueIndex("passkeys_credential_id_unique").on(table.credentialId),
+    uniqueIndex("passkeys_credential_id_unique")
+      .on(table.credentialId)
+      .where(sql`${table.revokedAt} is null`),
     index("passkeys_user_idx").on(table.userId),
   ],
 );

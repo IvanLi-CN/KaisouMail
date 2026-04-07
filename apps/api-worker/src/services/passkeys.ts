@@ -236,6 +236,18 @@ const resolvePasskeyRequestConfig = (
 const toApiErrorDetails = (error: unknown) =>
   error instanceof Error ? error.message : null;
 
+const isPasskeyCredentialConflictError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.message.includes(
+      "UNIQUE constraint failed: passkeys.credential_id",
+    ) || error.message.includes("passkeys_credential_id_unique")
+  );
+};
+
 const issueChallengeCookie = async (
   config: RuntimeConfig,
   name: string,
@@ -445,19 +457,17 @@ export const verifyPasskeyRegistrationForUser = async (
   const existing = await db
     .select({
       id: passkeys.id,
-      revokedAt: passkeys.revokedAt,
-      userId: passkeys.userId,
     })
     .from(passkeys)
     .where(
-      eq(passkeys.credentialId, verification.registrationInfo.credential.id),
+      and(
+        eq(passkeys.credentialId, verification.registrationInfo.credential.id),
+        isNull(passkeys.revokedAt),
+      ),
     )
     .limit(1);
   const existingRecord = existing[0];
-  if (
-    existingRecord &&
-    (!existingRecord.revokedAt || existingRecord.userId !== user.id)
-  ) {
+  if (existingRecord) {
     throw new ApiError(409, "Passkey already registered");
   }
 
@@ -480,17 +490,17 @@ export const verifyPasskeyRegistrationForUser = async (
   } as const;
 
   const record = {
-    id: existingRecord?.id ?? randomId("psk"),
+    id: randomId("psk"),
     ...baseRecord,
   } as const;
 
-  if (existingRecord) {
-    await db
-      .update(passkeys)
-      .set(baseRecord)
-      .where(eq(passkeys.id, existingRecord.id));
-  } else {
+  try {
     await db.insert(passkeys).values(record);
+  } catch (error) {
+    if (isPasskeyCredentialConflictError(error)) {
+      throw new ApiError(409, "Passkey already registered");
+    }
+    throw error;
   }
 
   return {

@@ -14,5 +14,6 @@ CREATE TABLE `passkeys` (
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 CREATE UNIQUE INDEX `passkeys_credential_id_unique`
-ON `passkeys` (`credential_id`);
+ON `passkeys` (`credential_id`)
+WHERE `revoked_at` IS NULL;
 CREATE INDEX `passkeys_user_idx` ON `passkeys` (`user_id`);

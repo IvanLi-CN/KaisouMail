@@ -378,7 +378,7 @@ describe("passkey service", () => {
     });
   });
 
-  it("re-enables a revoked credential when it is registered again", async () => {
+  it("keeps revoked history and inserts a fresh row when a credential is registered again", async () => {
     verifyRegistrationResponse.mockResolvedValue({
       verified: true,
       registrationInfo: {
@@ -391,29 +391,17 @@ describe("passkey service", () => {
         credentialBackedUp: true,
       },
     });
-    const updates: unknown[] = [];
+    const inserted: unknown[] = [];
     getDb.mockReturnValue({
       select: () => ({
         from: () => ({
-          where: () =>
-            createAwaitableQuery([
-              {
-                id: "psk_revoked",
-                userId: authUser.id,
-                revokedAt: "2026-04-07T00:00:00.000Z",
-              },
-            ]),
-        }),
-      }),
-      update: () => ({
-        set: (values: unknown) => ({
-          where: async () => {
-            updates.push(values);
-          },
+          where: () => createAwaitableQuery([]),
         }),
       }),
       insert: () => ({
-        values: vi.fn(),
+        values: async (row: unknown) => {
+          inserted.push(row);
+        },
       }),
     });
 
@@ -451,9 +439,77 @@ describe("passkey service", () => {
       } as RegistrationResponseJSON,
     );
 
-    expect(result.passkey.id).toBe("psk_revoked");
     expect(result.passkey.revokedAt).toBeNull();
-    expect(updates).toHaveLength(1);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      credentialId: "credential_revoked",
+      revokedAt: null,
+    });
+  });
+
+  it("maps concurrent credential inserts to a conflict response", async () => {
+    verifyRegistrationResponse.mockResolvedValue({
+      verified: true,
+      registrationInfo: {
+        credential: {
+          id: "credential_race",
+          publicKey: new Uint8Array([1, 2, 3]),
+          counter: 1,
+        },
+        credentialDeviceType: "singleDevice",
+        credentialBackedUp: false,
+      },
+    });
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => createAwaitableQuery([]),
+        }),
+      }),
+      insert: () => ({
+        values: async () => {
+          throw new Error("UNIQUE constraint failed: passkeys.credential_id");
+        },
+      }),
+    });
+
+    const registrationCookie =
+      "kaisoumail_passkey_registration=" +
+      encodeURIComponent(
+        await (await import("../lib/crypto")).signPayload(
+          {
+            kind: "registration",
+            challenge: "race_challenge",
+            name: "Laptop",
+            userId: authUser.id,
+            iat: Math.floor(Date.now() / 1000),
+            exp: Math.floor(Date.now() / 1000) + 300,
+          },
+          baseConfig.SESSION_SECRET,
+        ),
+      );
+
+    await expect(
+      verifyPasskeyRegistrationForUser(
+        {} as never,
+        baseConfig,
+        createRequest({ cookie: registrationCookie }),
+        authUser,
+        {
+          id: "credential_race",
+          rawId: "credential_race",
+          response: {
+            attestationObject: "attestation",
+            clientDataJSON: "client-data",
+          },
+          clientExtensionResults: {},
+          type: "public-key",
+        } as RegistrationResponseJSON,
+      ),
+    ).rejects.toMatchObject({
+      message: "Passkey already registered",
+      status: 409,
+    });
   });
 
   it("rejects registration when verification fails", async () => {
