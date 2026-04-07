@@ -148,7 +148,7 @@ export const MailWorkspace = ({
         description="在一个三栏视图里完成邮箱筛选、聚合收件浏览和正文阅读。默认先看全部邮箱，再按需要钻取到单邮箱上下文。"
         eyebrow="Workspace"
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             <Popover open={createMailboxAction.isOpen}>
               <PopoverAnchor asChild>
                 <ActionButton
@@ -243,11 +243,17 @@ export const MailWorkspace = ({
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]">
-        <section aria-label="邮箱列表" className="min-w-0">
-          <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-2xl border border-border bg-card">
+      <div
+        data-testid="mail-workspace-layout"
+        className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]"
+      >
+        <section
+          aria-label="邮箱列表"
+          className="min-w-0 lg:row-span-2 xl:row-auto"
+        >
+          <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[52rem] xl:min-h-[72vh]">
             <div className="space-y-4 border-b border-border px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
                     邮箱列表
@@ -428,7 +434,7 @@ export const MailWorkspace = ({
         </section>
 
         <section aria-label="邮件列表" className="min-w-0">
-          <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:min-h-[72vh]">
             <div className="space-y-2 border-b border-border px-4 py-4">
               <p className="text-sm font-semibold text-foreground">
                 {selectedMailbox
@@ -513,8 +519,8 @@ export const MailWorkspace = ({
         </section>
 
         <section aria-label="邮件内容" className="min-w-0">
-          <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4">
+          <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:min-h-[72vh]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   邮件内容

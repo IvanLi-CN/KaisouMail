@@ -6,8 +6,10 @@ import {
   LayoutPanelTop,
   LogOut,
   Mailbox,
+  Menu,
   ShieldCheck,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   type FocusEvent,
@@ -75,17 +77,69 @@ const navItems = [
 
 const ACCOUNT_PREVIEW_CLOSE_DELAY_MS = 80;
 
+const isNavItemActive = (item: NavItem, pathname: string) =>
+  item.activePatterns.some((pattern) =>
+    Boolean(
+      matchPath(
+        {
+          path: pattern,
+          end: pattern === item.to,
+        },
+        pathname,
+      ),
+    ),
+  );
+
+const renderNavLink = ({
+  item,
+  pathname,
+  layout,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  layout: "desktop" | "mobile";
+  onNavigate?: () => void;
+}) => {
+  const isActive = isNavItemActive(item, pathname);
+  const baseClassName =
+    layout === "mobile"
+      ? "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      : "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <Link
+      key={`${layout}-${item.to}`}
+      to={item.to}
+      className={cn(
+        baseClassName,
+        isActive
+          ? "border-border bg-secondary text-foreground"
+          : "border-transparent text-muted-foreground hover:border-border hover:bg-white/5 hover:text-foreground",
+      )}
+      onClick={onNavigate}
+    >
+      <item.icon
+        className={cn("shrink-0", layout === "mobile" ? "h-4 w-4" : "h-4 w-4")}
+      />
+      <span className="min-w-0 truncate">{item.label}</span>
+    </Link>
+  );
+};
+
 export const AppShell = ({
   user,
   version,
   onLogout,
   children,
   defaultAccountPopoverOpen = false,
+  defaultMobileNavOpen = false,
 }: PropsWithChildren<{
   user: SessionUser;
   version?: VersionInfo | null;
   onLogout: () => void;
   defaultAccountPopoverOpen?: boolean;
+  defaultMobileNavOpen?: boolean;
 }>) => {
   const location = useLocation();
   const pathname = location.pathname === "/" ? "/workspace" : location.pathname;
@@ -104,17 +158,23 @@ export const AppShell = ({
     },
   ] as const;
   const accountPopoverId = useId();
+  const mobileNavPopoverId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const closePreviewTimerRef = useRef<number | null>(null);
+  const hasHandledInitialPathRef = useRef(false);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const [isAccountPopoverPinned, setIsAccountPopoverPinned] = useState(
     defaultAccountPopoverOpen,
   );
   const [isAccountPopoverPreviewing, setIsAccountPopoverPreviewing] =
     useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(defaultMobileNavOpen);
   const isAccountPopoverOpen =
     isAccountPopoverPinned || isAccountPopoverPreviewing;
+  const visibleNavItems = navItems.filter(
+    (item) => !item.adminOnly || user.role === "admin",
+  );
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(hover: none), (pointer: coarse)");
@@ -151,6 +211,17 @@ export const AppShell = ({
     [],
   );
 
+  useEffect(() => {
+    if (!hasHandledInitialPathRef.current) {
+      hasHandledInitialPathRef.current = true;
+      return;
+    }
+
+    if (pathname) {
+      setIsMobileNavOpen(false);
+    }
+  }, [pathname]);
+
   const clearPreviewCloseTimer = () => {
     if (closePreviewTimerRef.current === null) return;
 
@@ -169,6 +240,7 @@ export const AppShell = ({
 
     clearPreviewCloseTimer();
     setIsAccountPopoverPreviewing(true);
+    setIsMobileNavOpen(false);
   };
 
   const scheduleAccountPreviewClose = () => {
@@ -206,6 +278,7 @@ export const AppShell = ({
 
   const handleAccountTriggerClick = () => {
     clearPreviewCloseTimer();
+    setIsMobileNavOpen(false);
 
     if (isAccountPopoverPinned) {
       setIsAccountPopoverPinned(false);
@@ -237,17 +310,17 @@ export const AppShell = ({
 
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex max-w-[1520px] flex-col gap-4 px-4 py-4 lg:px-6 xl:px-8">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-col gap-4">
-              <Link to="/workspace" className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-secondary text-primary">
+          <div className="flex flex-wrap items-start gap-3 lg:flex-nowrap lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-6">
+              <Link to="/workspace" className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-primary">
                   <BriefcaseBusiness className="h-4 w-4" />
                 </span>
-                <span>
-                  <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
                     {projectMeta.projectName}
                   </span>
-                  <span className="block text-xs text-muted-foreground">
+                  <span className="block truncate text-xs text-muted-foreground">
                     Temporary inbox control plane
                   </span>
                 </span>
@@ -255,40 +328,19 @@ export const AppShell = ({
 
               <nav
                 aria-label="主导航"
-                className="flex flex-wrap items-center gap-2"
+                className="hidden min-w-0 flex-1 flex-wrap items-center gap-2 lg:flex"
               >
-                {navItems
-                  .filter((item) => !item.adminOnly || user.role === "admin")
-                  .map((item) => {
-                    const isActive = item.activePatterns.some((pattern) =>
-                      Boolean(
-                        matchPath(
-                          { path: pattern, end: pattern === item.to },
-                          pathname,
-                        ),
-                      ),
-                    );
-
-                    return (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          isActive
-                            ? "border-border bg-secondary text-foreground"
-                            : "border-transparent text-muted-foreground hover:border-border hover:bg-white/5 hover:text-foreground",
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
+                {visibleNavItems.map((item) =>
+                  renderNavLink({
+                    item,
+                    pathname,
+                    layout: "desktop",
+                  }),
+                )}
               </nav>
             </div>
 
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto lg:ml-0 lg:w-auto lg:flex-nowrap">
               <Popover
                 open={isAccountPopoverOpen}
                 onOpenChange={(nextOpen) => {
@@ -304,7 +356,7 @@ export const AppShell = ({
                     aria-expanded={isAccountPopoverOpen}
                     aria-haspopup="dialog"
                     className={cn(
-                      "inline-flex min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-[12rem]",
+                      "inline-flex min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-[12rem]",
                       isAccountPopoverOpen
                         ? "bg-card/95 text-foreground"
                         : "text-muted-foreground hover:border-border/80 hover:text-foreground",
@@ -388,14 +440,84 @@ export const AppShell = ({
                   </dl>
                 </PopoverContent>
               </Popover>
+
               <ActionButton
-                density="default"
+                density="dense"
                 icon={LogOut}
                 label="退出登录"
+                labelVisibility="desktop"
                 onClick={onLogout}
                 priority="secondary"
                 variant="outline"
               />
+
+              <Popover
+                open={isMobileNavOpen}
+                onOpenChange={(nextOpen) => {
+                  if (nextOpen) {
+                    closeAccountPopover();
+                  }
+                  setIsMobileNavOpen(nextOpen);
+                }}
+              >
+                <PopoverAnchor asChild>
+                  <button
+                    aria-controls={mobileNavPopoverId}
+                    aria-expanded={isMobileNavOpen}
+                    aria-haspopup="dialog"
+                    aria-label={isMobileNavOpen ? "关闭主导航" : "打开主导航"}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                    onClick={() => {
+                      setIsMobileNavOpen((current) => {
+                        const next = !current;
+
+                        if (next) {
+                          closeAccountPopover();
+                        }
+
+                        return next;
+                      });
+                    }}
+                    type="button"
+                  >
+                    {isMobileNavOpen ? (
+                      <X aria-hidden className="h-4 w-4" />
+                    ) : (
+                      <Menu aria-hidden className="h-4 w-4" />
+                    )}
+                  </button>
+                </PopoverAnchor>
+                <PopoverContent
+                  id={mobileNavPopoverId}
+                  align="end"
+                  className="w-[min(calc(100vw-2rem),22rem)] space-y-3 px-3 py-3 lg:hidden"
+                  onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                  }}
+                  onOpenAutoFocus={(event) => {
+                    event.preventDefault();
+                  }}
+                >
+                  <div className="space-y-1 px-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      主导航
+                    </p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      小屏幕下把站点导航收进这里，给工作区内容留出更多纵向空间。
+                    </p>
+                  </div>
+                  <nav aria-label="移动主导航" className="space-y-2">
+                    {visibleNavItems.map((item) =>
+                      renderNavLink({
+                        item,
+                        pathname,
+                        layout: "mobile",
+                        onNavigate: () => setIsMobileNavOpen(false),
+                      }),
+                    )}
+                  </nav>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </div>
@@ -403,7 +525,7 @@ export const AppShell = ({
 
       <main
         id="app-main"
-        className="mx-auto min-w-0 w-full max-w-[1520px] flex-1 space-y-6 px-4 py-6 lg:px-6 xl:px-8"
+        className="mx-auto min-w-0 w-full max-w-[1520px] flex-1 space-y-6 px-4 py-5 sm:py-6 lg:px-6 xl:px-8"
       >
         {children}
       </main>

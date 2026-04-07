@@ -20,6 +20,18 @@ import {
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
 
+const desktopViewport = {
+  viewport: { value: "kaisouDesktop", isRotated: false },
+} as const;
+
+const tabletViewport = {
+  viewport: { value: "kaisouTablet", isRotated: false },
+} as const;
+
+const mobileViewport = {
+  viewport: { value: "kaisouMobile", isRotated: false },
+} as const;
+
 const buildMailboxMessageCounts = (
   mailboxes: Mailbox[],
   messages: MessageSummary[],
@@ -56,6 +68,7 @@ const meta = {
   tags: ["autodocs"],
   parameters: {
     layout: "fullscreen",
+    disableStoryPadding: true,
   },
   decorators: [
     (Story) => (
@@ -106,6 +119,47 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+
+const getLayoutRects = (canvasElement: HTMLElement) => {
+  const canvas = within(canvasElement);
+  const mailboxList = canvas.getByRole("region", { name: "邮箱列表" });
+  const messageList = canvas.getByRole("region", { name: "邮件列表" });
+  const messageContent = canvas.getByRole("region", { name: "邮件内容" });
+
+  return {
+    mailboxList: mailboxList.getBoundingClientRect(),
+    messageList: messageList.getBoundingClientRect(),
+    messageContent: messageContent.getBoundingClientRect(),
+  };
+};
+
+const assertMobileSingleColumnLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(messageList.top).toBeGreaterThan(mailboxList.bottom - 8);
+  expect(messageContent.top).toBeGreaterThan(messageList.bottom - 8);
+};
+
+const assertTabletSplitLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(Math.abs(mailboxList.top - messageList.top)).toBeLessThan(24);
+  expect(messageList.left).toBeGreaterThan(mailboxList.right - 8);
+  expect(Math.abs(messageList.left - messageContent.left)).toBeLessThan(24);
+  expect(messageContent.top).toBeGreaterThan(messageList.bottom - 8);
+};
+
+const assertDesktopThreePaneLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(Math.abs(mailboxList.top - messageList.top)).toBeLessThan(24);
+  expect(Math.abs(messageList.top - messageContent.top)).toBeLessThan(24);
+  expect(messageList.left).toBeGreaterThan(mailboxList.right - 8);
+  expect(messageContent.left).toBeGreaterThan(messageList.right - 8);
+};
 
 const WorkspaceStoryHarness = ({
   highlightedMailboxId: initialHighlightedMailboxId = null,
@@ -294,7 +348,40 @@ const WorkspaceStoryHarness = ({
   );
 };
 
-export const AllMailboxes: Story = {
+export const MobileSingleColumn: Story = {
+  globals: mobileViewport,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.getByRole("heading", { name: "邮件工作台" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "新建邮箱" }),
+    ).toBeInTheDocument();
+
+    assertMobileSingleColumnLayout(canvasElement);
+  },
+};
+
+export const TabletSplitView: Story = {
+  globals: tabletViewport,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.getByRole("button", { name: "新建邮箱" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "手动刷新" }),
+    ).toBeInTheDocument();
+
+    assertTabletSplitLayout(canvasElement);
+  },
+};
+
+export const DesktopThreePane: Story = {
+  globals: desktopViewport,
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
@@ -309,6 +396,8 @@ export const AllMailboxes: Story = {
     await expect(
       canvas.getByRole("link", { name: "打开邮箱管理" }),
     ).toBeInTheDocument();
+
+    assertDesktopThreePaneLayout(canvasElement);
 
     await userEvent.click(
       canvas.getByRole("button", {

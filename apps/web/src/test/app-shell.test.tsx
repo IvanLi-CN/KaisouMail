@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,10 +13,15 @@ import { AppShell } from "@/components/layout/app-shell";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
 
-const renderAppShell = () =>
+const renderAppShell = (props: Partial<ComponentProps<typeof AppShell>> = {}) =>
   render(
     <MemoryRouter initialEntries={["/workspace"]}>
-      <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
+      <AppShell
+        user={demoSessionUser}
+        version={demoVersion}
+        onLogout={vi.fn()}
+        {...props}
+      >
         <section>
           <h1>Workspace overview</h1>
           <p>Messages and mailbox health</p>
@@ -104,6 +110,45 @@ describe("AppShell account trigger", () => {
 
     expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
     expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
+  });
+});
+
+describe("AppShell mobile navigation", () => {
+  it("supports a controlled default-open mobile navigation state", () => {
+    renderAppShell({ defaultMobileNavOpen: true });
+
+    const mobileNav = screen.getByRole("navigation", { name: "移动主导航" });
+    expect(mobileNav).toBeInTheDocument();
+    expect(
+      within(mobileNav).getByRole("link", { name: /工作台/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(mobileNav).getByRole("link", { name: /用户/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭主导航" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("toggles the mobile menu and closes it before opening account details", async () => {
+    renderAppShell();
+
+    const menuTrigger = screen.getByRole("button", { name: "打开主导航" });
+    fireEvent.click(menuTrigger);
+
+    const mobileNav = screen.getByRole("navigation", { name: "移动主导航" });
+    expect(mobileNav).toBeInTheDocument();
+    expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: demoSessionUser.name }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("navigation", { name: "移动主导航" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
   });
 });
 
