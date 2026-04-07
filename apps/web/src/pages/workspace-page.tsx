@@ -312,84 +312,86 @@ export const WorkspacePage = () => {
     metaQuery.error instanceof Error ? metaQuery.error.message : null;
 
   return (
-    <MailWorkspace
-      createMailboxAction={{
-        defaultTtlMinutes:
-          metaQuery.data?.defaultMailboxTtlMinutes ??
-          DEFAULT_WORKSPACE_TTL_MINUTES,
-        domains: metaQuery.data?.domains ?? [],
-        error: createMailboxError,
-        isMetaLoading: metaQuery.isLoading,
-        isOpen: isCreateMailboxOpen,
-        isPending: createMailboxMutation.isPending,
-        maxTtlMinutes:
-          metaQuery.data?.maxMailboxTtlMinutes ?? maxMailboxTtlMinutes,
-        metaError: workspaceMetaError,
-        onCancel: handleCancelCreateMailbox,
-        onOpen: handleOpenCreateMailbox,
-        onSubmit: handleCreateMailbox,
-      }}
-      highlightedMailboxId={highlightedMailboxId}
-      visibleMailboxes={visibleMailboxes}
-      totalMailboxCount={mailboxes.length}
-      totalMessageCount={messages.length}
-      totalAggregatedMessageCount={allMessages.length}
-      mailboxMessageCounts={mailboxMessageCounts}
-      selectedMailboxId={selectedMailboxId}
-      selectedMailbox={selectedMailbox}
-      messages={messages}
-      selectedMessageId={selectedMessageId}
-      selectedMessage={messageDetailQuery.data ?? null}
-      searchQuery={searchQuery}
-      sortMode={resolvedSortMode}
-      refreshAction={
-        <MessageRefreshControl
-          density="dense"
-          isRefreshing={isWorkspaceRefreshing}
-          lastRefreshedAt={workspaceLastRefreshedAt}
-          labelVisibility="desktop"
-          onRefresh={handleRefresh}
-        />
-      }
-      isMailboxesLoading={mailboxesQuery.isLoading}
-      isMessagesLoading={messagesQuery.isLoading}
-      isMessageLoading={messageDetailQuery.isLoading}
-      mailboxManagementHref="/mailboxes"
-      messageDetailHref={
-        selectedMessageId
-          ? `/messages/${selectedMessageId}${buildWorkspaceSearch({
-              mailbox: selectedMailboxId,
-              message: selectedMessageId,
-              sort: resolvedSortMode,
-              q: searchQuery,
-            })}`
-          : null
-      }
-      onSearchQueryChange={(value) =>
-        updateSearchParams((draft) => {
-          if (value.trim()) {
-            draft.set("q", value);
-          } else {
-            draft.delete("q");
-          }
-        })
-      }
-      onSortModeChange={(mode) =>
-        updateSearchParams((draft) => {
-          draft.set("sort", mode);
-        })
-      }
-      onSelectMailbox={(mailboxId) =>
-        updateSearchParams((draft) => {
-          draft.set("mailbox", mailboxId);
-          draft.delete("message");
-        })
-      }
-      onSelectMessage={(messageId) =>
-        updateSearchParams((draft) => {
-          draft.set("message", messageId);
-        })
-      }
-    />
+    <div className="flex flex-1 flex-col xl:min-h-0">
+      <MailWorkspace
+        createMailboxAction={{
+          defaultTtlMinutes:
+            metaQuery.data?.defaultMailboxTtlMinutes ??
+            DEFAULT_WORKSPACE_TTL_MINUTES,
+          domains: metaQuery.data?.domains ?? [],
+          error: createMailboxError,
+          isMetaLoading: metaQuery.isLoading,
+          isOpen: isCreateMailboxOpen,
+          isPending: createMailboxMutation.isPending,
+          maxTtlMinutes:
+            metaQuery.data?.maxMailboxTtlMinutes ?? maxMailboxTtlMinutes,
+          metaError: workspaceMetaError,
+          onCancel: handleCancelCreateMailbox,
+          onOpen: handleOpenCreateMailbox,
+          onSubmit: handleCreateMailbox,
+        }}
+        highlightedMailboxId={highlightedMailboxId}
+        visibleMailboxes={visibleMailboxes}
+        totalMailboxCount={mailboxes.length}
+        totalMessageCount={messages.length}
+        totalAggregatedMessageCount={allMessages.length}
+        mailboxMessageCounts={mailboxMessageCounts}
+        selectedMailboxId={selectedMailboxId}
+        selectedMailbox={selectedMailbox}
+        messages={messages}
+        selectedMessageId={selectedMessageId}
+        selectedMessage={messageDetailQuery.data ?? null}
+        searchQuery={searchQuery}
+        sortMode={resolvedSortMode}
+        refreshAction={
+          <MessageRefreshControl
+            density="dense"
+            isRefreshing={isWorkspaceRefreshing}
+            lastRefreshedAt={workspaceLastRefreshedAt}
+            labelVisibility="desktop"
+            onRefresh={handleRefresh}
+          />
+        }
+        isMailboxesLoading={mailboxesQuery.isLoading}
+        isMessagesLoading={messagesQuery.isLoading}
+        isMessageLoading={messageDetailQuery.isLoading}
+        mailboxManagementHref="/mailboxes"
+        messageDetailHref={
+          selectedMessageId
+            ? `/messages/${selectedMessageId}${buildWorkspaceSearch({
+                mailbox: selectedMailboxId,
+                message: selectedMessageId,
+                sort: resolvedSortMode,
+                q: searchQuery,
+              })}`
+            : null
+        }
+        onSearchQueryChange={(value) =>
+          updateSearchParams((draft) => {
+            if (value.trim()) {
+              draft.set("q", value);
+            } else {
+              draft.delete("q");
+            }
+          })
+        }
+        onSortModeChange={(mode) =>
+          updateSearchParams((draft) => {
+            draft.set("sort", mode);
+          })
+        }
+        onSelectMailbox={(mailboxId) =>
+          updateSearchParams((draft) => {
+            draft.set("mailbox", mailboxId);
+            draft.delete("message");
+          })
+        }
+        onSelectMessage={(messageId) =>
+          updateSearchParams((draft) => {
+            draft.set("message", messageId);
+          })
+        }
+      />
+    </div>
   );
 };

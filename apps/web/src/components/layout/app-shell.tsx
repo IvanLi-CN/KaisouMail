@@ -403,7 +403,7 @@ export const AppShell = ({
 
       <main
         id="app-main"
-        className="mx-auto min-w-0 w-full max-w-[1520px] flex-1 space-y-6 px-4 py-6 lg:px-6 xl:px-8"
+        className="mx-auto flex min-w-0 w-full max-w-[1520px] flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8"
       >
         {children}
       </main>

@@ -62,7 +62,7 @@ export const MessageReaderPane = ({
   message: MessageDetail;
   rawUrl: string;
 }) => (
-  <Card className="h-full overflow-hidden p-0">
+  <Card className="overflow-hidden p-0">
     <CardHeader className="border-b border-border px-5 py-5">
       <div className="flex flex-wrap items-center gap-2">
         <Badge className="border-primary/30 bg-primary/15 text-primary">

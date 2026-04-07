@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
@@ -30,6 +30,31 @@ const buildMailboxMessageCounts = (
     ]),
   );
 
+const createLongMailboxes = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    ...demoMailboxes[0],
+    id: `mbx_virtual_${index}`,
+    address: `mailbox-${index.toString().padStart(3, "0")}@ops.alpha.relay.example.test`,
+    createdAt: `2026-04-05T08:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+    lastReceivedAt: `2026-04-05T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+  }));
+
+const createLongMessages = (
+  mailboxes: Mailbox[],
+  mailboxIndex: number,
+  count: number,
+) =>
+  Array.from({ length: count }, (_, index) => ({
+    ...demoMessages[0],
+    id: `msg_virtual_${index}`,
+    mailboxId: mailboxes[mailboxIndex]?.id ?? demoMailboxes[0].id,
+    mailboxAddress:
+      mailboxes[mailboxIndex]?.address ?? demoMailboxes[0]?.address ?? "",
+    subject: `Virtualized message ${index.toString().padStart(3, "0")}`,
+    previewText: `Virtualized preview ${index}`,
+    receivedAt: `2026-04-05T10:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+  }));
+
 const buildCreateMailboxAction = (
   overrides: Partial<
     ComponentProps<typeof MailWorkspace>["createMailboxAction"]
@@ -58,7 +83,7 @@ const meta = {
   },
   decorators: [
     (Story) => (
-      <div className="min-h-screen bg-background px-4 py-6 text-foreground lg:px-6 xl:px-8">
+      <div className="min-h-screen bg-background px-4 py-6 text-foreground lg:px-6 xl:flex xl:h-screen xl:flex-col xl:overflow-hidden xl:px-8">
         <Story />
       </div>
     ),
@@ -293,6 +318,95 @@ const WorkspaceStoryHarness = ({
   );
 };
 
+const DesktopVirtualizedHarness = () => {
+  const longMailboxes = useMemo(() => createLongMailboxes(160), []);
+  const longMessages = useMemo(
+    () => createLongMessages(longMailboxes, 118, 260),
+    [longMailboxes],
+  );
+  const [selectedMailboxId, setSelectedMailboxId] = useState(
+    longMailboxes[118]?.id ?? "all",
+  );
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    longMessages[203]?.id ?? null,
+  );
+
+  useEffect(() => {
+    const originalMatchMedia = window.matchMedia.bind(window);
+
+    window.matchMedia = ((query: string) => {
+      if (query.includes("min-width: 1280px")) {
+        return {
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener() {},
+          removeEventListener() {},
+          addListener() {},
+          removeListener() {},
+          dispatchEvent() {
+            return false;
+          },
+        } as MediaQueryList;
+      }
+
+      return originalMatchMedia(query);
+    }) as typeof window.matchMedia;
+
+    return () => {
+      window.matchMedia = originalMatchMedia;
+    };
+  }, []);
+
+  const selectedMailbox =
+    longMailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ?? null;
+  const selectedMessage =
+    (selectedMessageId ? demoDetailMap[selectedMessageId] : null) ??
+    demoMessageDetails.msg_alpha;
+
+  return (
+    <MailWorkspace
+      createMailboxAction={buildCreateMailboxAction()}
+      highlightedMailboxId={longMailboxes[118]?.id ?? null}
+      isMailboxesLoading={false}
+      isMessageLoading={false}
+      isMessagesLoading={false}
+      mailboxManagementHref="/mailboxes"
+      mailboxMessageCounts={
+        new Map(longMailboxes.map((mailbox) => [mailbox.id, 1]))
+      }
+      messageDetailHref={
+        selectedMessageId
+          ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}`
+          : null
+      }
+      messages={longMessages}
+      onSearchQueryChange={fn()}
+      onSelectMailbox={setSelectedMailboxId}
+      onSelectMessage={setSelectedMessageId}
+      onSortModeChange={fn()}
+      refreshAction={
+        <MessageRefreshControl
+          isRefreshing={false}
+          labelVisibility="desktop"
+          lastRefreshedAt={new Date("2026-04-05T10:12:00.000Z").getTime()}
+          onRefresh={fn()}
+        />
+      }
+      searchQuery=""
+      selectedMailbox={selectedMailbox}
+      selectedMailboxId={selectedMailboxId}
+      selectedMessage={selectedMessage}
+      selectedMessageId={selectedMessageId}
+      sortMode="recent"
+      totalAggregatedMessageCount={longMessages.length}
+      totalMailboxCount={longMailboxes.length}
+      totalMessageCount={longMessages.length}
+      visibleMailboxes={longMailboxes}
+    />
+  );
+};
+
 export const AllMailboxes: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
@@ -466,5 +580,47 @@ export const RefreshingWorkspace: Story = {
         onRefresh={fn()}
       />
     ),
+  },
+};
+
+export const DesktopVirtualizedLongLists: Story = {
+  render: () => <DesktopVirtualizedHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const mailboxScroll = canvas.getByTestId("workspace-mailbox-scroll");
+    const messageScroll = canvas.getByTestId("workspace-message-scroll");
+
+    await waitFor(() => {
+      expect(mailboxScroll.scrollTop).toBeGreaterThan(0);
+      expect(messageScroll.scrollTop).toBeGreaterThan(0);
+    });
+
+    await expect(
+      canvas.getByRole("button", {
+        name: /mailbox-118@ops\.alpha\.relay\.example\.test/i,
+      }),
+    ).toBeVisible();
+    await expect(
+      canvas.getByRole("button", {
+        name: /Virtualized message 203/i,
+      }),
+    ).toBeVisible();
+
+    mailboxScroll.scrollTo({
+      top: mailboxScroll.scrollHeight,
+    });
+    mailboxScroll.dispatchEvent(new Event("scroll"));
+
+    await expect(
+      await canvas.findByRole("button", {
+        name: /mailbox-159@ops\.alpha\.relay\.example\.test/i,
+      }),
+    ).toBeVisible();
+
+    await userEvent.click(
+      canvas.getByRole("button", {
+        name: /mailbox-159@ops\.alpha\.relay\.example\.test/i,
+      }),
+    );
   },
 };

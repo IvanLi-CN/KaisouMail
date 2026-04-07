@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-06
+Last: 2026-04-07
 
 ## Objective
 
@@ -16,6 +16,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Workspace
 - `/workspace`
 - Three-pane mail workbench for mailbox filtering, aggregated message browsing, and inline message reading
+- Desktop `xl+` workspace layout is clamped to the remaining AppShell viewport height; each pane keeps its own vertical scroll area instead of letting long lists stretch the whole page
+- Mailbox and message rails support dynamic-height virtualized rendering for unusually long datasets, while the right-side reader keeps inline content scrolling local to the pane
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
@@ -89,7 +91,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Desktop-first three-pane workbench for mailbox list, message list, and inline message content
+- On desktop three-pane layouts, long mailbox/message datasets stay inside pane-local scroll containers; the page itself should not grow purely because a rail becomes very long
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
+- Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
+- Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
 - Domains management includes a dedicated bind form plus a confirmation popover for destructive delete
 - Refresh controls must remain compact, single-line, and header-aligned; visual treatment should communicate freshness without introducing a noisy live-status badge system
@@ -105,6 +110,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
@@ -132,6 +138,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ### Workspace
 
 ![Workspace all mailboxes](./assets/workspace-all-mailboxes.png)
+
+![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
