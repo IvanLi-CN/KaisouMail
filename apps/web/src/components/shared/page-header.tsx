@@ -10,7 +10,7 @@ export const PageHeader = ({
   className,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   eyebrow?: string;
   action?: ReactNode;
   className?: string;
@@ -31,9 +31,13 @@ export const PageHeader = ({
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {title}
         </h1>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
+        {typeof description === "string" ? (
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        ) : (
+          description
+        )}
       </div>
     </div>
     {action ? (

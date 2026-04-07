@@ -346,6 +346,9 @@ export const MobileSingleColumn: Story = {
       canvas.getByRole("heading", { name: "邮件工作台" }),
     ).toBeInTheDocument();
     await expect(
+      canvas.queryByText("集中查看邮箱、邮件列表和正文内容。"),
+    ).not.toBeInTheDocument();
+    await expect(
       canvas.getByRole("button", { name: "新建邮箱" }),
     ).toBeInTheDocument();
 
@@ -360,6 +363,9 @@ export const TabletSplitView: Story = {
 
     await expect(
       canvas.getByRole("button", { name: "新建邮箱" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByText("集中查看邮箱、邮件列表和正文内容。"),
     ).toBeInTheDocument();
     await expect(
       canvas.getByRole("button", { name: "手动刷新" }),

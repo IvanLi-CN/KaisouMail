@@ -147,7 +147,11 @@ export const MailWorkspace = ({
     <div className="space-y-6">
       <PageHeader
         title="邮件工作台"
-        description="集中查看邮箱、邮件列表和正文内容。"
+        description={
+          <p className="hidden max-w-3xl text-sm leading-6 text-muted-foreground sm:block">
+            集中查看邮箱、邮件列表和正文内容。
+          </p>
+        }
         eyebrow="Workspace"
         action={
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
