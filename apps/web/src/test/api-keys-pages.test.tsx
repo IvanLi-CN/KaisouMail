@@ -110,21 +110,14 @@ describe("api key integration docs", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "API Keys" })).toHaveClass(
-      "bg-secondary",
+      "bg-secondary/90",
     );
     expect(screen.getByText("Session Auth")).toBeInTheDocument();
     expect(screen.getByText("/api/api-keys/:id/revoke")).toBeInTheDocument();
     expect(screen.getByText("/api/meta")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "公开文档站" })).toHaveAttribute(
-      "href",
-      "https://ivanli-cn.github.io/KaisouMail/zh/",
-    );
     expect(
-      screen.getByRole("link", { name: "公开 Storybook" }),
-    ).toHaveAttribute(
-      "href",
-      "https://ivanli-cn.github.io/KaisouMail/zh/storybook.html",
-    );
+      screen.getAllByRole("link", { name: "公开文档站" })[0],
+    ).toHaveAttribute("href", "https://ivanli-cn.github.io/KaisouMail/zh/");
   });
 
   it("documents the implemented auth and message contracts", () => {

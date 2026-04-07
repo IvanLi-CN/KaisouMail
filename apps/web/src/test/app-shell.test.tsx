@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -12,10 +13,17 @@ import { AppShell } from "@/components/layout/app-shell";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
 
-const renderAppShell = () =>
+const accountDetailsButtonName = `${demoSessionUser.name} 账号详情`;
+
+const renderAppShell = (props: Partial<ComponentProps<typeof AppShell>> = {}) =>
   render(
     <MemoryRouter initialEntries={["/workspace"]}>
-      <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
+      <AppShell
+        user={demoSessionUser}
+        version={demoVersion}
+        onLogout={vi.fn()}
+        {...props}
+      >
         <section>
           <h1>Workspace overview</h1>
           <p>Messages and mailbox health</p>
@@ -48,14 +56,20 @@ afterEach(() => {
 });
 
 describe("AppShell account trigger", () => {
-  it("shows only the nickname in the header until preview is opened", () => {
+  it("keeps header utilities compact until account preview is opened", () => {
     renderAppShell();
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     expect(trigger).toBeInTheDocument();
+    expect(screen.queryByText(demoSessionUser.name)).not.toBeInTheDocument();
     expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
     expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
 
     fireEvent.mouseEnter(trigger);
 
@@ -66,7 +80,9 @@ describe("AppShell account trigger", () => {
   it("supports focus preview plus pinned toggle and escape close", async () => {
     renderAppShell();
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     fireEvent.focus(trigger);
     expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
@@ -95,7 +111,9 @@ describe("AppShell account trigger", () => {
       expect(matchMediaMock).toHaveBeenCalled();
     });
 
-    const trigger = screen.getByRole("button", { name: demoSessionUser.name });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
     fireEvent.mouseEnter(trigger);
     expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
@@ -104,6 +122,60 @@ describe("AppShell account trigger", () => {
 
     expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
     expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
+  });
+});
+
+describe("AppShell mobile navigation", () => {
+  it("supports a controlled default-open mobile drawer state with user info inside", () => {
+    renderAppShell({ defaultMobileNavOpen: true });
+
+    const drawer = screen.getByRole("dialog", { name: "菜单" });
+    const mobileNav = within(drawer).getByRole("navigation", {
+      name: "移动主导航",
+    });
+
+    expect(drawer).toBeInTheDocument();
+    expect(
+      within(drawer).getAllByText(demoSessionUser.email).length,
+    ).toBeGreaterThan(0);
+    expect(within(drawer).getByText(/^admin$/i)).toBeInTheDocument();
+    expect(
+      within(mobileNav).getByRole("link", { name: /工作台/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(mobileNav).getByRole("link", { name: /用户/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "收起导航抽屉" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("toggles the mobile drawer and exposes logout inside it", async () => {
+    const onLogout = vi.fn();
+    renderAppShell({ onLogout });
+
+    const menuTrigger = screen.getByRole("button", { name: "打开导航抽屉" });
+    fireEvent.click(menuTrigger);
+
+    const drawer = screen.getByRole("dialog", { name: "菜单" });
+    expect(drawer).toBeInTheDocument();
+    expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(drawer).getAllByText(demoSessionUser.email).length,
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "退出登录" }));
+    expect(onLogout).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "打开导航抽屉" }));
+    expect(screen.getByRole("dialog", { name: "菜单" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭导航抽屉" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "菜单" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
 

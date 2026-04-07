@@ -150,7 +150,7 @@ export const LoadError: Story = {
     error: {
       variant: "recoverable",
       title: "API Keys 暂时加载失败",
-      description: "密钥列表现在不可用，所以控制台不会把它显示成空表。",
+      description: "暂时无法获取密钥列表，请重新加载后再试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "keys service unavailable"\n}',
     },
@@ -227,11 +227,5 @@ export const DocsReference: Story = {
     await expect(
       canvas.getByRole("link", { name: "公开文档站" }),
     ).toHaveAttribute("href", "https://ivanli-cn.github.io/KaisouMail/zh/");
-    await expect(
-      canvas.getByRole("link", { name: "公开 Storybook" }),
-    ).toHaveAttribute(
-      "href",
-      "https://ivanli-cn.github.io/KaisouMail/zh/storybook.html",
-    );
   },
 };

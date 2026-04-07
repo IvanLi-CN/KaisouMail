@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { StatGrid } from "@/components/shared/stat-grid";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
+import { projectViewportGlobals } from "@/storybook/viewports";
 
 const meta = {
   title: "Layout/AppShell",
@@ -13,12 +14,14 @@ const meta = {
   tags: ["autodocs"],
   parameters: {
     layout: "fullscreen",
+    disableStoryPadding: true,
   },
   args: {
     user: demoSessionUser,
     version: demoVersion,
     onLogout: () => undefined,
     defaultAccountPopoverOpen: false,
+    defaultMobileNavOpen: false,
   },
   render: (args) => (
     <AppShell {...args}>
@@ -26,7 +29,7 @@ const meta = {
         <PageHeader
           eyebrow="Overview"
           title="Cloudflare 临时邮箱台"
-          description="顶部横向导航 + 三栏邮件工作台的默认壳层。"
+          description="查看收件概览与系统状态。"
         />
         <StatGrid
           stats={[
@@ -43,15 +46,22 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+const accountDetailsButtonName = `${demoSessionUser.name} 账号详情`;
 
-export const Collapsed: Story = {
+export const ResponsiveCanvas: Story = {};
+
+export const DesktopInlineNav: Story = {
+  globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
     const accountTrigger = canvas.getByRole("button", {
-      name: demoSessionUser.name,
+      name: accountDetailsButtonName,
     });
 
+    await expect(
+      canvas.getByRole("navigation", { name: "主导航" }),
+    ).toBeInTheDocument();
     await expect(
       canvas.getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
@@ -62,9 +72,12 @@ export const Collapsed: Story = {
       canvas.getByRole("link", { name: /域名/i }),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", { name: "退出登录" }),
-    ).toBeInTheDocument();
+      canvas.queryByRole("button", { name: "打开导航抽屉" }),
+    ).not.toBeInTheDocument();
     await expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      canvas.queryByText(demoSessionUser.name),
+    ).not.toBeInTheDocument();
     await expect(
       body.queryByText(demoSessionUser.email),
     ).not.toBeInTheDocument();
@@ -92,18 +105,98 @@ export const Collapsed: Story = {
     await waitFor(() => {
       expect(body.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
     });
+  },
+};
 
-    await userEvent.click(accountTrigger);
+export const TabletInlineNav: Story = {
+  globals: projectViewportGlobals.tablet,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const accountTrigger = canvas.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
 
-    await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
-    await expect(accountTrigger).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      canvas.getByRole("navigation", { name: "主导航" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: /API Keys/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", { name: "打开导航抽屉" }),
+    ).not.toBeInTheDocument();
+    await expect(accountTrigger).toBeInTheDocument();
+    await expect(
+      canvas.queryByText(demoSessionUser.name),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const MobileDrawerOpen: Story = {
+  args: {
+    defaultMobileNavOpen: true,
+  },
+  globals: projectViewportGlobals.mobile,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await expect(
+      canvas.getByRole("button", { name: "收起导航抽屉" }),
+    ).toBeInTheDocument();
+
+    const drawer = body.getByRole("dialog", { name: "菜单" });
+    const mobileNav = within(drawer).getByRole("navigation", {
+      name: "移动主导航",
+    });
+
+    await expect(
+      within(drawer).getAllByText(demoSessionUser.email).at(0),
+    ).toBeVisible();
+    await expect(within(drawer).getByText(/^admin$/i)).toBeVisible();
+    await expect(
+      within(mobileNav).getByRole("link", { name: /工作台/i }),
+    ).toBeInTheDocument();
+    await expect(
+      within(mobileNav).getByRole("link", { name: /用户/i }),
+    ).toBeInTheDocument();
+    await expect(
+      within(drawer).getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const ResponsiveDrawerOpen: Story = {
+  args: {
+    defaultMobileNavOpen: true,
+  },
+};
+
+export const MobileDrawerToggle: Story = {
+  globals: projectViewportGlobals.mobile,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const drawerTrigger = canvas.getByRole("button", { name: "打开导航抽屉" });
+
+    await userEvent.click(drawerTrigger);
+
+    const drawer = await body.findByRole("dialog", { name: "菜单" });
+    await expect(
+      within(drawer).getAllByText(demoSessionUser.email).at(0),
+    ).toBeVisible();
 
     await userEvent.click(
-      canvas.getByRole("heading", { name: /cloudflare 临时邮箱台/i }),
+      within(drawer).getByRole("button", { name: "关闭导航抽屉" }),
     );
 
     await waitFor(() => {
-      expect(body.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+      expect(
+        body.queryByRole("dialog", { name: "菜单" }),
+      ).not.toBeInTheDocument();
     });
   },
 };
@@ -112,12 +205,13 @@ export const DetailsOpen: Story = {
   args: {
     defaultAccountPopoverOpen: true,
   },
+  globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
 
     await expect(
-      canvas.getByRole("button", { name: demoSessionUser.name }),
+      canvas.getByRole("button", { name: accountDetailsButtonName }),
     ).toHaveAttribute("aria-expanded", "true");
     await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
     await expect(body.getByText(/^admin$/i)).toBeVisible();
@@ -125,6 +219,7 @@ export const DetailsOpen: Story = {
 };
 
 export const FooterMetadata: Story = {
+  globals: projectViewportGlobals.desktop,
   render: (args) => (
     <AppShell {...args}>
       <div className="space-y-4 p-2">

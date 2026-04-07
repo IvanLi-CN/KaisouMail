@@ -10,18 +10,18 @@ export const PageHeader = ({
   className,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   eyebrow?: string;
   action?: ReactNode;
   className?: string;
 }) => (
   <div
     className={cn(
-      "flex flex-col gap-4 border-b border-border pb-4 md:flex-row md:items-end md:justify-between",
+      "flex min-w-0 flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between lg:gap-6",
       className,
     )}
   >
-    <div className="space-y-2">
+    <div className="min-w-0 flex-1 space-y-2">
       {eyebrow ? (
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {eyebrow}
@@ -31,11 +31,17 @@ export const PageHeader = ({
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {title}
         </h1>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
+        {typeof description === "string" ? (
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {description}
+          </p>
+        ) : (
+          description
+        )}
       </div>
     </div>
-    {action ? <div className="shrink-0">{action}</div> : null}
+    {action ? (
+      <div className="w-full min-w-0 lg:w-auto lg:shrink-0">{action}</div>
+    ) : null}
   </div>
 );

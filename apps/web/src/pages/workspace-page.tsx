@@ -322,8 +322,7 @@ export const WorkspacePage = () => {
       ? {
           variant: "recoverable" as const,
           title: "邮箱列表暂时不可用",
-          description:
-            "工作台左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。请重新刷新后再继续筛选邮箱。",
+          description: "暂时无法获取邮箱目录和统计，请刷新后重试。",
           details: getErrorDetails(mailboxesQuery.error),
           onRetry: handleRefresh,
         }
@@ -333,8 +332,7 @@ export const WorkspacePage = () => {
       ? {
           variant: "recoverable" as const,
           title: "邮件流加载失败",
-          description:
-            "当前邮箱范围内的邮件流没有成功返回，所以中栏不会继续伪装成“没有邮件”。",
+          description: "暂时无法获取当前范围内的邮件，请刷新后重试。",
           details: getErrorDetails(messagesQuery.error),
           onRetry: handleRefresh,
         }
@@ -353,8 +351,7 @@ export const WorkspacePage = () => {
         : {
             variant: "recoverable" as const,
             title: "邮件正文加载失败",
-            description:
-              "右栏正文和附件没有成功拉取，所以这里不会继续停留在卡住的加载状态。",
+            description: "暂时无法加载邮件正文和附件，请重试。",
             details: getErrorDetails(messageDetailQuery.error),
             onRetry: () => void messageDetailQuery.refetch(),
           }

@@ -1,8 +1,11 @@
 import type { Preview } from "@storybook/react-vite";
 import { MemoryRouter } from "react-router-dom";
 import { themes } from "storybook/theming";
-
 import { TooltipProvider } from "../src/components/ui/tooltip";
+import {
+  projectViewportGlobals,
+  projectViewportOptions,
+} from "../src/storybook/viewports";
 import "../src/index.css";
 
 const preview: Preview = {
@@ -14,14 +17,22 @@ const preview: Preview = {
         skipDelayDuration={200}
       >
         {context.parameters.disableMemoryRouter ? (
-          <div className="min-h-screen bg-background px-6 py-8 text-foreground">
+          context.parameters.disableStoryPadding ? (
             <Story />
-          </div>
-        ) : (
-          <MemoryRouter>
+          ) : (
             <div className="min-h-screen bg-background px-6 py-8 text-foreground">
               <Story />
             </div>
+          )
+        ) : (
+          <MemoryRouter>
+            {context.parameters.disableStoryPadding ? (
+              <Story />
+            ) : (
+              <div className="min-h-screen bg-background px-6 py-8 text-foreground">
+                <Story />
+              </div>
+            )}
           </MemoryRouter>
         )}
       </TooltipProvider>
@@ -38,7 +49,11 @@ const preview: Preview = {
     backgrounds: {
       default: "dark",
     },
+    viewport: {
+      options: projectViewportOptions,
+    },
   },
+  initialGlobals: projectViewportGlobals.desktop,
 };
 
 export default preview;

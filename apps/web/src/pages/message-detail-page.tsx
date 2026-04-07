@@ -86,7 +86,7 @@ export const MessageDetailPageView = ({
     <div className="space-y-6">
       <PageHeader
         title={message.subject}
-        description="V1 详情解析包含 headers、text/html、收件人和附件清单。"
+        description="查看正文、附件和收件信息。"
         eyebrow="Message Detail"
         action={
           <div className="flex flex-wrap gap-2">
@@ -165,8 +165,7 @@ export const MessageDetailPage = () => {
         : {
             variant: "recoverable" as const,
             title: "邮件详情加载失败",
-            description:
-              "正文、附件和 headers 现在还没拿到，所以控制台不会继续停留在简陋的加载文案。你可以立即重试，或先回到工作台。",
+            description: "暂时无法加载正文、附件和收件信息，请重试。",
             details: getErrorDetails(messageQuery.error),
           }
       : null;
