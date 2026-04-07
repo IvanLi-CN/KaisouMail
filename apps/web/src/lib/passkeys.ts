@@ -8,6 +8,14 @@ import { ApiClientError, apiClient } from "@/lib/api";
 
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
+const isIpLiteralHost = (hostname: string) => {
+  if (!hostname) {
+    return false;
+  }
+
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
+};
+
 const normalizePasskeyErrorMessage = (message: string, fallback: string) => {
   const normalized = message.trim();
   const lowered = normalized.toLowerCase();
@@ -44,6 +52,10 @@ export const browserSupportsPasskeys = () => {
   if (DEMO_MODE) return true;
 
   try {
+    if (isIpLiteralHost(globalThis.location?.hostname ?? "")) {
+      return false;
+    }
+
     return browserSupportsWebAuthn();
   } catch {
     return false;
