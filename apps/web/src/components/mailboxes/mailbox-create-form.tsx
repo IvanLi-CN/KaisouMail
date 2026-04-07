@@ -185,16 +185,6 @@ export const MailboxCreateForm = ({
                 </>
               ) : null}
             </div>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              组合格式为{" "}
-              <span className="font-medium text-foreground">
-                xxxxx@yyyyyy.zzzzz
-              </span>
-              ；用户名和子域名留空时会随机补齐，
-              {domains.length > 0
-                ? "邮箱域名默认随机分配 active 域名，也可以手动切换。"
-                : "当前没有 active 域名可供分配；启用域名后才能创建邮箱。"}
-            </p>
           </div>
         </div>
 
