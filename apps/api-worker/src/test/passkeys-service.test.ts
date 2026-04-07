@@ -104,7 +104,7 @@ describe("passkey service", () => {
 
     expect(generateRegistrationOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        rpID: "km.707979.xyz",
+        rpID: "707979.xyz",
       }),
     );
   });
@@ -163,7 +163,7 @@ describe("passkey service", () => {
 
     expect(generateAuthenticationOptions).toHaveBeenCalledWith(
       expect.objectContaining({
-        rpID: "km.707979.xyz",
+        rpID: "707979.xyz",
         userVerification: "required",
       }),
     );

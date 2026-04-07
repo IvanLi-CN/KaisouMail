@@ -24,7 +24,11 @@ import type { PasskeyRecord } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
 
 const createPasskeySchema = z.object({
-  name: z.string().min(1, "请输入设备名称").max(64, "设备名称最多 64 个字符"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "请输入设备名称")
+    .max(64, "设备名称最多 64 个字符"),
 });
 
 type CreatePasskeyValues = z.infer<typeof createPasskeySchema>;

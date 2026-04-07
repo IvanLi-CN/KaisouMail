@@ -40,7 +40,7 @@ export const passkeyRoutes = new Hono<AppBindings>()
         c.get("runtimeConfig"),
         c.req.raw,
         c.get("authUser"),
-        c.req.valid("json").name.trim(),
+        c.req.valid("json").name,
       );
       c.header("Set-Cookie", result.cookie);
       return c.json(result.options);

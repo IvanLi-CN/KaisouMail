@@ -45,7 +45,7 @@ export const createApiKeyResponseSchema = z.object({
 });
 
 export const createPasskeyRequestSchema = z.object({
-  name: z.string().min(1).max(64),
+  name: z.string().trim().min(1).max(64),
 });
 
 export const createMailboxRequestSchema = z.object({

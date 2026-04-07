@@ -19,8 +19,8 @@ Minimum variables:
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY` (optional; only if `BOOTSTRAP_ADMIN_EMAIL` is set for first-admin bootstrap)
-  - `WEB_APP_ORIGIN` (required for browser passkeys; it provides the primary trusted WebAuthn origin)
-  - `WEB_APP_ORIGINS` (optional; add it when multiple production control-plane aliases must stay trusted for passkeys)
+  - `WEB_APP_ORIGIN` (required for browser passkeys; it provides the primary trusted WebAuthn origin and the RP ID when you only keep one origin)
+  - `WEB_APP_ORIGINS` (optional; add it when multiple production control-plane aliases must stay trusted for passkeys and need one shared RP ID suffix)
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 

@@ -86,6 +86,34 @@ const serializeExpiredCookie = (name: string, secure: boolean) => {
 const pickExpectedValue = (values: string[]) =>
   values.length === 1 ? values[0] : values;
 
+const resolveSharedRpId = (origins: string[]) => {
+  const hostLabels = origins.map((origin) =>
+    new URL(origin).hostname.split("."),
+  );
+  const shortestLength = Math.min(...hostLabels.map((labels) => labels.length));
+  const sharedLabels: string[] = [];
+
+  for (let offset = 1; offset <= shortestLength; offset += 1) {
+    const label = hostLabels[0]?.at(-offset);
+    if (!label) break;
+    if (hostLabels.every((labels) => labels.at(-offset) === label)) {
+      sharedLabels.unshift(label);
+      continue;
+    }
+    break;
+  }
+
+  if (sharedLabels.length < 2) {
+    throw new ApiError(
+      503,
+      "Passkey auth is not configured",
+      "Configured origins must share a common RP ID suffix",
+    );
+  }
+
+  return sharedLabels.join(".");
+};
+
 const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
   const configuredOrigins =
     config.WEB_APP_ORIGINS && config.WEB_APP_ORIGINS.length > 0
@@ -101,13 +129,16 @@ const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
   const origins = [
     ...new Set(configuredOrigins.map((origin) => new URL(origin).origin)),
   ];
-  const rpIDs = [...new Set(origins.map((origin) => new URL(origin).hostname))];
+  const rpID =
+    origins.length === 1
+      ? new URL(origins[0]).hostname
+      : resolveSharedRpId(origins);
 
   return {
     expectedOrigin: pickExpectedValue(origins),
-    expectedRPID: pickExpectedValue(rpIDs),
+    expectedRPID: rpID,
     origins,
-    rpIDs,
+    rpID,
     rpName: PASSKEY_RP_NAME,
     secure: config.APP_ENV === "production",
   };
@@ -121,12 +152,7 @@ const resolvePasskeyRequestConfig = (
   const requestOriginHeader = request.headers.get("origin")?.trim();
 
   if (!requestOriginHeader) {
-    if (runtime.origins.length === 1 && runtime.rpIDs.length === 1) {
-      return {
-        ...runtime,
-        rpID: runtime.rpIDs[0],
-      };
-    }
+    if (runtime.origins.length === 1) return runtime;
 
     throw new ApiError(400, "Passkey origin is not allowed");
   }
@@ -142,10 +168,7 @@ const resolvePasskeyRequestConfig = (
     throw new ApiError(400, "Passkey origin is not allowed");
   }
 
-  return {
-    ...runtime,
-    rpID: new URL(requestOrigin).hostname,
-  };
+  return runtime;
 };
 
 const toApiErrorDetails = (error: unknown) =>

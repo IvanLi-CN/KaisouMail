@@ -166,12 +166,12 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "无需预先登录",
           responseBody: `{
   "challenge": "<base64url>",
-  "rpId": "cfm.example.com",
+  "rpId": "example.com",
   "userVerification": "required"
 }`,
           notes: [
             "接口会同步下发短时效、HttpOnly 的 passkey challenge cookie。",
-            "`rpId` 会跟随当前控制台 origin 的 host；验证阶段会接受 `WEB_APP_ORIGIN` 与 `WEB_APP_ORIGINS` 里配置的全部可信 origin / RP host。",
+            "`rpId` 会固定为当前可信 origin 集共享的 WebAuthn RP ID（单域时等于该 host，多域别名时会回退到共享后缀）；验证阶段会接受 `WEB_APP_ORIGIN` 与 `WEB_APP_ORIGINS` 里配置的全部可信 origin。",
           ],
         },
         {
@@ -855,8 +855,9 @@ const ApiKeysDocsPageView = ({
                 passkey 相关 challenge 与验证依赖控制台 origin 配置集：
                 <code className="ml-1">WEB_APP_ORIGIN</code> 提供主来源，
                 <code className="ml-1">WEB_APP_ORIGINS</code> 可扩展额外可信
-                WebAuthn origin；接口会按当前请求 origin 选择对应的
-                <code>rpId</code> host。
+                WebAuthn origin；接口会从这些 host 推导共享的
+                <code className="ml-1">rpId</code>，让同一套 passkey 可在
+                多个控制台别名之间复用。
               </p>
               <p className="mt-2">
                 项目同时支持拆分 token 和共享 token：运行时优先读取{" "}
