@@ -17,20 +17,9 @@ import {
   demoMessages,
   demoMeta,
 } from "@/mocks/data";
+import { projectViewportGlobals } from "@/storybook/viewports";
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
-
-const desktopViewport = {
-  viewport: { value: "kaisouDesktop", isRotated: false },
-} as const;
-
-const tabletViewport = {
-  viewport: { value: "kaisouTablet", isRotated: false },
-} as const;
-
-const mobileViewport = {
-  viewport: { value: "kaisouMobile", isRotated: false },
-} as const;
 
 const buildMailboxMessageCounts = (
   mailboxes: Mailbox[],
@@ -349,7 +338,7 @@ const WorkspaceStoryHarness = ({
 };
 
 export const MobileSingleColumn: Story = {
-  globals: mobileViewport,
+  globals: projectViewportGlobals.mobile,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -365,7 +354,7 @@ export const MobileSingleColumn: Story = {
 };
 
 export const TabletSplitView: Story = {
-  globals: tabletViewport,
+  globals: projectViewportGlobals.tablet,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -381,7 +370,7 @@ export const TabletSplitView: Story = {
 };
 
 export const DesktopThreePane: Story = {
-  globals: desktopViewport,
+  globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
@@ -413,6 +402,8 @@ export const DesktopThreePane: Story = {
   },
 };
 
+export const ResponsiveCanvas: Story = {};
+
 export const ToolbarCreateFlow: Story = {
   render: () => <WorkspaceStoryHarness />,
   play: async ({ canvasElement }) => {
@@ -424,10 +415,18 @@ export const ToolbarCreateFlow: Story = {
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
     await expect(
-      canvas.getByText("在当前工作台里直接创建新地址。"),
+      canvas.getByText("创建后会自动切换到新邮箱。"),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText(randomDomainPreviewAddress),
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await expect(
+      within(canvasElement.ownerDocument.body).getByText(
+        randomDomainPreviewAddress,
+      ),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
@@ -441,9 +440,17 @@ export const ToolbarCreateFlow: Story = {
       canvas.getByLabelText("邮箱域名"),
       "mail.example.net",
     );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await expect(
-      canvas.getByText(selectedDomainPreviewAddress),
+      within(canvasElement.ownerDocument.body).getByText(
+        selectedDomainPreviewAddress,
+      ),
     ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
     await expect(
@@ -466,8 +473,13 @@ export const CreatePopoverOpen: Story = {
   render: () => <WorkspaceStoryHarness initialCreateOpen />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await expect(
-      canvas.getByText(buildMailboxCreateAddressExample({})),
+      within(canvasElement.ownerDocument.body).getByText(
+        buildMailboxCreateAddressExample({}),
+      ),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
   },
@@ -569,7 +581,7 @@ export const MailboxPaneError: Story = {
     mailboxesError: {
       variant: "recoverable",
       title: "邮箱列表暂时不可用",
-      description: "左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。",
+      description: "暂时无法获取邮箱目录和统计，请刷新后重试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "mailboxes offline"\n}',
       onRetry: fn(),
@@ -585,7 +597,7 @@ export const MessagePaneError: Story = {
     messagesError: {
       variant: "recoverable",
       title: "邮件流加载失败",
-      description: "当前邮箱范围内的邮件流没有成功返回。",
+      description: "暂时无法获取当前范围内的邮件，请刷新后重试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "messages offline"\n}',
       onRetry: fn(),

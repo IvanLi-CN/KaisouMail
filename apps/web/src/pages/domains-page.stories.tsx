@@ -120,8 +120,7 @@ export const CatalogLoadError: Story = {
     error: {
       variant: "recoverable",
       title: "域名目录暂时加载失败",
-      description:
-        "Cloudflare 域名目录目前不可用，控制台不会把它误判成空列表。",
+      description: "暂时无法获取域名目录，请重试后再继续操作。",
       details:
         '{\n  "error": "Authentication error",\n  "details": "Token missing Zone:Read"\n}',
     },

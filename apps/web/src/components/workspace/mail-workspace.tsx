@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  CircleHelp,
   Inbox,
   ListTree,
   MailOpen,
@@ -30,6 +31,7 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
@@ -145,7 +147,7 @@ export const MailWorkspace = ({
     <div className="space-y-6">
       <PageHeader
         title="邮件工作台"
-        description="在一个三栏视图里完成邮箱筛选、聚合收件浏览和正文阅读。默认先看全部邮箱，再按需要钻取到单邮箱上下文。"
+        description="集中查看邮箱、邮件列表和正文内容。"
         eyebrow="Workspace"
         action={
           <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
@@ -182,28 +184,62 @@ export const MailWorkspace = ({
                 }}
               >
                 <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        新建邮箱
+                      </p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        创建后会自动切换到新邮箱。
+                      </p>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          aria-label="查看邮箱创建说明"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background/60 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          type="button"
+                        >
+                          <CircleHelp aria-hidden className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        className="w-[min(calc(100vw-2rem),20rem)] space-y-3 p-4"
+                        collisionPadding={20}
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-foreground">
+                            邮箱创建说明
+                          </p>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            用户名和子域可留空；系统会按当前可用域名自动生成地址，也可以手动指定邮箱域名和有效期。
+                          </p>
+                        </div>
+                        <div className="space-y-2 text-xs leading-5 text-muted-foreground">
+                          <p>
+                            {buildMailboxCreateDomainHint({
+                              rootDomain: selectedExampleRootDomain,
+                              hasAvailableDomains:
+                                createMailboxAction.domains.length > 0,
+                            })}
+                          </p>
+                          <p>
+                            示例地址：
+                            <span className="font-medium text-foreground">
+                              {" "}
+                              {buildMailboxCreateAddressExample({
+                                rootDomain: selectedExampleRootDomain,
+                                hasAvailableDomains:
+                                  createMailboxAction.domains.length > 0,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      新建邮箱
-                    </p>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      在当前工作台里直接创建新地址。支持随机或指定用户名 /
-                      子域，
-                      {buildMailboxCreateDomainHint({
-                        rootDomain: selectedExampleRootDomain,
-                        hasAvailableDomains:
-                          createMailboxAction.domains.length > 0,
-                      })}
-                      示例为{" "}
-                      <span className="font-medium text-foreground">
-                        {buildMailboxCreateAddressExample({
-                          rootDomain: selectedExampleRootDomain,
-                          hasAvailableDomains:
-                            createMailboxAction.domains.length > 0,
-                        })}
-                      </span>
-                      ，创建成功后会自动切到新邮箱上下文。
-                    </p>
                     {createMailboxAction.metaError ? (
                       <p className="text-xs leading-5 text-destructive">
                         邮箱规则加载失败：{createMailboxAction.metaError}

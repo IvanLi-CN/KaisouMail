@@ -102,7 +102,7 @@ export const MailboxesPageView = ({
   <div className="space-y-6">
     <PageHeader
       title="邮箱控制台"
-      description="这里仅保留邮箱地址管理。查看邮件、正文和附件统一跳转到邮件工作台。"
+      description="管理邮箱地址、有效期和未读统计。"
       eyebrow="Mailboxes"
       action={
         <div className="flex flex-wrap items-center gap-2">
@@ -125,9 +125,7 @@ export const MailboxesPageView = ({
       <Card>
         <CardHeader>
           <CardTitle>创建邮箱</CardTitle>
-          <CardDescription>
-            创建入口需要先读取运行时域名和 TTL 规则。
-          </CardDescription>
+          <CardDescription>创建新的临时邮箱地址。</CardDescription>
         </CardHeader>
         <CardContent>
           <ErrorState
@@ -156,14 +154,12 @@ export const MailboxesPageView = ({
       <Card>
         <CardHeader>
           <CardTitle>创建邮箱</CardTitle>
-          <CardDescription>
-            创建入口需要先从 `/api/meta` 读取域名和 TTL 规则。
-          </CardDescription>
+          <CardDescription>创建新的临时邮箱地址。</CardDescription>
         </CardHeader>
         <CardContent>
           <EmptyState
             title="正在加载邮箱规则"
-            description="拿到当前环境的邮箱元数据后，才会显示创建表单。"
+            description="正在读取可用域名和有效期设置。"
           />
         </CardContent>
       </Card>
@@ -172,9 +168,7 @@ export const MailboxesPageView = ({
     <Card>
       <CardHeader>
         <CardTitle>邮箱列表</CardTitle>
-        <CardDescription>
-          这里只做邮箱存续管理；点开任一地址后会直接进入工作台查看该邮箱的邮件上下文。
-        </CardDescription>
+        <CardDescription>查看地址状态、有效期和未读统计。</CardDescription>
       </CardHeader>
       <CardContent>
         {listError ? (
@@ -246,8 +240,7 @@ export const MailboxesPage = () => {
           ? {
               variant: "recoverable",
               title: "邮箱规则暂时加载失败",
-              description:
-                "域名与 TTL 元数据还没拿到，所以创建入口不会被误渲染成空表单。先重新加载一次，再继续创建邮箱。",
+              description: "暂时无法读取创建邮箱所需的规则，请重新加载后重试。",
               details: getErrorDetails(metaQuery.error),
             }
           : null
@@ -257,8 +250,7 @@ export const MailboxesPage = () => {
           ? {
               variant: "recoverable",
               title: "邮箱列表加载失败",
-              description:
-                "当前邮箱存续数据不可用，所以控制台不会把它误判成“暂无邮箱”。你可以重新刷新，或先回到工作台处理其他操作。",
+              description: "暂时无法获取邮箱列表，请重新加载后再试。",
               details: getErrorDetails(mailboxesQuery.error),
             }
           : null

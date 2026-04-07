@@ -50,8 +50,7 @@ export const RecoverableError: Story = {
     error: {
       variant: "recoverable",
       title: "邮件详情加载失败",
-      description:
-        "正文、附件和 headers 现在还没拿到，所以控制台不会继续停留在简陋的加载文案。",
+      description: "暂时无法加载正文、附件和收件信息，请重试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "blob timeout"\n}',
     },

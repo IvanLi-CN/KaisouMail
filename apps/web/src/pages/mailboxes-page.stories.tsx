@@ -115,8 +115,7 @@ export const RulesLoadError: Story = {
     createError: {
       variant: "recoverable",
       title: "邮箱规则暂时加载失败",
-      description:
-        "域名与 TTL 元数据还没拿到，所以创建入口不会被误渲染成空表单。",
+      description: "暂时无法读取创建邮箱所需的规则，请重新加载后重试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "meta offline"\n}',
     },
@@ -129,7 +128,7 @@ export const MailboxListError: Story = {
     listError: {
       variant: "recoverable",
       title: "邮箱列表加载失败",
-      description: "邮箱存续数据不可用，所以控制台不会把它误判成“暂无邮箱”。",
+      description: "暂时无法获取邮箱列表，请重新加载后再试。",
       details:
         '{\n  "error": "Request failed",\n  "details": "mailboxes offline"\n}',
     },

@@ -77,6 +77,37 @@ const navItems = [
 
 const ACCOUNT_PREVIEW_CLOSE_DELAY_MS = 80;
 
+const renderAccountDetails = (user: SessionUser) => (
+  <>
+    <div className="space-y-1">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        账号详情
+      </p>
+      <p className="text-sm font-semibold text-foreground">{user.name}</p>
+    </div>
+
+    <dl className="space-y-3">
+      <div className="space-y-1">
+        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          邮箱
+        </dt>
+        <dd className="break-all text-sm text-foreground">{user.email}</dd>
+      </div>
+
+      <div className="space-y-1">
+        <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          角色
+        </dt>
+        <dd>
+          <span className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+            {user.role}
+          </span>
+        </dd>
+      </div>
+    </dl>
+  </>
+);
+
 const isNavItemActive = (item: NavItem, pathname: string) =>
   item.activePatterns.some((pattern) =>
     Boolean(
@@ -104,7 +135,7 @@ const renderNavLink = ({
   const isActive = isNavItemActive(item, pathname);
   const baseClassName =
     layout === "mobile"
-      ? "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      ? "flex w-full items-center gap-3 rounded-xl border border-white/8 bg-background/45 px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       : "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
   return (
@@ -114,8 +145,8 @@ const renderNavLink = ({
       className={cn(
         baseClassName,
         isActive
-          ? "border-border bg-secondary text-foreground"
-          : "border-transparent text-muted-foreground hover:border-border hover:bg-white/5 hover:text-foreground",
+          ? "border-border bg-secondary/90 text-foreground"
+          : "text-muted-foreground hover:border-border/80 hover:bg-background/65 hover:text-foreground",
       )}
       onClick={onNavigate}
     >
@@ -158,8 +189,10 @@ export const AppShell = ({
     },
   ] as const;
   const accountPopoverId = useId();
-  const mobileNavPopoverId = useId();
+  const mobileNavDrawerId = useId();
+  const mobileNavDrawerTitleId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileNavCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const closePreviewTimerRef = useRef<number | null>(null);
   const hasHandledInitialPathRef = useRef(false);
@@ -221,6 +254,26 @@ export const AppShell = ({
       setIsMobileNavOpen(false);
     }
   }, [pathname]);
+
+  useEffect(() => {
+    if (!isMobileNavOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    mobileNavCloseButtonRef.current?.focus();
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isMobileNavOpen]);
 
   const clearPreviewCloseTimer = () => {
     if (closePreviewTimerRef.current === null) return;
@@ -341,187 +394,210 @@ export const AppShell = ({
             </div>
 
             <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto lg:ml-0 lg:w-auto lg:flex-nowrap">
-              <Popover
-                open={isAccountPopoverOpen}
-                onOpenChange={(nextOpen) => {
-                  if (!nextOpen) {
-                    closeAccountPopover();
-                  }
-                }}
-              >
-                <PopoverAnchor asChild>
-                  <button
-                    ref={triggerRef}
-                    aria-controls={accountPopoverId}
-                    aria-expanded={isAccountPopoverOpen}
-                    aria-haspopup="dialog"
-                    className={cn(
-                      "inline-flex min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-[12rem]",
-                      isAccountPopoverOpen
-                        ? "bg-card/95 text-foreground"
-                        : "text-muted-foreground hover:border-border/80 hover:text-foreground",
-                    )}
+              <div className="hidden items-center gap-2 lg:flex">
+                <Popover
+                  open={isAccountPopoverOpen}
+                  onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                      closeAccountPopover();
+                    }
+                  }}
+                >
+                  <PopoverAnchor asChild>
+                    <button
+                      ref={triggerRef}
+                      aria-controls={accountPopoverId}
+                      aria-expanded={isAccountPopoverOpen}
+                      aria-haspopup="dialog"
+                      className={cn(
+                        "inline-flex min-w-0 max-w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-w-[12rem]",
+                        isAccountPopoverOpen
+                          ? "bg-card/95 text-foreground"
+                          : "text-muted-foreground hover:border-border/80 hover:text-foreground",
+                      )}
+                      onBlur={handlePopoverBlur}
+                      onClick={handleAccountTriggerClick}
+                      onFocus={handlePopoverFocus}
+                      onKeyDown={handleAccountEscape}
+                      onMouseEnter={openAccountPreview}
+                      onMouseLeave={scheduleAccountPreviewClose}
+                      type="button"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <ShieldCheck
+                          aria-hidden
+                          className="h-4 w-4 shrink-0 text-primary"
+                        />
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {user.name}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        aria-hidden
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-transform duration-200",
+                          isAccountPopoverOpen
+                            ? "rotate-180 text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      />
+                    </button>
+                  </PopoverAnchor>
+                  <PopoverContent
+                    id={accountPopoverId}
+                    ref={contentRef}
+                    align="end"
+                    className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
                     onBlur={handlePopoverBlur}
-                    onClick={handleAccountTriggerClick}
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                    onEscapeKeyDown={() => {
+                      closeAccountPopover();
+                    }}
                     onFocus={handlePopoverFocus}
-                    onKeyDown={handleAccountEscape}
                     onMouseEnter={openAccountPreview}
                     onMouseLeave={scheduleAccountPreviewClose}
-                    type="button"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <ShieldCheck
-                        aria-hidden
-                        className="h-4 w-4 shrink-0 text-primary"
-                      />
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {user.name}
-                      </span>
-                    </span>
-                    <ChevronDown
-                      aria-hidden
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-transform duration-200",
-                        isAccountPopoverOpen
-                          ? "rotate-180 text-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    />
-                  </button>
-                </PopoverAnchor>
-                <PopoverContent
-                  id={accountPopoverId}
-                  ref={contentRef}
-                  align="end"
-                  className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
-                  onBlur={handlePopoverBlur}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                  }}
-                  onEscapeKeyDown={() => {
-                    closeAccountPopover();
-                  }}
-                  onFocus={handlePopoverFocus}
-                  onMouseEnter={openAccountPreview}
-                  onMouseLeave={scheduleAccountPreviewClose}
-                  onOpenAutoFocus={(event) => {
-                    event.preventDefault();
-                  }}
-                >
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      账号详情
-                    </p>
-                    <p className="text-sm font-semibold text-foreground">
-                      {user.name}
-                    </p>
-                  </div>
-
-                  <dl className="space-y-3">
-                    <div className="space-y-1">
-                      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        邮箱
-                      </dt>
-                      <dd className="break-all text-sm text-foreground">
-                        {user.email}
-                      </dd>
-                    </div>
-
-                    <div className="space-y-1">
-                      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                        角色
-                      </dt>
-                      <dd>
-                        <span className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
-                          {user.role}
-                        </span>
-                      </dd>
-                    </div>
-                  </dl>
-                </PopoverContent>
-              </Popover>
-
-              <ActionButton
-                density="dense"
-                icon={LogOut}
-                label="退出登录"
-                labelVisibility="desktop"
-                onClick={onLogout}
-                priority="secondary"
-                variant="outline"
-              />
-
-              <Popover
-                open={isMobileNavOpen}
-                onOpenChange={(nextOpen) => {
-                  if (nextOpen) {
-                    closeAccountPopover();
-                  }
-                  setIsMobileNavOpen(nextOpen);
-                }}
-              >
-                <PopoverAnchor asChild>
-                  <button
-                    aria-controls={mobileNavPopoverId}
-                    aria-expanded={isMobileNavOpen}
-                    aria-haspopup="dialog"
-                    aria-label={isMobileNavOpen ? "关闭主导航" : "打开主导航"}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-                    onClick={() => {
-                      setIsMobileNavOpen((current) => {
-                        const next = !current;
-
-                        if (next) {
-                          closeAccountPopover();
-                        }
-
-                        return next;
-                      });
+                    onOpenAutoFocus={(event) => {
+                      event.preventDefault();
                     }}
-                    type="button"
                   >
-                    {isMobileNavOpen ? (
-                      <X aria-hidden className="h-4 w-4" />
-                    ) : (
-                      <Menu aria-hidden className="h-4 w-4" />
-                    )}
-                  </button>
-                </PopoverAnchor>
-                <PopoverContent
-                  id={mobileNavPopoverId}
-                  align="end"
-                  className="w-[min(calc(100vw-2rem),22rem)] space-y-3 px-3 py-3 lg:hidden"
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                  }}
-                  onOpenAutoFocus={(event) => {
-                    event.preventDefault();
-                  }}
-                >
-                  <div className="space-y-1 px-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      主导航
-                    </p>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      小屏幕下把站点导航收进这里，给工作区内容留出更多纵向空间。
-                    </p>
-                  </div>
-                  <nav aria-label="移动主导航" className="space-y-2">
-                    {visibleNavItems.map((item) =>
-                      renderNavLink({
-                        item,
-                        pathname,
-                        layout: "mobile",
-                        onNavigate: () => setIsMobileNavOpen(false),
-                      }),
-                    )}
-                  </nav>
-                </PopoverContent>
-              </Popover>
+                    {renderAccountDetails(user)}
+                  </PopoverContent>
+                </Popover>
+
+                <ActionButton
+                  density="dense"
+                  icon={LogOut}
+                  label="退出登录"
+                  labelVisibility="desktop"
+                  onClick={onLogout}
+                  priority="secondary"
+                  variant="outline"
+                />
+              </div>
+
+              <button
+                aria-controls={mobileNavDrawerId}
+                aria-expanded={isMobileNavOpen}
+                aria-haspopup="dialog"
+                aria-label={isMobileNavOpen ? "收起导航抽屉" : "打开导航抽屉"}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                onClick={() => {
+                  setIsMobileNavOpen((current) => {
+                    const next = !current;
+
+                    if (next) {
+                      closeAccountPopover();
+                    }
+
+                    return next;
+                  });
+                }}
+                type="button"
+              >
+                {isMobileNavOpen ? (
+                  <X aria-hidden className="h-4 w-4" />
+                ) : (
+                  <Menu aria-hidden className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </header>
+
+      {isMobileNavOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            aria-label="关闭导航抽屉遮罩"
+            className="absolute inset-0 bg-background/72 backdrop-blur-sm"
+            onClick={() => setIsMobileNavOpen(false)}
+            type="button"
+          />
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex w-full justify-end">
+            <div
+              aria-labelledby={mobileNavDrawerTitleId}
+              aria-modal="true"
+              className="pointer-events-auto relative flex h-full w-[min(calc(100vw-3rem),21rem)] flex-col overflow-hidden border-l border-white/10 bg-[linear-gradient(180deg,rgba(8,12,20,0.82)_0%,rgba(8,12,20,0.94)_100%)] shadow-[0_28px_84px_rgba(2,6,23,0.46),0_14px_34px_rgba(2,6,23,0.32)] backdrop-blur-2xl"
+              id={mobileNavDrawerId}
+              role="dialog"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-background/24 px-4 py-4">
+                <p
+                  className="text-sm font-semibold text-foreground"
+                  id={mobileNavDrawerTitleId}
+                >
+                  菜单
+                </p>
+                <button
+                  ref={mobileNavCloseButtonRef}
+                  aria-label="关闭导航抽屉"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-background/40 text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:bg-background/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => setIsMobileNavOpen(false)}
+                  type="button"
+                >
+                  <X aria-hidden className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto bg-background/8 px-4 py-4">
+                <div className="space-y-3 rounded-2xl border border-white/10 bg-background/36 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    当前账号
+                  </p>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-primary">
+                      <ShieldCheck aria-hidden className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="space-y-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {user.name}
+                        </p>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {user.email}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-foreground">
+                        {user.role}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <nav aria-label="移动主导航" className="space-y-2">
+                  {visibleNavItems.map((item) =>
+                    renderNavLink({
+                      item,
+                      pathname,
+                      layout: "mobile",
+                      onNavigate: () => setIsMobileNavOpen(false),
+                    }),
+                  )}
+                </nav>
+              </div>
+
+              <div className="border-t border-white/10 bg-background/24 px-4 py-4">
+                <ActionButton
+                  className="w-full justify-center"
+                  density="default"
+                  forceIconOnly={false}
+                  icon={LogOut}
+                  label="退出登录"
+                  labelVisibility="always"
+                  onClick={() => {
+                    setIsMobileNavOpen(false);
+                    onLogout();
+                  }}
+                  priority="secondary"
+                  variant="outline"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <main
         id="app-main"

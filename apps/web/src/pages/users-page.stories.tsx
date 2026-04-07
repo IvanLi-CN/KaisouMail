@@ -33,7 +33,7 @@ export const LoadError: Story = {
     error: {
       variant: "recoverable",
       title: "用户目录加载失败",
-      description: "多用户列表现在不可用，所以控制台不会把它误判成空白状态。",
+      description: "暂时无法获取用户列表，请重试后再继续操作。",
       details:
         '{\n  "error": "Request failed",\n  "details": "users offline"\n}',
     },

@@ -37,7 +37,7 @@ export const UsersPageView = ({
   <div className="space-y-6">
     <PageHeader
       title="多用户管理"
-      description="管理员可以创建 member/admin，并为新用户生成初始 API Key。"
+      description="创建用户并发放初始 API Key。"
       eyebrow="Users"
     />
     {error ? (
@@ -78,7 +78,7 @@ export const UsersPage = () => {
       <ErrorState
         variant="permission"
         title="需要管理员权限"
-        description="只有 admin 才能查看多用户列表和创建新用户。"
+        description="仅管理员可以查看和创建用户。"
         secondaryAction={
           <Button asChild variant="outline">
             <Link to={appRoutes.workspace}>回到工作台</Link>
@@ -96,8 +96,7 @@ export const UsersPage = () => {
         error={{
           variant: "recoverable",
           title: "用户目录加载失败",
-          description:
-            "多用户列表现在不可用，所以控制台不会把它误判成空白状态。可以先重试一次，再继续发放初始 API Key。",
+          description: "暂时无法获取用户列表，请重试后再继续操作。",
           details: getErrorDetails(usersQuery.error),
         }}
         onRetry={() => {

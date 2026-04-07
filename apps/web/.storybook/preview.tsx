@@ -1,36 +1,12 @@
 import type { Preview } from "@storybook/react-vite";
 import { MemoryRouter } from "react-router-dom";
 import { themes } from "storybook/theming";
-
 import { TooltipProvider } from "../src/components/ui/tooltip";
+import {
+  projectViewportGlobals,
+  projectViewportOptions,
+} from "../src/storybook/viewports";
 import "../src/index.css";
-
-const viewportOptions = {
-  kaisouMobile: {
-    name: "Kaisou Mobile",
-    styles: {
-      width: "390px",
-      height: "844px",
-    },
-    type: "mobile",
-  },
-  kaisouTablet: {
-    name: "Kaisou Tablet",
-    styles: {
-      width: "1024px",
-      height: "1366px",
-    },
-    type: "tablet",
-  },
-  kaisouDesktop: {
-    name: "Kaisou Desktop",
-    styles: {
-      width: "1440px",
-      height: "1200px",
-    },
-    type: "desktop",
-  },
-} as const;
 
 const preview: Preview = {
   decorators: [
@@ -74,15 +50,10 @@ const preview: Preview = {
       default: "dark",
     },
     viewport: {
-      options: viewportOptions,
+      options: projectViewportOptions,
     },
   },
-  initialGlobals: {
-    viewport: {
-      value: "kaisouDesktop",
-      isRotated: false,
-    },
-  },
+  initialGlobals: projectViewportGlobals.desktop,
 };
 
 export default preview;

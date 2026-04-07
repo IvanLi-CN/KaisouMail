@@ -6,18 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { StatGrid } from "@/components/shared/stat-grid";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
-
-const desktopViewport = {
-  viewport: { value: "kaisouDesktop", isRotated: false },
-} as const;
-
-const tabletViewport = {
-  viewport: { value: "kaisouTablet", isRotated: false },
-} as const;
-
-const mobileViewport = {
-  viewport: { value: "kaisouMobile", isRotated: false },
-} as const;
+import { projectViewportGlobals } from "@/storybook/viewports";
 
 const meta = {
   title: "Layout/AppShell",
@@ -40,7 +29,7 @@ const meta = {
         <PageHeader
           eyebrow="Overview"
           title="Cloudflare 临时邮箱台"
-          description="宽平板开始让主导航贴到站点标题右边；小屏幕则收进汉堡菜单。"
+          description="查看收件概览与系统状态。"
         />
         <StatGrid
           stats={[
@@ -58,8 +47,10 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+export const ResponsiveCanvas: Story = {};
+
 export const DesktopInlineNav: Story = {
-  globals: desktopViewport,
+  globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -80,7 +71,7 @@ export const DesktopInlineNav: Story = {
       canvas.getByRole("link", { name: /域名/i }),
     ).toBeInTheDocument();
     await expect(
-      canvas.queryByRole("button", { name: "打开主导航" }),
+      canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
     await expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
     await expect(
@@ -114,7 +105,7 @@ export const DesktopInlineNav: Story = {
 };
 
 export const TabletInlineNav: Story = {
-  globals: tabletViewport,
+  globals: projectViewportGlobals.tablet,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
@@ -125,7 +116,7 @@ export const TabletInlineNav: Story = {
       canvas.getByRole("link", { name: /API Keys/i }),
     ).toBeInTheDocument();
     await expect(
-      canvas.queryByRole("button", { name: "打开主导航" }),
+      canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
     await expect(
       canvas.getByRole("button", { name: demoSessionUser.name }),
@@ -133,58 +124,69 @@ export const TabletInlineNav: Story = {
   },
 };
 
-export const MobileMenuOpen: Story = {
+export const MobileDrawerOpen: Story = {
   args: {
     defaultMobileNavOpen: true,
   },
-  globals: mobileViewport,
+  globals: projectViewportGlobals.mobile,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
 
     await expect(
-      canvas.getByRole("button", { name: "关闭主导航" }),
+      canvas.getByRole("button", { name: "收起导航抽屉" }),
     ).toBeInTheDocument();
 
-    const mobileNav = body.getByRole("navigation", { name: "移动主导航" });
+    const drawer = body.getByRole("dialog", { name: "菜单" });
+    const mobileNav = within(drawer).getByRole("navigation", {
+      name: "移动主导航",
+    });
+
+    await expect(
+      within(drawer).getAllByText(demoSessionUser.email).at(0),
+    ).toBeVisible();
+    await expect(within(drawer).getByText(/^admin$/i)).toBeVisible();
     await expect(
       within(mobileNav).getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
     await expect(
       within(mobileNav).getByRole("link", { name: /用户/i }),
     ).toBeInTheDocument();
+    await expect(
+      within(drawer).getByRole("button", { name: "退出登录" }),
+    ).toBeInTheDocument();
   },
 };
 
-export const MobileMenuAccountSwitch: Story = {
+export const ResponsiveDrawerOpen: Story = {
   args: {
     defaultMobileNavOpen: true,
   },
-  globals: mobileViewport,
+};
+
+export const MobileDrawerToggle: Story = {
+  globals: projectViewportGlobals.mobile,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    const accountTrigger = canvas.getByRole("button", {
-      name: demoSessionUser.name,
-    });
+    const drawerTrigger = canvas.getByRole("button", { name: "打开导航抽屉" });
 
+    await userEvent.click(drawerTrigger);
+
+    const drawer = await body.findByRole("dialog", { name: "菜单" });
     await expect(
-      canvas.getByRole("button", { name: "关闭主导航" }),
-    ).toBeInTheDocument();
+      within(drawer).getAllByText(demoSessionUser.email).at(0),
+    ).toBeVisible();
 
-    const mobileNav = body.getByRole("navigation", { name: "移动主导航" });
-    await expect(
-      within(mobileNav).getByRole("link", { name: /工作台/i }),
-    ).toBeInTheDocument();
-
-    await userEvent.click(accountTrigger);
+    await userEvent.click(
+      within(drawer).getByRole("button", { name: "关闭导航抽屉" }),
+    );
 
     await waitFor(() => {
       expect(
-        body.queryByRole("navigation", { name: "移动主导航" }),
+        body.queryByRole("dialog", { name: "菜单" }),
       ).not.toBeInTheDocument();
     });
-    await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
   },
 };
 
@@ -192,7 +194,7 @@ export const DetailsOpen: Story = {
   args: {
     defaultAccountPopoverOpen: true,
   },
-  globals: desktopViewport,
+  globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
@@ -206,7 +208,7 @@ export const DetailsOpen: Story = {
 };
 
 export const FooterMetadata: Story = {
-  globals: desktopViewport,
+  globals: projectViewportGlobals.desktop,
   render: (args) => (
     <AppShell {...args}>
       <div className="space-y-4 p-2">

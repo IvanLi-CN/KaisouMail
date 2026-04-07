@@ -43,7 +43,7 @@ export const ApiKeysPageView = ({
     <div className="space-y-6">
       <PageHeader
         title="API Keys"
-        description="每个用户都可以持有多把 API Key；Web 登录也通过它换取 session cookie。"
+        description="管理用于 API 调用和控制台登录的密钥。"
         eyebrow="Security"
         action={
           <Button asChild variant="outline">
@@ -117,8 +117,7 @@ export const ApiKeysPage = () => {
           ? {
               variant: "recoverable",
               title: "API Keys 暂时加载失败",
-              description:
-                "密钥列表现在不可用，所以控制台不会把它显示成空表。你可以重新加载，或先打开对接文档继续查看接口说明。",
+              description: "暂时无法获取密钥列表，请重新加载后再试。",
               details: getErrorDetails(apiKeysQuery.error),
             }
           : null

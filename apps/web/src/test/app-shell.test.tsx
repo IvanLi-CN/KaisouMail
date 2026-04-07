@@ -114,41 +114,56 @@ describe("AppShell account trigger", () => {
 });
 
 describe("AppShell mobile navigation", () => {
-  it("supports a controlled default-open mobile navigation state", () => {
+  it("supports a controlled default-open mobile drawer state with user info inside", () => {
     renderAppShell({ defaultMobileNavOpen: true });
 
-    const mobileNav = screen.getByRole("navigation", { name: "移动主导航" });
-    expect(mobileNav).toBeInTheDocument();
+    const drawer = screen.getByRole("dialog", { name: "菜单" });
+    const mobileNav = within(drawer).getByRole("navigation", {
+      name: "移动主导航",
+    });
+
+    expect(drawer).toBeInTheDocument();
+    expect(
+      within(drawer).getAllByText(demoSessionUser.email).length,
+    ).toBeGreaterThan(0);
+    expect(within(drawer).getByText(/^admin$/i)).toBeInTheDocument();
     expect(
       within(mobileNav).getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
     expect(
       within(mobileNav).getByRole("link", { name: /用户/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "关闭主导航" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "收起导航抽屉" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("toggles the mobile menu and closes it before opening account details", async () => {
-    renderAppShell();
+  it("toggles the mobile drawer and exposes logout inside it", async () => {
+    const onLogout = vi.fn();
+    renderAppShell({ onLogout });
 
-    const menuTrigger = screen.getByRole("button", { name: "打开主导航" });
+    const menuTrigger = screen.getByRole("button", { name: "打开导航抽屉" });
     fireEvent.click(menuTrigger);
 
-    const mobileNav = screen.getByRole("navigation", { name: "移动主导航" });
-    expect(mobileNav).toBeInTheDocument();
+    const drawer = screen.getByRole("dialog", { name: "菜单" });
+    expect(drawer).toBeInTheDocument();
     expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(
+      within(drawer).getAllByText(demoSessionUser.email).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: demoSessionUser.name }));
+    fireEvent.click(within(drawer).getByRole("button", { name: "退出登录" }));
+    expect(onLogout).toHaveBeenCalledTimes(1);
 
+    fireEvent.click(screen.getByRole("button", { name: "打开导航抽屉" }));
+    expect(screen.getByRole("dialog", { name: "菜单" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭导航抽屉" }));
     await waitFor(() => {
       expect(
-        screen.queryByRole("navigation", { name: "移动主导航" }),
+        screen.queryByRole("dialog", { name: "菜单" }),
       ).not.toBeInTheDocument();
     });
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
   });
 });
 

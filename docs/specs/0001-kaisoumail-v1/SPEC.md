@@ -88,7 +88,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
-- Responsive authenticated header keeps the brand, inline primary navigation from `lg+`, a hamburger menu below `lg`, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
+- Responsive authenticated header keeps the brand and inline primary navigation from `lg+`, while sub-`lg` layouts collapse account context, navigation, and logout into a right-side drawer so the mobile header stays single-row
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
@@ -109,10 +109,12 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-07: Tightened the responsive shell again so primary navigation stays single-line, utility actions collapse to compact icons at wider breakpoints, and the workspace summary sentence is hidden on phone-sized layouts to preserve vertical space.
+- 2026-04-07: Simplified user-facing copy across the authenticated shell and control-plane pages, kept the mobile drawer focused on account/navigation/logout only, moved longer mailbox-creation guidance behind a contextual help popover, and refreshed responsive evidence against the canonical phone/tablet/desktop Storybook viewports.
 - 2026-04-07: Removed the redundant inline helper copy from the mailbox address form so the create surface keeps explanation at the header level only, then refreshed the stored visual evidence.
 - 2026-04-07: Replaced legacy `mail-*` / `box-*` default mailbox generation with a shared realistic mixed-pool alias generator, added bounded retry/fallback behavior for generated collisions, and refreshed Web/runtime example surfaces plus visual evidence to match.
 - 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
-- 2026-04-07: Reworked the authenticated shell and `/workspace` layout into a responsive `mobile 1-column / tablet 2-pane / desktop 3-pane` system, moved inline primary navigation next to the site title from `lg+`, and routed narrow screens through a hamburger menu.
+- 2026-04-07: Reworked the authenticated shell and `/workspace` layout into a responsive `mobile 1-column / tablet 2-pane / desktop 3-pane` system, moved inline primary navigation next to the site title from `lg+`, and routed narrow screens through a right-side drawer that also carries account details and logout.
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
@@ -132,7 +134,7 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### App Shell
 
-![App shell on mobile with the hamburger menu expanded](./assets/app-shell-mobile-menu-responsive.png)
+![App shell on mobile with the navigation drawer expanded](./assets/app-shell-mobile-menu-responsive.png)
 
 ![App shell on wide tablet with inline navigation beside the site title](./assets/app-shell-tablet-inline-nav-responsive.png)
 
