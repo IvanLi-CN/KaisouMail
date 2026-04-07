@@ -54,6 +54,8 @@ import { domains, mailboxes, subdomains } from "../db/schema";
 import {
   classifyMailboxAddressState,
   createMailboxForUser,
+  getMailboxForUser,
+  listMailboxesForUser,
   resolveRequestedMailboxAddress,
 } from "../services/mailboxes";
 
@@ -181,6 +183,68 @@ describe("mailbox service helpers", () => {
     );
 
     expect(result.kind).toBe("create");
+  });
+
+  it("treats a provisioning mailbox as a conflict until creation finishes", () => {
+    const result = classifyMailboxAddressState(
+      [
+        {
+          ...baseMailbox,
+          status: "provisioning",
+          routingRuleId: null,
+        },
+      ],
+      memberUser,
+    );
+
+    expect(result.kind).toBe("conflict");
+  });
+
+  it("hides provisioning mailboxes from list responses", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+              orderBy: vi.fn(async () => []),
+            })),
+            orderBy: vi.fn(async () => []),
+          };
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+
+    const rows = await listMailboxesForUser({} as never, memberUser);
+
+    expect(rows).toEqual([]);
+  });
+
+  it("treats provisioning mailboxes as not found by id", async () => {
+    const db = createMailboxDb({
+      mailboxRows: [
+        {
+          ...baseMailbox,
+          status: "provisioning",
+          routingRuleId: null,
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+
+    await expect(
+      getMailboxForUser({} as never, memberUser, baseMailbox.id),
+    ).rejects.toThrow("Mailbox not found");
   });
 
   it("parses an ensured address against the configured root domain", () => {
@@ -482,6 +546,7 @@ describe("mailbox service helpers", () => {
         domain,
         "mail00",
       );
+      expect(db.update).toHaveBeenCalledWith(mailboxes);
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
@@ -618,6 +683,7 @@ describe("mailbox service helpers", () => {
         domain,
         "ops.alpha",
       );
+      expect(db.update).toHaveBeenCalledWith(mailboxes);
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
@@ -807,7 +873,7 @@ describe("mailbox service helpers", () => {
       "ops",
       "build@ops.707979.xyz",
       null,
-      "active",
+      "provisioning",
       expect.any(String),
       expect.any(String),
       null,

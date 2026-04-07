@@ -4,7 +4,7 @@ import {
   generateRealisticMailboxSubdomain,
   mailboxSchema,
 } from "@kaisoumail/shared";
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, ne } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
@@ -42,6 +42,7 @@ import {
 type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
+const mailboxProvisioningStatus = "provisioning";
 
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
@@ -237,14 +238,14 @@ const rollbackMailboxInsert = async (
   await db.delete(mailboxes).where(eq(mailboxes.id, mailboxId));
 };
 
-const updateMailboxRoutingRule = async (
+const activateMailbox = async (
   db: ReturnType<typeof getDb>,
   mailboxId: string,
   routingRuleId: string | null,
 ) => {
   await db
     .update(mailboxes)
-    .set({ routingRuleId })
+    .set({ routingRuleId, status: "active" })
     .where(eq(mailboxes.id, mailboxId));
 };
 
@@ -363,11 +364,20 @@ export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
   const db = getDb(env);
   const rows =
     user.role === "admin"
-      ? await db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt))
+      ? await db
+          .select()
+          .from(mailboxes)
+          .where(ne(mailboxes.status, mailboxProvisioningStatus))
+          .orderBy(desc(mailboxes.createdAt))
       : await db
           .select()
           .from(mailboxes)
-          .where(eq(mailboxes.userId, user.id))
+          .where(
+            and(
+              eq(mailboxes.userId, user.id),
+              ne(mailboxes.status, mailboxProvisioningStatus),
+            ),
+          )
           .orderBy(desc(mailboxes.createdAt));
 
   return attachLastReceivedAt(env, rows);
@@ -386,6 +396,9 @@ export const getMailboxForUser = async (
     .limit(1);
   const row = rows[0];
   if (!row) throw new ApiError(404, "Mailbox not found");
+  if (row.status === mailboxProvisioningStatus) {
+    throw new ApiError(404, "Mailbox not found");
+  }
   if (row.userId !== user.id && user.role !== "admin") {
     throw new ApiError(403, "Forbidden");
   }
@@ -487,7 +500,7 @@ export const createMailboxForUser = async (
       subdomain,
       address: mailboxAddress.address,
       routingRuleId: null,
-      status: "active",
+      status: mailboxProvisioningStatus,
       createdAt: now,
       expiresAt,
       destroyedAt: null,
@@ -514,10 +527,6 @@ export const createMailboxForUser = async (
         mailboxAddress.address,
       );
 
-      if (routingRuleId) {
-        await updateMailboxRoutingRule(db, created.id, routingRuleId);
-      }
-
       if (knownSubdomain[0]) {
         await db
           .update(subdomains)
@@ -536,9 +545,12 @@ export const createMailboxForUser = async (
         });
       }
 
+      await activateMailbox(db, created.id, routingRuleId);
+
       return toMailboxDto(
         {
           ...created,
+          status: "active",
           routingRuleId,
           rootDomain: domain.rootDomain,
         },
