@@ -30,9 +30,9 @@ const mailboxFieldClassName =
   "flex h-10 w-full rounded-lg border border-input bg-muted/40 px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60";
 const mailboxAddressSegmentClassName = "min-w-0 flex-1";
 const inputModeSwitcherClassName =
-  "inline-flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+  "inline-flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/5 p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 const inputModeButtonClassName =
-  "inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex h-8 min-w-[3.5rem] items-center justify-center rounded-[10px] px-3 text-xs font-medium transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
 const inputModeButtonActiveClassName =
   "bg-white/10 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_1px_2px_rgba(2,6,23,0.32)]";
 const inputModeButtonInactiveClassName =
