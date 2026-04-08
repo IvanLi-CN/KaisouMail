@@ -34,16 +34,59 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Check release helper syntax
-        run: python3 -m py_compile .github/scripts/metadata_gate.py .github/scripts/release_snapshot.py
+        run: |
+          python3 -m py_compile .github/scripts/metadata_gate.py .github/scripts/migration_safety_gate.py .github/scripts/pending_migration_gate.py .github/scripts/release_snapshot.py
+          node --check .github/scripts/verify_api_smoke.mjs
+          node --check .github/scripts/resolve_api_smoke_urls.mjs
 
       - name: Release helper self-tests
         run: |
           bash .github/scripts/test-write-version.sh
           bash .github/scripts/test-metadata-gate.sh
+          bash .github/scripts/test-migration-safety.sh
+          bash .github/scripts/test-pending-migration-gate.sh
+          bash .github/scripts/test-verify-api-smoke.sh
+          bash .github/scripts/test-resolve-api-smoke-urls.sh
           bash .github/scripts/test-release-snapshot.sh
 
       - name: Lint and format check
         run: bun run check
+
+
+  migration-safety:
+    name: Migration Safety Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run migration safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_ref="${{ github.event.before }}"
+          head_ref="${{ github.sha }}"
+
+          if [ -z "${base_ref}" ] || [ "${base_ref}" = "0000000000000000000000000000000000000000" ]; then
+            base_ref="$(git rev-parse "${head_ref}^" 2>/dev/null || git merge-base origin/main "${head_ref}")"
+          fi
+
+          mapfile -t changed_migrations < <(
+            git diff --name-only "${base_ref}" "${head_ref}" -- 'apps/api-worker/drizzle/*.sql'
+          )
+
+          if [ "${#changed_migrations[@]}" -eq 0 ]; then
+            echo "No changed D1 migration files detected between ${base_ref} and ${head_ref}."
+            exit 0
+          fi
+
+          echo 'Checking migration safety for:'
+          for migration_file in "${changed_migrations[@]}"; do
+            echo " - ${migration_file}"
+          done
+          python3 .github/scripts/migration_safety_gate.py "${changed_migrations[@]}"
 
   typecheck:
     name: Typecheck
@@ -223,6 +266,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - lint-and-format
+      - migration-safety
       - typecheck
       - unit-tests
       - storybook-build
