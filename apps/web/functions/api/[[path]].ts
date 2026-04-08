@@ -9,8 +9,10 @@ interface PagesFunctionContext {
   };
 }
 
-const isPagesPreviewHostname = (hostname: string) =>
-  hostname.toLowerCase().endsWith(".pages.dev");
+const isPagesPreviewHostname = (hostname: string) => {
+  const labels = hostname.toLowerCase().split(".");
+  return labels.length > 3 && labels.slice(-2).join(".") === "pages.dev";
+};
 
 const buildPreviewBlockedResponse = () =>
   new Response(

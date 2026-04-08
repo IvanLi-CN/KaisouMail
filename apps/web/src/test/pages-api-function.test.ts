@@ -93,4 +93,29 @@ describe("Pages same-origin API proxy", () => {
       error: "Preview Pages same-origin API is disabled",
     });
   });
+
+  it("keeps the production Pages hostname wired to the API binding", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ commitSha: "954abb0" }), {
+          headers: {
+            "content-type": "application/json",
+          },
+        }),
+    );
+
+    const response = await onRequest({
+      request: new Request("https://kaisoumail.pages.dev/api/version"),
+      env: {
+        API: {
+          fetch: fetchMock,
+        },
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toMatchObject({
+      commitSha: "954abb0",
+    });
+  });
 });
