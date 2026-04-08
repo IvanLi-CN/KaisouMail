@@ -18,7 +18,7 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "分段输入" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "分段" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -52,8 +52,8 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "分段输入" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "完整邮箱地址" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "分段" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "完整" })).toBeDisabled();
     expect(screen.getByLabelText("用户名")).toBeDisabled();
     expect(screen.getByLabelText("子域名")).toBeDisabled();
     expect(screen.getByLabelText("邮箱域名")).toBeDisabled();
@@ -135,7 +135,7 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "完整邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
     fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
       target: { value: "Build@Ops.Alpha.unsupported.test" },
     });
@@ -189,12 +189,12 @@ describe("MailboxCreateForm", () => {
       target: { value: "mail.example.net" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "完整邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
     expect(screen.getByLabelText("完整邮箱地址")).toHaveValue(
       "storybox@ops.alpha.mail.example.net",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "分段输入" }));
+    fireEvent.click(screen.getByRole("button", { name: "分段" }));
     expect(screen.getByLabelText("用户名")).toHaveValue("storybox");
     expect(screen.getByLabelText("子域名")).toHaveValue("ops.alpha");
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");
@@ -223,15 +223,13 @@ describe("MailboxCreateForm", () => {
       screen.getByText("build@ops.alpha.mail.example.net"),
     ).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "切换到完整邮箱地址输入" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "切换到完整" }));
 
     expect(screen.getByLabelText("完整邮箱地址")).toHaveValue(
       "build@ops.alpha.mail.example.net",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "分段输入" }));
+    fireEvent.click(screen.getByRole("button", { name: "分段" }));
     expect(screen.getByLabelText("用户名")).toHaveValue("build");
     expect(screen.getByLabelText("子域名")).toHaveValue("ops.alpha");
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");

@@ -603,7 +603,7 @@ export const ToolbarCreateFullAddressFlow: Story = {
     });
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
-    await userEvent.click(canvas.getByRole("button", { name: "完整邮箱地址" }));
+    await userEvent.click(canvas.getByRole("button", { name: "完整" }));
     await userEvent.type(
       canvas.getByLabelText("完整邮箱地址"),
       "Build@Ops.Alpha.mail.example.net",

@@ -274,7 +274,7 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "完整邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
     fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
       target: { value: "Build@Ops.Alpha.mail.example.net" },
     });

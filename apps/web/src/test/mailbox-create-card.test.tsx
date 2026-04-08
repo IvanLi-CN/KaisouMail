@@ -33,7 +33,7 @@ describe("MailboxCreateCard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "完整邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
 
     expect(
       screen.getByText(/支持直接输入完整邮箱地址，并校验是否属于当前支持域名/),

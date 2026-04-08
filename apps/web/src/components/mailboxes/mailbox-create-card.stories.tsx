@@ -85,7 +85,7 @@ export const FullAddressMode: Story = {
       address: "build@ops.alpha.mail.example.net",
     });
 
-    await userEvent.click(canvas.getByRole("button", { name: "完整邮箱地址" }));
+    await userEvent.click(canvas.getByRole("button", { name: "完整" }));
     await userEvent.type(
       canvas.getByLabelText("完整邮箱地址"),
       "Build@Ops.Alpha.mail.example.net",
@@ -108,7 +108,7 @@ export const PasteSwitchPrompt: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const localPartField = canvas.getByLabelText("用户名");
 
-    await userEvent.click(canvas.getByRole("button", { name: "分段输入" }));
+    await userEvent.click(canvas.getByRole("button", { name: "分段" }));
     await userEvent.click(localPartField);
     await userEvent.paste("Build@Ops.Alpha.mail.example.net");
 
@@ -127,13 +127,11 @@ export const PasteSwitchAccepted: Story = {
     const body = within(canvasElement.ownerDocument.body);
     const localPartField = canvas.getByLabelText("用户名");
 
-    await userEvent.click(canvas.getByRole("button", { name: "分段输入" }));
+    await userEvent.click(canvas.getByRole("button", { name: "分段" }));
     await userEvent.click(localPartField);
     await userEvent.paste("Build@Ops.Alpha.mail.example.net");
 
-    await userEvent.click(
-      body.getByRole("button", { name: "切换到完整邮箱地址输入" }),
-    );
+    await userEvent.click(body.getByRole("button", { name: "切换到完整" }));
     await expect(canvas.getByLabelText("完整邮箱地址")).toHaveValue(
       "build@ops.alpha.mail.example.net",
     );

@@ -72,7 +72,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await expect(mailboxRow.getByText("新建")).toHaveCount(0);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
-  await page.getByRole("button", { name: "完整邮箱地址" }).click();
+  await page.getByRole("button", { name: "完整" }).click();
   await page
     .getByLabel("完整邮箱地址")
     .fill(
