@@ -40,9 +40,7 @@ export const LoginCard = ({
           Sign in
         </p>
         <CardTitle className="text-2xl">登录 KaisouMail</CardTitle>
-        <CardDescription>
-          使用 API Key 登录控制台。浏览器端会换成 HttpOnly session cookie。
-        </CardDescription>
+        <CardDescription>使用 API Key 登录控制台。</CardDescription>
       </CardHeader>
       <CardContent>
         <form

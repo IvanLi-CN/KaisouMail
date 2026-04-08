@@ -15,7 +15,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ### Workspace
 - `/workspace`
-- Three-pane mail workbench for mailbox filtering, aggregated message browsing, and inline message reading
+- Responsive mail workbench for mailbox filtering, aggregated message browsing, and inline message reading: single-column on phones, two-pane split from `lg`, and full three-pane reading from `xl+`
 - Desktop `xl+` workspace layout is clamped to the remaining AppShell viewport height; each pane keeps its own vertical scroll area instead of letting long lists stretch the whole page
 - Mailbox and message rails support dynamic-height virtualized rendering for unusually long datasets, while the right-side reader keeps inline content scrolling local to the pane
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
@@ -69,7 +69,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
 - `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API without depending on bootstrap side effects
-- The automatic deploy workflow only supports schema-stable releases with a clean remote migration state: if the target release has a D1 migration diff or remote D1 still has pending migrations, the workflow fails closed and requires manual rollout; otherwise it blocks Pages promotion unless required Worker secrets exist and rollback-backed `/health` plus `/api/version` smoke checks reach the target release SHA
+- The automatic deploy workflow now captures a D1 Time Travel restore anchor, re-validates the actual remote pending D1 migration set before apply, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes that version to 100% production traffic only after shadow `/health` plus `/api/version` smoke reach the target release SHA, runs production API smoke before any trigger changes, explicitly applies API Worker route/domain/cron trigger changes only after that smoke passes, reruns post-trigger smoke across `VITE_API_BASE_URL` plus every routable API URL declared in `apps/api-worker/wrangler.jsonc` without automatic rollback, disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy, and keeps D1 restore as an explicit disaster-recovery path instead of an automatic failure hook
+- The default auto-release path only accepts expand-only / forward-compatible D1 migrations; CI blocks obvious destructive SQL patterns, Deploy re-checks the remote pending migration set before apply, runtime compatibility code is kept for at most one release, and destructive schema cleanup moves to a later dedicated cleanup release
 - Production control-plane aliases can coexist: the API Worker can serve multiple custom API domains simultaneously, its CORS trust list accepts every configured control-plane origin, and the Web client prefers the matching API alias for the active control-plane hostname before falling back to the configured base URL
 
 ## Refresh Behavior
@@ -90,16 +91,16 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
-- Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
+- Responsive authenticated header keeps the brand and inline primary navigation from `lg+`, while sub-`lg` layouts collapse account context, navigation, and logout into a right-side drawer so the mobile header stays single-row
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
-- Desktop-first three-pane workbench for mailbox list, message list, and inline message content
+- Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
 - On desktop three-pane layouts, long mailbox/message datasets stay inside pane-local scroll containers; the page itself should not grow purely because a rail becomes very long
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
 - Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
 - Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
 - Domains management includes a dedicated bind form plus a confirmation popover for destructive delete
-- Refresh controls must remain compact, single-line, and header-aligned; visual treatment should communicate freshness without introducing a noisy live-status badge system
+- Refresh controls stay compact and header-aligned on wide layouts, while narrow viewports may wrap the action row without truncating the primary operations or introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
 - Icon-only actions use a mature third-party tooltip with long-press / hover reveal and collision-aware floating placement
@@ -115,10 +116,14 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
+- 2026-04-07: Tightened the responsive shell again so inline navigation stays single-row on wide tablets, collapsed desktop account/logout utilities to icon-only actions, and hid the workspace summary sentence on phone-sized layouts to preserve vertical space.
+- 2026-04-07: Simplified user-facing copy across the authenticated shell and control-plane pages, kept the mobile drawer focused on account/navigation/logout only, moved longer mailbox-creation guidance behind a contextual help popover, and refreshed responsive evidence against the canonical phone/tablet/desktop Storybook viewports.
 - 2026-04-07: Removed the redundant inline helper copy from the mailbox address form so the create surface keeps explanation at the header level only, then refreshed the stored visual evidence.
 - 2026-04-07: Replaced legacy `mail-*` / `box-*` default mailbox generation with a shared realistic mixed-pool alias generator, added bounded retry/fallback behavior for generated collisions, and refreshed Web/runtime example surfaces plus visual evidence to match.
 - 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
+- 2026-04-07: Reworked the authenticated shell and `/workspace` layout into a responsive `mobile 1-column / tablet 2-pane / desktop 3-pane` system, moved inline primary navigation next to the site title from `lg+`, and routed narrow screens through a right-side drawer that also carries account details and logout.
 - 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
+- 2026-04-07: Production deployment now auto-applies remote D1 migrations, re-validates the pending remote migration set at deploy time, gates API promotion on preview plus production smoke checks, records an explicit D1 Time Travel restore anchor for incidents, runs the rollback-backed production smoke before any trigger changes, validates every routable API URL again after trigger application, halts for manual trigger inspection when trigger application or post-trigger smoke fails, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy so migrated schemas are never paired with an older Worker by accident.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
@@ -137,30 +142,28 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### App Shell
 
-![App shell with the compact nickname-only account trigger](./assets/app-shell-account-trigger.png)
+![App shell on mobile with the navigation drawer expanded](./assets/app-shell-mobile-menu-responsive.png)
 
-![App shell with the account details popover pinned open](./assets/app-shell-account-popover.png)
+![App shell on wide tablet with inline navigation beside the site title](./assets/app-shell-tablet-inline-nav-responsive.png)
 
-![Authenticated AppShell footer metadata](./assets/app-shell-footer.png)
+![App shell on desktop with the inline navigation kept in the same header row](./assets/app-shell-desktop-inline-nav-responsive.png)
+
+![App shell with the account details popover pinned open](./assets/app-shell-account-details-responsive.png)
+
+![Authenticated AppShell footer metadata](./assets/app-shell-footer-responsive.png)
 
 ### Workspace
 
-![Workspace all mailboxes](./assets/workspace-all-mailboxes.png)
+![Workspace on mobile with a single-column reading order](./assets/workspace-mobile-single-column-responsive.png)
+
+![Workspace on wide tablet with a mailbox rail and stacked reading panes](./assets/workspace-tablet-split-view-responsive.png)
+
+![Workspace on desktop with the restored three-pane reading layout](./assets/workspace-desktop-three-pane-responsive.png)
 
 ![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
-
-![Workspace mailbox creation pending state](./assets/workspace-create-pending.png)
-
-![Workspace newly created mailbox highlight](./assets/workspace-new-mailbox-highlight.png)
-
-![Workspace single mailbox](./assets/workspace-single-mailbox.png)
-
-![Workspace selected message](./assets/workspace-selected-message.png)
-
-![Workspace refreshing state](./assets/workspace-refreshing.png)
 
 ### UI Primitives
 

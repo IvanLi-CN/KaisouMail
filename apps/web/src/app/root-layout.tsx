@@ -37,7 +37,7 @@ export const RootLayout = () => {
           variant="recoverable"
           layout="fullScreen"
           title="会话恢复失败"
-          description="控制台暂时无法确认你的登录状态，所以这次不会把你静默踢回登录页。你可以重试一次，或者主动回到登录页重新换取会话。"
+          description="暂时无法恢复登录状态，请重试或重新登录。"
           details={getErrorDetails(sessionQuery.error)}
           primaryAction={
             <Button onClick={() => void sessionQuery.refetch()}>

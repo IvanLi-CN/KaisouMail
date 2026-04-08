@@ -97,7 +97,7 @@ export const ApiKeyTable = ({
         <CardHeader>
           <CardTitle>创建 API Key</CardTitle>
           <CardDescription>
-            V1 先使用默认 scopes：mailboxes:write + messages:read。
+            新密钥默认拥有邮箱写入和邮件读取权限。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

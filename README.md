@@ -278,7 +278,8 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
-- Keep one existing 100%-stable API Worker deployment available as the rollback target; the automatic deploy path only runs when the release has no D1 migration diff and remote D1 has no pending migrations, and in that case it uses rollback-backed API smoke checks before Pages promotion
+- Keep one existing 100%-stable API Worker deployment available as the baseline for schema-stable releases; the automatic deploy path now applies remote D1 migrations, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes it to 100% production traffic only after that shadow `/health` + `/api/version` smoke passes, runs production smoke before any trigger changes, applies route/domain/cron trigger changes explicitly only after that smoke passes, reruns post-trigger smoke across every API URL declared by `VITE_API_BASE_URL` plus `apps/api-worker/wrangler.jsonc`, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy
+- CI blocks obviously destructive D1 migrations on the default auto path, and the deploy workflow re-validates the actual remote pending migration set before apply; keep schema changes expand-only / forward-compatible, carry compatibility code for at most one release, and defer destructive cleanup to a later cleanup release
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
 
@@ -292,9 +293,11 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your canonical api origin>`
 7. Set `WEB_APP_ORIGINS=<comma-separated pages origins>` and optionally keep `WEB_APP_ORIGIN=<your primary pages origin>` for legacy single-origin compatibility
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
-9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can auto-rollback failed smoke checks
-10. Push to `main` to trigger the deploy workflow
-11. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
+9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can stage a 0%-traffic candidate, smoke-test it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, and then promote or roll back safely
+10. A `workers.dev` subdomain is optional for manual debugging, but the automatic deploy path no longer depends on preview URLs
+11. Push to `main` to trigger the deploy workflow
+12. Use `Actions -> Deploy -> Run workflow -> operation=restore-d1` with a timestamp or bookmark when you need a D1 Time Travel restore (Cloudflare D1 Time Travel currently keeps a 30-day restore window)
+13. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
 
 ## Worker topology
 

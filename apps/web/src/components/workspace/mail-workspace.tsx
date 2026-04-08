@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  CircleHelp,
   Inbox,
   ListTree,
   MailOpen,
@@ -30,6 +31,7 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
@@ -224,10 +226,14 @@ export const MailWorkspace = ({
     <div className="space-y-6 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:gap-6 xl:space-y-0">
       <PageHeader
         title="邮件工作台"
-        description="在一个三栏视图里完成邮箱筛选、聚合收件浏览和正文阅读。默认先看全部邮箱，再按需要钻取到单邮箱上下文。"
+        description={
+          <p className="hidden max-w-3xl text-sm leading-6 text-muted-foreground sm:block">
+            集中查看邮箱、邮件列表和正文内容。
+          </p>
+        }
         eyebrow="Workspace"
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             <Popover open={createMailboxAction.isOpen}>
               <PopoverAnchor asChild>
                 <ActionButton
@@ -261,28 +267,62 @@ export const MailWorkspace = ({
                 }}
               >
                 <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        新建邮箱
+                      </p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        创建后会自动切换到新邮箱。
+                      </p>
+                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          aria-label="查看邮箱创建说明"
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background/60 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          type="button"
+                        >
+                          <CircleHelp aria-hidden className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="end"
+                        className="w-[min(calc(100vw-2rem),20rem)] space-y-3 p-4"
+                        collisionPadding={20}
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-foreground">
+                            邮箱创建说明
+                          </p>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            用户名和子域可留空；系统会按当前可用域名自动生成地址，也可以手动指定邮箱域名和有效期。
+                          </p>
+                        </div>
+                        <div className="space-y-2 text-xs leading-5 text-muted-foreground">
+                          <p>
+                            {buildMailboxCreateDomainHint({
+                              rootDomain: selectedExampleRootDomain,
+                              hasAvailableDomains:
+                                createMailboxAction.domains.length > 0,
+                            })}
+                          </p>
+                          <p>
+                            示例地址：
+                            <span className="font-medium text-foreground">
+                              {" "}
+                              {buildMailboxCreateAddressExample({
+                                rootDomain: selectedExampleRootDomain,
+                                hasAvailableDomains:
+                                  createMailboxAction.domains.length > 0,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      新建邮箱
-                    </p>
-                    <p className="text-xs leading-5 text-muted-foreground">
-                      在当前工作台里直接创建新地址。支持随机或指定用户名 /
-                      子域，
-                      {buildMailboxCreateDomainHint({
-                        rootDomain: selectedExampleRootDomain,
-                        hasAvailableDomains:
-                          createMailboxAction.domains.length > 0,
-                      })}
-                      示例为{" "}
-                      <span className="font-medium text-foreground">
-                        {buildMailboxCreateAddressExample({
-                          rootDomain: selectedExampleRootDomain,
-                          hasAvailableDomains:
-                            createMailboxAction.domains.length > 0,
-                        })}
-                      </span>
-                      ，创建成功后会自动切到新邮箱上下文。
-                    </p>
                     {createMailboxAction.metaError ? (
                       <p className="text-xs leading-5 text-destructive">
                         邮箱规则加载失败：{createMailboxAction.metaError}
@@ -322,11 +362,17 @@ export const MailWorkspace = ({
         }
       />
 
-      <div className="grid gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]">
-        <section aria-label="邮箱列表" className="min-w-0 xl:min-h-0">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card xl:h-full xl:min-h-0">
+      <div
+        data-testid="mail-workspace-layout"
+        className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:min-h-0 xl:flex-1 xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]"
+      >
+        <section
+          aria-label="邮箱列表"
+          className="min-w-0 lg:row-span-2 xl:row-auto xl:min-h-0"
+        >
+          <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[52rem] xl:h-full xl:min-h-0">
             <div className="space-y-4 border-b border-border px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
                     邮箱列表
@@ -518,7 +564,7 @@ export const MailWorkspace = ({
         </section>
 
         <section aria-label="邮件列表" className="min-w-0 xl:min-h-0">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card xl:h-full xl:min-h-0">
+          <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
             <div className="space-y-2 border-b border-border px-4 py-4">
               <p className="text-sm font-semibold text-foreground">
                 {selectedMailbox
@@ -616,8 +662,8 @@ export const MailWorkspace = ({
         </section>
 
         <section aria-label="邮件内容" className="min-w-0 xl:min-h-0">
-          <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card xl:h-full xl:min-h-0">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4">
+          <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">
                   邮件内容

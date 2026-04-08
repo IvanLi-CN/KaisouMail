@@ -59,7 +59,7 @@ export const DomainsPageView = ({
   <div className="space-y-6">
     <PageHeader
       title="邮箱域名"
-      description="既支持从 Cloudflare 目录启用已有 zone，也支持直接通过 Cloudflare API 绑定新域名并在项目里管理删除。"
+      description="管理可接收邮件的域名、绑定状态和生命周期。"
       eyebrow="Domains"
     />
     {error ? (
@@ -117,7 +117,7 @@ export const DomainsPage = () => {
       <ErrorState
         variant="permission"
         title="需要管理员权限"
-        description="只有 admin 才能接入、停用和重试邮箱域名。"
+        description="仅管理员可以管理邮箱域名。"
         secondaryAction={
           <Button asChild variant="outline">
             <Link to={appRoutes.workspace}>回到工作台</Link>
@@ -134,8 +134,7 @@ export const DomainsPage = () => {
         error={{
           variant: "recoverable",
           title: "域名目录暂时加载失败",
-          description:
-            "Cloudflare 域名目录目前不可用，控制台不会把它误判成空列表。先重试一次，确认后再继续启用、绑定或停用域名。",
+          description: "暂时无法获取域名目录，请重试后再继续操作。",
           details: getErrorDetails(domainCatalogQuery.error),
         }}
         onReload={() => {

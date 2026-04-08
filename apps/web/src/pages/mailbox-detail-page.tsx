@@ -71,7 +71,7 @@ export const MailboxDetailPage = () => {
     <div className="space-y-6">
       <PageHeader
         title={mailboxQuery.data.address}
-        description="这是兼容入口；邮件浏览和正文阅读统一在工作台完成。"
+        description="查看邮箱状态、有效期和未读情况。"
         eyebrow="Mailbox Detail"
         action={
           <div className="flex flex-wrap gap-2">
@@ -125,9 +125,7 @@ export const MailboxDetailPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>邮箱信息</CardTitle>
-          <CardDescription>
-            这里只保留地址与生命周期信息；查看邮件请使用工作台。
-          </CardDescription>
+          <CardDescription>查看当前邮箱的地址和生命周期信息。</CardDescription>
         </CardHeader>
         <CardContent>
           <MailboxList

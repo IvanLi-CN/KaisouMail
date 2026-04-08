@@ -31,8 +31,7 @@ export const LoginPage = () => {
             Cloudflare 临时邮箱控制台
           </h1>
           <p className="max-w-xl text-sm leading-7 text-muted-foreground">
-            面向工具使用场景设计：创建临时邮箱、收件解析、查看
-            HTML/文本/附件详情，并按 TTL 自动销毁。
+            创建临时邮箱、查看邮件内容与附件，并按 TTL 自动回收。
           </p>
         </div>
       </div>

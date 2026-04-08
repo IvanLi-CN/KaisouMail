@@ -17,6 +17,7 @@ import {
   demoMessages,
   demoMeta,
 } from "@/mocks/data";
+import { projectViewportGlobals } from "@/storybook/viewports";
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
 
@@ -81,6 +82,7 @@ const meta = {
   tags: ["autodocs"],
   parameters: {
     layout: "fullscreen",
+    disableStoryPadding: true,
   },
   decorators: [
     (Story) => (
@@ -131,6 +133,47 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+
+const getLayoutRects = (canvasElement: HTMLElement) => {
+  const canvas = within(canvasElement);
+  const mailboxList = canvas.getByRole("region", { name: "邮箱列表" });
+  const messageList = canvas.getByRole("region", { name: "邮件列表" });
+  const messageContent = canvas.getByRole("region", { name: "邮件内容" });
+
+  return {
+    mailboxList: mailboxList.getBoundingClientRect(),
+    messageList: messageList.getBoundingClientRect(),
+    messageContent: messageContent.getBoundingClientRect(),
+  };
+};
+
+const assertMobileSingleColumnLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(messageList.top).toBeGreaterThan(mailboxList.bottom - 8);
+  expect(messageContent.top).toBeGreaterThan(messageList.bottom - 8);
+};
+
+const assertTabletSplitLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(Math.abs(mailboxList.top - messageList.top)).toBeLessThan(24);
+  expect(messageList.left).toBeGreaterThan(mailboxList.right - 8);
+  expect(Math.abs(messageList.left - messageContent.left)).toBeLessThan(24);
+  expect(messageContent.top).toBeGreaterThan(messageList.bottom - 8);
+};
+
+const assertDesktopThreePaneLayout = (canvasElement: HTMLElement) => {
+  const { mailboxList, messageList, messageContent } =
+    getLayoutRects(canvasElement);
+
+  expect(Math.abs(mailboxList.top - messageList.top)).toBeLessThan(24);
+  expect(Math.abs(messageList.top - messageContent.top)).toBeLessThan(24);
+  expect(messageList.left).toBeGreaterThan(mailboxList.right - 8);
+  expect(messageContent.left).toBeGreaterThan(messageList.right - 8);
+};
 
 const WorkspaceStoryHarness = ({
   highlightedMailboxId: initialHighlightedMailboxId = null,
@@ -408,7 +451,47 @@ const DesktopVirtualizedHarness = () => {
   );
 };
 
-export const AllMailboxes: Story = {
+export const MobileSingleColumn: Story = {
+  globals: projectViewportGlobals.mobile,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.getByRole("heading", { name: "邮件工作台" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByText("集中查看邮箱、邮件列表和正文内容。"),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "新建邮箱" }),
+    ).toBeInTheDocument();
+
+    assertMobileSingleColumnLayout(canvasElement);
+  },
+};
+
+export const TabletSplitView: Story = {
+  globals: projectViewportGlobals.tablet,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.getByRole("button", { name: "新建邮箱" }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByText("集中查看邮箱、邮件列表和正文内容。"),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "手动刷新" }),
+    ).toBeInTheDocument();
+
+    assertTabletSplitLayout(canvasElement);
+  },
+};
+
+export const DesktopThreePane: Story = {
+  globals: projectViewportGlobals.desktop,
+
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
@@ -424,6 +507,8 @@ export const AllMailboxes: Story = {
       canvas.getByRole("link", { name: "打开邮箱管理" }),
     ).toBeInTheDocument();
 
+    assertDesktopThreePaneLayout(canvasElement);
+
     await userEvent.click(
       canvas.getByRole("button", {
         name: /spec@ops\.beta\.mail\.example\.net/i,
@@ -438,6 +523,8 @@ export const AllMailboxes: Story = {
   },
 };
 
+export const ResponsiveCanvas: Story = {};
+
 export const ToolbarCreateFlow: Story = {
   render: () => <WorkspaceStoryHarness />,
   play: async ({ canvasElement }) => {
@@ -449,14 +536,25 @@ export const ToolbarCreateFlow: Story = {
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
     await expect(
-      canvas.getByText("在当前工作台里直接创建新地址。"),
+      canvas.getByText("创建后会自动切换到新邮箱。"),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText(randomDomainPreviewAddress),
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await expect(
+      within(canvasElement.ownerDocument.body).getByText(
+        randomDomainPreviewAddress,
+      ),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
 
-    await userEvent.keyboard("{Escape}");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "取消" }));
     await expect(canvas.queryByLabelText("用户名")).not.toBeInTheDocument();
 
     await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
@@ -466,9 +564,17 @@ export const ToolbarCreateFlow: Story = {
       canvas.getByLabelText("邮箱域名"),
       "mail.example.net",
     );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await expect(
-      canvas.getByText(selectedDomainPreviewAddress),
+      within(canvasElement.ownerDocument.body).getByText(
+        selectedDomainPreviewAddress,
+      ),
     ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
     await expect(
@@ -491,8 +597,13 @@ export const CreatePopoverOpen: Story = {
   render: () => <WorkspaceStoryHarness initialCreateOpen />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
     await expect(
-      canvas.getByText(buildMailboxCreateAddressExample({})),
+      within(canvasElement.ownerDocument.body).getByText(
+        buildMailboxCreateAddressExample({}),
+      ),
     ).toBeInTheDocument();
     await expect(canvas.getByLabelText("邮箱域名")).toHaveValue("");
   },
@@ -589,6 +700,7 @@ export const RefreshingWorkspace: Story = {
 };
 
 export const DesktopVirtualizedLongLists: Story = {
+  globals: projectViewportGlobals.desktop,
   render: () => <DesktopVirtualizedHarness />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -636,11 +748,9 @@ export const MailboxPaneError: Story = {
     mailboxesError: {
       variant: "recoverable",
       title: "邮箱列表暂时不可用",
-      description: "左栏依赖邮箱目录和聚合统计，当前不会把失败误显示成空状态。",
-      details: `{
-  "error": "Request failed",
-  "details": "mailboxes offline"
-}`,
+      description: "暂时无法获取邮箱目录和统计，请刷新后重试。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "mailboxes offline"\n}',
       onRetry: fn(),
     },
     visibleMailboxes: [],
@@ -654,11 +764,9 @@ export const MessagePaneError: Story = {
     messagesError: {
       variant: "recoverable",
       title: "邮件流加载失败",
-      description: "当前邮箱范围内的邮件流没有成功返回。",
-      details: `{
-  "error": "Request failed",
-  "details": "messages offline"
-}`,
+      description: "暂时无法获取当前范围内的邮件，请刷新后重试。",
+      details:
+        '{\n  "error": "Request failed",\n  "details": "messages offline"\n}',
       onRetry: fn(),
     },
     messages: [],

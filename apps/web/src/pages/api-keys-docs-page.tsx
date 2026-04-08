@@ -1,5 +1,5 @@
 import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
-import { BookOpenText, ExternalLink } from "lucide-react";
+import { BookOpenText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -498,7 +498,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "disabledAt": null
 }`,
           notes: [
-            "前端不会再让管理员手填 zone id，而是直接从 `GET /api/domains/catalog` 的可见域里选中后提交。",
+            "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
             "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
           ],
@@ -644,29 +644,17 @@ const ApiKeysDocsPageView = ({
     <div className="space-y-6">
       <PageHeader
         title="API 对接速查"
-        description="站内速查页只保留当前运行时最常用的接口示例与权限摘要；完整部署、Token 权限矩阵和 Storybook 入口请走公开文档站。"
+        description="查看常用接口、认证方式和地址规则。"
         eyebrow="Integration"
         action={
           <div className="flex flex-wrap justify-end gap-2">
             {docsLinks ? (
-              <>
-                <Button asChild variant="secondary">
-                  <a href={docsLinks.docsHome} target="_blank" rel="noreferrer">
-                    <BookOpenText className="mr-2 h-4 w-4" />
-                    公开文档站
-                  </a>
-                </Button>
-                <Button asChild variant="outline">
-                  <a
-                    href={docsLinks.storybook}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    公开 Storybook
-                  </a>
-                </Button>
-              </>
+              <Button asChild variant="secondary">
+                <a href={docsLinks.docsHome} target="_blank" rel="noreferrer">
+                  <BookOpenText className="mr-2 h-4 w-4" />
+                  公开文档站
+                </a>
+              </Button>
             ) : null}
             <Button asChild variant="outline">
               <Link to={appRoutes.apiKeys}>回到 API Keys</Link>
@@ -744,7 +732,16 @@ const ApiKeysDocsPageView = ({
               </p>
               {docsLinks ? (
                 <p className="mt-2">
-                  完整权限矩阵、部署说明与公开组件预览见{" "}
+                  更多权限矩阵与部署说明见{" "}
+                  <a
+                    className="underline underline-offset-4"
+                    href={docsLinks.docsHome}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    公开文档站
+                  </a>{" "}
+                  与{" "}
                   <a
                     className="underline underline-offset-4"
                     href={docsLinks.tokenPermissions}
@@ -752,15 +749,6 @@ const ApiKeysDocsPageView = ({
                     rel="noreferrer"
                   >
                     Cloudflare Token 权限页
-                  </a>{" "}
-                  与{" "}
-                  <a
-                    className="underline underline-offset-4"
-                    href={docsLinks.storybook}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Storybook
                   </a>
                   。
                 </p>
@@ -852,7 +840,7 @@ export const ApiKeysDocsPage = () => {
       <div className="space-y-4">
         <PageHeader
           title="API 对接速查"
-          description="正在读取 `/api/meta`，准备把当前可用域名、TTL 和地址规则写进这份速查页。"
+          description="正在读取当前可用域名和地址规则。"
           eyebrow="Integration"
         />
         <Card className={sectionCardClassName}>

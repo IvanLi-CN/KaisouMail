@@ -2,7 +2,6 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildMailboxCreateAddressExample } from "@/components/mailboxes/mailbox-create-preview";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import {
   demoMailboxes,
@@ -97,7 +96,7 @@ describe("MailWorkspace", () => {
     expect(onCancel).not.toHaveBeenCalled();
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("");
     expect(
-      screen.getByText(buildMailboxCreateAddressExample({})),
+      screen.getByRole("button", { name: "查看邮箱创建说明" }),
     ).toBeInTheDocument();
 
     fireEvent.keyDown(screen.getByLabelText("用户名"), {
@@ -148,14 +147,14 @@ describe("MailWorkspace", () => {
           mailboxesError={{
             variant: "recoverable",
             title: "邮箱列表暂时不可用",
-            description: "左栏依赖邮箱目录和聚合统计。",
+            description: "暂时无法获取邮箱目录和统计，请刷新后重试。",
             details: '{"error":"Request failed"}',
             onRetry: vi.fn(),
           }}
           messagesError={{
             variant: "recoverable",
             title: "邮件流加载失败",
-            description: "中栏不会继续伪装成没有邮件。",
+            description: "暂时无法获取当前范围内的邮件，请刷新后重试。",
             details: '{"error":"Request failed"}',
             onRetry: vi.fn(),
           }}

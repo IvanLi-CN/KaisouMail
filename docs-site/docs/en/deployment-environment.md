@@ -61,10 +61,12 @@ When the control plane runs from a known production alias such as `cfm.707979.xy
 
 ## Deploy workflow safety rails
 
-- The production deploy workflow captures the current 100%-stable API Worker version before publishing a new API release
-- It fails closed when the target release includes a D1 migration diff, or when remote D1 still has pending migrations, because rollback-backed automation only supports schema-stable releases with a clean remote migration state
-- For schema-stable releases with zero pending remote migrations, the workflow uses rollback-backed `/health` + `/api/version` smoke checks before it can continue to Pages promotion
-- Because the workflow also fails closed without a rollback target, bootstrap the very first production API release manually
+- The production deploy workflow always captures a D1 Time Travel restore anchor and, for schema-stable releases, also captures the current 100%-stable API Worker version before publishing a new API release
+- It applies remote D1 migrations automatically, uploads a non-live API Worker version to a preview URL, and only promotes that version to 100% production traffic after preview `/health` + `/api/version` smoke passes
+- After promotion it runs `/health` + `/api/version` smoke against the production API origin before any trigger changes; only then does it apply Worker route/domain/cron trigger changes explicitly and rerun smoke after trigger application across `VITE_API_BASE_URL` plus every routable API URL declared in `apps/api-worker/wrangler.jsonc`, all without automatic rollback. Trigger application errors or post-trigger smoke failures stop for manual inspection, and automatic Worker rollback is disabled whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy
+- D1 restore remains an explicit `workflow_dispatch` recovery path, not an automatic failure hook, because automatic DB restore could discard real writes
+- `CI Main` and `CI PR` block obviously destructive SQL patterns on the default path, and Deploy re-validates the remote pending migration set before apply; keep migrations expand-only / forward-compatible, keep compatibility code for at most one release, and move destructive cleanup to a later cleanup release
+- Because the workflow still needs a stable rollback target, bootstrap the very first production API release manually and keep a workers.dev subdomain available for preview URLs
 
 ## Public GitHub Pages site
 
