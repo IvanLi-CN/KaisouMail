@@ -46,7 +46,9 @@ jobs:
         run: |
           python3 -m py_compile .github/scripts/metadata_gate.py .github/scripts/migration_safety_gate.py .github/scripts/pending_migration_gate.py .github/scripts/release_snapshot.py
           node --check .github/scripts/verify_api_smoke.mjs
+          node --check .github/scripts/verify_pages_api_smoke.mjs
           node --check .github/scripts/resolve_api_smoke_urls.mjs
+          node --check .github/scripts/resolve_pages_smoke_origins.mjs
 
       - name: Release helper self-tests
         run: |
@@ -55,7 +57,9 @@ jobs:
           bash .github/scripts/test-migration-safety.sh
           bash .github/scripts/test-pending-migration-gate.sh
           bash .github/scripts/test-verify-api-smoke.sh
+          bash .github/scripts/test-verify-pages-api-smoke.sh
           bash .github/scripts/test-resolve-api-smoke-urls.sh
+          bash .github/scripts/test-resolve-pages-smoke-origins.sh
           bash .github/scripts/test-release-snapshot.sh
 
       - name: Lint and format check
