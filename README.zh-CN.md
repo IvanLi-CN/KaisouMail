@@ -22,7 +22,7 @@
 ## 仓库结构
 
 - `apps/api-worker`：API Worker、收信 Worker、清理任务、Drizzle schema、Wrangler 配置
-- `apps/web`：登录后的控制台、Storybook、Playwright smoke
+- `apps/web`：登录后的控制台、同源 `/api` Pages Function 代理、Storybook、Playwright smoke
 - `docs-site`：公开 Rspress 文档站，最终发布到 GitHub Pages
 - `packages/shared`：共享 schema、常量、版本信息
 
@@ -54,6 +54,8 @@ PORT=4173 bun run --cwd apps/web dev
 DOCS_PORT=56007 bun run --cwd docs-site dev
 STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 ```
+
+`apps/web` 里的浏览器请求现在默认走同源 `/api`。本地 dev / preview 会把 `/api` 代理到 `VITE_API_BASE_URL`，未设置时回退到 `http://127.0.0.1:8787`。
 
 ## Cloudflare API Token 权限
 
@@ -126,7 +128,8 @@ Web 侧重点变量：
 - `VITE_DOCS_SITE_ORIGIN`
 
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
-`WEB_APP_ORIGINS` 应与所有线上控制台域名保持一致；这样当控制台从不同别名域访问时，前端就能优先命中同族 API 域名，而 `VITE_API_BASE_URL` 继续作为本地和预览环境的回退值。
+一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + Service Binding 转发到 `kaisoumail-api`。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
+`VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、预览、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。
 
 ## 发布工作流门禁
 
@@ -143,16 +146,16 @@ Web 侧重点变量：
 
 ## 部署检查清单
 
-1. 在 Cloudflare 中创建一次 `kaisoumail` Pages 项目
+1. 创建或复用 `CF_PAGES_PROJECT_NAME` 指向的 Cloudflare Pages 项目
 2. 给 Pages 绑定一个或多个控制台域名（例如 `cfm.example.com`、`km.example.com`），同时给 API Worker 绑定对应的 API 自定义域（例如 `api.cfm.example.com`、`api.km.example.com`）
 3. 配置 Worker runtime secret `SESSION_SECRET`；只有在你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 做首次管理员引导时，才再配置 `BOOTSTRAP_ADMIN_API_KEY`
 4. 把 `EMAIL_WORKER_NAME` 指向收信 Worker 脚本
 5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`
-6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=kaisoumail`、`VITE_API_BASE_URL=<你的 canonical API 域名>`
-7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
+6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=<你的 Pages 项目>`、`VITE_API_BASE_URL=<你的 canonical 直连 API 域名，用于 deploy smoke>`
+7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源直连 API 配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
 8. 如果是从历史单域实例升级，首次部署时保留 `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID`，让 bootstrap 回填初始 `domains` 记录
 9. 第一次生产 API 发布仍需手动 bootstrap；之后保持至少一个 100% stable 的 API 版本，workflow 才能把候选版本以 0% 流量加入 active deployment，经由 canonical API 域名 + `Cloudflare-Workers-Version-Overrides` 完成 shadow smoke，再安全 promote 或回滚
-10. `workers.dev` 子域名只作为可选的人工调试入口，默认自动 deploy 链路不再依赖 preview URL
+10. 只有在本地 `.env` / 预览 override 里才设置 `VITE_API_BASE_URL`，用于把 `apps/web` 的 `/api` 代理到默认本地 Worker 之外的目标
 11. 推送到 `main` 触发 deploy workflow
 12. 需要恢复 D1 时，使用 `Actions -> Deploy -> Run workflow -> operation=restore-d1` 并提供 timestamp 或 bookmark（Cloudflare D1 Time Travel 当前默认保留 30 天恢复窗口）
 13. 推送文档或 Storybook 变更到 `main` 刷新 GitHub Pages 公开站点
