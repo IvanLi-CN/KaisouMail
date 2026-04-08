@@ -28,7 +28,7 @@ import type {
 
 import { demoApi } from "@/lib/demo-store";
 
-const SAME_ORIGIN_API_BASE = "/api";
+const SAME_ORIGIN_API_BASE = "";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
