@@ -693,6 +693,11 @@ describe("passkey service", () => {
     );
 
     expect(result.user.email).toBe(authUser.email);
+    expect(verifyAuthenticationResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requireUserVerification: true,
+      }),
+    );
     expect(updates).toHaveLength(1);
   });
 

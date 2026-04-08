@@ -598,6 +598,7 @@ export const verifyPasskeyAuthentication = async (
         expectedChallenge: challenge.challenge,
         expectedOrigin,
         expectedRPID,
+        requireUserVerification: true,
         credential: {
           id: row.credentialId,
           publicKey: fromBase64Url(row.publicKeyB64u),

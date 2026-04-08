@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { useMetaQuery } from "@/hooks/use-meta";
+import { sessionKeys, useSessionQuery } from "@/hooks/use-session";
 import { apiClient, resolveApiOrigin } from "@/lib/api";
+import type { SessionResponse } from "@/lib/contracts";
 import {
   browserSupportsPasskeys,
   registerPasskey,
@@ -10,21 +12,37 @@ import {
   signInWithPasskey,
 } from "@/lib/passkeys";
 
-export const passkeyListKey = ["passkeys"] as const;
+export const passkeyListKey = (userId: string | null) =>
+  ["passkeys", userId ?? "anonymous"] as const;
 
-export const usePasskeysQuery = (enabled = true) =>
-  useQuery({
-    queryKey: passkeyListKey,
+const resolveCurrentUserPasskeyListKey = (
+  queryClient: ReturnType<typeof useQueryClient>,
+) => {
+  const session = queryClient.getQueryData<SessionResponse | null>(
+    sessionKeys.all,
+  );
+  return passkeyListKey(session?.user.id ?? null);
+};
+
+export const usePasskeysQuery = (enabled = true) => {
+  const sessionQuery = useSessionQuery();
+  const userId = sessionQuery.data?.user.id ?? null;
+
+  return useQuery({
+    queryKey: passkeyListKey(userId),
     queryFn: () => apiClient.listPasskeys(),
-    enabled,
+    enabled: enabled && Boolean(userId),
   });
+};
 
 export const useCreatePasskeyMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => registerPasskey(name),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: passkeyListKey });
+      void queryClient.invalidateQueries({
+        queryKey: resolveCurrentUserPasskeyListKey(queryClient),
+      });
     },
   });
 };
@@ -34,7 +52,9 @@ export const useRevokePasskeyMutation = () => {
   return useMutation({
     mutationFn: (passkeyId: string) => apiClient.revokePasskey(passkeyId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: passkeyListKey });
+      void queryClient.invalidateQueries({
+        queryKey: resolveCurrentUserPasskeyListKey(queryClient),
+      });
     },
   });
 };
@@ -44,7 +64,7 @@ export const usePasskeyLoginMutation = () => {
   return useMutation({
     mutationFn: () => signInWithPasskey(),
     onSuccess: (session) => {
-      queryClient.setQueryData(["session"], session);
+      queryClient.setQueryData(sessionKeys.all, session);
     },
   });
 };
