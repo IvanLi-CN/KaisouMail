@@ -234,6 +234,38 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByLabelText("完整邮箱地址")).toHaveValue("");
   });
 
+  it("clears segmented values when switching back from an invalid full address", () => {
+    render(
+      <MailboxCreateForm
+        defaultTtlMinutes={60}
+        domains={["relay.example.test", "mail.example.net"]}
+        maxTtlMinutes={1440}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("用户名"), {
+      target: { value: "storybox" },
+    });
+    fireEvent.change(screen.getByLabelText("子域名"), {
+      target: { value: "ops.alpha" },
+    });
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "mail.example.net" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
+    fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
+      target: { value: "Build@Ops.Alpha.unsupported.test" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "分段" }));
+
+    expect(screen.getByLabelText("用户名")).toHaveValue("");
+    expect(screen.getByLabelText("子域名")).toHaveValue("");
+    expect(screen.getByLabelText("邮箱域名")).toHaveValue("");
+  });
+
   it("suggests switching after a supported full address is pasted into segmented inputs", async () => {
     render(
       <MailboxCreateForm

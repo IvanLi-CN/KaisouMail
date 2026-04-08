@@ -327,6 +327,22 @@ export const MailboxCreateForm = ({
         shouldTouch: true,
         shouldValidate: false,
       });
+    } else {
+      form.setValue("localPart", "", {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      form.setValue("subdomain", "", {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      form.setValue("rootDomain", "", {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
     }
 
     setPasteSuggestion(null);
