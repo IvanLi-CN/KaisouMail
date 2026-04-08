@@ -56,3 +56,12 @@ export const PasskeyUntrustedOrigin: Story = {
       "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
   },
 };
+
+export const PasskeyCrossSiteApiBase: Story = {
+  args: {
+    passkeySupported: false,
+    passkeyButtonLabel: "当前环境不支持 Passkey",
+    passkeySupportMessage:
+      "当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。",
+  },
+};

@@ -175,6 +175,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "接口会同步下发短时效、HttpOnly 的 passkey challenge cookie。",
             "`rpId` 会固定为当前可信 origin 集共享的 WebAuthn RP ID（单域时等于该 host，多域别名时会回退到共享的非 public suffix）；本地 passkey 调试必须使用 `localhost`，不能直接用 IP 字面量；验证阶段会接受 `WEB_APP_ORIGIN` 与 `WEB_APP_ORIGINS` 里配置的全部可信 origin。",
+            "浏览器控制台与 API 还必须保持 same-site，开发时不要混用 `localhost` 与 `127.0.0.1`，否则 challenge cookie 无法在 verify 阶段回传。",
           ],
         },
         {

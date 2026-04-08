@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { useMetaQuery } from "@/hooks/use-meta";
-import { apiClient } from "@/lib/api";
+import { apiClient, resolveApiOrigin } from "@/lib/api";
 import {
   browserSupportsPasskeys,
   registerPasskey,
@@ -56,6 +56,7 @@ export const usePasskeySupport = () => {
   return useMemo(
     () =>
       resolvePasskeySupportState({
+        apiOrigin: resolveApiOrigin(),
         browserSupported,
         passkeyAuthEnabled: metaQuery.data?.passkeyAuthEnabled,
         passkeyTrustedOrigins: metaQuery.data?.passkeyTrustedOrigins,

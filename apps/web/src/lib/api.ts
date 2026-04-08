@@ -35,6 +35,19 @@ const PRODUCTION_API_BASE_BY_WEB_HOST = {
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
+const normalizeOrigin = (value: string | null | undefined) => {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmedValue).origin;
+  } catch {
+    return null;
+  }
+};
+
 export const resolveApiBase = ({
   configuredBaseUrl = import.meta.env.VITE_API_BASE_URL,
   currentLocation = typeof window !== "undefined" ? window.location : undefined,
@@ -54,6 +67,25 @@ export const resolveApiBase = ({
 
   const configuredBase = configuredBaseUrl?.trim();
   return configuredBase ? trimTrailingSlash(configuredBase) : "";
+};
+
+export const resolveApiOrigin = ({
+  configuredBaseUrl = import.meta.env.VITE_API_BASE_URL,
+  currentLocation = typeof window !== "undefined" ? window.location : undefined,
+}: {
+  configuredBaseUrl?: string;
+  currentLocation?: Pick<Location, "hostname" | "origin">;
+} = {}) => {
+  const apiBase = resolveApiBase({ configuredBaseUrl, currentLocation });
+  if (!apiBase) {
+    return normalizeOrigin(currentLocation?.origin);
+  }
+
+  try {
+    return new URL(apiBase, currentLocation?.origin).origin;
+  } catch {
+    return null;
+  }
 };
 
 const API_BASE = resolveApiBase();

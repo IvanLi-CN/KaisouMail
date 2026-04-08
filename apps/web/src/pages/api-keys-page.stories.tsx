@@ -241,6 +241,35 @@ export const PasskeyTabUntrustedOrigin: Story = {
   },
 };
 
+export const PasskeyTabCrossSiteApiBase: Story = {
+  render: (args) => (
+    <InteractiveApiKeysPageView
+      {...args}
+      defaultTab="passkey"
+      passkeySupported={false}
+      passkeyError="当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。"
+      passkeyEmptyMessage="当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole("tab", { name: /Passkey/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.getByText(
+        "当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。",
+      ),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "注册当前设备" }),
+    ).toBeDisabled();
+    await expect(canvas.getByText("MacBook Pro")).toBeInTheDocument();
+  },
+};
+
 export const RouteFlow: Story = {
   render: () => <RouteFlowHarness />,
   play: async ({ canvasElement }) => {

@@ -3,8 +3,9 @@ import {
   startAuthentication,
   startRegistration,
 } from "@simplewebauthn/browser";
+import { getDomain } from "tldts";
 
-import { ApiClientError, apiClient } from "@/lib/api";
+import { ApiClientError, apiClient, resolveApiOrigin } from "@/lib/api";
 
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
@@ -35,6 +36,30 @@ const isIpLiteralHost = (hostname: string) => {
   }
 
   return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
+};
+
+const isLocalPreviewHost = (hostname: string) =>
+  hostname === "localhost" || isIpLiteralHost(hostname);
+
+const isSameSiteOrigin = (leftOrigin: string, rightOrigin: string) => {
+  const left = new URL(leftOrigin);
+  const right = new URL(rightOrigin);
+
+  if (left.protocol !== right.protocol) {
+    return false;
+  }
+
+  if (left.hostname === right.hostname) {
+    return true;
+  }
+
+  if (isLocalPreviewHost(left.hostname) || isLocalPreviewHost(right.hostname)) {
+    return false;
+  }
+
+  const leftSite = getDomain(left.hostname, { allowPrivateDomains: true });
+  const rightSite = getDomain(right.hostname, { allowPrivateDomains: true });
+  return Boolean(leftSite && rightSite && leftSite === rightSite);
 };
 
 const normalizePasskeyErrorMessage = (message: string, fallback: string) => {
@@ -84,6 +109,8 @@ export const browserSupportsPasskeys = () => {
 };
 
 export const resolvePasskeySupportState = ({
+  apiOrigin = resolveApiOrigin(),
+  allowAnyLocalOrigin = DEMO_MODE,
   browserSupported,
   currentOrigin = globalThis.location?.origin,
   hasMetaError = false,
@@ -91,6 +118,8 @@ export const resolvePasskeySupportState = ({
   passkeyAuthEnabled,
   passkeyTrustedOrigins = [],
 }: {
+  apiOrigin?: string | null;
+  allowAnyLocalOrigin?: boolean;
   browserSupported: boolean;
   currentOrigin?: string;
   hasMetaError?: boolean;
@@ -98,6 +127,7 @@ export const resolvePasskeySupportState = ({
   passkeyAuthEnabled?: boolean;
   passkeyTrustedOrigins?: string[];
 }): PasskeySupportState => {
+  const normalizedApiOrigin = normalizeOrigin(apiOrigin);
   const normalizedCurrentOrigin = normalizeOrigin(currentOrigin);
   const trustedOrigins = passkeyTrustedOrigins
     .map((origin) => normalizeOrigin(origin))
@@ -150,8 +180,29 @@ export const resolvePasskeySupportState = ({
   }
 
   if (
+    normalizedCurrentOrigin &&
+    normalizedApiOrigin &&
+    !isSameSiteOrigin(normalizedCurrentOrigin, normalizedApiOrigin)
+  ) {
+    return {
+      backendConfigured: true,
+      buttonLabel: "当前环境不支持 Passkey",
+      managementMessage:
+        "当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。",
+      message:
+        "当前控制台与 API 不在同一站点，Passkey challenge cookie 无法回传；请改用同站点域名，避免混用 localhost 与 127.0.0.1。",
+      supported: false,
+    };
+  }
+
+  const localPreviewTrusted =
+    allowAnyLocalOrigin &&
+    normalizedCurrentOrigin &&
+    isLocalPreviewHost(new URL(normalizedCurrentOrigin).hostname);
+
+  if (
     !normalizedCurrentOrigin ||
-    !trustedOrigins.includes(normalizedCurrentOrigin)
+    (!trustedOrigins.includes(normalizedCurrentOrigin) && !localPreviewTrusted)
   ) {
     return {
       backendConfigured: true,

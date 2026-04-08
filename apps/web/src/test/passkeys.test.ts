@@ -73,6 +73,7 @@ describe("resolvePasskeySupportState", () => {
   it("disables passkeys when the current origin is not trusted", () => {
     expect(
       resolvePasskeySupportState({
+        apiOrigin: "https://api.cfm.707979.xyz",
         browserSupported: true,
         currentOrigin: "https://preview.707979.xyz",
         passkeyAuthEnabled: true,
@@ -88,8 +89,42 @@ describe("resolvePasskeySupportState", () => {
   it("keeps passkeys enabled when the current origin is trusted", () => {
     expect(
       resolvePasskeySupportState({
+        apiOrigin: "https://api.cfm.707979.xyz",
         browserSupported: true,
         currentOrigin: "https://cfm.707979.xyz",
+        passkeyAuthEnabled: true,
+        passkeyTrustedOrigins: ["https://cfm.707979.xyz"],
+      }),
+    ).toMatchObject({
+      backendConfigured: true,
+      buttonLabel: "使用 Passkey 登录",
+      supported: true,
+    });
+  });
+
+  it("disables passkeys when the API base is cross-site", () => {
+    expect(
+      resolvePasskeySupportState({
+        apiOrigin: "http://127.0.0.1:8787",
+        browserSupported: true,
+        currentOrigin: "http://localhost:4173",
+        passkeyAuthEnabled: true,
+        passkeyTrustedOrigins: ["http://localhost:4173"],
+      }),
+    ).toMatchObject({
+      backendConfigured: true,
+      buttonLabel: "当前环境不支持 Passkey",
+      supported: false,
+    });
+  });
+
+  it("keeps demo/local preview origins eligible when explicitly allowed", () => {
+    expect(
+      resolvePasskeySupportState({
+        allowAnyLocalOrigin: true,
+        apiOrigin: "http://localhost:8787",
+        browserSupported: true,
+        currentOrigin: "http://localhost:4173",
         passkeyAuthEnabled: true,
         passkeyTrustedOrigins: ["https://cfm.707979.xyz"],
       }),
