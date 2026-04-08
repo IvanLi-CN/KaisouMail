@@ -19,7 +19,8 @@ Minimum variables:
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
   - `BOOTSTRAP_ADMIN_API_KEY` (optional; only if `BOOTSTRAP_ADMIN_EMAIL` is set for first-admin bootstrap)
-  - `WEB_APP_ORIGIN`
+  - `WEB_APP_ORIGIN` (required for browser passkeys; it provides the primary trusted WebAuthn origin and the RP ID when you only keep one origin, and local passkey development must use `http://localhost:4173` instead of an IP literal)
+  - `WEB_APP_ORIGINS` (optional; add it when multiple production control-plane aliases must stay trusted for passkeys and need one shared non-public RP ID suffix)
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -39,10 +40,16 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## Local URLs
 
-- Control plane: `http://127.0.0.1:4173`
-- Worker API: `http://127.0.0.1:8787`
-- Public docs: `http://127.0.0.1:56007`
-- Storybook: `http://127.0.0.1:6006`
+- Control plane: `http://localhost:4173`
+- Worker API: `http://localhost:8787`
+- Public docs: `http://localhost:56007`
+- Storybook: `http://localhost:6006`
+
+## Login options
+
+- Browser users can register a passkey inside `/api-keys` after their first sign-in
+- Automation and recovery flows should keep using API Keys
+- When you validate passkeys locally, open the control plane from `localhost` instead of `127.0.0.1`
 
 ## Production surfaces
 

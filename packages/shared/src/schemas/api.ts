@@ -14,6 +14,7 @@ import {
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
+  passkeySchema,
   sessionUserSchema,
   userRoleSchema,
   userSchema,
@@ -41,6 +42,10 @@ export const createApiKeyRequestSchema = z.object({
 export const createApiKeyResponseSchema = z.object({
   apiKey: z.string(),
   apiKeyRecord: apiKeySchema,
+});
+
+export const createPasskeyRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64),
 });
 
 export const createMailboxRequestSchema = z.object({
@@ -131,6 +136,10 @@ export const listApiKeysResponseSchema = z.object({
   apiKeys: z.array(apiKeySchema),
 });
 
+export const listPasskeysResponseSchema = z.object({
+  passkeys: z.array(passkeySchema),
+});
+
 export const listUsersResponseSchema = z.object({
   users: z.array(userSchema),
 });
@@ -150,6 +159,8 @@ export const apiMetaResponseSchema = z.object({
   domains: z.array(z.string().regex(rootDomainRegex)),
   cloudflareDomainBindingEnabled: z.boolean(),
   cloudflareDomainLifecycleEnabled: z.boolean(),
+  passkeyAuthEnabled: z.boolean(),
+  passkeyTrustedOrigins: z.array(z.string().url()),
   defaultMailboxTtlMinutes: z
     .number()
     .int()

@@ -6,7 +6,7 @@
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /api/meta` | 读取 active 域名、TTL 和地址规则 |
+| `GET /api/meta` | 读取 active 域名、TTL、地址规则与 Passkey 能力 |
 | `GET /api/domains/catalog` | 读取 Cloudflare 可见 zone + 项目状态 |
 | `GET /api/domains` | 读取项目内已有域记录 |
 | `POST /api/domains/bind` | 创建 Cloudflare full zone 并接入项目 |
@@ -19,9 +19,15 @@
 
 | 接口 | 用途 |
 | --- | --- |
+| `POST /api/auth/passkey/options` | 生成浏览器 passkey 登录 challenge |
+| `POST /api/auth/passkey/verify` | 校验 passkey 登录并签发会话 |
 | `GET /api/auth/session` | 读取当前登录会话 |
 | `POST /api/auth/session` | 用 API Key 换会话 |
 | `DELETE /api/auth/session` | 退出登录 |
+| `GET /api/passkeys` | 列出当前用户的 passkeys |
+| `POST /api/passkeys/registration/options` | 生成 passkey 注册 challenge |
+| `POST /api/passkeys/registration/verify` | 保存校验通过的 passkey |
+| `DELETE /api/passkeys/:id` | 撤销 passkey |
 | `GET /api/api-keys` | 列出 API Keys |
 | `POST /api/api-keys` | 创建 API Key |
 | `POST /api/api-keys/:id/revoke` | 撤销 API Key |
