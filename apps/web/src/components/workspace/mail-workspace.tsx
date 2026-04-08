@@ -607,11 +607,9 @@ export const MailWorkspace = ({
                       return (
                         <button
                           type="button"
+                          data-active={active ? "true" : undefined}
                           className={cn(
-                            "flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            active
-                              ? "border-primary/40 bg-primary/10"
-                              : "border-border bg-muted/10 hover:bg-white/5",
+                            "workspace-message-item flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
                           )}
                           onClick={() => onSelectMessage(message.id)}
                         >

@@ -139,7 +139,7 @@ describe("MailWorkspace", () => {
     ).toHaveTextContent("新建");
   });
 
-  it("uses semantic mailbox state hooks instead of stacked ring utilities across mailbox rows", () => {
+  it("uses semantic state hooks instead of stacked ring utilities across workspace rails", () => {
     render(
       <MemoryRouter>
         <MailWorkspace
@@ -164,6 +164,10 @@ describe("MailWorkspace", () => {
     const highlightedRow = within(mailboxList).getByRole("button", {
       name: /spec@ops\.beta\.mail\.example\.net/i,
     });
+    const messageList = screen.getByRole("region", { name: "邮件列表" });
+    const activeMessageRow = within(messageList).getByRole("button", {
+      name: /Build artifacts ready/i,
+    });
 
     expect(allMailRow).toHaveClass("workspace-mailbox-item");
     expect(allMailRow).toHaveAttribute("data-active", "true");
@@ -178,6 +182,11 @@ describe("MailWorkspace", () => {
     expect(highlightedRow).toHaveAttribute("data-highlighted", "true");
     expect(highlightedRow.className).not.toContain("ring-1");
     expect(highlightedRow.className).not.toContain("ring-primary/35");
+
+    expect(activeMessageRow).toHaveClass("workspace-message-item");
+    expect(activeMessageRow).toHaveAttribute("data-active", "true");
+    expect(activeMessageRow.className).not.toContain("focus-visible:ring-ring");
+    expect(activeMessageRow.className).not.toContain("focus-visible:ring-2");
 
     highlightedRow.focus();
     expect(highlightedRow).toHaveFocus();

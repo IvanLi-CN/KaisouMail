@@ -725,6 +725,18 @@ export const FocusedAllMailboxRow: Story = {
   },
 };
 
+export const FocusedMessageRow: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const messageRow = canvas.getByRole("button", {
+      name: /Spec review notes/i,
+    });
+
+    await focusMailboxByTab(canvasElement, messageRow);
+  },
+};
+
 export const HighlightedNewMailboxFocused: Story = {
   globals: projectViewportGlobals.desktop,
   args: {
