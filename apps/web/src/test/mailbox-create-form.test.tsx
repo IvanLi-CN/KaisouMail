@@ -200,6 +200,31 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");
   });
 
+  it("clears stale full-address values when segmented fields no longer resolve", () => {
+    render(
+      <MailboxCreateForm
+        defaultTtlMinutes={60}
+        domains={["relay.example.test", "mail.example.net"]}
+        maxTtlMinutes={1440}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
+    fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
+      target: { value: "Build@Ops.Alpha.mail.example.net" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "分段" }));
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
+
+    expect(screen.getByLabelText("完整邮箱地址")).toHaveValue("");
+  });
+
   it("suggests switching after a supported full address is pasted into segmented inputs", async () => {
     render(
       <MailboxCreateForm

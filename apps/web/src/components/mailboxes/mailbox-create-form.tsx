@@ -288,7 +288,7 @@ export const MailboxCreateForm = ({
         shouldValidate: false,
       });
       form.clearErrors("address");
-    } else if (!normalizeMailboxAddress(fullAddress)) {
+    } else {
       form.setValue("address", "", {
         shouldDirty: false,
         shouldTouch: false,
