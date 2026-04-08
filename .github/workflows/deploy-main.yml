@@ -206,6 +206,80 @@ jobs:
           echo "CF_MAIL_D1_API_TOKEN=${d1_token}" >> "${GITHUB_ENV}"
           echo "CF_MAIL_DEPLOY_API_TOKEN=${deploy_token}" >> "${GITHUB_ENV}"
 
+      - name: Render API Worker deploy config
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated_config_path="apps/api-worker/wrangler.deploy.generated.jsonc"
+          node scripts/render-api-worker-deploy-config.mjs \
+            apps/api-worker/wrangler.jsonc \
+            "${generated_config_path}"
+          echo "API_WORKER_CONFIG_PATH=${generated_config_path}" >> "${GITHUB_ENV}"
+
+      - name: Verify API Worker runtime config wiring
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f "${API_WORKER_CONFIG_PATH}" ]; then
+            echo "Generated API Worker deploy config is missing: ${API_WORKER_CONFIG_PATH}" >&2
+            exit 1
+          fi
+
+          render_check_output="$(node <<'NODE'
+          const fs = require("node:fs");
+
+          const config = JSON.parse(
+            fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
+          );
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
+          const runtimeAccountId =
+            typeof config?.vars?.CLOUDFLARE_ACCOUNT_ID === "string"
+              ? config.vars.CLOUDFLARE_ACCOUNT_ID.trim()
+              : "";
+          const managementEnabled =
+            String(config?.vars?.EMAIL_ROUTING_MANAGEMENT_ENABLED ?? "")
+              .trim()
+              .toLowerCase() === "true";
+
+          if (managementEnabled) {
+            if (!accountId) {
+              console.error(
+                "Missing CLOUDFLARE_ACCOUNT_ID. Set the GitHub secret so deploy can inject the API Worker runtime binding.",
+              );
+              process.exit(1);
+            }
+
+            if (runtimeAccountId !== accountId) {
+              console.error(
+                `Generated runtime CLOUDFLARE_ACCOUNT_ID mismatch: expected ${accountId}, received ${runtimeAccountId || "<missing>"}`,
+              );
+              process.exit(1);
+            }
+
+            console.log(`Verified generated runtime CLOUDFLARE_ACCOUNT_ID=${runtimeAccountId}`);
+            process.exit(0);
+          }
+
+          console.log(
+            "Skipped CLOUDFLARE_ACCOUNT_ID hard requirement because EMAIL_ROUTING_MANAGEMENT_ENABLED=false in the generated API Worker runtime config.",
+          );
+          NODE
+          )"
+          printf '%s\n' "${render_check_output}"
+          if ! printf '%s' "${render_check_output}" | grep -q "Verified generated runtime CLOUDFLARE_ACCOUNT_ID="; then
+            echo "Skipping env.CLOUDFLARE_ACCOUNT_ID dry-run assertion because EMAIL_ROUTING_MANAGEMENT_ENABLED=false for this deployment."
+            exit 0
+          fi
+
+          dry_run_output_file="${RUNNER_TEMP}/api-worker-dry-run.txt"
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deploy --dry-run --config "${API_WORKER_CONFIG_PATH}" >"${dry_run_output_file}" 2>&1
+          if ! grep -q "env.CLOUDFLARE_ACCOUNT_ID" "${dry_run_output_file}"; then
+            cat "${dry_run_output_file}"
+            echo "Expected wrangler dry-run to expose env.CLOUDFLARE_ACCOUNT_ID in the API Worker runtime bindings." >&2
+            exit 1
+          fi
       - name: Restore remote D1 from Time Travel
         if: steps.operation.outputs.operation == 'restore-d1'
         shell: bash
@@ -274,25 +348,45 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          secrets_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" secret list --config apps/api-worker/wrangler.jsonc --format json)"
+          secrets_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" secret list --config "${API_WORKER_CONFIG_PATH}" --format json)"
           export SECRETS_JSON="${secrets_json}"
-          node <<'NODE'
+          runtime_contract_env_file="${RUNNER_TEMP}/api-worker-runtime-contract.env"
+          RUNTIME_CONTRACT_ENV_FILE="${runtime_contract_env_file}" node <<'NODE'
           const fs = require("node:fs");
 
           const secrets = JSON.parse(process.env.SECRETS_JSON ?? "[]");
           const names = new Set(secrets.map((secret) => secret.name));
           const wranglerConfig = JSON.parse(
-            fs.readFileSync("apps/api-worker/wrangler.jsonc", "utf8"),
+            fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
           );
           const required = Array.isArray(wranglerConfig?.secrets?.required)
             ? wranglerConfig.secrets.required.filter(
                 (name) => typeof name === "string" && name.trim().length > 0,
               )
             : [];
+          const managementEnabled =
+            String(wranglerConfig?.vars?.EMAIL_ROUTING_MANAGEMENT_ENABLED ?? "")
+              .trim()
+              .toLowerCase() === "true";
+          const runtimeAccountId =
+            typeof wranglerConfig?.vars?.CLOUDFLARE_ACCOUNT_ID === "string"
+              ? wranglerConfig.vars.CLOUDFLARE_ACCOUNT_ID.trim()
+              : "";
+          const hasRuntimeCloudflareToken =
+            names.has("CLOUDFLARE_RUNTIME_API_TOKEN") ||
+            names.has("CLOUDFLARE_API_TOKEN") ||
+            (typeof wranglerConfig?.vars?.CLOUDFLARE_RUNTIME_API_TOKEN === "string" &&
+              wranglerConfig.vars.CLOUDFLARE_RUNTIME_API_TOKEN.trim().length > 0) ||
+            (typeof wranglerConfig?.vars?.CLOUDFLARE_API_TOKEN === "string" &&
+              wranglerConfig.vars.CLOUDFLARE_API_TOKEN.trim().length > 0);
+          const expectedLifecycleEnabled =
+            managementEnabled && hasRuntimeCloudflareToken;
+          const expectedBindingEnabled =
+            expectedLifecycleEnabled && Boolean(runtimeAccountId);
 
           if (required.length === 0) {
             console.error(
-              "apps/api-worker/wrangler.jsonc must declare at least one required runtime secret in secrets.required.",
+              `${process.env.API_WORKER_CONFIG_PATH} must declare at least one required runtime secret in secrets.required.`,
             );
             process.exit(1);
           }
@@ -309,9 +403,19 @@ jobs:
             process.exit(1);
           }
 
-          console.log(`Verified API Worker secrets: ${required.join(", ")}`);
-          NODE
+          fs.writeFileSync(
+            process.env.RUNTIME_CONTRACT_ENV_FILE,
+            [
+              `API_EXPECTS_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED=${expectedLifecycleEnabled}`,
+              `API_EXPECTS_CLOUDFLARE_DOMAIN_BINDING_ENABLED=${expectedBindingEnabled}`,
+            ].join("\n") + "\n",
+          );
 
+          console.log(
+            `Verified API Worker secrets: ${required.join(", ")} (hasRuntimeCloudflareToken=${hasRuntimeCloudflareToken})`,
+          );
+          NODE
+          cat "${runtime_contract_env_file}" >> "${GITHUB_ENV}"
       - name: Capture D1 disaster-recovery timestamp
         if: steps.operation.outputs.operation == 'deploy'
         shell: bash
@@ -380,7 +484,7 @@ jobs:
         run: |
           set -euo pipefail
           pending_migrations_output="${RUNNER_TEMP}/pending-d1-migrations.txt"
-          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations list kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc | tee "${pending_migrations_output}"
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations list kaisoumail-db --remote --config "${API_WORKER_CONFIG_PATH}" | tee "${pending_migrations_output}"
           python3 .github/scripts/pending_migration_gate.py \
             --migrations-dir apps/api-worker/drizzle \
             --wrangler-output-file "${pending_migrations_output}"
@@ -428,7 +532,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deployments_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deployments list --config apps/api-worker/wrangler.jsonc --json)"
+          deployments_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deployments list --config "${API_WORKER_CONFIG_PATH}" --json)"
           export DEPLOYMENTS_JSON="${deployments_json}"
           node <<'NODE' | tee -a "${GITHUB_OUTPUT}"
           const deployments = JSON.parse(process.env.DEPLOYMENTS_JSON ?? "[]");
@@ -473,7 +577,7 @@ jobs:
       - name: Apply remote D1 migrations
         if: steps.operation.outputs.operation == 'deploy'
         run: |
-          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations apply kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations apply kaisoumail-db --remote --config "${API_WORKER_CONFIG_PATH}"
 
       - name: Upload candidate API Worker version
         id: api-candidate
@@ -486,7 +590,7 @@ jobs:
           rm -f "${output_file}" "${candidate_env_file}"
 
           CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" WRANGLER_OUTPUT_FILE_PATH="${output_file}" "${WRANGLER_BIN}" versions upload \
-            --config apps/api-worker/wrangler.jsonc \
+            --config "${API_WORKER_CONFIG_PATH}" \
             --tag "${CF_MAIL_RELEASE_TAG}" \
             --message "Release ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})"
 
@@ -534,7 +638,7 @@ jobs:
           candidate_version_id="${{ steps.api-candidate.outputs.version_id }}"
 
           CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
-            --config apps/api-worker/wrangler.jsonc \
+            --config "${API_WORKER_CONFIG_PATH}" \
             "${stable_version_id}@100%" \
             "${candidate_version_id}@0%" \
             --message "Shadow deploy ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA}) for custom-domain smoke" \
@@ -555,6 +659,8 @@ jobs:
           API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           API_OVERRIDE_VERSION_ID: ${{ steps.api-candidate.outputs.version_id }}
           API_STABLE_VERSION_ID: ${{ steps.stable-baseline.outputs.version_id }}
+          EXPECT_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED }}
+          EXPECT_CLOUDFLARE_DOMAIN_BINDING_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_BINDING_ENABLED }}
         run: |
           set -euo pipefail
           api_base_url="${API_BASE_URL%/}"
@@ -563,19 +669,23 @@ jobs:
             exit 1
           fi
 
-          worker_name="$(node -pe "JSON.parse(require('node:fs').readFileSync('apps/api-worker/wrangler.jsonc', 'utf8')).name")"
+          worker_name="$(node -pe "JSON.parse(require('node:fs').readFileSync(process.env.API_WORKER_CONFIG_PATH, 'utf8')).name")"
           override_header="Cloudflare-Workers-Version-Overrides: ${worker_name}=\"${API_OVERRIDE_VERSION_ID}\""
           health_file="${RUNNER_TEMP}/preview-api-health.json"
           version_file="${RUNNER_TEMP}/preview-api-version.json"
+          meta_file="${RUNNER_TEMP}/preview-api-meta.json"
 
           for attempt in 1 2 3 4 5 6; do
             health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" -H "${override_header}" "${api_base_url}/health" || true)"
             version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" -H "${override_header}" "${api_base_url}/api/version" || true)"
+            meta_code="$(curl -sS -o "${meta_file}" -w "%{http_code}" -H "${override_header}" "${api_base_url}/api/meta" || true)"
 
             export HEALTH_CODE="${health_code}"
             export VERSION_CODE="${version_code}"
+            export META_CODE="${meta_code}"
             export HEALTH_FILE="${health_file}"
             export VERSION_FILE="${version_file}"
+            export META_FILE="${meta_file}"
             export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
 
             if SMOKE_LABEL="Preview" node .github/scripts/verify_api_smoke.mjs
@@ -595,11 +705,12 @@ jobs:
             echo "Shadow smoke gate attempt ${attempt} not ready yet; retrying..."
             echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
             echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+            echo "/api/meta => ${meta_code} $(cat "${meta_file}" 2>/dev/null || true)"
 
             if [ "${attempt}" -eq 6 ]; then
               echo "Shadow API Worker failed smoke gate after ${attempt} attempts; restoring stable-only deployment ${API_STABLE_VERSION_ID}" >&2
               CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
-                --config apps/api-worker/wrangler.jsonc \
+                --config "${API_WORKER_CONFIG_PATH}" \
                 "${API_STABLE_VERSION_ID}@100%" \
                 --message "Restore stable-only deploy after failed shadow smoke for ${CF_MAIL_RELEASE_SHA}" \
                 --yes || true
@@ -612,7 +723,7 @@ jobs:
         if: steps.operation.outputs.operation == 'deploy'
         run: |
           CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
-            --config apps/api-worker/wrangler.jsonc \
+            --config "${API_WORKER_CONFIG_PATH}" \
             --version-id "${{ steps.api-candidate.outputs.version_id }}" \
             --percentage 100 \
             --message "Promote ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})" \
@@ -625,6 +736,8 @@ jobs:
           API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           API_ROLLBACK_VERSION_ID: ${{ steps.stable-baseline.outputs.version_id }}
           AUTO_API_ROLLBACK: ${{ steps.pending-migrations.outputs.rollback_safe }}
+          EXPECT_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED }}
+          EXPECT_CLOUDFLARE_DOMAIN_BINDING_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_BINDING_ENABLED }}
         run: |
           set -euo pipefail
           api_base_url="${API_BASE_URL%/}"
@@ -635,15 +748,19 @@ jobs:
 
           health_file="${RUNNER_TEMP}/api-health.json"
           version_file="${RUNNER_TEMP}/api-version.json"
+          meta_file="${RUNNER_TEMP}/api-meta.json"
 
           for attempt in 1 2 3 4 5 6; do
             health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
             version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+            meta_code="$(curl -sS -o "${meta_file}" -w "%{http_code}" "${api_base_url}/api/meta" || true)"
 
             export HEALTH_CODE="${health_code}"
             export VERSION_CODE="${version_code}"
+            export META_CODE="${meta_code}"
             export HEALTH_FILE="${health_file}"
             export VERSION_FILE="${version_file}"
+            export META_FILE="${meta_file}"
             export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
 
             if SMOKE_LABEL="Production" node .github/scripts/verify_api_smoke.mjs
@@ -654,13 +771,14 @@ jobs:
             echo "Production smoke gate attempt ${attempt} not ready yet; retrying..."
             echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
             echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+            echo "/api/meta => ${meta_code} $(cat "${meta_file}" 2>/dev/null || true)"
 
             if [ "${attempt}" -eq 6 ]; then
               echo "Promoted API Worker failed production smoke gate after ${attempt} attempts" >&2
               if [ "${AUTO_API_ROLLBACK}" = "true" ]; then
                 echo "Rolling API Worker back to ${API_ROLLBACK_VERSION_ID}" >&2
                 CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" rollback "${API_ROLLBACK_VERSION_ID}" \
-                  --config apps/api-worker/wrangler.jsonc \
+                  --config "${API_WORKER_CONFIG_PATH}" \
                   --message "Rollback failed deploy smoke gate for ${CF_MAIL_RELEASE_SHA}" \
                   --yes
               else
@@ -685,7 +803,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" triggers deploy --config apps/api-worker/wrangler.jsonc; then
+          if CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" triggers deploy --config "${API_WORKER_CONFIG_PATH}"; then
             exit 0
           fi
 
@@ -706,6 +824,8 @@ jobs:
         shell: bash
         env:
           API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          EXPECT_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED }}
+          EXPECT_CLOUDFLARE_DOMAIN_BINDING_ENABLED: ${{ env.API_EXPECTS_CLOUDFLARE_DOMAIN_BINDING_ENABLED }}
         run: |
           set -euo pipefail
           api_smoke_urls=()
@@ -715,11 +835,11 @@ jobs:
             fi
           done < <(
             VITE_API_BASE_URL="${API_BASE_URL}" \
-              node .github/scripts/resolve_api_smoke_urls.mjs apps/api-worker/wrangler.jsonc
+              node .github/scripts/resolve_api_smoke_urls.mjs "${API_WORKER_CONFIG_PATH}"
           )
 
           if [ "${#api_smoke_urls[@]}" -eq 0 ]; then
-            echo "Unable to resolve any post-trigger API smoke URLs from wrangler.jsonc or VITE_API_BASE_URL." >&2
+            echo "Unable to resolve any post-trigger API smoke URLs from ${API_WORKER_CONFIG_PATH} or VITE_API_BASE_URL." >&2
             exit 1
           fi
 
@@ -727,17 +847,21 @@ jobs:
             api_base_url="${smoke_target%/}"
             health_file="${RUNNER_TEMP}/post-trigger-api-health.json"
             version_file="${RUNNER_TEMP}/post-trigger-api-version.json"
+            meta_file="${RUNNER_TEMP}/post-trigger-api-meta.json"
 
             echo "Post-trigger smoke target: ${api_base_url}"
 
             for attempt in 1 2 3 4 5 6; do
               health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
               version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+              meta_code="$(curl -sS -o "${meta_file}" -w "%{http_code}" "${api_base_url}/api/meta" || true)"
 
               export HEALTH_CODE="${health_code}"
               export VERSION_CODE="${version_code}"
+              export META_CODE="${meta_code}"
               export HEALTH_FILE="${health_file}"
               export VERSION_FILE="${version_file}"
+              export META_FILE="${meta_file}"
               export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
 
               if SMOKE_LABEL="Post-trigger ${api_base_url}" node .github/scripts/verify_api_smoke.mjs
@@ -748,6 +872,7 @@ jobs:
               echo "Post-trigger smoke gate attempt ${attempt} not ready yet for ${api_base_url}; retrying..."
               echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
               echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+              echo "/api/meta => ${meta_code} $(cat "${meta_file}" 2>/dev/null || true)"
 
               if [ "${attempt}" -eq 6 ]; then
                 {

@@ -28,6 +28,7 @@
 | `DEFAULT_MAILBOX_TTL_MINUTES` | default mailbox TTL |
 | `CLEANUP_BATCH_SIZE` | cleanup batch size |
 | `EMAIL_ROUTING_MANAGEMENT_ENABLED` | whether the app may mutate live Email Routing |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID exposed to the API Worker runtime; required for direct zone binding from `/domains` |
 | `BOOTSTRAP_ADMIN_EMAIL` | first admin email |
 | `BOOTSTRAP_ADMIN_NAME` | first admin display name |
 | `CF_ROUTE_RULESET_TAG` | Worker route management tag |
@@ -53,6 +54,7 @@ Do not treat these as long-term configuration for new instances.
 
 If `VITE_DOCS_SITE_ORIGIN` is empty, the in-app quick reference still works, but public docs links are hidden.
 `VITE_API_BASE_URL` is no longer the production browser API locator. First-party browser traffic defaults to same-origin `/api`.
+The deploy workflow renders a generated API Worker config and injects the GitHub repository secret `CLOUDFLARE_ACCOUNT_ID` into the Worker runtime variables before deploy. Exporting `CLOUDFLARE_ACCOUNT_ID` only to the GitHub Actions job environment is not sufficient for `/api/meta` or the `/domains` direct-binding UI gate.
 
 ## Pages same-origin `/api` proxy
 
