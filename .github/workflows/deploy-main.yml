@@ -6,6 +6,14 @@ on:
       - published
   workflow_dispatch:
     inputs:
+      operation:
+        description: Deploy the latest release or restore D1 from Time Travel
+        required: true
+        default: deploy
+        type: choice
+        options:
+          - deploy
+          - restore-d1
       release_tag:
         description: Release tag to deploy
         required: false
@@ -18,6 +26,22 @@ on:
         description: Source branch name for the release
         required: false
         type: string
+      restore_timestamp:
+        description: RFC3339 or Unix timestamp to restore D1 to (restore-d1 only)
+        required: false
+        type: string
+      restore_bookmark:
+        description: D1 Time Travel bookmark to restore to (restore-d1 only)
+        required: false
+        type: string
+      restore_reason:
+        description: Human-readable reason for the D1 restore (restore-d1 only)
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-main-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -32,6 +56,7 @@ jobs:
       CF_PAGES_PROJECT_NAME: ${{ vars.CF_PAGES_PROJECT_NAME }}
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       VITE_DEMO_MODE: "false"
+      WRANGLER_BIN: ./apps/api-worker/node_modules/.bin/wrangler
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,7 +67,52 @@ jobs:
       - name: Fetch release tags
         run: git fetch --tags origin
 
+      - name: Determine deploy operation
+        id: operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            operation="deploy"
+          else
+            operation="${{ inputs.operation || 'deploy' }}"
+          fi
+
+          echo "operation=${operation}" >> "${GITHUB_OUTPUT}"
+          echo "CF_MAIL_DEPLOY_OPERATION=${operation}" >> "${GITHUB_ENV}"
+
+      - name: Validate D1 restore inputs
+        id: restore-inputs
+        if: steps.operation.outputs.operation == 'restore-d1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          restore_timestamp="${{ inputs.restore_timestamp }}"
+          restore_bookmark="${{ inputs.restore_bookmark }}"
+          restore_reason="${{ inputs.restore_reason || 'manual disaster recovery' }}"
+
+          if [ -n "${restore_timestamp}" ] && [ -n "${restore_bookmark}" ]; then
+            echo "Provide either restore_timestamp or restore_bookmark, not both." >&2
+            exit 1
+          fi
+
+          if [ -z "${restore_timestamp}" ] && [ -z "${restore_bookmark}" ]; then
+            echo "restore-d1 requires restore_timestamp or restore_bookmark." >&2
+            exit 1
+          fi
+
+          if [ -n "${restore_timestamp}" ]; then
+            echo "restore_mode=timestamp" >> "${GITHUB_OUTPUT}"
+            echo "restore_value=${restore_timestamp}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "restore_mode=bookmark" >> "${GITHUB_OUTPUT}"
+            echo "restore_value=${restore_bookmark}" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "restore_reason=${restore_reason}" >> "${GITHUB_OUTPUT}"
+
       - name: Resolve deployed release metadata
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
@@ -113,29 +183,97 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Write version metadata
+        if: steps.operation.outputs.operation == 'deploy'
         run: bun run version:write
 
-      - name: Resolve Cloudflare deploy token
+      - name: Resolve Cloudflare API tokens
         shell: bash
         run: |
           set -euo pipefail
-          token="${CLOUDFLARE_DEPLOY_API_TOKEN:-}"
-          if [ -z "${token}" ]; then
-            token="${CLOUDFLARE_API_TOKEN:-}"
-          fi
+          d1_token="${CLOUDFLARE_API_TOKEN:-}"
+          deploy_token="${CLOUDFLARE_DEPLOY_API_TOKEN:-}"
 
-          if [ -z "${token}" ]; then
-            echo "Missing Cloudflare deploy token. Set CLOUDFLARE_DEPLOY_API_TOKEN or fall back to CLOUDFLARE_API_TOKEN." >&2
+          if [ -z "${d1_token}" ]; then
+            echo "Missing CLOUDFLARE_API_TOKEN. D1 migrations and Time Travel operations require a Cloudflare token with D1 scope." >&2
             exit 1
           fi
 
-          echo "CLOUDFLARE_API_TOKEN=${token}" >> "${GITHUB_ENV}"
+          if [ -z "${deploy_token}" ]; then
+            deploy_token="${d1_token}"
+          fi
 
-      - name: Verify API Worker required secrets
+          echo "CF_MAIL_D1_API_TOKEN=${d1_token}" >> "${GITHUB_ENV}"
+          echo "CF_MAIL_DEPLOY_API_TOKEN=${deploy_token}" >> "${GITHUB_ENV}"
+
+      - name: Restore remote D1 from Time Travel
+        if: steps.operation.outputs.operation == 'restore-d1'
         shell: bash
         run: |
           set -euo pipefail
-          secrets_json="$(bunx wrangler secret list --config apps/api-worker/wrangler.jsonc --format json)"
+          restore_mode="${{ steps.restore-inputs.outputs.restore_mode }}"
+          restore_value="${{ steps.restore-inputs.outputs.restore_value }}"
+          restore_reason="${{ steps.restore-inputs.outputs.restore_reason }}"
+
+          if [ "${restore_mode}" = "timestamp" ]; then
+            restore_output="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 time-travel restore kaisoumail-db --config apps/api-worker/wrangler.jsonc --timestamp "${restore_value}" --json)"
+          else
+            restore_output="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 time-travel restore kaisoumail-db --config apps/api-worker/wrangler.jsonc --bookmark "${restore_value}" --json)"
+          fi
+
+          export D1_RESTORE_OUTPUT="${restore_output}"
+          undo_bookmark="$(node <<'NODE'
+            const payload = JSON.parse(process.env.D1_RESTORE_OUTPUT ?? "{}");
+
+            const findFirstString = (value, keys) => {
+              if (!value || typeof value !== "object") {
+                return "";
+              }
+
+              for (const key of keys) {
+                if (typeof value[key] === "string" && value[key].trim()) {
+                  return value[key].trim();
+                }
+              }
+
+              for (const child of Object.values(value)) {
+                const nested = findFirstString(child, keys);
+                if (nested) {
+                  return nested;
+                }
+              }
+
+              return "";
+            };
+
+            const bookmark = findFirstString(payload, [
+              "previous_bookmark",
+              "previousBookmark",
+            ]);
+
+            if (bookmark) {
+              process.stdout.write(bookmark);
+            }
+            NODE
+          )"
+
+          printf '%s\n' "${restore_output}"
+          {
+            echo "## D1 restore"
+            echo
+            echo "- Mode: ${restore_mode}"
+            echo "- Target: ${restore_value}"
+            echo "- Reason: ${restore_reason}"
+            if [ -n "${undo_bookmark}" ]; then
+              echo "- Undo bookmark: ${undo_bookmark}"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verify API Worker required secrets
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          secrets_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" secret list --config apps/api-worker/wrangler.jsonc --format json)"
           export SECRETS_JSON="${secrets_json}"
           node <<'NODE'
           const fs = require("node:fs");
@@ -173,38 +311,125 @@ jobs:
           console.log(`Verified API Worker secrets: ${required.join(", ")}`);
           NODE
 
-      - name: Detect D1 migration changes in release
+      - name: Capture D1 disaster-recovery timestamp
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          restore_timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          echo "D1_PRE_DEPLOY_RESTORE_TIMESTAMP=${restore_timestamp}" >> "${GITHUB_ENV}"
+          {
+            echo "## Deploy recovery anchor"
+            echo
+            echo "- Release: ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})"
+            echo "- D1 Time Travel timestamp: ${restore_timestamp}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Assess release D1 rollback contract
+        id: release-migration-contract
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
           target_commit="$(git rev-parse --verify "${CF_MAIL_RELEASE_TAG}^{commit}" 2>/dev/null || true)"
-
           if [ -z "${target_commit}" ]; then
             echo "Release tag ${CF_MAIL_RELEASE_TAG} is not present in the fetched v* tag set; automatic deploy requires a tagged release commit." >&2
             exit 1
           fi
 
           previous_release_tag="$(git describe --first-parent --tags --abbrev=0 --match 'v*' --exclude '*-rc.*' "${target_commit}^" 2>/dev/null || true)"
+          release_contains_migrations="false"
 
           if [ -z "${previous_release_tag}" ]; then
-            echo "Cannot determine a previous release tag on the same lineage for ${CF_MAIL_RELEASE_TAG}; bootstrap or migration-bearing releases must use manual rollout." >&2
+            {
+              echo "## Release rollback contract"
+              echo
+              echo "- Previous release tag: unavailable"
+              echo "- Release contains D1 migrations relative to previous release: unknown"
+              echo "- Post-cutover behavior: automatic deploy stops here because the release lineage cannot prove this deploy is schema-stable or provide a safe rollback target."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "Cannot determine a previous release tag on the same lineage for ${CF_MAIL_RELEASE_TAG}; bootstrap or release-tag gaps must use manual rollout." >&2
             exit 1
           fi
 
           if git diff --name-only "${previous_release_tag}..${CF_MAIL_RELEASE_TAG}" -- apps/api-worker/drizzle | grep -q .; then
-            echo "Release ${CF_MAIL_RELEASE_TAG} changes D1 migrations relative to ${previous_release_tag}; automatic rollback-backed deploy is disabled. Use the manual migration rollout path." >&2
-            exit 1
+            release_contains_migrations="true"
           fi
 
-          echo "Verified ${CF_MAIL_RELEASE_TAG} has no D1 migration diff relative to ${previous_release_tag} on the same lineage."
+          echo "lineage_resolved=true" >> "${GITHUB_OUTPUT}"
+          echo "previous_release_tag=${previous_release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_contains_migrations=${release_contains_migrations}" >> "${GITHUB_OUTPUT}"
 
-      - name: Capture current API Worker rollback target
+          {
+            echo "## Release rollback contract"
+            echo
+            echo "- Previous release tag: ${previous_release_tag}"
+            echo "- Release contains D1 migrations relative to previous release: ${release_contains_migrations}"
+            if [ "${release_contains_migrations}" = "true" ]; then
+              echo "- Post-cutover behavior: automatic API Worker rollback is disabled because this release is migration-bearing even if its migrations were applied before the workflow started."
+            else
+              echo "- Post-cutover behavior: automatic API Worker rollback can stay enabled if remote D1 also has zero pending migrations at deploy time."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Validate pending remote D1 migrations against auto-release contract
+        id: pending-migrations
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
-          deployments_json="$(bunx wrangler deployments list --config apps/api-worker/wrangler.jsonc --json)"
+          pending_migrations_output="${RUNNER_TEMP}/pending-d1-migrations.txt"
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations list kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc | tee "${pending_migrations_output}"
+          python3 .github/scripts/pending_migration_gate.py \
+            --migrations-dir apps/api-worker/drizzle \
+            --wrangler-output-file "${pending_migrations_output}"
+
+          export PENDING_MIGRATIONS_OUTPUT="${pending_migrations_output}"
+          pending_count="$(python3 - <<'PY2'
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, ".github/scripts")
+          from pending_migration_gate import parse_pending_migration_names
+
+          raw_output = Path(os.environ["PENDING_MIGRATIONS_OUTPUT"]).read_text(encoding="utf-8")
+          print(len(parse_pending_migration_names(raw_output)))
+          PY2
+          )"
+
+          release_contains_migrations="${{ steps.release-migration-contract.outputs.release_contains_migrations }}"
+
+          echo "count=${pending_count}" >> "${GITHUB_OUTPUT}"
+          if [ "${pending_count}" -eq 0 ] && [ "${release_contains_migrations}" = "false" ]; then
+            echo "rollback_safe=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "rollback_safe=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          {
+            echo "## Pending remote D1 migrations"
+            echo
+            echo "- Count: ${pending_count}"
+            echo "- Release contains D1 migrations relative to previous release: ${release_contains_migrations}"
+            if [ "${pending_count}" -eq 0 ] && [ "${release_contains_migrations}" = "false" ]; then
+              echo "- Post-cutover behavior: automatic API Worker rollback remains available because this release is schema-stable and remote D1 has zero pending migrations."
+            elif [ "${release_contains_migrations}" = "true" ]; then
+              echo "- Post-cutover behavior: automatic API Worker rollback is disabled after promotion because this release is migration-bearing, even if those migrations were already applied before the workflow started."
+            else
+              echo "- Post-cutover behavior: automatic API Worker rollback is disabled after promotion because remote D1 still has migrations to apply for this release."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Capture current API Worker rollback target
+        id: rollback-target
+        if: steps.operation.outputs.operation == 'deploy' && steps.pending-migrations.outputs.rollback_safe == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployments_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deployments list --config apps/api-worker/wrangler.jsonc --json)"
           export DEPLOYMENTS_JSON="${deployments_json}"
-          node <<'NODE' | tee -a "${GITHUB_ENV}"
+          node <<'NODE' | tee -a "${GITHUB_OUTPUT}"
           const deployments = JSON.parse(process.env.DEPLOYMENTS_JSON ?? "[]");
           const latest = [...deployments]
             .sort((a, b) => a.created_on.localeCompare(b.created_on))
@@ -212,7 +437,7 @@ jobs:
 
           if (!latest) {
             console.error(
-              "Automated deploy requires an existing stable API deployment so failed smoke checks can roll back safely. Bootstrap the first production release manually.",
+              "Automated rollback requires an existing stable API deployment so failed smoke checks can restore production safely.",
             );
             process.exit(1);
           }
@@ -225,38 +450,140 @@ jobs:
             process.exit(1);
           }
 
-          console.log(`API_ROLLBACK_VERSION_ID=${stable.version_id}`);
+          console.log(`version_id=${stable.version_id}`);
           NODE
 
-      - name: Verify no pending remote D1 migrations
+      - name: Apply remote D1 migrations
+        if: steps.operation.outputs.operation == 'deploy'
+        run: |
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_D1_API_TOKEN}" "${WRANGLER_BIN}" d1 migrations apply kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc
+
+      - name: Upload candidate API Worker version
+        id: api-candidate
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
-          pending_migrations_output="$(bunx wrangler d1 migrations list kaisoumail-db --remote --config apps/api-worker/wrangler.jsonc)"
+          output_file="${RUNNER_TEMP}/wrangler-version-upload.jsonl"
+          candidate_env_file="${RUNNER_TEMP}/api-candidate.env"
+          preview_alias="deploy-${CF_MAIL_RELEASE_SHA}"
+          rm -f "${output_file}" "${candidate_env_file}"
 
-          case "${pending_migrations_output}" in
-            *"✅ No migrations to apply!"*)
-              echo "Verified remote D1 has no pending migrations."
-              ;;
-            *"Migrations to be applied:"*)
-              printf '%s\n' "${pending_migrations_output}"
-              echo "Remote D1 still has unapplied migrations; automatic rollback-backed deploy requires zero pending remote migrations. Use the manual migration rollout path." >&2
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" WRANGLER_OUTPUT_FILE_PATH="${output_file}" "${WRANGLER_BIN}" versions upload \
+            --config apps/api-worker/wrangler.jsonc \
+            --tag "${CF_MAIL_RELEASE_TAG}" \
+            --message "Release ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})" \
+            --preview-alias "${preview_alias}"
+
+          export WRANGLER_OUTPUT_FILE_PATH="${output_file}"
+          export EXPECTED_PREVIEW_ALIAS="${preview_alias}"
+          export CANDIDATE_ENV_FILE="${candidate_env_file}"
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const outputPath = process.env.WRANGLER_OUTPUT_FILE_PATH;
+          const previewAlias = process.env.EXPECTED_PREVIEW_ALIAS;
+          const candidateEnvFile = process.env.CANDIDATE_ENV_FILE;
+          const lines = fs
+            .readFileSync(outputPath, "utf8")
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line));
+          const entry = [...lines].reverse().find((item) => item.type === "version-upload");
+
+          if (!entry?.version_id) {
+            console.error("Unable to resolve uploaded Worker version ID from Wrangler output.");
+            process.exit(1);
+          }
+
+          const previewUrl = entry.preview_alias_url || entry.preview_url;
+          if (!previewUrl) {
+            console.error(
+              "Wrangler did not return a preview URL. Ensure preview_urls are enabled in wrangler.jsonc and the Cloudflare account has a workers.dev subdomain.",
+            );
+            process.exit(1);
+          }
+
+          const linesOut = [
+            `version_id=${entry.version_id}`,
+            `preview_url=${previewUrl}`,
+            `preview_alias=${previewAlias}`,
+          ];
+          fs.writeFileSync(candidateEnvFile, linesOut.join("\n") + "\n");
+          NODE
+
+          cat "${candidate_env_file}" >> "${GITHUB_OUTPUT}"
+          # shellcheck disable=SC1090
+          source "${candidate_env_file}"
+
+          {
+            echo "## API candidate"
+            echo
+            echo "- Version ID: ${version_id}"
+            echo "- Preview URL: ${preview_url}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Smoke test preview API Worker
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        env:
+          API_BASE_URL: ${{ steps.api-candidate.outputs.preview_url }}
+        run: |
+          set -euo pipefail
+          api_base_url="${API_BASE_URL%/}"
+          if [ -z "${api_base_url}" ]; then
+            echo "Missing preview API base URL for deploy smoke gate" >&2
+            exit 1
+          fi
+
+          health_file="${RUNNER_TEMP}/preview-api-health.json"
+          version_file="${RUNNER_TEMP}/preview-api-version.json"
+
+          for attempt in 1 2 3 4 5 6; do
+            health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
+            version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+
+            export HEALTH_CODE="${health_code}"
+            export VERSION_CODE="${version_code}"
+            export HEALTH_FILE="${health_file}"
+            export VERSION_FILE="${version_file}"
+            export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
+
+            if SMOKE_LABEL="Preview" node .github/scripts/verify_api_smoke.mjs
+            then
+              exit 0
+            fi
+
+            echo "Preview smoke gate attempt ${attempt} not ready yet; retrying..."
+            echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
+            echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+
+            if [ "${attempt}" -eq 6 ]; then
+              echo "Uploaded preview API Worker failed smoke gate after ${attempt} attempts" >&2
               exit 1
-              ;;
-            *)
-              printf '%s\n' "${pending_migrations_output}"
-              echo "Unable to confirm remote D1 migration state; automatic rollback-backed deploy fails closed until the migration state is reviewed manually." >&2
-              exit 1
-              ;;
-          esac
+            fi
 
-      - name: Deploy Worker
-        run: bunx wrangler deploy --config apps/api-worker/wrangler.jsonc
+            sleep "$((attempt * 5))"
+          done
 
-      - name: Smoke test deployed API Worker
+      - name: Promote candidate API Worker to production
+        if: steps.operation.outputs.operation == 'deploy'
+        run: |
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
+            --config apps/api-worker/wrangler.jsonc \
+            --version-id "${{ steps.api-candidate.outputs.version_id }}" \
+            --percentage 100 \
+            --message "Promote ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})" \
+            --yes
+
+      - name: Smoke test promoted production API Worker
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         env:
           API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          API_ROLLBACK_VERSION_ID: ${{ steps.rollback-target.outputs.version_id }}
+          AUTO_API_ROLLBACK: ${{ steps.pending-migrations.outputs.rollback_safe }}
         run: |
           set -euo pipefail
           api_base_url="${API_BASE_URL%/}"
@@ -278,72 +605,142 @@ jobs:
             export VERSION_FILE="${version_file}"
             export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
 
-            if node -e '
-              const fs = require("node:fs");
-
-              const healthCode = process.env.HEALTH_CODE;
-              const versionCode = process.env.VERSION_CODE;
-              const expectedSha = process.env.EXPECTED_SHA;
-
-              if (versionCode !== "200") {
-                console.error(`Unexpected status code: /api/version=${versionCode}`);
-                process.exit(1);
-              }
-
-              const version = JSON.parse(fs.readFileSync(process.env.VERSION_FILE, "utf8"));
-
-              if (healthCode !== "200") {
-                console.error(`Unexpected status code: /health=${healthCode}`);
-                process.exit(1);
-              }
-
-              const health = JSON.parse(fs.readFileSync(process.env.HEALTH_FILE, "utf8"));
-              if (health?.ok !== true) {
-                console.error(`Unexpected /health payload: ${JSON.stringify(health)}`);
-                process.exit(1);
-              }
-
-              if (version?.commitSha !== expectedSha) {
-                console.error(
-                  `Expected deployed commit ${expectedSha}, received ${version?.commitSha ?? "<missing>"}`,
-                );
-                process.exit(1);
-              }
-
-              console.log(`Smoke gate passed for deployed commit ${version.commitSha}`);
-            '; then
+            if SMOKE_LABEL="Production" node .github/scripts/verify_api_smoke.mjs
+            then
               exit 0
             fi
 
-            echo "Deploy smoke gate attempt ${attempt} not ready yet; retrying..."
+            echo "Production smoke gate attempt ${attempt} not ready yet; retrying..."
             echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
             echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
 
             if [ "${attempt}" -eq 6 ]; then
-              echo "Deployed API Worker failed smoke gate after ${attempt} attempts" >&2
-              echo "Rolling API Worker back to ${API_ROLLBACK_VERSION_ID}" >&2
-              bunx wrangler rollback "${API_ROLLBACK_VERSION_ID}" \
-                --config apps/api-worker/wrangler.jsonc \
-                --message "Rollback failed deploy smoke gate for ${CF_MAIL_RELEASE_SHA}" \
-                --yes
+              echo "Promoted API Worker failed production smoke gate after ${attempt} attempts" >&2
+              if [ "${AUTO_API_ROLLBACK}" = "true" ]; then
+                echo "Rolling API Worker back to ${API_ROLLBACK_VERSION_ID}" >&2
+                CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" rollback "${API_ROLLBACK_VERSION_ID}" \
+                  --config apps/api-worker/wrangler.jsonc \
+                  --message "Rollback failed deploy smoke gate for ${CF_MAIL_RELEASE_SHA}" \
+                  --yes
+              else
+                {
+                  echo "## Production API smoke"
+                  echo
+                  echo "- Result: fail"
+                  echo "- Recovery: automatic API Worker rollback is disabled because this release is migration-bearing or otherwise not rollback-safe after the D1 schema changes involved in this deploy."
+                  echo "- D1 restore anchor: ${D1_PRE_DEPLOY_RESTORE_TIMESTAMP}"
+                  echo "- Next step: inspect the promoted Worker, and if you need to recover the pre-deploy database state, run this workflow again with operation=restore-d1 before coordinating a Worker rollback."
+                } >> "${GITHUB_STEP_SUMMARY}"
+                echo "Automatic API Worker rollback is disabled because this release is not rollback-safe after the D1 schema changes involved in this deploy. Investigate manually or run the explicit D1 restore workflow before any coordinated rollback." >&2
+              fi
               exit 1
             fi
 
             sleep "$((attempt * 5))"
           done
 
+      - name: Apply API Worker triggers
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" triggers deploy --config apps/api-worker/wrangler.jsonc; then
+            exit 0
+          fi
+
+          {
+            echo "## API trigger deploy"
+            echo
+            echo "- Result: fail"
+            echo "- Warning: \`wrangler triggers deploy\` can partially apply routes, custom domains, or cron triggers before reporting an error."
+            echo "- Recovery: stop the deploy, inspect current trigger state in Cloudflare, and only then decide whether to retry or run a manual rollback."
+            echo "- Note: Worker version rollback is intentionally skipped here because it does not restore partially applied trigger state."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          echo "Applying API Worker triggers failed. Stopping without automatic rollback because version rollback does not restore trigger state." >&2
+          exit 1
+
+      - name: Smoke test production API after trigger apply
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        env:
+          API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          set -euo pipefail
+          api_smoke_urls=()
+          while IFS= read -r smoke_url; do
+            if [ -n "${smoke_url}" ]; then
+              api_smoke_urls+=("${smoke_url}")
+            fi
+          done < <(
+            VITE_API_BASE_URL="${API_BASE_URL}" \
+              node .github/scripts/resolve_api_smoke_urls.mjs apps/api-worker/wrangler.jsonc
+          )
+
+          if [ "${#api_smoke_urls[@]}" -eq 0 ]; then
+            echo "Unable to resolve any post-trigger API smoke URLs from wrangler.jsonc or VITE_API_BASE_URL." >&2
+            exit 1
+          fi
+
+          for smoke_target in "${api_smoke_urls[@]}"; do
+            api_base_url="${smoke_target%/}"
+            health_file="${RUNNER_TEMP}/post-trigger-api-health.json"
+            version_file="${RUNNER_TEMP}/post-trigger-api-version.json"
+
+            echo "Post-trigger smoke target: ${api_base_url}"
+
+            for attempt in 1 2 3 4 5 6; do
+              health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
+              version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+
+              export HEALTH_CODE="${health_code}"
+              export VERSION_CODE="${version_code}"
+              export HEALTH_FILE="${health_file}"
+              export VERSION_FILE="${version_file}"
+              export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
+
+              if SMOKE_LABEL="Post-trigger ${api_base_url}" node .github/scripts/verify_api_smoke.mjs
+              then
+                break
+              fi
+
+              echo "Post-trigger smoke gate attempt ${attempt} not ready yet for ${api_base_url}; retrying..."
+              echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
+              echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+
+              if [ "${attempt}" -eq 6 ]; then
+                {
+                  echo "## Post-trigger production smoke"
+                  echo
+                  echo "- Result: fail"
+                  echo "- Target: ${api_base_url}"
+                  echo "- Recovery: trigger changes have already been applied, so the workflow stops for manual inspection instead of attempting an automatic version rollback."
+                  echo "- Next step: inspect current trigger state in Cloudflare and decide whether to retry trigger deployment, roll the Worker version back manually, or run the explicit restore-d1 workflow."
+                } >> "${GITHUB_STEP_SUMMARY}"
+                echo "Production API failed post-trigger smoke after ${attempt} attempts for ${api_base_url}; stopping for manual inspection because trigger state may already be partially cut over." >&2
+                exit 1
+              fi
+
+              sleep "$((attempt * 5))"
+            done
+          done
+
       - name: Deploy Email receiver Worker
-        run: bunx wrangler deploy --config apps/api-worker/wrangler.email.jsonc
+        if: steps.operation.outputs.operation == 'deploy'
+        run: |
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deploy --config apps/api-worker/wrangler.email.jsonc
 
       - name: Build web app
+        if: steps.operation.outputs.operation == 'deploy'
         run: bun run --cwd apps/web build
 
       - name: Deploy Pages
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if bunx wrangler pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-kaisoumail}" --branch main; then
+            if CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" pages deploy apps/web/dist --project-name "${CF_PAGES_PROJECT_NAME:-kaisoumail}" --branch main; then
               exit 0
             fi
 

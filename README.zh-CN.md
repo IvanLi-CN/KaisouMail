@@ -130,8 +130,10 @@ Web 侧重点变量：
 
 ## 发布工作流门禁
 
-- 主发布 workflow 会先捕获当前 100% 稳定的 API Worker 版本；只有 release 不包含 D1 migration diff 且远端 D1 没有 pending migration 时，才允许走 rollback-backed 的自动发布路径
-- 因为要保留可回滚目标，首次生产 API 发布需要手动 bootstrap；自动发布从第二次开始使用
+- 主发布 workflow 会先捕获 D1 恢复锚点，并在 schema-stable 发布时额外捕获当前 100% 稳定的 API Worker 回滚目标；随后自动 apply 远端 D1 migration、上传一个不接生产流量的 API Worker 预览版本，并在预览 `/health` + `/api/version` smoke 通过后才 promote 到 100% 生产流量
+- Promote 成功后 workflow 会先对正式 API 域名跑一次 production smoke；只有这一步通过后才显式应用 API Worker 的 routes / domains / cron triggers，并在 trigger 应用后对 `VITE_API_BASE_URL` 与 `apps/api-worker/wrangler.jsonc` 里声明的每个 API URL 再跑一次 post-trigger smoke。trigger 应用失败或 post-trigger smoke 失败都会直接停下并要求人工核查当前 trigger 状态；只有相对上一版 release 保持 schema-stable 且当前部署不涉及 D1 schema 变更的发布，production smoke 失败时才会自动回滚 API Worker，不自动 restore D1
+- `CI Main / CI PR` 会阻止明显破坏性的 migration 进入默认自动链路，Deploy 在 apply 前也会按远端 pending migration 实际集合再校验一次；默认发布路径只接受 expand-only / forward-compatible 迁移，兼容代码最多保留一个发布周期，破坏性清理放到后续 cleanup release
+- 因为要保留可回滚目标，首次生产 API 发布仍需要手动 bootstrap；异常事故的 D1 恢复走 `workflow_dispatch -> operation=restore-d1`
 
 ## 发布面
 
@@ -149,9 +151,11 @@ Web 侧重点变量：
 6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=kaisoumail`、`VITE_API_BASE_URL=<你的 canonical API 域名>`
 7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
 8. 如果是从历史单域实例升级，首次部署时保留 `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID`，让 bootstrap 回填初始 `domains` 记录
-9. 第一次生产 API 发布仍需手动 bootstrap；之后保持至少一个 100% stable 的 API 版本，workflow 才能在 smoke 失败时自动回滚
-10. 推送到 `main` 触发 deploy workflow
-11. 推送文档或 Storybook 变更到 `main` 刷新 GitHub Pages 公开站点
+9. 给 Cloudflare 账号注册 workers.dev 子域名，让 `wrangler versions upload` 能为 API Worker 生成预览 URL
+10. 第一次生产 API 发布仍需手动 bootstrap；之后保持至少一个 100% stable 的 API 版本，workflow 才能安全完成预览、promote 和自动回滚
+11. 推送到 `main` 触发 deploy workflow
+12. 需要恢复 D1 时，使用 `Actions -> Deploy -> Run workflow -> operation=restore-d1` 并提供 timestamp 或 bookmark（Cloudflare D1 Time Travel 当前默认保留 30 天恢复窗口）
+13. 推送文档或 Storybook 变更到 `main` 刷新 GitHub Pages 公开站点
 
 ## 域名拓扑示例
 
