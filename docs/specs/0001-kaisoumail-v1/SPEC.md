@@ -137,6 +137,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
+![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
+
 ### App Shell
 
 ![App shell on mobile with the navigation drawer expanded](./assets/app-shell-mobile-menu-responsive.png)

@@ -548,6 +548,7 @@ export const demoMeta: ApiMeta = {
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
   passkeyAuthEnabled: true,
+  passkeyTrustedOrigins: ["https://cfm.707979.xyz"],
   defaultMailboxTtlMinutes: 60,
   minMailboxTtlMinutes: 5,
   maxMailboxTtlMinutes: 1440,

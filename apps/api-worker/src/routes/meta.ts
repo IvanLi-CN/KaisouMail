@@ -28,6 +28,7 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
       cloudflareDomainLifecycleEnabled:
         config.EMAIL_ROUTING_MANAGEMENT_ENABLED && hasCloudflareApiToken,
       passkeyAuthEnabled: isPasskeyAuthConfigured(config),
+      passkeyTrustedOrigins: config.WEB_APP_ORIGINS ?? [],
       defaultMailboxTtlMinutes: config.DEFAULT_MAILBOX_TTL_MINUTES,
       minMailboxTtlMinutes,
       maxMailboxTtlMinutes,

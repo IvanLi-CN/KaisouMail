@@ -58,6 +58,7 @@ export const usePasskeySupport = () => {
       resolvePasskeySupportState({
         browserSupported,
         passkeyAuthEnabled: metaQuery.data?.passkeyAuthEnabled,
+        passkeyTrustedOrigins: metaQuery.data?.passkeyTrustedOrigins,
         isMetaLoading: metaQuery.isLoading && metaQuery.data === undefined,
         hasMetaError: Boolean(metaQuery.error) && metaQuery.data === undefined,
       }),

@@ -160,6 +160,7 @@ export const apiMetaResponseSchema = z.object({
   cloudflareDomainBindingEnabled: z.boolean(),
   cloudflareDomainLifecycleEnabled: z.boolean(),
   passkeyAuthEnabled: z.boolean(),
+  passkeyTrustedOrigins: z.array(z.string().url()),
   defaultMailboxTtlMinutes: z
     .number()
     .int()

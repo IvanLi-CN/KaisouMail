@@ -16,6 +16,19 @@ export type PasskeySupportState = {
   supported: boolean;
 };
 
+const normalizeOrigin = (value: string | null | undefined) => {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  try {
+    return new URL(trimmedValue).origin;
+  } catch {
+    return null;
+  }
+};
+
 const isIpLiteralHost = (hostname: string) => {
   if (!hostname) {
     return false;
@@ -72,15 +85,24 @@ export const browserSupportsPasskeys = () => {
 
 export const resolvePasskeySupportState = ({
   browserSupported,
+  currentOrigin = globalThis.location?.origin,
   hasMetaError = false,
   isMetaLoading = false,
   passkeyAuthEnabled,
+  passkeyTrustedOrigins = [],
 }: {
   browserSupported: boolean;
+  currentOrigin?: string;
   hasMetaError?: boolean;
   isMetaLoading?: boolean;
   passkeyAuthEnabled?: boolean;
+  passkeyTrustedOrigins?: string[];
 }): PasskeySupportState => {
+  const normalizedCurrentOrigin = normalizeOrigin(currentOrigin);
+  const trustedOrigins = passkeyTrustedOrigins
+    .map((origin) => normalizeOrigin(origin))
+    .filter((origin): origin is string => Boolean(origin));
+
   if (!browserSupported) {
     return {
       backendConfigured: passkeyAuthEnabled === true,
@@ -123,6 +145,21 @@ export const resolvePasskeySupportState = ({
         "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
       message:
         "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
+      supported: false,
+    };
+  }
+
+  if (
+    !normalizedCurrentOrigin ||
+    !trustedOrigins.includes(normalizedCurrentOrigin)
+  ) {
+    return {
+      backendConfigured: true,
+      buttonLabel: "当前域名未启用 Passkey",
+      managementMessage:
+        "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
+      message:
+        "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
       supported: false,
     };
   }

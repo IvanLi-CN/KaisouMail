@@ -212,6 +212,35 @@ export const PasskeyTab: Story = {
   },
 };
 
+export const PasskeyTabUntrustedOrigin: Story = {
+  render: (args) => (
+    <InteractiveApiKeysPageView
+      {...args}
+      defaultTab="passkey"
+      passkeySupported={false}
+      passkeyError="当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。"
+      passkeyEmptyMessage="当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole("tab", { name: /Passkey/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.getByText(
+        "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
+      ),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "注册当前设备" }),
+    ).toBeDisabled();
+    await expect(canvas.getByText("MacBook Pro")).toBeInTheDocument();
+  },
+};
+
 export const RouteFlow: Story = {
   render: () => <RouteFlowHarness />,
   play: async ({ canvasElement }) => {

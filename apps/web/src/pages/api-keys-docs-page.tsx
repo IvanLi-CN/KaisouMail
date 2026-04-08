@@ -53,7 +53,7 @@ const authModes = [
     title: "Automation / Agent",
     description: "适合脚本、CI、Agent 与后端服务。",
     detail:
-      "所有受保护接口都接受 `Authorization: Bearer <API_KEY>`。鉴权逻辑会优先读取 Bearer token，再回退到浏览器 session cookie。",
+      "绝大多数受保护接口都接受 `Authorization: Bearer <API_KEY>`。Passkey 注册、列表与撤销只接受已登录浏览器 session cookie，避免自动化密钥直接绑定长期浏览器凭证。",
   },
   {
     title: "Browser Session",
@@ -138,6 +138,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "domains": ${JSON.stringify(meta.domains, null, 2)},
   "passkeyAuthEnabled": ${meta.passkeyAuthEnabled},
+  "passkeyTrustedOrigins": ${JSON.stringify(meta.passkeyTrustedOrigins, null, 2)},
   "defaultMailboxTtlMinutes": ${ttl},
   "minMailboxTtlMinutes": ${meta.minMailboxTtlMinutes},
   "maxMailboxTtlMinutes": ${maxTtl},
@@ -151,7 +152,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `rootDomain`。",
             "创建邮箱时如果省略 `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
-            "浏览器登录页也会读取 `passkeyAuthEnabled`，避免在服务端未配置 passkey 时展示一个必然失败的入口。",
+            "浏览器登录页与身份认证页会同时检查 `passkeyAuthEnabled` 与 `passkeyTrustedOrigins`，只有当前页面 origin 命中可信列表时才启用 passkey CTA。",
           ],
         },
       ],
@@ -270,7 +271,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "GET",
           path: "/api/passkeys",
           summary: "列出当前用户的 passkeys。",
-          auth: "Bearer 或 `kaisoumail_session` cookie",
+          auth: "仅 `kaisoumail_session` cookie",
           responseBody: `{
   "passkeys": [
     {
@@ -295,7 +296,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/passkeys/registration/options",
           summary: "为当前登录用户生成 passkey 注册 challenge。",
-          auth: "Bearer 或 `kaisoumail_session` cookie",
+          auth: "仅 `kaisoumail_session` cookie",
           requestBody: `{
   "name": "MacBook Pro"
 }`,
@@ -312,7 +313,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/passkeys/registration/verify",
           summary: "校验 passkey attestation 并保存凭证。",
-          auth: "Bearer 或 `kaisoumail_session` cookie",
+          auth: "仅 `kaisoumail_session` cookie",
           requestBody: `{
   "response": {
     "id": "<credential-id>",
@@ -346,7 +347,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "DELETE",
           path: "/api/passkeys/:id",
           summary: "撤销指定 passkey。",
-          auth: "Bearer 或 `kaisoumail_session` cookie",
+          auth: "仅 `kaisoumail_session` cookie",
           notes: [
             "成功时返回 `204 No Content`。",
             "撤销只作用于当前用户自己的 passkey；撤销后记录仍保留 `revokedAt` 供审计使用。",

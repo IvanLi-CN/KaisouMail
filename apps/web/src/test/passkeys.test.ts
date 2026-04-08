@@ -46,6 +46,7 @@ describe("resolvePasskeySupportState", () => {
     expect(
       resolvePasskeySupportState({
         browserSupported: true,
+        currentOrigin: "https://cfm.707979.xyz",
         passkeyAuthEnabled: false,
       }),
     ).toMatchObject({
@@ -59,12 +60,43 @@ describe("resolvePasskeySupportState", () => {
     expect(
       resolvePasskeySupportState({
         browserSupported: false,
+        currentOrigin: "https://cfm.707979.xyz",
         passkeyAuthEnabled: true,
       }),
     ).toMatchObject({
       backendConfigured: true,
       buttonLabel: "当前浏览器不支持 Passkey",
       supported: false,
+    });
+  });
+
+  it("disables passkeys when the current origin is not trusted", () => {
+    expect(
+      resolvePasskeySupportState({
+        browserSupported: true,
+        currentOrigin: "https://preview.707979.xyz",
+        passkeyAuthEnabled: true,
+        passkeyTrustedOrigins: ["https://cfm.707979.xyz"],
+      }),
+    ).toMatchObject({
+      backendConfigured: true,
+      buttonLabel: "当前域名未启用 Passkey",
+      supported: false,
+    });
+  });
+
+  it("keeps passkeys enabled when the current origin is trusted", () => {
+    expect(
+      resolvePasskeySupportState({
+        browserSupported: true,
+        currentOrigin: "https://cfm.707979.xyz",
+        passkeyAuthEnabled: true,
+        passkeyTrustedOrigins: ["https://cfm.707979.xyz"],
+      }),
+    ).toMatchObject({
+      backendConfigured: true,
+      buttonLabel: "使用 Passkey 登录",
+      supported: true,
     });
   });
 });

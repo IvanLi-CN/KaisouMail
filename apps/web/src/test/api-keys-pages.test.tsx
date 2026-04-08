@@ -240,6 +240,9 @@ describe("api key integration docs", () => {
     expect(screen.getByText("/api/messages/:id/raw")).toBeInTheDocument();
     expect(screen.getByText("ApiError Envelope")).toBeInTheDocument();
     expect(screen.getByText("Auth Failure")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/仅 .*kaisoumail_session.* cookie/)[0],
+    ).toBeInTheDocument();
   });
 
   it("restores the one-time secret after navigating away and back", async () => {
@@ -373,6 +376,53 @@ describe("api key integration docs", () => {
     expect(
       await screen.findByText(
         "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps existing passkeys visible when the current origin is not trusted", async () => {
+    passkeysHookState.data = [demoPasskeys[0]];
+    passkeysHookState.error = null;
+    passkeySupportState.backendConfigured = true;
+    passkeySupportState.buttonLabel = "当前域名未启用 Passkey";
+    passkeySupportState.managementMessage =
+      "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。";
+    passkeySupportState.message =
+      "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。";
+    passkeySupportState.supported = false;
+
+    const queryClient = createQueryClient();
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
+        <AppShell
+          user={demoSessionUser}
+          version={demoVersion}
+          onLogout={vi.fn()}
+        >
+          <Routes>
+            <Route
+              path="/"
+              element={<Navigate to={appRoutes.apiKeys} replace />}
+            />
+            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
+            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+          </Routes>
+        </AppShell>
+      </MemoryRouter>,
+      queryClient,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "已注册 Passkeys",
+        level: 2,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("MacBook Pro")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "注册当前设备" })).toBeDisabled();
+    expect(
+      screen.getByText(
+        "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
       ),
     ).toBeInTheDocument();
   });

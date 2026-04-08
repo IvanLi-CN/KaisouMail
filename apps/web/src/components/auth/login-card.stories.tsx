@@ -47,3 +47,12 @@ export const PasskeyUnsupported: Story = {
     passkeySupported: false,
   },
 };
+
+export const PasskeyUntrustedOrigin: Story = {
+  args: {
+    passkeySupported: false,
+    passkeyButtonLabel: "当前域名未启用 Passkey",
+    passkeySupportMessage:
+      "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
+  },
+};
