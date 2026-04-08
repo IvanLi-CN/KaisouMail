@@ -421,9 +421,9 @@ jobs:
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Capture current API Worker rollback target
-        id: rollback-target
-        if: steps.operation.outputs.operation == 'deploy' && steps.pending-migrations.outputs.rollback_safe == 'true'
+      - name: Capture current API Worker stable baseline
+        id: stable-baseline
+        if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         run: |
           set -euo pipefail
@@ -437,7 +437,7 @@ jobs:
 
           if (!latest) {
             console.error(
-              "Automated rollback requires an existing stable API deployment so failed smoke checks can restore production safely.",
+              "Automated deploy requires an existing stable API deployment so the workflow can keep production traffic pinned while it smoke-tests a candidate version.",
             );
             process.exit(1);
           }
@@ -445,13 +445,29 @@ jobs:
           const stable = latest.versions?.find((version) => version.percentage === 100);
           if (!stable?.version_id) {
             console.error(
-              "Current API deployment does not expose a single 100% stable version, so the workflow cannot capture a safe rollback target.",
+              "Current API deployment does not expose a single 100% stable version, so the workflow cannot capture the baseline needed for shadow smoke tests.",
             );
             process.exit(1);
           }
 
           console.log(`version_id=${stable.version_id}`);
           NODE
+
+      - name: Record API Worker rollback availability
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## API version baseline"
+            echo
+            echo "- Stable version ID: ${{ steps.stable-baseline.outputs.version_id }}"
+            if [ "${{ steps.pending-migrations.outputs.rollback_safe }}" = "true" ]; then
+              echo "- Post-cutover rollback: enabled"
+            else
+              echo "- Post-cutover rollback: disabled after promotion because this release is migration-bearing or otherwise not schema-stable."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Apply remote D1 migrations
         if: steps.operation.outputs.operation == 'deploy'
@@ -466,23 +482,19 @@ jobs:
           set -euo pipefail
           output_file="${RUNNER_TEMP}/wrangler-version-upload.jsonl"
           candidate_env_file="${RUNNER_TEMP}/api-candidate.env"
-          preview_alias="deploy-${CF_MAIL_RELEASE_SHA}"
           rm -f "${output_file}" "${candidate_env_file}"
 
           CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" WRANGLER_OUTPUT_FILE_PATH="${output_file}" "${WRANGLER_BIN}" versions upload \
             --config apps/api-worker/wrangler.jsonc \
             --tag "${CF_MAIL_RELEASE_TAG}" \
-            --message "Release ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})" \
-            --preview-alias "${preview_alias}"
+            --message "Release ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})"
 
           export WRANGLER_OUTPUT_FILE_PATH="${output_file}"
-          export EXPECTED_PREVIEW_ALIAS="${preview_alias}"
           export CANDIDATE_ENV_FILE="${candidate_env_file}"
           node <<'NODE'
           const fs = require("node:fs");
 
           const outputPath = process.env.WRANGLER_OUTPUT_FILE_PATH;
-          const previewAlias = process.env.EXPECTED_PREVIEW_ALIAS;
           const candidateEnvFile = process.env.CANDIDATE_ENV_FILE;
           const lines = fs
             .readFileSync(outputPath, "utf8")
@@ -497,20 +509,7 @@ jobs:
             process.exit(1);
           }
 
-          const previewUrl = entry.preview_alias_url || entry.preview_url;
-          if (!previewUrl) {
-            console.error(
-              "Wrangler did not return a preview URL. Ensure preview_urls are enabled in wrangler.jsonc and the Cloudflare account has a workers.dev subdomain.",
-            );
-            process.exit(1);
-          }
-
-          const linesOut = [
-            `version_id=${entry.version_id}`,
-            `preview_url=${previewUrl}`,
-            `preview_alias=${previewAlias}`,
-          ];
-          fs.writeFileSync(candidateEnvFile, linesOut.join("\n") + "\n");
+          fs.writeFileSync(candidateEnvFile, `version_id=${entry.version_id}\n`);
           NODE
 
           cat "${candidate_env_file}" >> "${GITHUB_OUTPUT}"
@@ -521,28 +520,56 @@ jobs:
             echo "## API candidate"
             echo
             echo "- Version ID: ${version_id}"
-            echo "- Preview URL: ${preview_url}"
+            echo "- Preview flow: custom-domain shadow deploy with version override headers (no workers.dev preview URL required)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-      - name: Smoke test preview API Worker
+      - name: Add candidate API Worker to active deployment at 0%
+        id: api-shadow
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stable_version_id="${{ steps.stable-baseline.outputs.version_id }}"
+          candidate_version_id="${{ steps.api-candidate.outputs.version_id }}"
+
+          CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
+            --config apps/api-worker/wrangler.jsonc \
+            "${stable_version_id}@100%" \
+            "${candidate_version_id}@0%" \
+            --message "Shadow deploy ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA}) for custom-domain smoke" \
+            --yes
+
+          {
+            echo "## API shadow deploy"
+            echo
+            echo "- Stable version: ${stable_version_id} @ 100%"
+            echo "- Candidate version: ${candidate_version_id} @ 0%"
+            echo "- Validation path: custom-domain smoke requests with Cloudflare-Workers-Version-Overrides"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Smoke test shadow API Worker through version override
         if: steps.operation.outputs.operation == 'deploy'
         shell: bash
         env:
-          API_BASE_URL: ${{ steps.api-candidate.outputs.preview_url }}
+          API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          API_OVERRIDE_VERSION_ID: ${{ steps.api-candidate.outputs.version_id }}
+          API_STABLE_VERSION_ID: ${{ steps.stable-baseline.outputs.version_id }}
         run: |
           set -euo pipefail
           api_base_url="${API_BASE_URL%/}"
           if [ -z "${api_base_url}" ]; then
-            echo "Missing preview API base URL for deploy smoke gate" >&2
+            echo "Missing VITE_API_BASE_URL for shadow API smoke gate" >&2
             exit 1
           fi
 
+          worker_name="$(node -pe "JSON.parse(require('node:fs').readFileSync('apps/api-worker/wrangler.jsonc', 'utf8')).name")"
+          override_header="Cloudflare-Workers-Version-Overrides: ${worker_name}=\"${API_OVERRIDE_VERSION_ID}\""
           health_file="${RUNNER_TEMP}/preview-api-health.json"
           version_file="${RUNNER_TEMP}/preview-api-version.json"
 
           for attempt in 1 2 3 4 5 6; do
-            health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" "${api_base_url}/health" || true)"
-            version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${api_base_url}/api/version" || true)"
+            health_code="$(curl -sS -o "${health_file}" -w "%{http_code}" -H "${override_header}" "${api_base_url}/health" || true)"
+            version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" -H "${override_header}" "${api_base_url}/api/version" || true)"
 
             export HEALTH_CODE="${health_code}"
             export VERSION_CODE="${version_code}"
@@ -552,21 +579,34 @@ jobs:
 
             if SMOKE_LABEL="Preview" node .github/scripts/verify_api_smoke.mjs
             then
+              {
+                echo "## API shadow smoke"
+                echo
+                echo "- Base URL: ${api_base_url}"
+                echo "- Worker name: ${worker_name}"
+                echo "- Candidate version: ${API_OVERRIDE_VERSION_ID}"
+                echo "- Stable version: ${API_STABLE_VERSION_ID}"
+                echo "- Mechanism: active deployment kept at stable 100% + candidate 0%; smoke requests force the candidate with Cloudflare-Workers-Version-Overrides."
+              } >> "${GITHUB_STEP_SUMMARY}"
               exit 0
             fi
 
-            echo "Preview smoke gate attempt ${attempt} not ready yet; retrying..."
+            echo "Shadow smoke gate attempt ${attempt} not ready yet; retrying..."
             echo "/health => ${health_code} $(cat "${health_file}" 2>/dev/null || true)"
             echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
 
             if [ "${attempt}" -eq 6 ]; then
-              echo "Uploaded preview API Worker failed smoke gate after ${attempt} attempts" >&2
+              echo "Shadow API Worker failed smoke gate after ${attempt} attempts; restoring stable-only deployment ${API_STABLE_VERSION_ID}" >&2
+              CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" versions deploy \
+                --config apps/api-worker/wrangler.jsonc \
+                "${API_STABLE_VERSION_ID}@100%" \
+                --message "Restore stable-only deploy after failed shadow smoke for ${CF_MAIL_RELEASE_SHA}" \
+                --yes || true
               exit 1
             fi
 
             sleep "$((attempt * 5))"
           done
-
       - name: Promote candidate API Worker to production
         if: steps.operation.outputs.operation == 'deploy'
         run: |
@@ -582,7 +622,7 @@ jobs:
         shell: bash
         env:
           API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          API_ROLLBACK_VERSION_ID: ${{ steps.rollback-target.outputs.version_id }}
+          API_ROLLBACK_VERSION_ID: ${{ steps.stable-baseline.outputs.version_id }}
           AUTO_API_ROLLBACK: ${{ steps.pending-migrations.outputs.rollback_safe }}
         run: |
           set -euo pipefail
