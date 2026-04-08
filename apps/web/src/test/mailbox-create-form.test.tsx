@@ -209,6 +209,33 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");
   });
 
+  it("restores partial segmented values when returning from an empty address mode", () => {
+    render(
+      <MailboxCreateForm
+        defaultTtlMinutes={60}
+        domains={["relay.example.test", "mail.example.net"]}
+        maxTtlMinutes={1440}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("用户名"), {
+      target: { value: "storybox" },
+    });
+    fireEvent.change(screen.getByLabelText("子域名"), {
+      target: { value: "ops.alpha" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "完整" }));
+    expect(screen.getByLabelText("完整邮箱地址")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "分段" }));
+
+    expect(screen.getByLabelText("用户名")).toHaveValue("storybox");
+    expect(screen.getByLabelText("子域名")).toHaveValue("ops.alpha");
+    expect(screen.getByLabelText("邮箱域名")).toHaveValue("");
+  });
+
   it("clears stale full-address values when segmented fields no longer resolve", () => {
     render(
       <MailboxCreateForm

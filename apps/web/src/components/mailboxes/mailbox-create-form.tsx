@@ -68,6 +68,11 @@ type DismissedPasteSuggestionState = {
   observedValue: string;
 };
 
+type SegmentedDraftState = Pick<
+  CreateMailboxValues,
+  "localPart" | "subdomain" | "rootDomain"
+>;
+
 const normalizeOptionalValue = (value: string) => {
   const normalized = normalizeMailboxLabel(value);
   return normalized || "";
@@ -146,6 +151,8 @@ export const MailboxCreateForm = ({
     useState<PasteSuggestionState | null>(null);
   const [dismissedPasteSuggestion, setDismissedPasteSuggestion] =
     useState<DismissedPasteSuggestionState | null>(null);
+  const [segmentedDraftBeforeAddressMode, setSegmentedDraftBeforeAddressMode] =
+    useState<SegmentedDraftState | null>(null);
   const pasteDetectionTimeoutRef = useRef<number | null>(null);
   const normalizedDomains = useMemo(
     () => domains.map((domain) => normalizeRootDomain(domain)),
@@ -273,6 +280,7 @@ export const MailboxCreateForm = ({
   } = {}) => {
     const nextParsed = parsed ?? segmentedAddress;
     if (nextParsed) {
+      setSegmentedDraftBeforeAddressMode(null);
       form.setValue("localPart", nextParsed.localPart, {
         shouldDirty: true,
         shouldTouch: true,
@@ -295,6 +303,11 @@ export const MailboxCreateForm = ({
       });
       form.clearErrors("address");
     } else {
+      setSegmentedDraftBeforeAddressMode({
+        localPart: form.getValues("localPart"),
+        subdomain: form.getValues("subdomain"),
+        rootDomain: form.getValues("rootDomain"),
+      });
       form.setValue("address", "", {
         shouldDirty: false,
         shouldTouch: false,
@@ -311,7 +324,12 @@ export const MailboxCreateForm = ({
   };
 
   const switchToSegmentedMode = () => {
+    const normalizedAddress = normalizeMailboxAddress(
+      form.getValues("address"),
+    );
+
     if (parsedFullAddress) {
+      setSegmentedDraftBeforeAddressMode(null);
       form.setValue("localPart", parsedFullAddress.localPart, {
         shouldDirty: true,
         shouldTouch: true,
@@ -327,7 +345,25 @@ export const MailboxCreateForm = ({
         shouldTouch: true,
         shouldValidate: false,
       });
+    } else if (!normalizedAddress && segmentedDraftBeforeAddressMode) {
+      form.setValue("localPart", segmentedDraftBeforeAddressMode.localPart, {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      form.setValue("subdomain", segmentedDraftBeforeAddressMode.subdomain, {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      form.setValue("rootDomain", segmentedDraftBeforeAddressMode.rootDomain, {
+        shouldDirty: true,
+        shouldTouch: false,
+        shouldValidate: false,
+      });
+      setSegmentedDraftBeforeAddressMode(null);
     } else {
+      setSegmentedDraftBeforeAddressMode(null);
       form.setValue("localPart", "", {
         shouldDirty: true,
         shouldTouch: false,
