@@ -4,10 +4,12 @@ import { expect, test } from "@playwright/test";
 test("demo console login and workspace mail flow", async ({ page }) => {
   const mailboxLocalPart = `e2e${Date.now().toString().slice(-6)}`;
   const manualMailboxLocalPart = `pick${Date.now().toString().slice(-6)}`;
+  const fullAddressMailboxLocalPart = `full${Date.now().toString().slice(-6)}`;
   const randomPreviewAddress =
     buildRealisticMailboxAddressExample("<随机 active 域名>");
   const selectedDomainPreviewAddress =
     buildRealisticMailboxAddressExample("mail.example.net");
+  const fullAddressPreview = `${fullAddressMailboxLocalPart}@ops.alpha.mail.example.net`;
   const randomMailboxAddress = new RegExp(
     `${mailboxLocalPart}@ops\\.alpha\\.(relay\\.example\\.test|mail\\.example\\.net)`,
   );
@@ -68,6 +70,27 @@ test("demo console login and workspace mail flow", async ({ page }) => {
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
   await expect(mailboxRow.getByText("新建")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "新建邮箱" }).click();
+  await page.getByRole("button", { name: "完整邮箱地址" }).click();
+  await page
+    .getByLabel("完整邮箱地址")
+    .fill(
+      `${fullAddressMailboxLocalPart.toUpperCase()}@Ops.Alpha.mail.example.net`,
+    );
+  await createHelpButton.click();
+  await expect(page.getByText(fullAddressPreview)).toBeVisible();
+  await createHelpButton.click();
+  await page.getByRole("button", { name: "创建邮箱" }).click();
+
+  const fullAddressMailboxRow = page.getByRole("button", {
+    name: new RegExp(fullAddressPreview),
+  });
+  await expect(fullAddressMailboxRow).toBeVisible();
+  await expect(fullAddressMailboxRow.getByText("新建")).toBeVisible();
+
+  await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
+  await expect(fullAddressMailboxRow.getByText("新建")).toHaveCount(0);
 
   await page.getByRole("button", { name: /全部邮箱/i }).click();
   await page.getByRole("button", { name: /Build artifacts ready/ }).click();

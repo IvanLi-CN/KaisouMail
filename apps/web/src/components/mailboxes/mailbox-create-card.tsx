@@ -3,6 +3,7 @@ import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
 import {
   buildMailboxCreateAddressExample,
   buildMailboxCreateDomainHint,
+  type MailboxCreatePreviewState,
 } from "@/components/mailboxes/mailbox-create-preview";
 import {
   Card,
@@ -36,9 +37,9 @@ export const MailboxCreateCard = ({
   metaError?: string | null;
   submitError?: string | null;
 }) => {
-  const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState<
-    string | undefined
-  >(undefined);
+  const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
+    mode: "segmented",
+  });
 
   return (
     <Card>
@@ -52,24 +53,33 @@ export const MailboxCreateCard = ({
             </span>
           ) : isMetaLoading ? (
             "正在读取邮箱规则与默认 TTL…"
+          ) : previewState.mode === "address" ? (
+            "支持直接输入完整邮箱地址，并校验是否属于当前支持域名。"
           ) : (
             "随机或指定用户名 / 子域。支持多级子域，例如"
           )}
           {!metaError ? (
             <>
-              <span className="ml-1 font-medium text-foreground">alpha</span>或
-              <span className="ml-1 font-medium text-foreground">
-                ops.alpha
-              </span>
-              。
+              {previewState.mode === "segmented" ? (
+                <>
+                  <span className="ml-1 font-medium text-foreground">
+                    alpha
+                  </span>
+                  或
+                  <span className="ml-1 font-medium text-foreground">
+                    ops.alpha
+                  </span>
+                  。
+                </>
+              ) : null}
               {buildMailboxCreateDomainHint({
-                rootDomain: selectedExampleRootDomain,
+                ...previewState,
                 hasAvailableDomains: domains.length > 0,
               })}
               地址示例为
               <span className="ml-1 font-medium text-foreground">
                 {buildMailboxCreateAddressExample({
-                  rootDomain: selectedExampleRootDomain,
+                  ...previewState,
                   hasAvailableDomains: domains.length > 0,
                 })}
               </span>
@@ -86,7 +96,7 @@ export const MailboxCreateCard = ({
           isMetaLoading={isMetaLoading}
           isPending={isPending}
           maxTtlMinutes={maxTtlMinutes}
-          onDomainPreviewChange={setSelectedExampleRootDomain}
+          onPreviewChange={setPreviewState}
           submitError={submitError}
           onSubmit={onSubmit}
         />

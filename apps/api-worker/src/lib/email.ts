@@ -1,83 +1,25 @@
 import {
-  mailboxLocalPartRegex,
-  mailboxSubdomainRegex,
+  buildMailboxAddress,
+  normalizeMailboxAddress,
+  normalizeRootDomain,
+  type ParsedMailboxAddress,
+  parseMailboxAddress,
+  parseMailboxAddressAgainstDomains,
 } from "@kaisoumail/shared";
 
-export interface ParsedMailboxAddress {
-  localPart: string;
-  subdomain: string;
-  rootDomain: string;
-  address: string;
-}
-
-export const buildMailboxAddress = (
-  localPart: string,
-  subdomain: string,
-  rootDomain: string,
-): ParsedMailboxAddress => ({
-  localPart,
-  subdomain,
-  rootDomain,
-  address: `${localPart}@${subdomain}.${rootDomain}`,
-});
+export {
+  buildMailboxAddress,
+  normalizeMailboxAddress,
+  normalizeRootDomain,
+  type ParsedMailboxAddress,
+  parseMailboxAddress,
+  parseMailboxAddressAgainstDomains,
+};
 
 export const randomLabel = (prefix: string) =>
   `${prefix}-${crypto.randomUUID().slice(0, 8)}`.toLowerCase();
 
 export const normalizeLabel = (value: string) => value.toLowerCase().trim();
-
-export const normalizeRootDomain = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/^\.+|\.+$/g, "");
-
-export const normalizeMailboxAddress = (value: string) =>
-  value.trim().toLowerCase();
-
-export const parseMailboxAddress = (
-  value: string,
-  rootDomain: string,
-): ParsedMailboxAddress | null => {
-  const address = normalizeMailboxAddress(value);
-  const [localPart, domain] = address.split("@");
-  const normalizedRootDomain = normalizeRootDomain(rootDomain);
-  const suffix = `.${normalizedRootDomain}`;
-
-  if (!localPart || !domain || domain.length <= suffix.length) return null;
-  if (!domain.endsWith(suffix)) return null;
-
-  const subdomain = domain.slice(0, -suffix.length);
-  if (
-    !mailboxLocalPartRegex.test(localPart) ||
-    !mailboxSubdomainRegex.test(subdomain)
-  ) {
-    return null;
-  }
-
-  return {
-    localPart,
-    subdomain,
-    rootDomain: normalizedRootDomain,
-    address: `${localPart}@${subdomain}${suffix}`,
-  };
-};
-
-export const parseMailboxAddressAgainstDomains = (
-  value: string,
-  rootDomains: string[],
-) => {
-  const orderedDomains = [...rootDomains]
-    .map((entry) => normalizeRootDomain(entry))
-    .sort((left, right) => right.length - left.length);
-
-  for (const rootDomain of orderedDomains) {
-    const parsed = parseMailboxAddress(value, rootDomain);
-    if (parsed) return parsed;
-  }
-
-  return null;
-};
 
 export const extractRootDomainFromAddress = (
   address: string,

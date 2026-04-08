@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -251,5 +257,36 @@ describe("MailWorkspace", () => {
       "style",
       expect.stringContaining("height: 22880px;"),
     );
+  });
+
+  it("submits normalized full addresses from the create popover", () => {
+    const onSubmit = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            onSubmit,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "完整邮箱地址" }));
+    fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
+      target: { value: "Build@Ops.Alpha.mail.example.net" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
+
+    return waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        localPart: "build",
+        subdomain: "ops.alpha",
+        rootDomain: "mail.example.net",
+        expiresInMinutes: demoMeta.defaultMailboxTtlMinutes,
+      });
+    });
   });
 });
