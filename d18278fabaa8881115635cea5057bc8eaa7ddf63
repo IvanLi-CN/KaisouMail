@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.15.1",
+  "base_stable_version": "0.15.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-08T04:10:46Z",
+  "next_stable_version": "0.15.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "fc3062eb8bf8e2737dcea9644b09a30b31877b0a",
+  "pr_number": 30,
+  "pr_title": "fix: remove preview URL dependency from deploy smoke gate",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.15.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.15.1",
+  "target_sha": "d18278fabaa8881115635cea5057bc8eaa7ddf63",
+  "type_label": "type:patch"
+}
