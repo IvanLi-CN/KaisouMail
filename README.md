@@ -135,7 +135,7 @@ These two values are kept only for one-time bootstrap/backfill when upgrading a 
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
 First-party browser traffic now uses same-origin `/api`, served by Cloudflare Pages Functions and forwarded to `kaisoumail-api` through the Service Binding declared in `apps/web/wrangler.jsonc`. Keep `api.cfm...` / `api.km...` style API aliases available for compatibility, automation, and direct API consumers, and keep `WEB_APP_ORIGINS` aligned with every live control-plane origin so those direct API aliases still receive the correct CORS allowlist.
-`VITE_API_BASE_URL` is no longer the production browser API locator baked into the bundle. It is only used for local dev, preview, tests, explicit non-browser overrides, and the deploy workflow's canonical direct-API smoke target.
+`VITE_API_BASE_URL` is no longer the production browser API locator baked into the bundle. It is only used for local dev, preview, tests, explicit non-browser overrides, and the deploy workflow's canonical direct-API smoke target. The deploy workflow separately uses `CF_PAGES_SMOKE_ORIGINS` to prove that every live Pages alias serves the same release through same-origin `/api/version` after Pages deploy completes.
 
 ## Cloudflare API Tokens
 
@@ -281,7 +281,7 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
-- Keep one existing 100%-stable API Worker deployment available as the baseline for schema-stable releases; the automatic deploy path now applies remote D1 migrations, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes it to 100% production traffic only after that shadow `/health` + `/api/version` smoke passes, runs production smoke before any trigger changes, applies route/domain/cron trigger changes explicitly only after that smoke passes, reruns post-trigger smoke across every API URL declared by `VITE_API_BASE_URL` plus `apps/api-worker/wrangler.jsonc`, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy
+- Keep one existing 100%-stable API Worker deployment available as the baseline for schema-stable releases; the automatic deploy path now applies remote D1 migrations, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes it to 100% production traffic only after that shadow `/health` + `/api/version` smoke passes, runs production smoke before any trigger changes, applies route/domain/cron trigger changes explicitly only after that smoke passes, reruns post-trigger smoke across every API URL declared by `VITE_API_BASE_URL` plus `apps/api-worker/wrangler.jsonc`, deploys Pages, and finally reruns same-origin `/api/version` smoke across every Pages origin declared in `CF_PAGES_SMOKE_ORIGINS` before the workflow reports success
 - CI blocks obviously destructive D1 migrations on the default auto path, and the deploy workflow re-validates the actual remote pending migration set before apply; keep schema changes expand-only / forward-compatible, carry compatibility code for at most one release, and defer destructive cleanup to a later cleanup release
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
@@ -293,7 +293,7 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 3. Set the Worker runtime secret `SESSION_SECRET`, and only add `BOOTSTRAP_ADMIN_API_KEY` when you also set `BOOTSTRAP_ADMIN_EMAIL` for first-admin bootstrap
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`
-6. Set GitHub vars `CF_PAGES_PROJECT_NAME=<your Pages project>` and `VITE_API_BASE_URL=<your canonical direct API origin for deploy smoke>`
+6. Set GitHub vars `CF_PAGES_PROJECT_NAME=<your Pages project>`, `VITE_API_BASE_URL=<your canonical direct API origin for deploy smoke>`, and `CF_PAGES_SMOKE_ORIGINS=<comma-separated Pages origins that must pass same-origin /api/version smoke after deploy>`
 7. Set `WEB_APP_ORIGINS=<comma-separated Pages origins>` and optionally keep `WEB_APP_ORIGIN=<your primary Pages origin>` for legacy direct-API compatibility
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
 9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can stage a 0%-traffic candidate, smoke-test it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, and then promote or roll back safely

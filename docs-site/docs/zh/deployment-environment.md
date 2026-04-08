@@ -62,6 +62,7 @@
 - `apps/web/functions/api/[[path]].ts` 直接把收到的 `Request` 转发给 `env.API.fetch(...)`
 - `apps/web/wrangler.jsonc` 声明了 Pages build output，以及指向 `kaisoumail-api` 的 `API` Service Binding
 - 普通 HTML、JS、CSS 和静态资源不会进入 Function，因此不会把静态流量额外记成 Workers 请求
+- deploy workflow 会读取 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个重跑每个控制台域名的同源 `/api/version` smoke
 
 像 `https://api.cfm.707979.xyz`、`https://api.km.707979.xyz` 这样的直连 API 自定义域仍然保留给兼容调用或直接 API 消费者使用。`WEB_APP_ORIGINS` 继续承担这些直连 API 域名的 CORS allowlist；但一方浏览器控制台应优先使用同源 `/api`。
 
@@ -74,7 +75,7 @@
 
 - 生产发布 workflow 会先捕获一个 D1 Time Travel 恢复锚点；如果是 schema-stable 发布，还会额外捕获当前 100% 稳定的 API Worker 回滚目标，再发布新的 API 版本
 - workflow 会自动 apply 远端 D1 migration、上传一个不接生产流量的 API Worker 预览版本，并且只有在 canonical 直连 API 域名上的 shadow `/health` + `/api/version` smoke 通过后才 promote 到 100% 生产流量
-- Promote 之后会先对正式 API 域名跑一次 `/health` + `/api/version` production smoke；只有这一步通过后才显式应用 API Worker 的 routes / domains / cron triggers，并在 trigger 应用后对 `VITE_API_BASE_URL` 和 `apps/api-worker/wrangler.jsonc` 里声明的每个 API URL 再跑一次 post-trigger smoke。如果 trigger 应用本身报错，或 post-trigger smoke 失败，则先停下并要求人工核查 trigger 状态；只有相对上一版 release 保持 schema-stable 且当前部署不涉及 D1 schema 变更的发布，production smoke 失败时才自动回滚 API Worker，随后阻断 Email Worker 与 Pages 发布
+- Promote 之后会先对正式 API 域名跑一次 `/health` + `/api/version` production smoke；只有这一步通过后才显式应用 API Worker 的 routes / domains / cron triggers，并在 trigger 应用后对 `VITE_API_BASE_URL` 和 `apps/api-worker/wrangler.jsonc` 里声明的每个 API URL 再跑一次 post-trigger smoke。随后 workflow 会部署 Pages，并按 `CF_PAGES_SMOKE_ORIGINS` 逐个重跑每个控制台域名的同源 `/api/version` smoke。如果 trigger 应用本身报错、post-trigger smoke 失败，或 Pages 同源 smoke 失败，则先停下并要求人工核查；只有相对上一版 release 保持 schema-stable 且当前部署不涉及 D1 schema 变更的发布，production smoke 失败时才自动回滚 API Worker，随后阻断 Email Worker 与 Pages 发布
 - D1 restore 仍然是显式的 `workflow_dispatch` 灾难恢复入口，不会绑定到常规发布失败分支，因为自动恢复数据库可能抹掉真实写入
 - `CI Main` 与 `CI PR` 会拦截明显破坏性的 SQL migration，Deploy 在 apply 前也会按远端 pending migration 实际集合再校验一次；默认自动发布路径只接受 expand-only / forward-compatible 迁移，兼容代码最多保留一个发布周期，破坏性清理放到后续 cleanup release
 

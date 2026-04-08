@@ -54,6 +54,7 @@ jobs:
       CLOUDFLARE_DEPLOY_API_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CF_PAGES_PROJECT_NAME: ${{ vars.CF_PAGES_PROJECT_NAME }}
+      CF_PAGES_SMOKE_ORIGINS: ${{ vars.CF_PAGES_SMOKE_ORIGINS }}
       VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       VITE_DEMO_MODE: "false"
       WRANGLER_BIN: ./apps/api-worker/node_modules/.bin/wrangler
@@ -774,6 +775,37 @@ jobs:
         if: steps.operation.outputs.operation == 'deploy'
         run: bun run --cwd apps/web build
 
+      - name: Resolve Pages same-origin smoke origins
+        id: pages-smoke
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        env:
+          PAGES_SMOKE_ORIGINS: ${{ vars.CF_PAGES_SMOKE_ORIGINS }}
+        run: |
+          set -euo pipefail
+          pages_smoke_file="${RUNNER_TEMP}/pages-smoke-origins.txt"
+          rm -f "${pages_smoke_file}"
+
+          CF_PAGES_SMOKE_ORIGINS="${PAGES_SMOKE_ORIGINS}" \
+            node .github/scripts/resolve_pages_smoke_origins.mjs > "${pages_smoke_file}"
+
+          if [ ! -s "${pages_smoke_file}" ]; then
+            echo "Missing CF_PAGES_SMOKE_ORIGINS. Set it to a comma-separated list of Pages origins that must pass same-origin /api/version smoke after deploy." >&2
+            exit 1
+          fi
+
+          echo "file=${pages_smoke_file}" >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## Pages same-origin smoke targets"
+            echo
+            while IFS= read -r pages_origin; do
+              if [ -n "${pages_origin}" ]; then
+                echo "- ${pages_origin}"
+              fi
+            done < "${pages_smoke_file}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Deploy Pages
         if: steps.operation.outputs.operation == 'deploy'
         shell: bash
@@ -791,3 +823,64 @@ jobs:
 
             sleep "$((attempt * 15))"
           done
+
+      - name: Smoke test Pages same-origin API aliases
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        env:
+          PAGES_SMOKE_ORIGINS_FILE: ${{ steps.pages-smoke.outputs.file }}
+        run: |
+          set -euo pipefail
+          pages_smoke_file="${PAGES_SMOKE_ORIGINS_FILE}"
+
+          if [ -z "${pages_smoke_file}" ] || [ ! -f "${pages_smoke_file}" ]; then
+            echo "Pages same-origin smoke targets were not resolved before deploy." >&2
+            exit 1
+          fi
+
+          while IFS= read -r pages_origin; do
+            if [ -z "${pages_origin}" ]; then
+              continue
+            fi
+
+            version_file="${RUNNER_TEMP}/pages-api-version.json"
+            pages_api_base="${pages_origin%/}/api"
+
+            echo "Pages same-origin smoke target: ${pages_api_base}"
+
+            for attempt in 1 2 3 4 5 6; do
+              version_code="$(curl -sS -o "${version_file}" -w "%{http_code}" "${pages_api_base}/version" || true)"
+
+              export VERSION_CODE="${version_code}"
+              export VERSION_FILE="${version_file}"
+              export EXPECTED_SHA="${CF_MAIL_RELEASE_SHA}"
+
+              if SMOKE_LABEL="Pages ${pages_origin}" node .github/scripts/verify_pages_api_smoke.mjs
+              then
+                {
+                  echo "## Pages same-origin smoke"
+                  echo
+                  echo "- Target: ${pages_api_base}"
+                  echo "- Result: pass"
+                } >> "${GITHUB_STEP_SUMMARY}"
+                break
+              fi
+
+              echo "Pages same-origin smoke attempt ${attempt} not ready yet for ${pages_api_base}; retrying..."
+              echo "/api/version => ${version_code} $(cat "${version_file}" 2>/dev/null || true)"
+
+              if [ "${attempt}" -eq 6 ]; then
+                {
+                  echo "## Pages same-origin smoke"
+                  echo
+                  echo "- Result: fail"
+                  echo "- Target: ${pages_api_base}"
+                  echo "- Recovery: Pages was deployed, but the first-party same-origin /api path did not reach the expected release SHA. Inspect the Pages Function binding and active Pages deployment before declaring the release healthy."
+                } >> "${GITHUB_STEP_SUMMARY}"
+                echo "Pages same-origin smoke failed after ${attempt} attempts for ${pages_api_base}" >&2
+                exit 1
+              fi
+
+              sleep "$((attempt * 5))"
+            done
+          done < "${pages_smoke_file}"

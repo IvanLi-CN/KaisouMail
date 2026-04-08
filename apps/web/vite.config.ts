@@ -3,10 +3,7 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type UserConfig } from "vite";
 
-import {
-  createApiProxy,
-  resolveApiProxyTarget,
-} from "./src/lib/vite-proxy";
+import { createApiProxy, resolveApiProxyTarget } from "./src/lib/vite-proxy";
 
 export const createWebViteConfig = ({
   port = Number(process.env.PORT ?? 4173),
