@@ -16,6 +16,7 @@ import { domainRoutes } from "./routes/domains";
 import { mailboxRoutes } from "./routes/mailboxes";
 import { messageRoutes } from "./routes/messages";
 import { metaRoutes } from "./routes/meta";
+import { passkeyRoutes } from "./routes/passkeys";
 import { userRoutes } from "./routes/users";
 import {
   ensureBootstrapAdmin,
@@ -128,6 +129,7 @@ export const createApp = () => {
   );
   app.route("/api/auth", authRoutes);
   app.route("/api/api-keys", apiKeyRoutes);
+  app.route("/api/passkeys", passkeyRoutes);
   app.route("/api/domains", domainRoutes);
   app.route("/api/meta", metaRoutes);
   app.route("/api/mailboxes", mailboxRoutes);

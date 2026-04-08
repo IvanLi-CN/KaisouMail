@@ -15,6 +15,7 @@ export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
 export const domainStatusSchema = z.enum(domainStatuses);
+export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
 export const domainBindingSourceSchema = z.enum(domainBindingSources);
 export const domainCatalogAvailabilitySchema = z.enum(
   domainCatalogAvailabilities,
@@ -61,6 +62,18 @@ export const apiKeySchema = z.object({
   name: z.string(),
   prefix: z.string(),
   scopes: z.array(z.string()),
+  createdAt: isoDateSchema,
+  lastUsedAt: isoDateSchema.nullable(),
+  revokedAt: isoDateSchema.nullable(),
+});
+
+export const passkeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  credentialId: z.string(),
+  deviceType: passkeyDeviceTypeSchema,
+  backedUp: z.boolean(),
+  transports: z.array(z.string()),
   createdAt: isoDateSchema,
   lastUsedAt: isoDateSchema.nullable(),
   revokedAt: isoDateSchema.nullable(),

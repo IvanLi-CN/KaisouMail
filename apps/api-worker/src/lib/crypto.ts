@@ -1,6 +1,6 @@
 const encoder = new TextEncoder();
 
-const toBase64Url = (input: ArrayBuffer | Uint8Array) => {
+export const toBase64Url = (input: ArrayBuffer | Uint8Array) => {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -10,7 +10,7 @@ const toBase64Url = (input: ArrayBuffer | Uint8Array) => {
     .replace(/=+$/g, "");
 };
 
-const fromBase64Url = (input: string) => {
+export const fromBase64Url = (input: string) => {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
   const padded =
     normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4);
@@ -43,7 +43,15 @@ export interface SessionPayload {
   exp: number;
 }
 
-export const signSession = async (payload: SessionPayload, secret: string) => {
+type ExpiringPayload = {
+  iat: number;
+  exp: number;
+};
+
+export const signPayload = async <T extends ExpiringPayload>(
+  payload: T,
+  secret: string,
+) => {
   const body = toBase64Url(encoder.encode(JSON.stringify(payload)));
   const key = await crypto.subtle.importKey(
     "raw",
@@ -56,10 +64,10 @@ export const signSession = async (payload: SessionPayload, secret: string) => {
   return `${body}.${toBase64Url(signature)}`;
 };
 
-export const verifySession = async (
+export const verifyPayload = async <T extends ExpiringPayload>(
   token: string,
   secret: string,
-): Promise<SessionPayload | null> => {
+): Promise<T | null> => {
   const [body, signature] = token.split(".");
   if (!body || !signature) return null;
   const key = await crypto.subtle.importKey(
@@ -78,7 +86,16 @@ export const verifySession = async (
   if (!valid) return null;
   const payload = JSON.parse(
     new TextDecoder().decode(fromBase64Url(body)),
-  ) as SessionPayload;
+  ) as T;
   if (Date.now() >= payload.exp * 1000) return null;
   return payload;
 };
+
+export const signSession = async (payload: SessionPayload, secret: string) =>
+  signPayload(payload, secret);
+
+export const verifySession = async (
+  token: string,
+  secret: string,
+): Promise<SessionPayload | null> =>
+  verifyPayload<SessionPayload>(token, secret);

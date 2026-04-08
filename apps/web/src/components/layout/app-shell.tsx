@@ -61,7 +61,7 @@ const navItems = [
   },
   {
     to: "/api-keys",
-    label: "API Keys",
+    label: "身份认证",
     icon: KeyRound,
     activePatterns: ["/api-keys", "/api-keys/docs"],
   },

@@ -9,6 +9,7 @@ import type {
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
+  passkeySchema,
   sessionResponseSchema,
   userSchema,
   versionResponseSchema,
@@ -25,6 +26,7 @@ export type Mailbox = z.infer<typeof mailboxSchema>;
 export type MessageSummary = z.infer<typeof messageSummarySchema>;
 export type MessageDetail = z.infer<typeof messageDetailSchema>;
 export type ApiKeyRecord = z.infer<typeof apiKeySchema>;
+export type PasskeyRecord = z.infer<typeof passkeySchema>;
 export type UserRecord = z.infer<typeof userSchema>;
 export type VersionInfo = z.infer<typeof versionResponseSchema>;
 export type CreateApiKeyResult = z.infer<typeof createApiKeyResponseSchema>;

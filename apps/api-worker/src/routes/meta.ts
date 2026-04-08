@@ -10,6 +10,7 @@ import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";
 import { listActiveRootDomains } from "../services/domains";
+import { isPasskeyAuthConfigured } from "../services/passkeys";
 import type { AppBindings } from "../types";
 
 export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
@@ -26,6 +27,8 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
         Boolean(config.CLOUDFLARE_ACCOUNT_ID),
       cloudflareDomainLifecycleEnabled:
         config.EMAIL_ROUTING_MANAGEMENT_ENABLED && hasCloudflareApiToken,
+      passkeyAuthEnabled: isPasskeyAuthConfigured(config),
+      passkeyTrustedOrigins: config.WEB_APP_ORIGINS ?? [],
       defaultMailboxTtlMinutes: config.DEFAULT_MAILBOX_TTL_MINUTES,
       minMailboxTtlMinutes,
       maxMailboxTtlMinutes,

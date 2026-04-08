@@ -15,6 +15,7 @@ import type {
   Mailbox,
   MessageDetail,
   MessageSummary,
+  PasskeyRecord,
   SessionResponse,
   UserRecord,
   VersionInfo,
@@ -27,6 +28,7 @@ import {
   demoMessageDetails,
   demoMessages,
   demoMeta,
+  demoPasskeys,
   demoSessionUser,
   demoUsers,
   demoVersion,
@@ -52,6 +54,7 @@ const pickRandomRootDomain = (domains: string[]) => {
 interface DemoState {
   session: SessionResponse | null;
   apiKeys: ApiKeyRecord[];
+  passkeys: PasskeyRecord[];
   users: UserRecord[];
   cloudflareZones: Array<{
     id: string;
@@ -70,6 +73,7 @@ interface DemoState {
 const createState = (): DemoState => ({
   session: null,
   apiKeys: clone(demoApiKeys),
+  passkeys: clone(demoPasskeys),
   users: clone(demoUsers),
   cloudflareZones: clone(demoCloudflareZones),
   domains: clone(demoDomains),
@@ -348,6 +352,41 @@ export const demoApi = {
   },
   async listApiKeys() {
     return clone(state.apiKeys);
+  },
+  async listPasskeys() {
+    return clone(state.passkeys);
+  },
+  async registerPasskey(name: string) {
+    const createdAt = new Date().toISOString();
+    const passkey: PasskeyRecord = {
+      id: randomId("psk"),
+      name,
+      credentialId: `demo_${Math.random().toString(36).slice(2, 14)}`,
+      deviceType: "multiDevice",
+      backedUp: true,
+      transports: ["internal", "hybrid"],
+      createdAt,
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    state.passkeys.unshift(passkey);
+    return clone(passkey);
+  },
+  async revokePasskey(id: string) {
+    const passkey = state.passkeys.find((entry) => entry.id === id);
+    if (passkey) passkey.revokedAt = new Date().toISOString();
+  },
+  async loginWithPasskey() {
+    const activePasskey = state.passkeys.find((entry) => !entry.revokedAt);
+    if (!activePasskey) {
+      throw new Error("No passkeys are registered");
+    }
+    activePasskey.lastUsedAt = new Date().toISOString();
+    state.session = {
+      user: clone(demoSessionUser),
+      authenticatedAt: activePasskey.lastUsedAt,
+    };
+    return clone(state.session);
   },
   async createApiKey(input: {
     name: string;

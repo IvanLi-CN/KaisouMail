@@ -2,13 +2,21 @@ import { useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { LoginCard } from "@/components/auth/login-card";
+import {
+  usePasskeyLoginMutation,
+  usePasskeySupport,
+} from "@/hooks/use-passkeys";
 import { useLoginMutation, useSessionQuery } from "@/hooks/use-session";
+import { getPasskeyErrorMessage } from "@/lib/passkeys";
 
 export const LoginPage = () => {
   const location = useLocation();
   const sessionQuery = useSessionQuery();
   const loginMutation = useLoginMutation();
+  const passkeyLoginMutation = usePasskeyLoginMutation();
+  const passkeySupport = usePasskeySupport();
   const [error, setError] = useState<string | null>(null);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const redirectTarget =
     typeof location.state?.from === "string" &&
     location.state.from.startsWith("/") &&
@@ -38,12 +46,27 @@ export const LoginPage = () => {
       <LoginCard
         error={error}
         isPending={loginMutation.isPending}
+        isPasskeyPending={passkeyLoginMutation.isPending}
+        passkeyError={passkeyError}
+        passkeyButtonLabel={passkeySupport.buttonLabel}
+        passkeySupported={passkeySupport.supported}
+        passkeySupportMessage={passkeySupport.message}
         onSubmit={async ({ apiKey }) => {
           setError(null);
+          setPasskeyError(null);
           try {
             await loginMutation.mutateAsync(apiKey);
           } catch (reason) {
             setError(reason instanceof Error ? reason.message : "登录失败");
+          }
+        }}
+        onPasskeySubmit={async () => {
+          setError(null);
+          setPasskeyError(null);
+          try {
+            await passkeyLoginMutation.mutateAsync();
+          } catch (reason) {
+            setPasskeyError(getPasskeyErrorMessage(reason, "Passkey 登录失败"));
           }
         }}
       />
