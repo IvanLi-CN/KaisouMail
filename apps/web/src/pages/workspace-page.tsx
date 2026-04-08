@@ -58,7 +58,9 @@ export const WorkspacePage = () => {
     string | null
   >(null);
   const metaQuery = useMetaQuery();
-  const mailboxesQuery = useMailboxesQuery();
+  const mailboxesQuery = useMailboxesQuery({
+    scope: "workspace",
+  });
   const createMailboxMutation = useCreateMailboxMutation();
   const mailboxes = mailboxesQuery.data ?? [];
 
@@ -110,6 +112,7 @@ export const WorkspacePage = () => {
 
   const allMessagesQuery = useMessagesQuery([], undefined, {
     pollingIntervalMs: selectedMailbox ? 60_000 : 15_000,
+    scope: "workspace",
   });
 
   useEffect(() => {
@@ -127,6 +130,7 @@ export const WorkspacePage = () => {
     undefined,
     {
       pollingIntervalMs: 15_000,
+      scope: "workspace",
     },
   );
   const messages = messagesQuery.data ?? [];
@@ -200,11 +204,13 @@ export const WorkspacePage = () => {
   const messageDetailQuery = useMessageDetailQuery(selectedMessageId ?? "");
   const refreshTargets = useMemo(
     () => [
-      { queryKey: mailboxKeys.all },
-      { queryKey: messageKeys.list([]) },
+      { queryKey: mailboxKeys.list("workspace") },
+      { queryKey: messageKeys.list([], undefined, "workspace") },
       {
         queryKey: messageKeys.list(
           selectedMailbox ? [selectedMailbox.address] : [],
+          undefined,
+          "workspace",
         ),
       },
       ...(selectedMessageId

@@ -29,6 +29,7 @@ export const messageRoutes = new Hono<AppBindings>()
         user,
         mailboxAddresses,
         resolveReceivedAfter(query),
+        query.scope ?? "default",
       );
       return c.json(listMessagesResponseSchema.parse({ messages }));
     },

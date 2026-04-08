@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  mailboxListScopes,
   mailboxLocalPartRegex,
   mailboxSubdomainRegex,
   maxMailboxTtlMinutes,
@@ -91,9 +92,16 @@ export const resolveMailboxQuerySchema = z.object({
   address: z.string().email(),
 });
 
+export const listQueryScopeSchema = z.enum(mailboxListScopes);
+
+export const listMailboxesQuerySchema = z.object({
+  scope: listQueryScopeSchema.optional(),
+});
+
 export const listMessagesQuerySchema = z.object({
   after: z.string().datetime({ offset: true }).optional(),
   since: z.string().datetime({ offset: true }).optional(),
+  scope: listQueryScopeSchema.optional(),
 });
 
 export const createUserRequestSchema = z.object({

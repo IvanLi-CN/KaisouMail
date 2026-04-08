@@ -1,4 +1,9 @@
-import { messageDetailSchema, messageSummarySchema } from "@kaisoumail/shared";
+import {
+  type mailboxListScopes,
+  messageDetailSchema,
+  messageSummarySchema,
+} from "@kaisoumail/shared";
+import type { SQLWrapper } from "drizzle-orm";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import PostalMime from "postal-mime";
 
@@ -11,9 +16,17 @@ import {
 } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { extractPreviewText, resolveDisposition } from "../lib/email";
+import { chunkD1InValues } from "../lib/d1-batches";
+import {
+  extractPreviewText,
+  normalizeMailboxAddress,
+  resolveDisposition,
+} from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
+import { listScopedMailboxRowsForUser } from "./mailboxes";
+
+type MailboxListScope = (typeof mailboxListScopes)[number];
 
 const normalizePeople = (value: unknown) => {
   if (!value) return [] as Array<{ name: string | null; address: string }>;
@@ -66,27 +79,76 @@ export const listMessagesForUser = async (
   user: AuthUser,
   mailboxAddresses: string[],
   after?: string | null,
+  scope: MailboxListScope = "default",
 ) => {
   const db = getDb(env);
-  const filters = [];
+  const normalizedMailboxAddresses = [
+    ...new Set(
+      mailboxAddresses.map((address) => normalizeMailboxAddress(address)),
+    ),
+  ];
+  const scopedMailboxAddresses =
+    scope === "workspace"
+      ? [
+          ...new Set(
+            (await listScopedMailboxRowsForUser(env, user, "workspace")).map(
+              (mailbox) => mailbox.address,
+            ),
+          ),
+        ]
+      : null;
+  const candidateMailboxAddresses =
+    scopedMailboxAddresses === null
+      ? normalizedMailboxAddresses
+      : normalizedMailboxAddresses.length > 0
+        ? normalizedMailboxAddresses.filter((address) =>
+            scopedMailboxAddresses.includes(address),
+          )
+        : scopedMailboxAddresses;
+  if (
+    (normalizedMailboxAddresses.length > 0 || scope === "workspace") &&
+    candidateMailboxAddresses.length === 0
+  ) {
+    return [];
+  }
+  const filters: SQLWrapper[] = [];
   if (user.role !== "admin") {
     filters.push(eq(messages.userId, user.id));
-  }
-  if (mailboxAddresses.length > 0) {
-    filters.push(inArray(messages.mailboxAddress, mailboxAddresses));
   }
   if (after) {
     filters.push(gt(messages.receivedAt, after));
   }
 
   const rows =
-    filters.length > 0
-      ? await db
-          .select()
-          .from(messages)
-          .where(and(...filters))
-          .orderBy(desc(messages.receivedAt))
-      : await db.select().from(messages).orderBy(desc(messages.receivedAt));
+    candidateMailboxAddresses.length > 0
+      ? (
+          await Promise.all(
+            chunkD1InValues(candidateMailboxAddresses).map(
+              (mailboxAddressChunk) =>
+                db
+                  .select()
+                  .from(messages)
+                  .where(
+                    and(
+                      ...filters,
+                      inArray(messages.mailboxAddress, mailboxAddressChunk),
+                    ),
+                  )
+                  .orderBy(desc(messages.receivedAt)),
+            ),
+          )
+        )
+          .flat()
+          .sort((left, right) =>
+            right.receivedAt.localeCompare(left.receivedAt),
+          )
+      : filters.length > 0
+        ? await db
+            .select()
+            .from(messages)
+            .where(and(...filters))
+            .orderBy(desc(messages.receivedAt))
+        : await db.select().from(messages).orderBy(desc(messages.receivedAt));
   return rows.map(mapSummary);
 };
 

@@ -1,8 +1,10 @@
 import {
   buildRealisticMailboxAddressExamples,
+  filterMailboxesForWorkspaceScope,
   generatedMailboxMaxAttempts,
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
+  type mailboxListScopes,
 } from "@kaisoumail/shared";
 
 import type {
@@ -39,6 +41,8 @@ const randomId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
 const normalizeLabel = (value: string) => value.trim().toLowerCase();
+const DEMO_NOW_ISO = "2026-04-08T12:00:00.000Z";
+type MailboxListScope = (typeof mailboxListScopes)[number];
 const buildAddress = (
   localPart: string,
   subdomain: string,
@@ -196,9 +200,13 @@ export const demoApi = {
   async getMeta() {
     return clone(state.meta);
   },
-  async listMailboxes() {
+  async listMailboxes(options?: { scope?: MailboxListScope }) {
+    const visibleMailboxes =
+      options?.scope === "workspace"
+        ? filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO)
+        : state.mailboxes;
     return clone(
-      [...state.mailboxes].sort((a, b) =>
+      [...visibleMailboxes].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt),
       ),
     );
@@ -323,6 +331,7 @@ export const demoApi = {
   async listMessages(
     mailboxAddresses: string[],
     input?: { after?: string; since?: string },
+    options?: { scope?: MailboxListScope },
   ) {
     const receivedAfter = [input?.after, input?.since]
       .map((value) => {
@@ -333,12 +342,31 @@ export const demoApi = {
       .filter((value): value is string => Boolean(value))
       .sort((left, right) => left.localeCompare(right))
       .at(-1);
-    const messages =
-      mailboxAddresses.length > 0
-        ? state.messages.filter((message) =>
-            mailboxAddresses.includes(message.mailboxAddress),
+    const scopedMailboxAddresses =
+      options?.scope === "workspace"
+        ? new Set(
+            filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO).map(
+              (mailbox) => mailbox.address,
+            ),
           )
-        : state.messages;
+        : null;
+    const normalizedMailboxAddresses = mailboxAddresses.map(normalizeAddress);
+    const visibleMailboxAddresses =
+      scopedMailboxAddresses === null
+        ? normalizedMailboxAddresses
+        : normalizedMailboxAddresses.length > 0
+          ? normalizedMailboxAddresses.filter((address) =>
+              scopedMailboxAddresses.has(address),
+            )
+          : [...scopedMailboxAddresses];
+    const messages =
+      visibleMailboxAddresses.length > 0
+        ? state.messages.filter((message) =>
+            visibleMailboxAddresses.includes(message.mailboxAddress),
+          )
+        : scopedMailboxAddresses
+          ? []
+          : state.messages;
     return clone(
       messages
         .filter((message) =>

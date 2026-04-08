@@ -1,3 +1,4 @@
+import { filterMailboxesForWorkspaceScope } from "@kaisoumail/shared";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
@@ -56,6 +57,98 @@ const createLongMessages = (
     previewText: `Virtualized preview ${index}`,
     receivedAt: `2026-04-05T10:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
   }));
+
+const WORKSPACE_SCOPE_DEMO_NOW = "2026-04-08T12:00:00.000Z";
+
+const createWorkspaceScopeMailboxes = () => {
+  const activeMailbox: Mailbox = {
+    ...demoMailboxes[0],
+    id: "mbx_scope_active",
+    address: "active@ops.mail.example.net",
+    localPart: "active",
+    subdomain: "ops",
+    rootDomain: "mail.example.net",
+    status: "active",
+    createdAt: "2026-04-08T11:05:00.000Z",
+    lastReceivedAt: "2026-04-08T11:58:00.000Z",
+    expiresAt: "2026-04-08T13:00:00.000Z",
+    destroyedAt: null,
+    routingRuleId: "rule_scope_active",
+  };
+  const destroyingMailbox: Mailbox = {
+    ...demoMailboxes[1],
+    id: "mbx_scope_destroying",
+    address: "retry@ops.mail.example.net",
+    localPart: "retry",
+    subdomain: "ops",
+    rootDomain: "mail.example.net",
+    status: "destroying",
+    createdAt: "2026-04-08T10:55:00.000Z",
+    lastReceivedAt: null,
+    expiresAt: "2026-04-08T12:30:00.000Z",
+    destroyedAt: null,
+    routingRuleId: "rule_scope_destroying",
+  };
+  const recentDestroyedMailboxes = Array.from({ length: 55 }, (_, index) => ({
+    ...demoMailboxes[2],
+    id: `mbx_scope_destroyed_${index.toString().padStart(3, "0")}`,
+    address: `destroyed-${index.toString().padStart(3, "0")}@archive.mail.example.net`,
+    localPart: `destroyed-${index.toString().padStart(3, "0")}`,
+    subdomain: "archive",
+    rootDomain: "mail.example.net",
+    status: "destroyed" as const,
+    createdAt: `2026-04-08T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+    lastReceivedAt: null,
+    expiresAt: "2026-04-08T11:00:00.000Z",
+    destroyedAt: `2026-04-08T11:${index.toString().padStart(2, "0")}:00.000Z`,
+    routingRuleId: null,
+  }));
+  const staleDestroyedMailbox: Mailbox = {
+    ...demoMailboxes[2],
+    id: "mbx_scope_destroyed_stale",
+    address: "destroyed-stale@archive.mail.example.net",
+    localPart: "destroyed-stale",
+    subdomain: "archive",
+    rootDomain: "mail.example.net",
+    status: "destroyed",
+    createdAt: "2026-03-25T10:00:00.000Z",
+    lastReceivedAt: null,
+    expiresAt: "2026-03-25T11:00:00.000Z",
+    destroyedAt: "2026-03-31T11:00:00.000Z",
+    routingRuleId: null,
+  };
+  const missingDestroyedAtMailbox: Mailbox = {
+    ...demoMailboxes[2],
+    id: "mbx_scope_destroyed_missing",
+    address: "destroyed-missing@archive.mail.example.net",
+    localPart: "destroyed-missing",
+    subdomain: "archive",
+    rootDomain: "mail.example.net",
+    status: "destroyed",
+    createdAt: "2026-04-08T10:10:00.000Z",
+    lastReceivedAt: null,
+    expiresAt: "2026-04-08T11:10:00.000Z",
+    destroyedAt: null,
+    routingRuleId: null,
+  };
+
+  const allMailboxes = [
+    activeMailbox,
+    destroyingMailbox,
+    ...recentDestroyedMailboxes,
+    staleDestroyedMailbox,
+    missingDestroyedAtMailbox,
+  ];
+
+  return {
+    activeMailbox,
+    allMailboxes,
+    visibleMailboxes: filterMailboxesForWorkspaceScope(
+      allMailboxes,
+      WORKSPACE_SCOPE_DEMO_NOW,
+    ),
+  };
+};
 
 const buildCreateMailboxAction = (
   overrides: Partial<
@@ -466,6 +559,80 @@ const DesktopVirtualizedHarness = () => {
   );
 };
 
+const WorkspaceScopeHistoryHarness = () => {
+  const { activeMailbox, visibleMailboxes } = useMemo(
+    () => createWorkspaceScopeMailboxes(),
+    [],
+  );
+  const scopedMessages = useMemo<MessageSummary[]>(
+    () => [
+      {
+        ...demoMessages[0],
+        id: "msg_scope_active",
+        mailboxId: activeMailbox.id,
+        mailboxAddress: activeMailbox.address,
+        subject: "Workspace scope keeps only recent destroyed rows",
+        previewText: "Recent destroyed mailboxes stay visible for seven days.",
+        receivedAt: "2026-04-08T11:58:00.000Z",
+      },
+    ],
+    [activeMailbox],
+  );
+  const scopedDetail = useMemo<MessageDetail>(
+    () => ({
+      ...demoMessageDetails.msg_alpha,
+      id: "msg_scope_active",
+      mailboxId: activeMailbox.id,
+      mailboxAddress: activeMailbox.address,
+      subject: "Workspace scope keeps only recent destroyed rows",
+      previewText: "Recent destroyed mailboxes stay visible for seven days.",
+      receivedAt: "2026-04-08T11:58:00.000Z",
+      envelopeTo: activeMailbox.address,
+      rawDownloadPath: "/api/messages/msg_scope_active/raw",
+    }),
+    [activeMailbox],
+  );
+
+  return (
+    <MailWorkspace
+      createMailboxAction={buildCreateMailboxAction()}
+      highlightedMailboxId={null}
+      isMailboxesLoading={false}
+      isMessageLoading={false}
+      isMessagesLoading={false}
+      mailboxManagementHref="/mailboxes"
+      mailboxMessageCounts={buildMailboxMessageCounts(
+        visibleMailboxes,
+        scopedMessages,
+      )}
+      messageDetailHref="/messages/msg_scope_active?mailbox=all&sort=recent"
+      messages={scopedMessages}
+      onSearchQueryChange={fn()}
+      onSelectMailbox={fn()}
+      onSelectMessage={fn()}
+      onSortModeChange={fn()}
+      refreshAction={
+        <MessageRefreshControl
+          isRefreshing={false}
+          labelVisibility="desktop"
+          lastRefreshedAt={new Date(WORKSPACE_SCOPE_DEMO_NOW).getTime()}
+          onRefresh={fn()}
+        />
+      }
+      searchQuery=""
+      selectedMailbox={null}
+      selectedMailboxId="all"
+      selectedMessage={scopedDetail}
+      selectedMessageId={scopedDetail.id}
+      sortMode="recent"
+      totalAggregatedMessageCount={scopedMessages.length}
+      totalMailboxCount={visibleMailboxes.length}
+      totalMessageCount={scopedMessages.length}
+      visibleMailboxes={visibleMailboxes}
+    />
+  );
+};
+
 export const MobileSingleColumn: Story = {
   globals: projectViewportGlobals.mobile,
   play: async ({ canvasElement }) => {
@@ -841,6 +1008,44 @@ export const DesktopVirtualizedLongLists: Story = {
         name: /mailbox-159@ops\.alpha\.relay\.example\.test/i,
       }),
     );
+  },
+};
+
+export const WorkspaceScopeTrimmedDestroyedHistory: Story = {
+  globals: projectViewportGlobals.tablet,
+  render: () => <WorkspaceScopeHistoryHarness />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Workspace scope keeps active/destroying mailboxes, retains only the latest 50 destroyed rows from the last seven days, and hides older or malformed destroyed history.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("52 个邮箱 · 1 封邮件")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", {
+        name: /destroyed-054@archive\.mail\.example\.net/i,
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /destroyed-000@archive\.mail\.example\.net/i,
+      }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /destroyed-stale@archive\.mail\.example\.net/i,
+      }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /destroyed-missing@archive\.mail\.example\.net/i,
+      }),
+    ).not.toBeInTheDocument();
   },
 };
 
