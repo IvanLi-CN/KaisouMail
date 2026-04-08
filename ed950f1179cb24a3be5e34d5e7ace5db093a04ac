@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.17.1",
+  "base_stable_version": "0.17.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-08T12:26:16Z",
+  "next_stable_version": "0.17.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "b7d5a0781d97acb0f92e87bb0bb51c6af588b7e9",
+  "pr_number": 31,
+  "pr_title": "feat(web): route control plane API through same-origin pages proxy",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.17.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.17.1",
+  "target_sha": "ed950f1179cb24a3be5e34d5e7ace5db093a04ac",
+  "type_label": "type:patch"
+}
