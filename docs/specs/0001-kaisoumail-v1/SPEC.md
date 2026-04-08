@@ -16,6 +16,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Workspace
 - `/workspace`
 - Responsive mail workbench for mailbox filtering, aggregated message browsing, and inline message reading: single-column on phones, two-pane split from `lg`, and full three-pane reading from `xl+`
+- Desktop `xl+` workspace layout is clamped to the remaining AppShell viewport height; each pane keeps its own vertical scroll area instead of letting long lists stretch the whole page
+- Mailbox and message rails support dynamic-height virtualized rendering for unusually long datasets, while the right-side reader keeps inline content scrolling local to the pane
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
@@ -92,7 +94,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Responsive authenticated header keeps the brand and inline primary navigation from `lg+`, while sub-`lg` layouts collapse account context, navigation, and logout into a right-side drawer so the mobile header stays single-row
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
+- On desktop three-pane layouts, long mailbox/message datasets stay inside pane-local scroll containers; the page itself should not grow purely because a rail becomes very long
 - Workspace mailbox rail supports all-mailbox aggregation, mailbox search, and sorting by recent receive time or create time
+- Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
+- Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
 - Domains management includes a dedicated bind form plus a confirmation popover for destructive delete
 - Refresh controls stay compact and header-aligned on wide layouts, while narrow viewports may wrap the action row without truncating the primary operations or introducing a noisy live-status badge system
@@ -110,6 +115,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
 - 2026-04-07: Tightened the responsive shell again so inline navigation stays single-row on wide tablets, collapsed desktop account/logout utilities to icon-only actions, and hid the workspace summary sentence on phone-sized layouts to preserve vertical space.
 - 2026-04-07: Simplified user-facing copy across the authenticated shell and control-plane pages, kept the mobile drawer focused on account/navigation/logout only, moved longer mailbox-creation guidance behind a contextual help popover, and refreshed responsive evidence against the canonical phone/tablet/desktop Storybook viewports.
 - 2026-04-07: Removed the redundant inline helper copy from the mailbox address form so the create surface keeps explanation at the header level only, then refreshed the stored visual evidence.
@@ -153,6 +159,11 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ![Workspace on wide tablet with a mailbox rail and stacked reading panes](./assets/workspace-tablet-split-view-responsive.png)
 
 ![Workspace on desktop with the restored three-pane reading layout](./assets/workspace-desktop-three-pane-responsive.png)
+
+![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
+
+PR: include
+![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
 
 ### UI Primitives
 

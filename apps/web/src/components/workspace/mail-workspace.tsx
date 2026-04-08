@@ -33,15 +33,27 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MailboxSortMode } from "@/lib/workspace";
 
+import { PaneScrollbar } from "./pane-scrollbar";
+import { VirtualizedPaneList } from "./virtualized-pane-list";
+
 const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
   { label: "最近收信", value: "recent" },
   { label: "创建时间", value: "created" },
 ];
+
+type WorkspacePaneError = {
+  variant: ErrorStateVariant;
+  title: string;
+  description: string;
+  details?: string | null;
+  onRetry?: () => void;
+};
 
 type MailWorkspaceProps = {
   createMailboxAction: {
@@ -62,27 +74,9 @@ type MailWorkspaceProps = {
       expiresInMinutes: number;
     }) => Promise<void> | void;
   };
-  mailboxesError?: {
-    variant: ErrorStateVariant;
-    title: string;
-    description: string;
-    details?: string | null;
-    onRetry?: () => void;
-  } | null;
-  messagesError?: {
-    variant: ErrorStateVariant;
-    title: string;
-    description: string;
-    details?: string | null;
-    onRetry?: () => void;
-  } | null;
-  messageError?: {
-    variant: ErrorStateVariant;
-    title: string;
-    description: string;
-    details?: string | null;
-    onRetry?: () => void;
-  } | null;
+  mailboxesError?: WorkspacePaneError | null;
+  messagesError?: WorkspacePaneError | null;
+  messageError?: WorkspacePaneError | null;
   highlightedMailboxId?: string | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
@@ -142,9 +136,94 @@ export const MailWorkspace = ({
   const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState<
     string | undefined
   >(undefined);
+  const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
+  const selectedMailboxIndex = visibleMailboxes.findIndex(
+    (mailbox) =>
+      mailbox.id === highlightedMailboxId || mailbox.id === selectedMailboxId,
+  );
+  const selectedMessageIndex = messages.findIndex(
+    (message) => message.id === selectedMessageId,
+  );
+
+  const renderMailboxError = () => (
+    <ErrorState
+      variant={mailboxesError?.variant ?? "recoverable"}
+      title={mailboxesError?.title ?? "邮箱列表暂时不可用"}
+      description={mailboxesError?.description ?? "请稍后重试。"}
+      details={mailboxesError?.details}
+      primaryAction={
+        mailboxesError?.onRetry ? (
+          <Button onClick={mailboxesError.onRetry}>重新加载邮箱列表</Button>
+        ) : undefined
+      }
+    />
+  );
+
+  const renderMessagesError = () => (
+    <ErrorState
+      variant={messagesError?.variant ?? "recoverable"}
+      title={messagesError?.title ?? "邮件流加载失败"}
+      description={messagesError?.description ?? "请稍后重试。"}
+      details={messagesError?.details}
+      primaryAction={
+        messagesError?.onRetry ? (
+          <Button onClick={messagesError.onRetry}>重新加载邮件列表</Button>
+        ) : undefined
+      }
+    />
+  );
+
+  const renderMessagePaneContent = () => {
+    if (isMessageLoading && selectedMessageSummary) {
+      return (
+        <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
+          正在加载《{selectedMessageSummary.subject}》的正文…
+        </div>
+      );
+    }
+
+    if (messageError) {
+      return (
+        <ErrorState
+          variant={messageError.variant}
+          title={messageError.title}
+          description={messageError.description}
+          details={messageError.details}
+          primaryAction={
+            messageError.onRetry ? (
+              <Button onClick={messageError.onRetry}>重新加载邮件正文</Button>
+            ) : undefined
+          }
+          secondaryAction={
+            messageDetailHref ? (
+              <Button asChild variant="outline">
+                <Link to={messageDetailHref}>打开独立详情页</Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      );
+    }
+
+    if (selectedMessage) {
+      return (
+        <MessageReaderPane
+          message={selectedMessage}
+          rawUrl={selectedMessage.rawDownloadPath}
+        />
+      );
+    }
+
+    return (
+      <EmptyState
+        title="还没有选中邮件"
+        description="从中栏点一封邮件，右边就会直接展开正文与附件信息。"
+      />
+    );
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:gap-6 xl:space-y-0">
       <PageHeader
         title="邮件工作台"
         description={
@@ -285,13 +364,13 @@ export const MailWorkspace = ({
 
       <div
         data-testid="mail-workspace-layout"
-        className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]"
+        className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] xl:min-h-0 xl:flex-1 xl:grid-cols-[320px_minmax(360px,0.9fr)_minmax(0,1.2fr)] 2xl:grid-cols-[340px_minmax(380px,0.9fr)_minmax(0,1.25fr)]"
       >
         <section
           aria-label="邮箱列表"
-          className="min-w-0 lg:row-span-2 xl:row-auto"
+          className="min-w-0 lg:row-span-2 xl:row-auto xl:min-h-0"
         >
-          <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[52rem] xl:min-h-[72vh]">
+          <div className="flex h-full min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[52rem] xl:h-full xl:min-h-0">
             <div className="space-y-4 border-b border-border px-4 py-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -349,112 +428,123 @@ export const MailWorkspace = ({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-3">
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex w-full cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    selectedMailboxId === "all"
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-border bg-muted/10 hover:bg-white/5",
-                  )}
-                  onClick={() => onSelectMailbox("all")}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Inbox className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-foreground">
-                        全部邮箱
-                      </span>
-                    </div>
-                    <Badge>{totalAggregatedMessageCount}</Badge>
+            <div className="py-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
+              <button
+                type="button"
+                className={cn(
+                  "mx-3 flex w-auto cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selectedMailboxId === "all"
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-border bg-muted/10 hover:bg-white/5",
+                )}
+                onClick={() => onSelectMailbox("all")}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Inbox className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">
+                      全部邮箱
+                    </span>
                   </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    聚合显示所有邮箱的最新邮件，适合日常巡检与快速切换。
-                  </p>
-                </button>
+                  <Badge>{totalAggregatedMessageCount}</Badge>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  聚合显示所有邮箱的最新邮件，适合日常巡检与快速切换。
+                </p>
+              </button>
 
-                {isMailboxesLoading ? (
-                  <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                    正在加载邮箱列表…
-                  </div>
-                ) : mailboxesError ? (
-                  <ErrorState
-                    variant={mailboxesError.variant}
-                    title={mailboxesError.title}
-                    description={mailboxesError.description}
-                    details={mailboxesError.details}
-                    primaryAction={
-                      mailboxesError.onRetry ? (
-                        <Button onClick={mailboxesError.onRetry}>
-                          重新加载邮箱列表
-                        </Button>
-                      ) : undefined
+              {isMailboxesLoading ? (
+                <div className="mx-3 mt-2 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
+                  正在加载邮箱列表…
+                </div>
+              ) : mailboxesError ? (
+                <div className="mx-3 mt-3 xl:min-h-0 xl:flex-1">
+                  {isDesktopThreePane ? (
+                    <PaneScrollbar className="h-full" contentClassName="pb-2">
+                      {renderMailboxError()}
+                    </PaneScrollbar>
+                  ) : (
+                    renderMailboxError()
+                  )}
+                </div>
+              ) : visibleMailboxes.length > 0 ? (
+                <div className="mt-3 xl:min-h-0 xl:flex-1">
+                  <VirtualizedPaneList
+                    activeIndex={
+                      selectedMailboxIndex >= 0 ? selectedMailboxIndex : null
                     }
-                  />
-                ) : visibleMailboxes.length > 0 ? (
-                  visibleMailboxes.map((mailbox) => {
-                    const isActive = selectedMailboxId === mailbox.id;
-                    const isDestroyed = mailbox.status === "destroyed";
-                    const isHighlighted = highlightedMailboxId === mailbox.id;
-                    const messageCount =
-                      mailboxMessageCounts.get(mailbox.id) ?? 0;
-                    return (
-                      <button
-                        key={mailbox.id}
-                        type="button"
-                        disabled={isDestroyed}
-                        className={cn(
-                          "flex w-full rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          isDestroyed
-                            ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                            : "cursor-pointer flex-col gap-3",
-                          !isDestroyed && isActive
-                            ? "border-primary/40 bg-primary/10"
-                            : null,
-                          !isDestroyed && !isActive
-                            ? "border-border bg-muted/10 hover:bg-white/5"
-                            : null,
-                          !isDestroyed && isHighlighted
-                            ? "border-primary/70 bg-primary/18 ring-1 ring-primary/35 shadow-[0_0_0_1px_rgba(148,163,184,0.14)_inset]"
-                            : null,
-                        )}
-                        onClick={() => onSelectMailbox(mailbox.id)}
-                      >
-                        <div className="flex w-full items-center justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <p
+                    enabled={isDesktopThreePane}
+                    estimateSize={() => 88}
+                    getItemKey={(mailbox) => mailbox.id}
+                    items={visibleMailboxes}
+                    overscan={8}
+                    scrollContainerClassName="h-full px-3 xl:px-0"
+                    scrollContentClassName="pb-2 pl-3"
+                    scrollTestId="workspace-mailbox-scroll"
+                    renderItem={(mailbox) => {
+                      const isActive = selectedMailboxId === mailbox.id;
+                      const isDestroyed = mailbox.status === "destroyed";
+                      const isHighlighted = highlightedMailboxId === mailbox.id;
+                      const messageCount =
+                        mailboxMessageCounts.get(mailbox.id) ?? 0;
+
+                      return (
+                        <button
+                          type="button"
+                          disabled={isDestroyed}
+                          className={cn(
+                            "flex w-full rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            isDestroyed
+                              ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
+                              : "cursor-pointer flex-col gap-3",
+                            !isDestroyed && isActive
+                              ? "border-primary/40 bg-primary/10"
+                              : null,
+                            !isDestroyed && !isActive
+                              ? "border-border bg-muted/10 hover:bg-white/5"
+                              : null,
+                            !isDestroyed && isHighlighted
+                              ? "border-primary/70 bg-primary/18 ring-1 ring-primary/35 shadow-[0_0_0_1px_rgba(148,163,184,0.14)_inset]"
+                              : null,
+                          )}
+                          onClick={() => onSelectMailbox(mailbox.id)}
+                        >
+                          <div className="flex w-full items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <p
+                                className={cn(
+                                  "min-w-0 text-sm font-medium",
+                                  isDestroyed
+                                    ? "truncate text-muted-foreground"
+                                    : "break-all text-foreground",
+                                )}
+                              >
+                                {mailbox.address}
+                              </p>
+                              {isHighlighted ? (
+                                <Badge className="border-primary/40 bg-primary/20 text-primary">
+                                  新建
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <Badge
                               className={cn(
-                                "min-w-0 text-sm font-medium",
-                                isDestroyed
-                                  ? "truncate text-muted-foreground"
-                                  : "break-all text-foreground",
+                                "min-w-7 justify-center px-2",
+                                isDestroyed || messageCount === 0
+                                  ? "border-border bg-muted/20 text-muted-foreground"
+                                  : "border-primary/30 bg-primary/15 text-primary",
                               )}
                             >
-                              {mailbox.address}
-                            </p>
-                            {isHighlighted ? (
-                              <Badge className="border-primary/40 bg-primary/20 text-primary">
-                                新建
-                              </Badge>
-                            ) : null}
+                              {messageCount}
+                            </Badge>
                           </div>
-                          <Badge
-                            className={cn(
-                              "min-w-7 justify-center px-2",
-                              isDestroyed || messageCount === 0
-                                ? "border-border bg-muted/20 text-muted-foreground"
-                                : "border-primary/30 bg-primary/15 text-primary",
-                            )}
-                          >
-                            {messageCount}
-                          </Badge>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
+                        </button>
+                      );
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="mx-3 mt-2">
                   <EmptyState
                     title="没有匹配邮箱"
                     description="试试清空搜索词，或者直接在这里新建一个地址。"
@@ -467,14 +557,14 @@ export const MailWorkspace = ({
                       </Button>
                     }
                   />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </section>
 
-        <section aria-label="邮件列表" className="min-w-0">
-          <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:min-h-[72vh]">
+        <section aria-label="邮件列表" className="min-w-0 xl:min-h-0">
+          <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
             <div className="space-y-2 border-b border-border px-4 py-4">
               <p className="text-sm font-semibold text-foreground">
                 {selectedMailbox
@@ -488,78 +578,91 @@ export const MailWorkspace = ({
               </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 py-3">
+            <div className="py-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
               {isMessagesLoading ? (
-                <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
+                <div className="mx-3 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
                   正在加载邮件列表…
                 </div>
               ) : messagesError ? (
-                <ErrorState
-                  variant={messagesError.variant}
-                  title={messagesError.title}
-                  description={messagesError.description}
-                  details={messagesError.details}
-                  primaryAction={
-                    messagesError.onRetry ? (
-                      <Button onClick={messagesError.onRetry}>
-                        重新加载邮件列表
-                      </Button>
-                    ) : undefined
-                  }
-                />
+                <div className="mx-3 xl:min-h-0 xl:flex-1">
+                  {isDesktopThreePane ? (
+                    <PaneScrollbar className="h-full" contentClassName="pb-2">
+                      {renderMessagesError()}
+                    </PaneScrollbar>
+                  ) : (
+                    renderMessagesError()
+                  )}
+                </div>
               ) : messages.length > 0 ? (
-                <div className="space-y-2">
-                  {messages.map((message) => {
-                    const active = message.id === selectedMessageId;
-                    return (
-                      <button
-                        key={message.id}
-                        type="button"
-                        className={cn(
-                          "flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-primary/40 bg-primary/10"
-                            : "border-border bg-muted/10 hover:bg-white/5",
-                        )}
-                        onClick={() => onSelectMessage(message.id)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">
-                              {message.subject}
-                            </p>
-                            <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                              {message.previewText}
-                            </p>
+                <div className="xl:min-h-0 xl:flex-1">
+                  <VirtualizedPaneList
+                    activeIndex={
+                      selectedMessageIndex >= 0 ? selectedMessageIndex : null
+                    }
+                    enabled={isDesktopThreePane}
+                    estimateSize={() => 104}
+                    getItemKey={(message) => message.id}
+                    items={messages}
+                    overscan={8}
+                    scrollContainerClassName="h-full px-3 xl:px-0"
+                    scrollContentClassName="pb-2 pl-3"
+                    scrollTestId="workspace-message-scroll"
+                    renderItem={(message) => {
+                      const active = message.id === selectedMessageId;
+
+                      return (
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active
+                              ? "border-primary/40 bg-primary/10"
+                              : "border-border bg-muted/10 hover:bg-white/5",
+                          )}
+                          onClick={() => onSelectMessage(message.id)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">
+                                {message.subject}
+                              </p>
+                              <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                {message.previewText}
+                              </p>
+                            </div>
+                            <MailOpen
+                              className={cn(
+                                "mt-1 h-4 w-4 shrink-0",
+                                active
+                                  ? "text-primary"
+                                  : "text-muted-foreground",
+                              )}
+                            />
                           </div>
-                          <MailOpen
-                            className={cn(
-                              "mt-1 h-4 w-4 shrink-0",
-                              active ? "text-primary" : "text-muted-foreground",
-                            )}
-                          />
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                          <span>{message.fromAddress ?? "Unknown"}</span>
-                          <span>{formatDateTime(message.receivedAt)}</span>
-                          <span>{message.mailboxAddress}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <span>{message.fromAddress ?? "Unknown"}</span>
+                            <span>{formatDateTime(message.receivedAt)}</span>
+                            <span>{message.mailboxAddress}</span>
+                          </div>
+                        </button>
+                      );
+                    }}
+                  />
                 </div>
               ) : (
-                <EmptyState
-                  title="当前范围内还没有邮件"
-                  description="可以先创建邮箱并发送测试邮件，或者切回全部邮箱视图查看聚合列表。"
-                />
+                <div className="mx-3">
+                  <EmptyState
+                    title="当前范围内还没有邮件"
+                    description="可以先创建邮箱并发送测试邮件，或者切回全部邮箱视图查看聚合列表。"
+                  />
+                </div>
               )}
             </div>
           </div>
         </section>
 
-        <section aria-label="邮件内容" className="min-w-0">
-          <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:min-h-[72vh]">
+        <section aria-label="邮件内容" className="min-w-0 xl:min-h-0">
+          <div className="flex min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">
@@ -585,42 +688,13 @@ export const MailWorkspace = ({
               ) : null}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3">
-              {isMessageLoading && selectedMessageSummary ? (
-                <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                  正在加载《{selectedMessageSummary.subject}》的正文…
-                </div>
-              ) : messageError ? (
-                <ErrorState
-                  variant={messageError.variant}
-                  title={messageError.title}
-                  description={messageError.description}
-                  details={messageError.details}
-                  primaryAction={
-                    messageError.onRetry ? (
-                      <Button onClick={messageError.onRetry}>
-                        重新加载邮件正文
-                      </Button>
-                    ) : undefined
-                  }
-                  secondaryAction={
-                    messageDetailHref ? (
-                      <Button asChild variant="outline">
-                        <Link to={messageDetailHref}>打开独立详情页</Link>
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              ) : selectedMessage ? (
-                <MessageReaderPane
-                  message={selectedMessage}
-                  rawUrl={selectedMessage.rawDownloadPath}
-                />
+            <div className="py-3 xl:min-h-0 xl:flex-1">
+              {isDesktopThreePane ? (
+                <PaneScrollbar className="h-full" contentClassName="pb-2 pl-3">
+                  {renderMessagePaneContent()}
+                </PaneScrollbar>
               ) : (
-                <EmptyState
-                  title="还没有选中邮件"
-                  description="从中栏点一封邮件，右边就会直接展开正文与附件信息。"
-                />
+                <div className="px-3">{renderMessagePaneContent()}</div>
               )}
             </div>
           </div>

@@ -1,0 +1,147 @@
+.workspace-scrollbar {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  --workspace-scrollbar-track-size: 0.5rem;
+  --workspace-scrollbar-content-gap: 0.875rem;
+  --workspace-scrollbar-thumb-rest-opacity: 0.34;
+  --workspace-scrollbar-thumb-active-opacity: 0.92;
+  --workspace-scrollbar-thumb-bg: hsl(var(--muted-foreground) / 0.34);
+  --workspace-scrollbar-thumb-border: hsl(var(--border) / 0.78);
+  --workspace-scrollbar-thumb-shadow:
+    inset 0 0 0 1px hsl(var(--foreground) / 0.08),
+    0 2px 8px hsl(var(--background) / 0.32);
+}
+
+.workspace-scrollbar__scroller {
+  width: 100%;
+  height: 100%;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.workspace-scrollbar__scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-scrollbar__content {
+  min-height: 100%;
+  padding-right: var(--workspace-scrollbar-content-gap);
+}
+
+.workspace-scrollbar__track {
+  position: absolute;
+  opacity: 1;
+  transition:
+    opacity 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+  pointer-events: auto;
+}
+
+.workspace-scrollbar__track--y {
+  top: 0.5rem;
+  right: 0;
+  bottom: 0.5rem;
+  width: var(--workspace-scrollbar-track-size);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  backdrop-filter: blur(10px);
+  box-shadow: none;
+  transform: translateX(1px);
+}
+
+.workspace-scrollbar__track--x {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--workspace-scrollbar-track-size);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  backdrop-filter: blur(10px);
+  box-shadow: none;
+  transform: translateY(1px);
+}
+
+.workspace-scrollbar__thumb {
+  border-radius: inherit;
+  background: var(--workspace-scrollbar-thumb-bg);
+  box-shadow: var(--workspace-scrollbar-thumb-shadow);
+  opacity: var(--workspace-scrollbar-thumb-rest-opacity);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    filter 160ms ease;
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar__track--y,
+.workspace-scrollbar:focus-within .workspace-scrollbar__track--y,
+.workspace-scrollbar--active .workspace-scrollbar__track--y,
+.workspace-scrollbar.dragging .workspace-scrollbar__track--y {
+  background: rgba(15, 23, 42, 0.32);
+  border-color: rgba(191, 219, 254, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(15, 23, 42, 0.12);
+  transform: translateX(0);
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar__track--x,
+.workspace-scrollbar:focus-within .workspace-scrollbar__track--x,
+.workspace-scrollbar--active .workspace-scrollbar__track--x,
+.workspace-scrollbar.dragging .workspace-scrollbar__track--x {
+  background: rgba(15, 23, 42, 0.32);
+  border-color: rgba(191, 219, 254, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(15, 23, 42, 0.12);
+  transform: translateY(0);
+}
+
+.workspace-scrollbar:hover,
+.workspace-scrollbar:focus-within,
+.workspace-scrollbar--active,
+.workspace-scrollbar.dragging {
+  --workspace-scrollbar-thumb-bg: hsl(var(--foreground) / 0.54);
+  --workspace-scrollbar-thumb-border: hsl(var(--primary) / 0.24);
+  --workspace-scrollbar-thumb-shadow:
+    inset 0 0 0 1px hsl(var(--foreground) / 0.1),
+    0 4px 12px hsl(var(--background) / 0.38);
+}
+
+.workspace-scrollbar__thumb--y {
+  transform: scaleX(0.72);
+  transform-origin: right center;
+}
+
+.workspace-scrollbar__thumb--x {
+  transform: scaleY(0.72);
+  transform-origin: center bottom;
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar__thumb,
+.workspace-scrollbar:focus-within .workspace-scrollbar__thumb,
+.workspace-scrollbar--active .workspace-scrollbar__thumb,
+.workspace-scrollbar.dragging .workspace-scrollbar__thumb {
+  opacity: var(--workspace-scrollbar-thumb-active-opacity);
+  filter: saturate(1.08);
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar__thumb--y,
+.workspace-scrollbar:focus-within .workspace-scrollbar__thumb--y,
+.workspace-scrollbar--active .workspace-scrollbar__thumb--y,
+.workspace-scrollbar.dragging .workspace-scrollbar__thumb--y {
+  transform: scaleX(1);
+}
+
+.workspace-scrollbar:hover .workspace-scrollbar__thumb--x,
+.workspace-scrollbar:focus-within .workspace-scrollbar__thumb--x,
+.workspace-scrollbar--active .workspace-scrollbar__thumb--x,
+.workspace-scrollbar.dragging .workspace-scrollbar__thumb--x {
+  transform: scaleY(1);
+}
