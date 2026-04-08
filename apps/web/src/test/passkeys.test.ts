@@ -10,7 +10,10 @@ vi.mock("@simplewebauthn/browser", () => ({
   startRegistration: vi.fn(),
 }));
 
-import { browserSupportsPasskeys } from "@/lib/passkeys";
+import {
+  browserSupportsPasskeys,
+  resolvePasskeySupportState,
+} from "@/lib/passkeys";
 
 const originalLocation = globalThis.location;
 
@@ -35,5 +38,33 @@ describe("browserSupportsPasskeys", () => {
 
     expect(browserSupportsPasskeys()).toBe(true);
     expect(browserSupportsWebAuthn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resolvePasskeySupportState", () => {
+  it("disables passkeys when the backend is not configured", () => {
+    expect(
+      resolvePasskeySupportState({
+        browserSupported: true,
+        passkeyAuthEnabled: false,
+      }),
+    ).toMatchObject({
+      backendConfigured: false,
+      buttonLabel: "当前环境未启用 Passkey",
+      supported: false,
+    });
+  });
+
+  it("prefers browser support messaging when WebAuthn is unavailable", () => {
+    expect(
+      resolvePasskeySupportState({
+        browserSupported: false,
+        passkeyAuthEnabled: true,
+      }),
+    ).toMatchObject({
+      backendConfigured: true,
+      buttonLabel: "当前浏览器不支持 Passkey",
+      supported: false,
+    });
   });
 });

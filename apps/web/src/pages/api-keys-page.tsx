@@ -33,6 +33,7 @@ type ApiKeysPageViewProps = {
   apiKeys: Parameters<typeof ApiKeyTable>[0]["apiKeys"];
   passkeys: Parameters<typeof PasskeyTable>[0]["passkeys"];
   activeTab: IdentityAuthTab;
+  passkeyEmptyMessage?: string | null;
   passkeySupported: boolean;
   passkeyError?: string | null;
   passkeyPending?: boolean;
@@ -62,6 +63,7 @@ export const ApiKeysPageView = ({
   apiKeys,
   passkeys,
   activeTab,
+  passkeyEmptyMessage,
   passkeySupported,
   passkeyError,
   passkeyPending,
@@ -141,6 +143,7 @@ export const ApiKeysPageView = ({
                 <PasskeyTable
                   passkeys={passkeys}
                   passkeySupported={passkeySupported}
+                  emptyMessage={passkeyEmptyMessage}
                   isPending={passkeyPending}
                   error={passkeyError}
                   onCreate={onCreatePasskey}
@@ -157,12 +160,12 @@ export const ApiKeysPageView = ({
 
 export const ApiKeysPage = () => {
   const apiKeysQuery = useApiKeysQuery();
-  const passkeysQuery = usePasskeysQuery();
+  const passkeySupport = usePasskeySupport();
+  const passkeysQuery = usePasskeysQuery(passkeySupport.backendConfigured);
   const createApiKeyMutation = useCreateApiKeyMutation();
   const revokeApiKeyMutation = useRevokeApiKeyMutation();
   const createPasskeyMutation = useCreatePasskeyMutation();
   const revokePasskeyMutation = useRevokePasskeyMutation();
-  const passkeySupported = usePasskeySupport();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const hasApiKeysData = apiKeysQuery.data !== undefined;
@@ -192,14 +195,17 @@ export const ApiKeysPage = () => {
       apiKeys={apiKeysQuery.data ?? []}
       passkeys={passkeysQuery.data ?? []}
       activeTab={activeTab}
-      passkeySupported={passkeySupported}
+      passkeyEmptyMessage={passkeySupport.managementMessage}
+      passkeySupported={passkeySupport.supported}
       passkeyError={
         createPasskeyMutation.error
           ? getPasskeyErrorMessage(
               createPasskeyMutation.error,
               "Passkey 注册失败",
             )
-          : null
+          : !passkeySupport.supported
+            ? passkeySupport.message
+            : null
       }
       passkeyPending={createPasskeyMutation.isPending}
       latestSecret={latestSecret}
@@ -214,7 +220,9 @@ export const ApiKeysPage = () => {
           : null
       }
       passkeyLoadError={
-        passkeysQuery.error && !hasPasskeysData
+        passkeySupport.backendConfigured &&
+        passkeysQuery.error &&
+        !hasPasskeysData
           ? {
               variant: "recoverable",
               title: "Passkeys 暂时加载失败",
@@ -227,7 +235,9 @@ export const ApiKeysPage = () => {
         void apiKeysQuery.refetch();
       }}
       onRetryPasskeys={() => {
-        void passkeysQuery.refetch();
+        if (passkeySupport.backendConfigured) {
+          void passkeysQuery.refetch();
+        }
       }}
       onActiveTabChange={(tab) => {
         setSearchParams((current) => {

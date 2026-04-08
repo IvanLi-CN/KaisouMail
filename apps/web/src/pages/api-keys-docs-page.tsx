@@ -137,6 +137,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "无需预先登录",
           responseBody: `{
   "domains": ${JSON.stringify(meta.domains, null, 2)},
+  "passkeyAuthEnabled": ${meta.passkeyAuthEnabled},
   "defaultMailboxTtlMinutes": ${ttl},
   "minMailboxTtlMinutes": ${meta.minMailboxTtlMinutes},
   "maxMailboxTtlMinutes": ${maxTtl},
@@ -150,6 +151,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `rootDomain`。",
             "创建邮箱时如果省略 `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
+            "浏览器登录页也会读取 `passkeyAuthEnabled`，避免在服务端未配置 passkey 时展示一个必然失败的入口。",
           ],
         },
       ],

@@ -6,7 +6,7 @@
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /api/meta` | 读取 active 域名、TTL 和地址规则 |
+| `GET /api/meta` | 读取 active 域名、TTL、地址规则与 Passkey 能力 |
 | `GET /api/domains/catalog` | 读取 Cloudflare 可见 zone + 项目状态 |
 | `GET /api/domains` | 读取项目内已有域记录 |
 | `POST /api/domains/bind` | 创建 Cloudflare full zone 并接入项目 |

@@ -37,6 +37,13 @@ const passkeysHookState = {
   error: null as Error | null,
   refetch: vi.fn(),
 };
+const passkeySupportState = {
+  backendConfigured: true,
+  buttonLabel: "使用 Passkey 登录",
+  managementMessage: null as string | null,
+  message: " ",
+  supported: true,
+};
 
 const docsLinks = buildPublicDocsLinks(
   "https://ivanli-cn.github.io/KaisouMail",
@@ -77,7 +84,7 @@ vi.mock("@/hooks/use-passkeys", () => ({
   useRevokePasskeyMutation: () => ({
     mutate: vi.fn(),
   }),
-  usePasskeySupport: () => true,
+  usePasskeySupport: () => passkeySupportState,
 }));
 
 vi.mock("@/hooks/use-session", () => ({
@@ -94,6 +101,11 @@ afterEach(() => {
   passkeysHookState.data = demoPasskeys;
   passkeysHookState.error = null;
   passkeysHookState.refetch.mockReset();
+  passkeySupportState.backendConfigured = true;
+  passkeySupportState.buttonLabel = "使用 Passkey 登录";
+  passkeySupportState.managementMessage = null;
+  passkeySupportState.message = " ";
+  passkeySupportState.supported = true;
 });
 
 const createQueryClient = () =>
@@ -120,6 +132,7 @@ const ApiKeysPageViewHarness = ({
       apiKeys={demoApiKeys}
       passkeys={demoPasskeys}
       activeTab={activeTab}
+      passkeyEmptyMessage={null}
       passkeySupported
       passkeyError={null}
       passkeyPending={false}
@@ -315,5 +328,50 @@ describe("api key integration docs", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "重新加载 Passkeys" }));
     expect(passkeysHookState.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the passkey tab disabled instead of showing a fetch error when backend capability is off", async () => {
+    passkeysHookState.data = undefined;
+    passkeysHookState.error = new Error("Passkey backend offline");
+    passkeySupportState.backendConfigured = false;
+    passkeySupportState.buttonLabel = "当前环境未启用 Passkey";
+    passkeySupportState.managementMessage =
+      "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。";
+    passkeySupportState.message =
+      "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。";
+    passkeySupportState.supported = false;
+
+    const queryClient = createQueryClient();
+    renderWithQueryClient(
+      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
+        <AppShell
+          user={demoSessionUser}
+          version={demoVersion}
+          onLogout={vi.fn()}
+        >
+          <Routes>
+            <Route
+              path="/"
+              element={<Navigate to={appRoutes.apiKeys} replace />}
+            />
+            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
+            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+          </Routes>
+        </AppShell>
+      </MemoryRouter>,
+      queryClient,
+    );
+
+    expect(
+      screen.queryByRole("heading", {
+        name: "Passkeys 暂时加载失败",
+        level: 2,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findAllByText(
+        "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
+      ),
+    ).toHaveLength(2);
   });
 });

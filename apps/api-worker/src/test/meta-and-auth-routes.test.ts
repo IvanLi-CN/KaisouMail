@@ -67,6 +67,7 @@ describe("meta and auth routes", () => {
       domains: string[];
       cloudflareDomainBindingEnabled: boolean;
       cloudflareDomainLifecycleEnabled: boolean;
+      passkeyAuthEnabled: boolean;
       defaultMailboxTtlMinutes: number;
       addressRules: { examples: string[] };
     };
@@ -75,8 +76,23 @@ describe("meta and auth routes", () => {
     expect(payload.domains).toContain("707979.xyz");
     expect(payload.cloudflareDomainBindingEnabled).toBe(false);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
+    expect(payload.passkeyAuthEnabled).toBe(false);
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
     expect(payload.addressRules.examples[0]).toContain("@desk.hub.707979.xyz");
+  });
+
+  it("reports passkey capability from /api/meta when WEB_APP_ORIGIN is configured", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/api/meta"), {
+      ...env,
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+    } as never);
+    const payload = (await response.json()) as {
+      passkeyAuthEnabled: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.passkeyAuthEnabled).toBe(true);
   });
 
   it("keeps Cloudflare lifecycle actions disabled when the runtime token is missing", async () => {

@@ -206,6 +206,23 @@ const resolvePasskeyRuntimeConfig = (config: RuntimeConfig) => {
   };
 };
 
+export const isPasskeyAuthConfigured = (config: RuntimeConfig) => {
+  try {
+    resolvePasskeyRuntimeConfig(config);
+    return true;
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status === 503 &&
+      error.message === "Passkey auth is not configured"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+};
+
 const resolvePasskeyRequestConfig = (
   config: RuntimeConfig,
   request: Request,
@@ -647,6 +664,9 @@ export const revokePasskeyForUser = async (
   }
   if (record.userId !== user.id) {
     throw new ApiError(403, "Forbidden");
+  }
+  if (record.revokedAt) {
+    return;
   }
 
   await db

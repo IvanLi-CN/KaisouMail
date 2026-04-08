@@ -547,6 +547,7 @@ export const demoMeta: ApiMeta = {
     .map((domain) => domain.rootDomain),
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
+  passkeyAuthEnabled: true,
   defaultMailboxTtlMinutes: 60,
   minMailboxTtlMinutes: 5,
   maxMailboxTtlMinutes: 1440,

@@ -39,6 +39,7 @@ const toDeviceTypeLabel = (value: PasskeyRecord["deviceType"]) =>
 export const PasskeyTable = ({
   passkeys,
   passkeySupported,
+  emptyMessage,
   onCreate,
   onRevoke,
   isPending,
@@ -46,6 +47,7 @@ export const PasskeyTable = ({
 }: {
   passkeys: PasskeyRecord[];
   passkeySupported: boolean;
+  emptyMessage?: string | null;
   onCreate: (name: string) => Promise<unknown> | undefined;
   onRevoke: (passkeyId: string) => void;
   isPending?: boolean;
@@ -86,7 +88,7 @@ export const PasskeyTable = ({
                   error ??
                   (passkeySupported
                     ? " "
-                    : "当前浏览器或上下文不支持 passkey 注册。")}
+                    : "当前浏览器、上下文或部署配置暂不支持 passkey 注册。")}
               </p>
             </div>
             <Button
@@ -165,7 +167,7 @@ export const PasskeyTable = ({
                     colSpan={5}
                     className="text-center text-sm text-muted-foreground"
                   >
-                    当前还没有注册任何 passkey。
+                    {emptyMessage ?? "当前还没有注册任何 passkey。"}
                   </TableCell>
                 </TableRow>
               )}

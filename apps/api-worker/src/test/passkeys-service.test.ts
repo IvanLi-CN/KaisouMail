@@ -36,6 +36,8 @@ vi.mock("../db/client", () => ({
 import {
   createPasskeyAuthenticationOptions,
   createPasskeyRegistrationOptionsForUser,
+  isPasskeyAuthConfigured,
+  revokePasskeyForUser,
   verifyPasskeyAuthentication,
   verifyPasskeyRegistrationForUser,
 } from "../services/passkeys";
@@ -247,6 +249,25 @@ describe("passkey service", () => {
       message: "Passkey auth is not configured",
       details: "Configured origins must share a non-public RP ID suffix",
     });
+  });
+
+  it("reports whether passkey auth is configured for the current runtime", () => {
+    expect(
+      isPasskeyAuthConfigured(
+        withConfig({
+          WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+          WEB_APP_ORIGINS: ["https://cfm.707979.xyz"],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isPasskeyAuthConfigured(
+        withConfig({
+          WEB_APP_ORIGIN: undefined,
+          WEB_APP_ORIGINS: [],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("persists a verified registration", async () => {
@@ -784,5 +805,34 @@ describe("passkey service", () => {
       message: "Invalid passkey",
       status: 401,
     });
+  });
+
+  it("preserves the first revocation timestamp on repeated deletes", async () => {
+    const updates: unknown[] = [];
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () =>
+            createAwaitableQuery([
+              {
+                id: "psk_1",
+                userId: authUser.id,
+                revokedAt: "2026-04-08T01:02:03.000Z",
+              },
+            ]),
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => ({
+          where: async () => {
+            updates.push(values);
+          },
+        }),
+      }),
+    });
+
+    await revokePasskeyForUser({} as never, authUser, "psk_1");
+
+    expect(updates).toHaveLength(0);
   });
 });

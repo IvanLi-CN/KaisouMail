@@ -27,6 +27,8 @@ export const LoginCard = ({
   error,
   passkeyError,
   passkeySupported,
+  passkeyButtonLabel,
+  passkeySupportMessage,
 }: {
   onSubmit: (values: LoginValues) => Promise<void> | void;
   onPasskeySubmit?: () => Promise<void> | void;
@@ -35,6 +37,8 @@ export const LoginCard = ({
   error?: string | null;
   passkeyError?: string | null;
   passkeySupported?: boolean;
+  passkeyButtonLabel?: string;
+  passkeySupportMessage?: string | null;
 }) => {
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -70,13 +74,17 @@ export const LoginCard = ({
           >
             {isPasskeyPending
               ? "Passkey 登录中…"
-              : passkeySupported
-                ? "使用 Passkey 登录"
-                : "当前浏览器不支持 Passkey"}
+              : (passkeyButtonLabel ??
+                (passkeySupported
+                  ? "使用 Passkey 登录"
+                  : "当前浏览器不支持 Passkey"))}
           </Button>
           <p className="min-h-5 text-sm text-destructive" role="alert">
             {passkeyError ??
-              (passkeySupported ? " " : "当前浏览器或上下文不支持 WebAuthn。")}
+              (passkeySupported
+                ? " "
+                : (passkeySupportMessage ??
+                  "当前浏览器或上下文不支持 WebAuthn。"))}
           </p>
         </div>
 

@@ -14,7 +14,7 @@ export const LoginPage = () => {
   const sessionQuery = useSessionQuery();
   const loginMutation = useLoginMutation();
   const passkeyLoginMutation = usePasskeyLoginMutation();
-  const passkeySupported = usePasskeySupport();
+  const passkeySupport = usePasskeySupport();
   const [error, setError] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const redirectTarget =
@@ -48,7 +48,9 @@ export const LoginPage = () => {
         isPending={loginMutation.isPending}
         isPasskeyPending={passkeyLoginMutation.isPending}
         passkeyError={passkeyError}
-        passkeySupported={passkeySupported}
+        passkeyButtonLabel={passkeySupport.buttonLabel}
+        passkeySupported={passkeySupport.supported}
+        passkeySupportMessage={passkeySupport.message}
         onSubmit={async ({ apiKey }) => {
           setError(null);
           setPasskeyError(null);

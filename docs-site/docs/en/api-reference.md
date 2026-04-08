@@ -6,7 +6,7 @@ This page lists the implemented endpoints and their purpose. For request and res
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/meta` | read active domains, TTL, and address rules |
+| `GET /api/meta` | read active domains, TTL, address rules, and passkey capability |
 | `GET /api/domains/catalog` | read Cloudflare-visible zones plus project status |
 | `GET /api/domains` | read project-managed domain records |
 | `POST /api/domains/bind` | create a Cloudflare full zone and attach it to the project |
