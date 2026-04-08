@@ -204,14 +204,20 @@ export const MailboxCreateForm = ({
         ? {
             mode: "address",
             rootDomain: parsedFullAddress?.rootDomain,
-            address: parsedFullAddress?.address,
+            address: normalizeMailboxAddress(fullAddress) || undefined,
           }
         : {
             mode: "segmented",
             rootDomain: normalizeRootDomain(selectedRootDomain) || undefined,
           },
     );
-  }, [inputMode, onPreviewChange, parsedFullAddress, selectedRootDomain]);
+  }, [
+    fullAddress,
+    inputMode,
+    onPreviewChange,
+    parsedFullAddress,
+    selectedRootDomain,
+  ]);
 
   useEffect(() => {
     if (inputMode === "address" && parsedFullAddress) {

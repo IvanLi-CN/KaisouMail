@@ -139,6 +139,15 @@ describe("MailboxCreateForm", () => {
     fireEvent.change(screen.getByLabelText("完整邮箱地址"), {
       target: { value: "Build@Ops.Alpha.unsupported.test" },
     });
+
+    await waitFor(() => {
+      expect(onPreviewChange).toHaveBeenLastCalledWith({
+        mode: "address",
+        rootDomain: undefined,
+        address: "build@ops.alpha.unsupported.test",
+      });
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
 
     await waitFor(() => {
