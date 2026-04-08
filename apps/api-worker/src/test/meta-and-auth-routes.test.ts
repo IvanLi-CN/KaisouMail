@@ -6,6 +6,12 @@ const { authenticateApiKey } = vi.hoisted(() => ({
 const { listActiveRootDomains } = vi.hoisted(() => ({
   listActiveRootDomains: vi.fn(),
 }));
+const { listPasskeysForUser } = vi.hoisted(() => ({
+  listPasskeysForUser: vi.fn(),
+}));
+const { getDb } = vi.hoisted(() => ({
+  getDb: vi.fn(),
+}));
 
 vi.mock("../services/bootstrap", () => ({
   ensureBootstrapAdmin: vi.fn(),
@@ -13,7 +19,7 @@ vi.mock("../services/bootstrap", () => ({
 }));
 
 vi.mock("../db/client", () => ({
-  getDb: vi.fn(() => ({})),
+  getDb,
 }));
 
 vi.mock("../services/domains", async () => {
@@ -23,6 +29,16 @@ vi.mock("../services/domains", async () => {
   return {
     ...actual,
     listActiveRootDomains,
+  };
+});
+
+vi.mock("../services/passkeys", async () => {
+  const actual = await vi.importActual<typeof import("../services/passkeys")>(
+    "../services/passkeys",
+  );
+  return {
+    ...actual,
+    listPasskeysForUser,
   };
 });
 
@@ -38,6 +54,7 @@ vi.mock("../services/auth", async () => {
 });
 
 import { createApp } from "../app";
+import { issueSessionCookie } from "../services/auth";
 
 const env = {
   APP_ENV: "development",
@@ -55,6 +72,8 @@ describe("meta and auth routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listActiveRootDomains.mockResolvedValue(["707979.xyz", "mail.example.net"]);
+    listPasskeysForUser.mockResolvedValue([]);
+    getDb.mockReturnValue({});
   });
 
   it("returns runtime metadata from /api/meta", async () => {
@@ -134,6 +153,84 @@ describe("meta and auth routes", () => {
       error: "Invalid API key",
       details: null,
     });
+  });
+
+  it("rejects bearer API keys on /api/passkeys even when the key itself is valid", async () => {
+    authenticateApiKey.mockResolvedValue({
+      id: "usr_owner",
+      email: "owner@example.com",
+      name: "Owner",
+      role: "admin",
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/passkeys", {
+        headers: {
+          authorization: "Bearer cfm_demo_secret_key",
+        },
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+      } as never,
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Authentication required",
+      details: null,
+    });
+    expect(listPasskeysForUser).not.toHaveBeenCalled();
+  });
+
+  it("allows session cookies on /api/passkeys", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                id: "usr_owner",
+                email: "owner@example.com",
+                name: "Owner",
+                role: "admin",
+              },
+            ],
+          }),
+        }),
+      }),
+    });
+
+    const config = {
+      ...env,
+      WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+    } as never;
+    const sessionCookie = await issueSessionCookie(config, {
+      id: "usr_owner",
+      email: "owner@example.com",
+      name: "Owner",
+      role: "admin",
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/passkeys", {
+        headers: {
+          cookie: `kaisoumail_session=${encodeURIComponent(sessionCookie)}`,
+        },
+      }),
+      config,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      passkeys: [],
+    });
+    expect(listPasskeysForUser).toHaveBeenCalledWith(
+      expect.anything(),
+      "usr_owner",
+    );
   });
 
   it("returns details:null for unexpected 500 responses", async () => {

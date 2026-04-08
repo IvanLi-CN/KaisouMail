@@ -23,7 +23,7 @@ const passkeyRegistrationVerificationRequestSchema = z.object({
 });
 
 export const passkeyRoutes = new Hono<AppBindings>()
-  .use("*", requireAuth())
+  .use("*", requireAuth({ sessionOnly: true }))
   .get("/", async (c) => {
     return c.json(
       listPasskeysResponseSchema.parse({

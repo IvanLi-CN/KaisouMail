@@ -284,13 +284,29 @@ export const resolveAuthUser = async (
   return getUserById(env, payload.sub);
 };
 
+export const resolveSessionUser = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+) => {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const sessionCookie = parseCookies(cookieHeader)[SESSION_COOKIE];
+  if (!sessionCookie) return null;
+  const payload = await verifySession(sessionCookie, config.SESSION_SECRET);
+  if (!payload) return null;
+  return getUserById(env, payload.sub);
+};
+
 export const requireAuth = (options?: {
   admin?: boolean;
   optional?: boolean;
+  sessionOnly?: boolean;
 }): MiddlewareHandler<AppBindings> => {
   return async (c, next) => {
     const config = c.get("runtimeConfig");
-    const user = await resolveAuthUser(c.env, config, c.req.raw);
+    const user = options?.sessionOnly
+      ? await resolveSessionUser(c.env, config, c.req.raw)
+      : await resolveAuthUser(c.env, config, c.req.raw);
     if (!user && !options?.optional)
       throw new ApiError(401, "Authentication required");
     if (user) c.set("authUser", user);
