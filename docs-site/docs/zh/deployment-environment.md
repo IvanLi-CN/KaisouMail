@@ -60,9 +60,9 @@
 
 - `apps/web/public/_routes.json` 只把 `/api/*` 送进 Pages Functions
 - `apps/web/functions/api/[[path]].ts` 直接把收到的 `Request` 转发给 `env.API.fetch(...)`
-- `apps/web/wrangler.jsonc` 声明了 Pages build output，以及指向 `kaisoumail-api` 的 `API` Service Binding
+- `apps/web/wrangler.jsonc` 声明了 Pages build output，以及 `API` Service Binding；Preview 部署默认把它绑定到 `kaisoumail-api-preview`，production 再覆盖回 `kaisoumail-api`
 - 普通 HTML、JS、CSS 和静态资源不会进入 Function，因此不会把静态流量额外记成 Workers 请求
-- deploy workflow 会读取 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个重跑每个控制台域名的同源 `/api/version` smoke
+- deploy workflow 会读取 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个重跑每个控制台域名的同源 `/api/version` smoke；如果变量里出现格式错误的域名项，workflow 会直接失败而不是静默跳过
 
 像 `https://api.cfm.707979.xyz`、`https://api.km.707979.xyz` 这样的直连 API 自定义域仍然保留给兼容调用或直接 API 消费者使用。`WEB_APP_ORIGINS` 继续承担这些直连 API 域名的 CORS allowlist；但一方浏览器控制台应优先使用同源 `/api`。
 

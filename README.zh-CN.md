@@ -128,8 +128,8 @@ Web 侧重点变量：
 - `VITE_DOCS_SITE_ORIGIN`
 
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
-一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + Service Binding 转发到 `kaisoumail-api`。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
-`VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、预览、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release。
+一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + `API` Service Binding 转发。Preview 部署默认把 `API` 绑定到 `kaisoumail-api-preview`，production 部署再显式覆盖回 `kaisoumail-api`，这样 preview QA 不会误打到线上控制面。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
+`VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、预览、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release；如果变量里有格式错误的域名项，workflow 现在会直接失败而不是静默跳过。
 
 ## 发布工作流门禁
 

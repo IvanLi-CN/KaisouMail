@@ -7,7 +7,7 @@ while IFS= read -r smoke_origin; do
     origins+=("${smoke_origin}")
   fi
 done < <(
-  CF_PAGES_SMOKE_ORIGINS="km.example.com, https://cfm.example.com/ ,invalid host,https://cfm.example.com/path,*.example.com" \
+  CF_PAGES_SMOKE_ORIGINS="km.example.com, https://cfm.example.com/" \
     node .github/scripts/resolve_pages_smoke_origins.mjs
 )
 
@@ -28,5 +28,21 @@ for index in "${!expected[@]}"; do
     exit 1
   fi
 done
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "${tmp_dir}"' EXIT
+
+if CF_PAGES_SMOKE_ORIGINS="km.example.com, invalid host, https://cfm.example.com/path, *.example.com" \
+  node .github/scripts/resolve_pages_smoke_origins.mjs >"${tmp_dir}/out" 2>"${tmp_dir}/err"
+then
+  echo "resolve_pages_smoke_origins should fail on malformed origins" >&2
+  exit 1
+fi
+
+if ! grep -q "Invalid CF_PAGES_SMOKE_ORIGINS entries" "${tmp_dir}/err"; then
+  echo "resolve_pages_smoke_origins did not explain malformed origins" >&2
+  cat "${tmp_dir}/err" >&2
+  exit 1
+fi
 
 echo "resolve_pages_smoke_origins tests passed"

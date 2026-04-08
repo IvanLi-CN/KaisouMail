@@ -3,12 +3,12 @@ const input =
 
 const normalizeOrigin = (value) => {
   if (typeof value !== "string") {
-    return null;
+    return { ok: false, reason: "not-a-string" };
   }
 
   const trimmed = value.trim();
   if (!trimmed) {
-    return null;
+    return { ok: false, reason: "empty" };
   }
 
   const withScheme = /^https?:\/\//i.test(trimmed)
@@ -19,24 +19,49 @@ const normalizeOrigin = (value) => {
   try {
     parsed = new URL(withScheme);
   } catch {
-    return null;
+    return { ok: false, reason: "invalid-url", value: trimmed };
   }
 
-  if (parsed.pathname.includes("*") || parsed.hostname.includes("*")) {
-    return null;
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    return { ok: false, reason: "invalid-protocol", value: trimmed };
   }
 
-  parsed.hash = "";
-  parsed.search = "";
-  return parsed.origin;
+  if (parsed.hostname.includes("*")) {
+    return { ok: false, reason: "wildcard-hostname", value: trimmed };
+  }
+
+  if (
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.username ||
+    parsed.password
+  ) {
+    return { ok: false, reason: "not-an-origin", value: trimmed };
+  }
+
+  return { ok: true, origin: parsed.origin };
 };
 
 const uniqueOrigins = new Set();
+const invalidEntries = [];
 for (const candidate of input.split(/[\n,]/)) {
   const normalized = normalizeOrigin(candidate);
-  if (normalized) {
-    uniqueOrigins.add(normalized);
+  if (normalized.ok) {
+    uniqueOrigins.add(normalized.origin);
+    continue;
   }
+
+  if (normalized.reason !== "empty") {
+    invalidEntries.push(candidate.trim());
+  }
+}
+
+if (invalidEntries.length > 0) {
+  console.error(
+    `Invalid CF_PAGES_SMOKE_ORIGINS entries: ${invalidEntries.join(", ")}`,
+  );
+  process.exit(1);
 }
 
 for (const origin of uniqueOrigins) {

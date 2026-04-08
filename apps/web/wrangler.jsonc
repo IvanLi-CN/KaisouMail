@@ -6,7 +6,17 @@
   "services": [
     {
       "binding": "API",
-      "service": "kaisoumail-api"
+      "service": "kaisoumail-api-preview"
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "services": [
+        {
+          "binding": "API",
+          "service": "kaisoumail-api"
+        }
+      ]
+    }
+  }
 }
