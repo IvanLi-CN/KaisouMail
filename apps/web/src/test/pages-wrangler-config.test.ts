@@ -11,17 +11,12 @@ const wranglerConfig = JSON.parse(
 );
 
 describe("web Pages wrangler config", () => {
-  it("defaults preview deployments to the isolated preview API service", () => {
-    expect(wranglerConfig.services).toEqual([
-      {
-        binding: "API",
-        service: "kaisoumail-api-preview",
-      },
-    ]);
+  it("keeps the Pages project name aligned with the deploy target", () => {
+    expect(wranglerConfig.name).toBe("kaisoumail");
   });
 
-  it("pins production deployments to the live API service", () => {
-    expect(wranglerConfig.env?.production?.services).toEqual([
+  it("binds the same-origin proxy to the live API worker service", () => {
+    expect(wranglerConfig.services).toEqual([
       {
         binding: "API",
         service: "kaisoumail-api",

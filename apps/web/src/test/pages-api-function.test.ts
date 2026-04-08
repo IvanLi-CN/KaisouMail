@@ -73,4 +73,24 @@ describe("Pages same-origin API proxy", () => {
       "application/octet-stream",
     );
   });
+
+  it("fails closed on Cloudflare Pages preview hostnames", async () => {
+    const fetchMock = vi.fn();
+    const response = await onRequest({
+      request: new Request(
+        "https://same-origin-api-reapply.kaisoumail.pages.dev/api/version",
+      ),
+      env: {
+        API: {
+          fetch: fetchMock,
+        },
+      },
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Preview Pages same-origin API is disabled",
+    });
+  });
 });

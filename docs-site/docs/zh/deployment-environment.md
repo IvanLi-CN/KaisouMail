@@ -60,7 +60,8 @@
 
 - `apps/web/public/_routes.json` 只把 `/api/*` 送进 Pages Functions
 - `apps/web/functions/api/[[path]].ts` 直接把收到的 `Request` 转发给 `env.API.fetch(...)`
-- `apps/web/wrangler.jsonc` 声明了 Pages build output，以及 `API` Service Binding；Preview 部署默认把它绑定到 `kaisoumail-api-preview`，production 再覆盖回 `kaisoumail-api`
+- `apps/web/wrangler.jsonc` 声明了 Pages build output，并把 Pages 项目名与线上 `kaisoumail` 目标保持一致，同时把代理绑定到现有的 `kaisoumail-api` 服务
+- `.pages.dev` 预览域名会在代理层直接 fail-closed，避免预览流量误打到线上控制面
 - 普通 HTML、JS、CSS 和静态资源不会进入 Function，因此不会把静态流量额外记成 Workers 请求
 - deploy workflow 会读取 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个重跑每个控制台域名的同源 `/api/version` smoke；如果变量里出现格式错误的域名项，workflow 会直接失败而不是静默跳过
 
