@@ -29,6 +29,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Lightweight mailbox inventory and lifecycle management surface
 - Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace
 - API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
+- The shared mailbox-creation form now supports both segmented entry (`localPart + subdomain + rootDomain`) and a full-address mode; supported full addresses normalize to lowercase, unsupported domains are blocked client-side, and pasting a supported full address into segmented fields offers a one-click mode switch with auto-filled values
 - When `localPart` and/or `subdomain` are omitted, generated mailbox aliases come from a readable mixed pool instead of machine-looking `mail-*` / `box-*` prefixes, and collisions retry within a bounded attempt budget before falling back to a short natural suffix
 
 ### Domains
@@ -111,6 +112,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Route 404、权限拒绝、资源不存在、可恢复查询失败与未捕获渲染异常必须共用一套品牌化暗色错误体验；错误态不得伪装成空状态
 - 嵌入页面主体的错误态（如工作台内联 404 / pane failure）使用单栏堆叠布局；仅路由级全屏错误页允许使用更宽的恢复信息布局
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
+- Mailbox creation guidance stays mode-aware: segmented mode can still promise random active-domain allocation, while full-address mode instead explains supported-domain validation and keeps the current normalized address preview visible
 - Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
 - Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
 - Destroyed mailboxes collapse to a muted single-line row in dense lists to avoid wasting vertical space
@@ -120,8 +122,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-04-08: The first-party Web control plane now uses same-origin `/api` through a Pages Function plus Service Binding, while direct `api.cfm.707979.xyz` / `api.km.707979.xyz` aliases remain available for compatibility, automation, deploy smoke, and direct API consumers.
+- 2026-04-08: Added dual-mode mailbox creation with supported full-address input, segmented-field paste-to-switch guidance, normalized auto-fill when switching modes, and refreshed mailbox-creation visual evidence for both the classic segmented flow and the new full-address states.
 - 2026-04-07: Renamed the `/api-keys` control-plane surface to an identity-auth page, added explicit `API Keys` / `Passkey` tabs, and refreshed the page evidence to show each tab separately.
-- 2026-04-06: Added passkey registration and passkey-based browser sign-in alongside the existing API key session exchange, expanded the `/api-keys` security surface with passkey management, and refreshed the in-app/public auth reference docs.
 - 2026-04-07: Workspace desktop three-pane layout now clamps to the AppShell viewport, keeps scrolling inside each pane, virtualizes the mailbox/message rails for unusually long lists, and uses themed self-rendered pane scrollbars instead of browser-native rails.
 - 2026-04-07: Tightened the responsive shell again so inline navigation stays single-row on wide tablets, collapsed desktop account/logout utilities to icon-only actions, and hid the workspace summary sentence on phone-sized layouts to preserve vertical space.
 - 2026-04-07: Simplified user-facing copy across the authenticated shell and control-plane pages, kept the mobile drawer focused on account/navigation/logout only, moved longer mailbox-creation guidance behind a contextual help popover, and refreshed responsive evidence against the canonical phone/tablet/desktop Storybook viewports.
@@ -129,8 +131,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-07: Replaced legacy `mail-*` / `box-*` default mailbox generation with a shared realistic mixed-pool alias generator, added bounded retry/fallback behavior for generated collisions, and refreshed Web/runtime example surfaces plus visual evidence to match.
 - 2026-04-07: Synced the spec after final error-UI convergence; embedded workspace/message 404 surfaces now use the approved single-column stacked layout, while route-level error pages keep the wider recovery treatment.
 - 2026-04-07: Reworked the authenticated shell and `/workspace` layout into a responsive `mobile 1-column / tablet 2-pane / desktop 3-pane` system, moved inline primary navigation next to the site title from `lg+`, and routed narrow screens through a right-side drawer that also carries account details and logout.
-- 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-07: Production deployment now auto-applies remote D1 migrations, re-validates the pending remote migration set at deploy time, gates API promotion on preview plus production smoke checks, records an explicit D1 Time Travel restore anchor for incidents, runs the rollback-backed production smoke before any trigger changes, validates every routable API URL again after trigger application, halts for manual trigger inspection when trigger application or post-trigger smoke fails, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy so migrated schemas are never paired with an older Worker by accident.
+- 2026-04-06: Added passkey registration and passkey-based browser sign-in alongside the existing API key session exchange, expanded the `/api-keys` security surface with passkey management, and refreshed the in-app/public auth reference docs.
+- 2026-04-06: Added the parallel production aliases `km.707979.xyz` and `api.km.707979.xyz`, kept the existing `cfm.707979.xyz` and `api.cfm.707979.xyz` domains live, and hardened the runtime so the Web control plane picks the matching API alias while Worker CORS trusts both control-plane origins.
 - 2026-04-06: Production deployment is now hardened with explicit API Worker secret gates, rollback-backed smoke checks for schema-stable releases with zero pending remote migrations, manual fail-closed handling for migration-bearing releases, and runtime config failures that stay inside the standard JSON error envelope.
 - 2026-04-06: Domains can now bind new Cloudflare `full` zones directly from `/domains`, expose `bindingSource/cloudflareStatus/nameServers`, and soft-delete only project-bound domains after a confirmation popover.
 - 2026-04-06: Header account details now collapse to a nickname-only trigger; full account metadata is revealed through hover/focus preview or click-pinned popover details instead of a static three-line card.
@@ -213,6 +216,12 @@ PR: include
 
 PR: include
 ![Mailbox create card with explicit root domain selected](./assets/mailbox-create-selected-domain.png)
+
+PR: include
+![Mailbox create card switched to full-address mode with a supported address preview](./assets/mailbox-create-full-address-mode.png)
+
+PR: include
+![Mailbox create card showing the paste-to-switch prompt for a supported full address](./assets/mailbox-create-paste-switch-prompt.png)
 
 ### Mailbox Detail
 

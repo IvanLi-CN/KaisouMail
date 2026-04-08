@@ -15,6 +15,7 @@ import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
 import {
   buildMailboxCreateAddressExample,
   buildMailboxCreateDomainHint,
+  type MailboxCreatePreviewState,
 } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -133,9 +134,9 @@ export const MailWorkspace = ({
 }: MailWorkspaceProps) => {
   const selectedMessageSummary =
     messages.find((message) => message.id === selectedMessageId) ?? null;
-  const [selectedExampleRootDomain, setSelectedExampleRootDomain] = useState<
-    string | undefined
-  >(undefined);
+  const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
+    mode: "segmented",
+  });
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
@@ -296,13 +297,15 @@ export const MailWorkspace = ({
                             邮箱创建说明
                           </p>
                           <p className="text-xs leading-5 text-muted-foreground">
-                            用户名和子域可留空；系统会按当前可用域名自动生成地址，也可以手动指定邮箱域名和有效期。
+                            {previewState.mode === "address"
+                              ? "支持直接输入完整邮箱地址；系统会校验这个域名是否属于当前支持列表。"
+                              : "用户名和子域可留空；系统会按当前可用域名自动生成地址，也可以手动指定邮箱域名和有效期。"}
                           </p>
                         </div>
                         <div className="space-y-2 text-xs leading-5 text-muted-foreground">
                           <p>
                             {buildMailboxCreateDomainHint({
-                              rootDomain: selectedExampleRootDomain,
+                              ...previewState,
                               hasAvailableDomains:
                                 createMailboxAction.domains.length > 0,
                             })}
@@ -312,7 +315,7 @@ export const MailWorkspace = ({
                             <span className="font-medium text-foreground">
                               {" "}
                               {buildMailboxCreateAddressExample({
-                                rootDomain: selectedExampleRootDomain,
+                                ...previewState,
                                 hasAvailableDomains:
                                   createMailboxAction.domains.length > 0,
                               })}
@@ -339,7 +342,7 @@ export const MailWorkspace = ({
                     maxTtlMinutes={createMailboxAction.maxTtlMinutes}
                     submitError={createMailboxAction.error}
                     onCancel={createMailboxAction.onCancel}
-                    onDomainPreviewChange={setSelectedExampleRootDomain}
+                    onPreviewChange={setPreviewState}
                     onSubmit={createMailboxAction.onSubmit}
                   />
                 </div>

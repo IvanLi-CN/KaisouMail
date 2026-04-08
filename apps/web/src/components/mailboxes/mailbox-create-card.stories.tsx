@@ -51,7 +51,6 @@ export const RandomDefault: Story = {
 };
 
 export const ManualDomainSelected: Story = {
-  args: {},
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const selectedDomainPreviewAddress = buildMailboxCreateAddressExample({
@@ -75,6 +74,73 @@ export const ManualDomainSelected: Story = {
       rootDomain: "mail.example.net",
       expiresInMinutes: 90,
     });
+  },
+};
+
+export const FullAddressMode: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const fullAddressPreview = buildMailboxCreateAddressExample({
+      mode: "address",
+      address: "build@ops.alpha.mail.example.net",
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "完整" }));
+    await userEvent.type(
+      canvas.getByLabelText("完整邮箱地址"),
+      "Build@Ops.Alpha.mail.example.net",
+    );
+    await expect(canvas.getByText(fullAddressPreview)).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
+
+    await expect(args.onSubmit).toHaveBeenCalledWith({
+      localPart: "build",
+      subdomain: "ops.alpha",
+      rootDomain: "mail.example.net",
+      expiresInMinutes: 60,
+    });
+  },
+};
+
+export const PasteSwitchPrompt: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const localPartField = canvas.getByLabelText("用户名");
+
+    await userEvent.click(canvas.getByRole("button", { name: "分段" }));
+    await userEvent.click(localPartField);
+    await userEvent.paste("Build@Ops.Alpha.mail.example.net");
+    await expect(localPartField).toHaveValue(
+      "Build@Ops.Alpha.mail.example.net",
+    );
+
+    await expect(
+      body.getByText("检测到这是当前支持的完整邮箱地址："),
+    ).toBeInTheDocument();
+    await expect(
+      body.getByText("build@ops.alpha.mail.example.net"),
+    ).toBeInTheDocument();
+  },
+};
+
+export const PasteSwitchAccepted: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const localPartField = canvas.getByLabelText("用户名");
+
+    await userEvent.click(canvas.getByRole("button", { name: "分段" }));
+    await userEvent.click(localPartField);
+    await userEvent.paste("Build@Ops.Alpha.mail.example.net");
+    await expect(localPartField).toHaveValue(
+      "Build@Ops.Alpha.mail.example.net",
+    );
+
+    await userEvent.click(body.getByRole("button", { name: "切换到完整" }));
+    await expect(canvas.getByLabelText("完整邮箱地址")).toHaveValue(
+      "build@ops.alpha.mail.example.net",
+    );
   },
 };
 
