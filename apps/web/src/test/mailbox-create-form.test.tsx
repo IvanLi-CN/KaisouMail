@@ -200,7 +200,7 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");
   });
 
-  it("suggests switching when a supported full address is pasted into segmented inputs", () => {
+  it("suggests switching after a supported full address is pasted into segmented inputs", async () => {
     render(
       <MailboxCreateForm
         defaultTtlMinutes={60}
@@ -210,20 +210,29 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    fireEvent.paste(screen.getByLabelText("用户名"), {
+    const localPartField = screen.getByLabelText("用户名");
+
+    fireEvent.paste(localPartField, {
       clipboardData: {
         getData: () => "Build@Ops.Alpha.mail.example.net",
       },
     });
+    fireEvent.change(localPartField, {
+      target: { value: "Build@Ops.Alpha.mail.example.net" },
+    });
 
-    expect(
-      screen.getByText("检测到这是当前支持的完整邮箱地址："),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("build@ops.alpha.mail.example.net"),
-    ).toBeInTheDocument();
+    expect(localPartField).toHaveValue("Build@Ops.Alpha.mail.example.net");
 
-    fireEvent.click(screen.getByRole("button", { name: "切换到完整" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("检测到这是当前支持的完整邮箱地址："),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("build@ops.alpha.mail.example.net"),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("切换到完整"));
 
     expect(screen.getByLabelText("完整邮箱地址")).toHaveValue(
       "build@ops.alpha.mail.example.net",
@@ -235,7 +244,7 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByLabelText("邮箱域名")).toHaveValue("mail.example.net");
   });
 
-  it("restores the original paste when the user keeps segmented input", () => {
+  it("keeps the pasted value in place when the user dismisses the recommendation", async () => {
     render(
       <MailboxCreateForm
         defaultTtlMinutes={60}
@@ -245,23 +254,32 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    fireEvent.paste(screen.getByLabelText("子域名"), {
+    const subdomainField = screen.getByLabelText("子域名");
+
+    fireEvent.paste(subdomainField, {
       clipboardData: {
         getData: () => "Build@Ops.Alpha.mail.example.net",
       },
     });
+    fireEvent.change(subdomainField, {
+      target: { value: "Build@Ops.Alpha.mail.example.net" },
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "保留当前粘贴" }));
+    await waitFor(() => {
+      expect(
+        screen.getByText("检测到这是当前支持的完整邮箱地址："),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("继续用分段"));
 
     expect(
       screen.queryByText("检测到这是当前支持的完整邮箱地址："),
     ).not.toBeInTheDocument();
-    expect(screen.getByLabelText("子域名")).toHaveValue(
-      "Build@Ops.Alpha.mail.example.net",
-    );
+    expect(subdomainField).toHaveValue("Build@Ops.Alpha.mail.example.net");
   });
 
-  it("blocks submit until the pasted full-address suggestion is resolved", async () => {
+  it("does not block submit after paste and falls back to segmented validation", async () => {
     const onSubmit = vi.fn();
 
     render(
@@ -273,10 +291,21 @@ describe("MailboxCreateForm", () => {
       />,
     );
 
-    fireEvent.paste(screen.getByLabelText("用户名"), {
+    const localPartField = screen.getByLabelText("用户名");
+
+    fireEvent.paste(localPartField, {
       clipboardData: {
         getData: () => "Build@Ops.Alpha.mail.example.net",
       },
+    });
+    fireEvent.change(localPartField, {
+      target: { value: "Build@Ops.Alpha.mail.example.net" },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("检测到这是当前支持的完整邮箱地址："),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
@@ -284,13 +313,13 @@ describe("MailboxCreateForm", () => {
     await waitFor(() => {
       expect(onSubmit).not.toHaveBeenCalled();
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "检测到完整邮箱地址，请先选择切换输入方式，或保留这次原始粘贴",
+        "仅支持小写字母、数字和短横线",
       );
     });
 
     expect(
       screen.getByText("检测到这是当前支持的完整邮箱地址："),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("用户名")).toHaveValue("");
+    expect(localPartField).toHaveValue("Build@Ops.Alpha.mail.example.net");
   });
 });

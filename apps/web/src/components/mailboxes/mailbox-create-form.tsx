@@ -9,7 +9,13 @@ import {
   parseMailboxAddressAgainstDomains,
 } from "@kaisoumail/shared";
 import { LoaderCircle } from "lucide-react";
-import { type ClipboardEvent, useEffect, useMemo, useState } from "react";
+import {
+  type ClipboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useForm } from "react-hook-form";
 import {
   type MailboxCreateInputMode,
@@ -39,8 +45,6 @@ const inputModeButtonInactiveClassName =
   "text-muted-foreground hover:text-foreground";
 const segmentedModeLabel = "分段";
 const fullAddressModeLabel = "完整";
-const resolvePasteSuggestionMessage =
-  "检测到完整邮箱地址，请先选择切换输入方式，或保留这次原始粘贴";
 
 type CreateMailboxValues = {
   localPart: string;
@@ -56,7 +60,12 @@ type PasteSuggestionState = {
   address: string;
   parsed: ParsedMailboxAddress;
   field: SegmentFieldName;
-  restoreValue: string;
+  observedValue: string;
+};
+
+type DismissedPasteSuggestionState = {
+  field: SegmentFieldName;
+  observedValue: string;
 };
 
 const normalizeOptionalValue = (value: string) => {
@@ -135,6 +144,9 @@ export const MailboxCreateForm = ({
     useState<MailboxCreateInputMode>("segmented");
   const [pasteSuggestion, setPasteSuggestion] =
     useState<PasteSuggestionState | null>(null);
+  const [dismissedPasteSuggestion, setDismissedPasteSuggestion] =
+    useState<DismissedPasteSuggestionState | null>(null);
+  const pasteDetectionTimeoutRef = useRef<number | null>(null);
   const normalizedDomains = useMemo(
     () => domains.map((domain) => normalizeRootDomain(domain)),
     [domains],
@@ -207,6 +219,39 @@ export const MailboxCreateForm = ({
     }
   }, [form, inputMode, parsedFullAddress]);
 
+  useEffect(
+    () => () => {
+      if (pasteDetectionTimeoutRef.current !== null) {
+        window.clearTimeout(pasteDetectionTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!pasteSuggestion || inputMode !== "segmented") return;
+
+    const activeValue =
+      pasteSuggestion.field === "localPart" ? localPart : subdomain;
+    const parsed = parseMailboxAddressAgainstDomains(
+      activeValue,
+      normalizedDomains,
+    );
+    if (!parsed || parsed.address !== pasteSuggestion.address) {
+      setPasteSuggestion(null);
+    }
+  }, [inputMode, localPart, normalizedDomains, pasteSuggestion, subdomain]);
+
+  useEffect(() => {
+    if (!dismissedPasteSuggestion) return;
+
+    const activeValue =
+      dismissedPasteSuggestion.field === "localPart" ? localPart : subdomain;
+    if (activeValue !== dismissedPasteSuggestion.observedValue) {
+      setDismissedPasteSuggestion(null);
+    }
+  }, [dismissedPasteSuggestion, localPart, subdomain]);
+
   const segmentedErrorMessage =
     form.formState.errors.localPart?.message ??
     form.formState.errors.subdomain?.message ??
@@ -253,6 +298,7 @@ export const MailboxCreateForm = ({
 
     if (clearSuggestion) {
       setPasteSuggestion(null);
+      setDismissedPasteSuggestion(null);
     }
     form.clearErrors(["localPart", "subdomain"]);
     setInputMode("address");
@@ -278,6 +324,7 @@ export const MailboxCreateForm = ({
     }
 
     setPasteSuggestion(null);
+    setDismissedPasteSuggestion(null);
     setInputMode("segmented");
     form.clearErrors(["address", "localPart", "subdomain"]);
   };
@@ -288,32 +335,39 @@ export const MailboxCreateForm = ({
   ) => {
     if (inputMode !== "segmented") return;
 
-    const pastedText = event.clipboardData.getData("text");
-    const parsed = parseMailboxAddressAgainstDomains(
-      pastedText,
-      normalizedDomains,
-    );
-    if (!parsed) return;
+    const input = event.currentTarget;
+    if (pasteDetectionTimeoutRef.current !== null) {
+      window.clearTimeout(pasteDetectionTimeoutRef.current);
+    }
 
-    event.preventDefault();
-    setPasteSuggestion({
-      address: parsed.address,
-      parsed,
-      field,
-      restoreValue: pastedText,
-    });
-  };
+    pasteDetectionTimeoutRef.current = window.setTimeout(() => {
+      pasteDetectionTimeoutRef.current = null;
 
-  const restoreSuggestedPaste = () => {
-    if (!pasteSuggestion) return;
+      const observedValue = input.value;
+      const parsed = parseMailboxAddressAgainstDomains(
+        observedValue,
+        normalizedDomains,
+      );
+      if (!parsed) {
+        setPasteSuggestion((current) =>
+          current?.field === field ? null : current,
+        );
+        return;
+      }
+      if (
+        dismissedPasteSuggestion?.field === field &&
+        dismissedPasteSuggestion.observedValue === observedValue
+      ) {
+        return;
+      }
 
-    form.setValue(pasteSuggestion.field, pasteSuggestion.restoreValue, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: false,
-    });
-    form.clearErrors(pasteSuggestion.field);
-    setPasteSuggestion(null);
+      setPasteSuggestion({
+        address: parsed.address,
+        parsed,
+        field,
+        observedValue,
+      });
+    }, 0);
   };
 
   const handleAddressModeToggle = () =>
@@ -321,6 +375,17 @@ export const MailboxCreateForm = ({
       parsed: pasteSuggestion?.parsed,
       clearSuggestion: true,
     });
+
+  const dismissPasteSuggestion = () => {
+    if (!pasteSuggestion) return;
+
+    setDismissedPasteSuggestion({
+      field: pasteSuggestion.field,
+      observedValue: pasteSuggestion.observedValue,
+    });
+    setPasteSuggestion(null);
+    form.clearErrors(pasteSuggestion.field);
+  };
 
   return (
     <form
@@ -347,13 +412,6 @@ export const MailboxCreateForm = ({
             rootDomain: parsed.rootDomain,
             expiresInMinutes: values.expiresInMinutes,
           });
-        }
-
-        if (pasteSuggestion) {
-          form.setError(pasteSuggestion.field, {
-            message: resolvePasteSuggestionMessage,
-          });
-          return;
         }
 
         const normalizedLocalPart = normalizeOptionalValue(values.localPart);
@@ -441,7 +499,7 @@ export const MailboxCreateForm = ({
                         {pasteSuggestion.address}
                       </p>
                       <p className="text-xs leading-5 text-muted-foreground">
-                        可直接切换到完整输入，并自动帮你填好；如果不切换，也会恢复这次原始粘贴。
+                        你刚刚的粘贴已保留在输入框里；如果这是你想要的完整地址，可直接切换过去并自动填好。
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -455,9 +513,9 @@ export const MailboxCreateForm = ({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={restoreSuggestedPaste}
+                        onClick={dismissPasteSuggestion}
                       >
-                        保留当前粘贴
+                        继续用分段
                       </Button>
                     </div>
                   </PopoverContent>

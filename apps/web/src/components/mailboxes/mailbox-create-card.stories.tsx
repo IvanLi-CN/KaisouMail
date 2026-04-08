@@ -111,6 +111,9 @@ export const PasteSwitchPrompt: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "分段" }));
     await userEvent.click(localPartField);
     await userEvent.paste("Build@Ops.Alpha.mail.example.net");
+    await expect(localPartField).toHaveValue(
+      "Build@Ops.Alpha.mail.example.net",
+    );
 
     await expect(
       body.getByText("检测到这是当前支持的完整邮箱地址："),
@@ -130,6 +133,9 @@ export const PasteSwitchAccepted: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "分段" }));
     await userEvent.click(localPartField);
     await userEvent.paste("Build@Ops.Alpha.mail.example.net");
+    await expect(localPartField).toHaveValue(
+      "Build@Ops.Alpha.mail.example.net",
+    );
 
     await userEvent.click(body.getByRole("button", { name: "切换到完整" }));
     await expect(canvas.getByLabelText("完整邮箱地址")).toHaveValue(
