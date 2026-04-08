@@ -12,6 +12,7 @@
   },
   "include": [
     "src",
+    "functions",
     ".storybook",
     "vite.config.ts",
     "playwright.config.ts",

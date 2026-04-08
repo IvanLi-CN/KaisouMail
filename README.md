@@ -36,7 +36,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 ## Workspaces
 
 - `apps/api-worker`: Worker API, Email Worker, scheduled cleanup, Drizzle schema, Wrangler config
-- `apps/web`: Pages-deployed React admin UI, Storybook, Playwright smoke tests
+- `apps/web`: Pages-deployed React admin UI, same-origin `/api` Pages Function proxy, Storybook, Playwright smoke tests
 - `docs-site`: GitHub Pages-deployed Rspress docs site that links to the public Storybook surface
 - `packages/shared`: shared contracts, constants, and version metadata
 
@@ -71,6 +71,8 @@ WORKER_PORT=8787 bun run --cwd apps/api-worker dev
 ```
 
 ### Web
+
+The browser client now defaults to same-origin `/api`. In local dev and preview, Vite proxies `/api` to `VITE_API_BASE_URL`, falling back to `http://127.0.0.1:8787` when the variable is unset.
 
 ```bash
 PORT=4173 bun run --cwd apps/web dev
@@ -121,7 +123,7 @@ The Worker expects these bindings and variables:
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
 - `CF_ROUTE_RULESET_TAG`
-- `WEB_APP_ORIGIN` (legacy primary control-plane origin for single-origin compatibility)
+- `WEB_APP_ORIGIN` (legacy primary control-plane origin for direct API compatibility)
 - `WEB_APP_ORIGINS` (comma-separated trusted control-plane origins when multiple production aliases stay live)
 
 ### Legacy bootstrap vars
@@ -132,7 +134,8 @@ The Worker expects these bindings and variables:
 These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
-For multi-alias production rollouts, keep `WEB_APP_ORIGINS` in sync with every live control-plane domain; the web client can then prefer the matching API alias per hostname while `VITE_API_BASE_URL` remains the canonical fallback for local and preview hosts.
+First-party browser traffic now uses same-origin `/api`, served by Cloudflare Pages Functions and forwarded through the `API` Service Binding declared in `apps/web/wrangler.jsonc`. The checked-in Pages config now stays aligned with the live `kaisoumail` project and points at the existing `kaisoumail-api` service; preview `.pages.dev` requests fail closed inside the proxy instead of being allowed to reach the live control plane. Keep `api.cfm...` / `api.km...` style API aliases available for compatibility, automation, and direct API consumers, and keep `WEB_APP_ORIGINS` aligned with every live control-plane origin so those direct API aliases still receive the correct CORS allowlist.
+`VITE_API_BASE_URL` is no longer the production browser API locator baked into the bundle. It is only used for local dev, tests, explicit non-browser overrides, and the deploy workflow's canonical direct-API smoke target. The deploy workflow separately uses `CF_PAGES_SMOKE_ORIGINS` to prove that every live Pages alias serves the same release through same-origin `/api/version` after Pages deploy completes, and malformed smoke-origin entries now fail the workflow instead of being skipped silently.
 
 ## Cloudflare API Tokens
 
@@ -278,23 +281,23 @@ To use the deploy workflow, configure:
 - GitHub secret: `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variable: `CF_PAGES_PROJECT_NAME`
 - GitHub variable: `VITE_API_BASE_URL`
-- Keep one existing 100%-stable API Worker deployment available as the baseline for schema-stable releases; the automatic deploy path now applies remote D1 migrations, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes it to 100% production traffic only after that shadow `/health` + `/api/version` smoke passes, runs production smoke before any trigger changes, applies route/domain/cron trigger changes explicitly only after that smoke passes, reruns post-trigger smoke across every API URL declared by `VITE_API_BASE_URL` plus `apps/api-worker/wrangler.jsonc`, and disables automatic Worker rollback whenever the release is migration-bearing or remote D1 schema changes were involved in the deploy
+- Keep one existing 100%-stable API Worker deployment available as the baseline for schema-stable releases; the automatic deploy path now applies remote D1 migrations, uploads a non-live API Worker version, adds it to the active deployment at 0% traffic, smoke-tests it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, promotes it to 100% production traffic only after that shadow `/health` + `/api/version` smoke passes, runs production smoke before any trigger changes, applies route/domain/cron trigger changes explicitly only after that smoke passes, reruns post-trigger smoke across every API URL declared by `VITE_API_BASE_URL` plus `apps/api-worker/wrangler.jsonc`, deploys Pages, and finally reruns same-origin `/api/version` smoke across every Pages origin declared in `CF_PAGES_SMOKE_ORIGINS` before the workflow reports success
 - CI blocks obviously destructive D1 migrations on the default auto path, and the deploy workflow re-validates the actual remote pending migration set before apply; keep schema changes expand-only / forward-compatible, carry compatibility code for at most one release, and defer destructive cleanup to a later cleanup release
 
 To use the public docs workflow, enable GitHub Pages for this repository and keep the default Pages environment ready for `.github/workflows/docs-pages.yml`.
 
 ## Deployment checklist
 
-1. Create the Pages project `kaisoumail` once in Cloudflare
+1. Create or reuse the Cloudflare Pages project referenced by `CF_PAGES_PROJECT_NAME`
 2. Bind one or more control-plane origins (for example `cfm.example.com` and `km.example.com`) to Pages, and attach the matching API custom domains (for example `api.cfm.example.com` and `api.km.example.com`) to the API Worker
 3. Set the Worker runtime secret `SESSION_SECRET`, and only add `BOOTSTRAP_ADMIN_API_KEY` when you also set `BOOTSTRAP_ADMIN_EMAIL` for first-admin bootstrap
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`
-6. Set GitHub vars `CF_PAGES_PROJECT_NAME=kaisoumail` and `VITE_API_BASE_URL=<your canonical api origin>`
-7. Set `WEB_APP_ORIGINS=<comma-separated pages origins>` and optionally keep `WEB_APP_ORIGIN=<your primary pages origin>` for legacy single-origin compatibility
+6. Set GitHub vars `CF_PAGES_PROJECT_NAME=<your Pages project>`, `VITE_API_BASE_URL=<your canonical direct API origin for deploy smoke>`, and `CF_PAGES_SMOKE_ORIGINS=<comma-separated Pages origins that must pass same-origin /api/version smoke after deploy>`
+7. Set `WEB_APP_ORIGINS=<comma-separated Pages origins>` and optionally keep `WEB_APP_ORIGIN=<your primary Pages origin>` for legacy direct-API compatibility
 8. For upgrades from a historical single-domain deployment, keep `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID` populated for the first deploy so bootstrap can backfill the initial `domains` row
 9. Bootstrap the very first production API deploy manually; after that, keep one 100%-stable API deployment available so the workflow can stage a 0%-traffic candidate, smoke-test it through the canonical API custom domain with `Cloudflare-Workers-Version-Overrides`, and then promote or roll back safely
-10. A `workers.dev` subdomain is optional for manual debugging, but the automatic deploy path no longer depends on preview URLs
+10. Put `VITE_API_BASE_URL` in local `.env` or preview overrides when you want `apps/web` dev/preview to proxy `/api` somewhere other than the default local Worker target
 11. Push to `main` to trigger the deploy workflow
 12. Use `Actions -> Deploy -> Run workflow -> operation=restore-d1` with a timestamp or bookmark when you need a D1 Time Travel restore (Cloudflare D1 Time Travel currently keeps a 30-day restore window)
 13. Push docs or Storybook changes to `main` to refresh the GitHub Pages docs bundle
@@ -302,8 +305,8 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 ## Worker topology
 
 - `kaisoumail-api`
-  - serves your single control-plane API origin
-  - owns the REST API and scheduled cleanup trigger
+  - serves direct API aliases plus the scheduled cleanup trigger
+  - owns the REST API and the runtime used behind the Pages same-origin `/api` proxy
 - `email-receiver-worker`
   - receives Email Routing `email()` events
   - uses the same source code as `kaisoumail-api`, but is deployed with the dedicated `wrangler.email.jsonc` config and the same D1/R2 bindings

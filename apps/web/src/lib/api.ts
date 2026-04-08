@@ -28,10 +28,7 @@ import type {
 
 import { demoApi } from "@/lib/demo-store";
 
-const PRODUCTION_API_BASE_BY_WEB_HOST = {
-  "cfm.707979.xyz": "https://api.cfm.707979.xyz",
-  "km.707979.xyz": "https://api.km.707979.xyz",
-} as const;
+const SAME_ORIGIN_API_BASE = "";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
@@ -51,18 +48,14 @@ const normalizeOrigin = (value: string | null | undefined) => {
 export const resolveApiBase = ({
   configuredBaseUrl = import.meta.env.VITE_API_BASE_URL,
   currentLocation = typeof window !== "undefined" ? window.location : undefined,
+  preferSameOrigin = currentLocation !== undefined,
 }: {
   configuredBaseUrl?: string;
   currentLocation?: Pick<Location, "hostname">;
+  preferSameOrigin?: boolean;
 } = {}) => {
-  const mappedApiBase = currentLocation?.hostname
-    ? PRODUCTION_API_BASE_BY_WEB_HOST[
-        currentLocation.hostname as keyof typeof PRODUCTION_API_BASE_BY_WEB_HOST
-      ]
-    : undefined;
-
-  if (mappedApiBase) {
-    return mappedApiBase;
+  if (preferSameOrigin && currentLocation) {
+    return SAME_ORIGIN_API_BASE;
   }
 
   const configuredBase = configuredBaseUrl?.trim();
