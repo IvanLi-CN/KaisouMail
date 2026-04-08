@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-08
+Last: 2026-04-09
 
 ## Objective
 
@@ -121,6 +121,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
 - 2026-04-08: The first-party Web control plane now uses same-origin `/api` through a Pages Function plus Service Binding, while direct `api.cfm.707979.xyz` / `api.km.707979.xyz` aliases remain available for compatibility, automation, deploy smoke, and direct API consumers.
 - 2026-04-08: Added dual-mode mailbox creation with supported full-address input, segmented-field paste-to-switch guidance, normalized auto-fill when switching modes, and refreshed mailbox-creation visual evidence for both the classic segmented flow and the new full-address states.
 - 2026-04-07: Renamed the `/api-keys` control-plane surface to an identity-auth page, added explicit `API Keys` / `Passkey` tabs, and refreshed the page evidence to show each tab separately.
@@ -176,6 +177,10 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
+
+![Workspace message row with the repaired focus halo](./assets/workspace-message-row-focus-ring.png)
+
+![Workspace toolbar create button with the repaired focus halo](./assets/workspace-new-mailbox-button-focus-ring.png)
 
 ### UI Primitives
 
@@ -236,6 +241,8 @@ PR: include
 ![Identity auth tabs component with the API Keys tab selected](./assets/identity-auth-tabs-api-keys-story.png)
 
 ![Identity auth tabs component with the Passkey tab selected](./assets/identity-auth-tabs-passkey-story.png)
+
+![Identity auth tabs with the repaired focus halo](./assets/identity-auth-tabs-focus-ring.png)
 
 ### Integration Reference
 
