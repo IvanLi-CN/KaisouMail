@@ -105,6 +105,7 @@ export const FullAddressMode: Story = {
 export const PasteSwitchPrompt: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
     const localPartField = canvas.getByLabelText("用户名");
 
     await userEvent.click(canvas.getByRole("button", { name: "分段输入" }));
@@ -112,14 +113,26 @@ export const PasteSwitchPrompt: Story = {
     await userEvent.paste("Build@Ops.Alpha.mail.example.net");
 
     await expect(
-      canvas.getByText("检测到这是当前支持的完整邮箱地址："),
+      body.getByText("检测到这是当前支持的完整邮箱地址："),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByText("build@ops.alpha.mail.example.net"),
+      body.getByText("build@ops.alpha.mail.example.net"),
     ).toBeInTheDocument();
+  },
+};
+
+export const PasteSwitchAccepted: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const localPartField = canvas.getByLabelText("用户名");
+
+    await userEvent.click(canvas.getByRole("button", { name: "分段输入" }));
+    await userEvent.click(localPartField);
+    await userEvent.paste("Build@Ops.Alpha.mail.example.net");
 
     await userEvent.click(
-      canvas.getByRole("button", { name: "切换到完整邮箱地址输入" }),
+      body.getByRole("button", { name: "切换到完整邮箱地址输入" }),
     );
     await expect(canvas.getByLabelText("完整邮箱地址")).toHaveValue(
       "build@ops.alpha.mail.example.net",

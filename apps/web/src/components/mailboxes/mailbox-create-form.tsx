@@ -19,6 +19,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 const mailboxFieldClassName =
@@ -419,143 +424,161 @@ export const MailboxCreateForm = ({
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-2 md:flex-row md:items-center">
-                <div className={mailboxAddressSegmentClassName}>
-                  <Label className="sr-only" htmlFor="localPart">
-                    用户名
-                  </Label>
-                  <Input
-                    aria-invalid={Boolean(form.formState.errors.localPart)}
-                    aria-label="用户名"
-                    autoFocus={autoFocusFirstField}
-                    className={cn(
-                      form.formState.errors.localPart
-                        ? "border-destructive"
-                        : undefined,
-                    )}
-                    id="localPart"
-                    placeholder="用户名"
-                    {...form.register("localPart", {
-                      validate: (value) => {
-                        if (inputMode !== "segmented") return true;
-                        const normalizedValue = normalizeOptionalValue(value);
-                        if (!normalizedValue) return true;
-                        return (
-                          mailboxLocalPartRegex.test(normalizedValue) ||
-                          "仅支持小写字母、数字和短横线"
-                        );
-                      },
-                    })}
-                    onPaste={(event) => handleSegmentPaste("localPart", event)}
-                  />
-                </div>
-                <span
-                  aria-hidden="true"
-                  className="hidden shrink-0 text-sm font-semibold text-muted-foreground md:inline"
-                >
-                  @
-                </span>
-                <div className={mailboxAddressSegmentClassName}>
-                  <Label className="sr-only" htmlFor="subdomain">
-                    子域名
-                  </Label>
-                  <Input
-                    aria-invalid={Boolean(form.formState.errors.subdomain)}
-                    aria-label="子域名"
-                    className={cn(
-                      form.formState.errors.subdomain
-                        ? "border-destructive"
-                        : undefined,
-                    )}
-                    id="subdomain"
-                    placeholder="子域名"
-                    {...form.register("subdomain", {
-                      validate: (value) => {
-                        if (inputMode !== "segmented") return true;
-                        const normalizedValue = normalizeOptionalValue(value);
-                        if (!normalizedValue) return true;
-                        return (
-                          mailboxSubdomainRegex.test(normalizedValue) ||
-                          "支持多级子域，例如 team 或 inbox.team"
-                        );
-                      },
-                    })}
-                    onPaste={(event) => handleSegmentPaste("subdomain", event)}
-                  />
-                </div>
-                {domains.length > 0 ? (
-                  <>
+              <Popover open={Boolean(pasteSuggestion)}>
+                <PopoverAnchor asChild>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                    <div className={mailboxAddressSegmentClassName}>
+                      <Label className="sr-only" htmlFor="localPart">
+                        用户名
+                      </Label>
+                      <Input
+                        aria-invalid={Boolean(form.formState.errors.localPart)}
+                        aria-label="用户名"
+                        autoFocus={autoFocusFirstField}
+                        className={cn(
+                          form.formState.errors.localPart
+                            ? "border-destructive"
+                            : undefined,
+                        )}
+                        id="localPart"
+                        placeholder="用户名"
+                        {...form.register("localPart", {
+                          validate: (value) => {
+                            if (inputMode !== "segmented") return true;
+                            const normalizedValue =
+                              normalizeOptionalValue(value);
+                            if (!normalizedValue) return true;
+                            return (
+                              mailboxLocalPartRegex.test(normalizedValue) ||
+                              "仅支持小写字母、数字和短横线"
+                            );
+                          },
+                        })}
+                        onPaste={(event) =>
+                          handleSegmentPaste("localPart", event)
+                        }
+                      />
+                    </div>
                     <span
                       aria-hidden="true"
                       className="hidden shrink-0 text-sm font-semibold text-muted-foreground md:inline"
                     >
-                      .
+                      @
                     </span>
-                    <div
-                      className={cn(
-                        mailboxAddressSegmentClassName,
-                        "md:max-w-[14rem]",
-                      )}
-                    >
-                      <Label className="sr-only" htmlFor="rootDomain">
-                        邮箱域名
+                    <div className={mailboxAddressSegmentClassName}>
+                      <Label className="sr-only" htmlFor="subdomain">
+                        子域名
                       </Label>
-                      <select
-                        aria-label="邮箱域名"
-                        id="rootDomain"
-                        className={mailboxFieldClassName}
-                        {...form.register("rootDomain")}
-                      >
-                        <option value="">
-                          {RANDOM_ROOT_DOMAIN_OPTION_LABEL}
-                        </option>
-                        {domains.map((domain) => (
-                          <option key={domain} value={domain}>
-                            {domain}
-                          </option>
-                        ))}
-                      </select>
+                      <Input
+                        aria-invalid={Boolean(form.formState.errors.subdomain)}
+                        aria-label="子域名"
+                        className={cn(
+                          form.formState.errors.subdomain
+                            ? "border-destructive"
+                            : undefined,
+                        )}
+                        id="subdomain"
+                        placeholder="子域名"
+                        {...form.register("subdomain", {
+                          validate: (value) => {
+                            if (inputMode !== "segmented") return true;
+                            const normalizedValue =
+                              normalizeOptionalValue(value);
+                            if (!normalizedValue) return true;
+                            return (
+                              mailboxSubdomainRegex.test(normalizedValue) ||
+                              "支持多级子域，例如 team 或 inbox.team"
+                            );
+                          },
+                        })}
+                        onPaste={(event) =>
+                          handleSegmentPaste("subdomain", event)
+                        }
+                      />
                     </div>
-                  </>
+                    {domains.length > 0 ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="hidden shrink-0 text-sm font-semibold text-muted-foreground md:inline"
+                        >
+                          .
+                        </span>
+                        <div
+                          className={cn(
+                            mailboxAddressSegmentClassName,
+                            "md:max-w-[14rem]",
+                          )}
+                        >
+                          <Label className="sr-only" htmlFor="rootDomain">
+                            邮箱域名
+                          </Label>
+                          <select
+                            aria-label="邮箱域名"
+                            id="rootDomain"
+                            className={mailboxFieldClassName}
+                            {...form.register("rootDomain")}
+                          >
+                            <option value="">
+                              {RANDOM_ROOT_DOMAIN_OPTION_LABEL}
+                            </option>
+                            {domains.map((domain) => (
+                              <option key={domain} value={domain}>
+                                {domain}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </PopoverAnchor>
+                {pasteSuggestion ? (
+                  <PopoverContent
+                    align="start"
+                    className="w-[min(calc(100vw-2rem),24rem)] space-y-3 p-4"
+                    collisionPadding={20}
+                    side="bottom"
+                    sideOffset={12}
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        检测到这是当前支持的完整邮箱地址：
+                      </p>
+                      <p className="break-all text-sm text-foreground">
+                        {pasteSuggestion.address}
+                      </p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        可直接切换到完整邮箱地址输入，并自动帮你填好；如果不切换，也会恢复这次原始粘贴。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() =>
+                          switchToAddressMode({
+                            parsed: pasteSuggestion.parsed,
+                            clearSuggestion: true,
+                          })
+                        }
+                      >
+                        切换到完整邮箱地址输入
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={restoreSuggestedPaste}
+                      >
+                        保留当前粘贴
+                      </Button>
+                    </div>
+                  </PopoverContent>
                 ) : null}
-              </div>
+              </Popover>
             )}
           </div>
-
-          {pasteSuggestion ? (
-            <div className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm">
-              <p className="font-medium text-foreground">
-                检测到这是当前支持的完整邮箱地址：
-                <span className="ml-1 break-all">
-                  {pasteSuggestion.address}
-                </span>
-              </p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                可直接切换到完整邮箱地址输入，并自动帮你填好；如果不切换，也会恢复这次原始粘贴。
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    switchToAddressMode({
-                      parsed: pasteSuggestion.parsed,
-                      clearSuggestion: true,
-                    })
-                  }
-                >
-                  切换到完整邮箱地址输入
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={restoreSuggestedPaste}
-                >
-                  保留当前粘贴
-                </Button>
-              </div>
-            </div>
-          ) : null}
 
           {inputMode === "address" ? (
             addressErrorMessage ? (
