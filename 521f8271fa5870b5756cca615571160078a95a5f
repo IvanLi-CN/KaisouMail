@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.18.1",
+  "base_stable_version": "0.18.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-08T18:10:04Z",
+  "next_stable_version": "0.18.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "3a6479f01d1a50b74d45f410dcdec7b695d81536",
+  "pr_number": 33,
+  "pr_title": "fix(web): stabilize workspace mailbox focus states",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.18.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.18.1",
+  "target_sha": "521f8271fa5870b5756cca615571160078a95a5f",
+  "type_label": "type:patch"
+}
