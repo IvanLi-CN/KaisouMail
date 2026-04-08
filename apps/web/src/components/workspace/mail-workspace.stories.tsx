@@ -593,6 +593,39 @@ export const ToolbarCreateFlow: Story = {
   },
 };
 
+export const ToolbarCreateFullAddressFlow: Story = {
+  render: () => <WorkspaceStoryHarness />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const fullAddressPreview = buildMailboxCreateAddressExample({
+      mode: "address",
+      address: "build@ops.alpha.mail.example.net",
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "新建邮箱" }));
+    await userEvent.click(canvas.getByRole("button", { name: "完整" }));
+    await userEvent.type(
+      canvas.getByLabelText("完整邮箱地址"),
+      "Build@Ops.Alpha.mail.example.net",
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await expect(
+      within(canvasElement.ownerDocument.body).getByText(fullAddressPreview),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "查看邮箱创建说明" }),
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
+
+    const createdRow = await canvas.findByRole("button", {
+      name: /build@ops\.alpha\.mail\.example\.net/i,
+    });
+    await expect(within(createdRow).getByText("新建")).toBeInTheDocument();
+  },
+};
+
 export const CreatePopoverOpen: Story = {
   render: () => <WorkspaceStoryHarness initialCreateOpen />,
   play: async ({ canvasElement }) => {
