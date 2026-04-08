@@ -434,11 +434,9 @@ export const MailWorkspace = ({
             <div className="py-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
               <button
                 type="button"
+                data-active={selectedMailboxId === "all" ? "true" : undefined}
                 className={cn(
-                  "mx-3 flex w-auto cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selectedMailboxId === "all"
-                    ? "border-primary/40 bg-primary/10"
-                    : "border-border bg-muted/10 hover:bg-white/5",
+                  "workspace-mailbox-item mx-3 flex w-auto cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
                 )}
                 onClick={() => onSelectMailbox("all")}
               >
@@ -495,19 +493,15 @@ export const MailWorkspace = ({
                         <button
                           type="button"
                           disabled={isDestroyed}
+                          data-active={isActive ? "true" : undefined}
+                          data-highlighted={isHighlighted ? "true" : undefined}
                           className={cn(
-                            "flex w-full rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            "flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
                             isDestroyed
                               ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                              : "cursor-pointer flex-col gap-3",
-                            !isDestroyed && isActive
-                              ? "border-primary/40 bg-primary/10"
-                              : null,
-                            !isDestroyed && !isActive
-                              ? "border-border bg-muted/10 hover:bg-white/5"
-                              : null,
+                              : "workspace-mailbox-item cursor-pointer flex-col gap-3",
                             !isDestroyed && isHighlighted
-                              ? "border-primary/70 bg-primary/18 ring-1 ring-primary/35 shadow-[0_0_0_1px_rgba(148,163,184,0.14)_inset]"
+                              ? "text-foreground"
                               : null,
                           )}
                           onClick={() => onSelectMailbox(mailbox.id)}
@@ -616,11 +610,9 @@ export const MailWorkspace = ({
                       return (
                         <button
                           type="button"
+                          data-active={active ? "true" : undefined}
                           className={cn(
-                            "flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            active
-                              ? "border-primary/40 bg-primary/10"
-                              : "border-border bg-muted/10 hover:bg-white/5",
+                            "workspace-message-item flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
                           )}
                           onClick={() => onSelectMessage(message.id)}
                         >

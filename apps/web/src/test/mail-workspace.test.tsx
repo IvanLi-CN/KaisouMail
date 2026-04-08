@@ -145,6 +145,59 @@ describe("MailWorkspace", () => {
     ).toHaveTextContent("新建");
   });
 
+  it("uses semantic state hooks instead of stacked ring utilities across workspace rails", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          highlightedMailboxId="mbx_beta"
+          selectedMailboxId="all"
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
+    const allMailRow = within(mailboxList).getByRole("button", {
+      name: /全部邮箱/i,
+    });
+    const normalRow = within(mailboxList).getByRole("button", {
+      name: /build@alpha\.relay\.example\.test/i,
+    });
+    const highlightedRow = within(mailboxList).getByRole("button", {
+      name: /spec@ops\.beta\.mail\.example\.net/i,
+    });
+    const messageList = screen.getByRole("region", { name: "邮件列表" });
+    const activeMessageRow = within(messageList).getByRole("button", {
+      name: /Build artifacts ready/i,
+    });
+
+    expect(allMailRow).toHaveClass("workspace-mailbox-item");
+    expect(allMailRow).toHaveAttribute("data-active", "true");
+    expect(allMailRow.className).not.toContain("focus-visible:ring-ring");
+    expect(allMailRow.className).not.toContain("focus-visible:ring-2");
+
+    expect(normalRow).toHaveClass("workspace-mailbox-item");
+    expect(normalRow).not.toHaveAttribute("data-active");
+    expect(normalRow).not.toHaveAttribute("data-highlighted");
+
+    expect(highlightedRow).toHaveClass("workspace-mailbox-item");
+    expect(highlightedRow).toHaveAttribute("data-highlighted", "true");
+    expect(highlightedRow.className).not.toContain("ring-1");
+    expect(highlightedRow.className).not.toContain("ring-primary/35");
+
+    expect(activeMessageRow).toHaveClass("workspace-message-item");
+    expect(activeMessageRow).toHaveAttribute("data-active", "true");
+    expect(activeMessageRow.className).not.toContain("focus-visible:ring-ring");
+    expect(activeMessageRow.className).not.toContain("focus-visible:ring-2");
+
+    highlightedRow.focus();
+    expect(highlightedRow).toHaveFocus();
+  });
+
   it("renders pane-specific errors instead of empty placeholders", () => {
     render(
       <MemoryRouter>

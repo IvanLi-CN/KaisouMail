@@ -175,6 +175,21 @@ const assertDesktopThreePaneLayout = (canvasElement: HTMLElement) => {
   expect(messageContent.left).toBeGreaterThan(messageList.right - 8);
 };
 
+const focusMailboxByTab = async (
+  canvasElement: HTMLElement,
+  target: HTMLElement,
+) => {
+  for (let index = 0; index < 12; index += 1) {
+    if (target === canvasElement.ownerDocument.activeElement) {
+      break;
+    }
+
+    await userEvent.tab();
+  }
+
+  await expect(target).toHaveFocus();
+};
+
 const WorkspaceStoryHarness = ({
   highlightedMailboxId: initialHighlightedMailboxId = null,
   initialCreateError = null,
@@ -712,9 +727,63 @@ export const SearchEmptyState: Story = {
 };
 
 export const HighlightedNewMailbox: Story = {
+  globals: projectViewportGlobals.desktop,
   args: {
     createMailboxAction: buildCreateMailboxAction(),
     highlightedMailboxId: "mbx_beta",
+  },
+};
+
+export const FocusedMailboxRow: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const mailboxRow = canvas.getByRole("button", {
+      name: /build@alpha\.relay\.example\.test/i,
+    });
+
+    await focusMailboxByTab(canvasElement, mailboxRow);
+  },
+};
+
+export const FocusedAllMailboxRow: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const mailboxRow = canvas.getByRole("button", {
+      name: /全部邮箱/i,
+    });
+
+    await focusMailboxByTab(canvasElement, mailboxRow);
+  },
+};
+
+export const FocusedMessageRow: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const messageRow = canvas.getByRole("button", {
+      name: /Spec review notes/i,
+    });
+
+    await focusMailboxByTab(canvasElement, messageRow);
+  },
+};
+
+export const HighlightedNewMailboxFocused: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    createMailboxAction: buildCreateMailboxAction(),
+    highlightedMailboxId: "mbx_beta",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const highlightedRow = canvas.getByRole("button", {
+      name: /spec@ops\.beta\.mail\.example\.net/i,
+    });
+
+    await focusMailboxByTab(canvasElement, highlightedRow);
+    await expect(within(highlightedRow).getByText("新建")).toBeInTheDocument();
   },
 };
 

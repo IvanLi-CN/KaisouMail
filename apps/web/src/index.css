@@ -48,6 +48,92 @@ body {
   min-height: 100vh;
 }
 
+.focus\:ring-primary\/20:focus {
+  --tw-ring-color: hsl(var(--primary) / 0.2);
+}
+
+.focus-visible\:ring-ring:focus-visible {
+  --tw-ring-color: hsl(var(--ring) / 0.34);
+}
+
+.ring-offset-background {
+  --tw-ring-offset-color: hsl(var(--background));
+}
+
+.workspace-mailbox-item {
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.1);
+}
+
+.workspace-mailbox-item:hover:not(:disabled) {
+  background: hsl(var(--foreground) / 0.05);
+}
+
+.workspace-mailbox-item[data-active="true"] {
+  border-color: hsl(var(--primary) / 0.34);
+  background: hsl(var(--primary) / 0.1);
+}
+
+.workspace-mailbox-item[data-highlighted="true"] {
+  border-color: hsl(var(--primary) / 0.58);
+  background: linear-gradient(
+    180deg,
+    hsl(var(--primary) / 0.18),
+    hsl(var(--primary) / 0.12)
+  );
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
+.workspace-mailbox-item[data-active="true"][data-highlighted="true"] {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--primary) / 0.2),
+    hsl(var(--primary) / 0.14)
+  );
+}
+
+.workspace-mailbox-item:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.56);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
+}
+
+.workspace-mailbox-item[data-highlighted="true"]:focus-visible {
+  box-shadow:
+    0 0 0 2px hsl(var(--ring) / 0.34),
+    inset 0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
+.workspace-mailbox-item[data-active="true"]:not(
+    [data-highlighted="true"]
+  ):focus-visible {
+  background: hsl(var(--primary) / 0.12);
+}
+
+.workspace-message-item {
+  border-color: hsl(var(--border));
+  background: hsl(var(--muted) / 0.1);
+}
+
+.workspace-message-item:hover:not(:disabled) {
+  background: hsl(var(--foreground) / 0.05);
+}
+
+.workspace-message-item[data-active="true"] {
+  border-color: hsl(var(--primary) / 0.34);
+  background: hsl(var(--primary) / 0.1);
+}
+
+.workspace-message-item:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.56);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
+}
+
+.workspace-message-item[data-active="true"]:focus-visible {
+  background: hsl(var(--primary) / 0.12);
+}
+
 .sbdocs,
 .sbdocs-wrapper,
 .sbdocs-content,
