@@ -213,7 +213,7 @@ describe("api key integration docs", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "身份认证" })).toHaveClass(
-      "bg-secondary",
+      "bg-secondary/90",
     );
     expect(screen.getByText("Session Auth")).toBeInTheDocument();
     expect(screen.getByText("/api/api-keys/:id/revoke")).toBeInTheDocument();

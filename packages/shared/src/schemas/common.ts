@@ -16,6 +16,7 @@ export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
 export const domainStatusSchema = z.enum(domainStatuses);
 export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
+export const domainBindingSourceSchema = z.enum(domainBindingSources);
 export const domainCatalogAvailabilitySchema = z.enum(
   domainCatalogAvailabilities,
 );

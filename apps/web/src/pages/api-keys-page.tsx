@@ -10,6 +10,10 @@ import {
   isIdentityAuthTab,
 } from "@/components/identity/identity-auth-tabs";
 import { PasskeyTable } from "@/components/passkeys/passkey-table";
+import {
+  ErrorState,
+  type ErrorStateVariant,
+} from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -24,6 +28,7 @@ import {
   usePasskeysQuery,
   useRevokePasskeyMutation,
 } from "@/hooks/use-passkeys";
+import { getErrorDetails } from "@/lib/error-utils";
 import { getPasskeyErrorMessage } from "@/lib/passkeys";
 import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 
@@ -110,12 +115,34 @@ export const ApiKeysPageView = ({
 
           <div className="mt-4 rounded-[28px] border border-white/8 bg-background/40 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-5">
             <TabsContent value="api-keys" className="mt-0">
-              <ApiKeyTable
-                apiKeys={apiKeys}
-                latestSecret={latestSecret}
-                onCreate={onCreate}
-                onRevoke={onRevoke}
-              />
+              {error ? (
+                <ErrorState
+                  variant={error.variant}
+                  title={error.title}
+                  description={error.description}
+                  details={error.details}
+                  primaryAction={
+                    onRetry ? (
+                      <Button onClick={onRetry}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        重新加载 API Keys
+                      </Button>
+                    ) : undefined
+                  }
+                  secondaryAction={
+                    <Button asChild variant="outline">
+                      <Link to={appRoutes.apiKeysDocs}>查看对接文档</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <ApiKeyTable
+                  apiKeys={apiKeys}
+                  latestSecret={latestSecret}
+                  onCreate={onCreate}
+                  onRevoke={onRevoke}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="passkey" className="mt-0">
