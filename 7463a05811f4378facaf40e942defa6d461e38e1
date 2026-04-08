@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.18.0",
+  "base_stable_version": "0.17.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-08T15:49:51Z",
+  "next_stable_version": "0.18.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "307c3d99711369eebe075c8d3e168b40fc55a5e9",
+  "pr_number": 32,
+  "pr_title": "feat(mailboxes): support full mailbox address input",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.18.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.18.0",
+  "target_sha": "7463a05811f4378facaf40e942defa6d461e38e1",
+  "type_label": "type:minor"
+}
