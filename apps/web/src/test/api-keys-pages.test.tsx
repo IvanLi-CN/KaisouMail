@@ -330,9 +330,9 @@ describe("api key integration docs", () => {
     expect(passkeysHookState.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the passkey tab disabled instead of showing a fetch error when backend capability is off", async () => {
-    passkeysHookState.data = undefined;
-    passkeysHookState.error = new Error("Passkey backend offline");
+  it("keeps existing passkeys visible when backend capability is off", async () => {
+    passkeysHookState.data = [demoPasskeys[0]];
+    passkeysHookState.error = null;
     passkeySupportState.backendConfigured = false;
     passkeySupportState.buttonLabel = "当前环境未启用 Passkey";
     passkeySupportState.managementMessage =
@@ -363,15 +363,17 @@ describe("api key integration docs", () => {
     );
 
     expect(
-      screen.queryByRole("heading", {
-        name: "Passkeys 暂时加载失败",
+      await screen.findByRole("heading", {
+        name: "已注册 Passkeys",
         level: 2,
       }),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
+    expect(screen.getByText("MacBook Pro")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "注册当前设备" })).toBeDisabled();
     expect(
-      await screen.findAllByText(
+      await screen.findByText(
         "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
       ),
-    ).toHaveLength(2);
+    ).toBeInTheDocument();
   });
 });

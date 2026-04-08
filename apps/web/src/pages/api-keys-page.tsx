@@ -188,7 +188,7 @@ export const ApiKeysPageView = ({
 export const ApiKeysPage = () => {
   const apiKeysQuery = useApiKeysQuery();
   const passkeySupport = usePasskeySupport();
-  const passkeysQuery = usePasskeysQuery(passkeySupport.backendConfigured);
+  const passkeysQuery = usePasskeysQuery();
   const createApiKeyMutation = useCreateApiKeyMutation();
   const revokeApiKeyMutation = useRevokeApiKeyMutation();
   const createPasskeyMutation = useCreatePasskeyMutation();
@@ -247,9 +247,7 @@ export const ApiKeysPage = () => {
           : null
       }
       passkeyLoadError={
-        passkeySupport.backendConfigured &&
-        passkeysQuery.error &&
-        !hasPasskeysData
+        passkeysQuery.error && !hasPasskeysData
           ? {
               variant: "recoverable",
               title: "Passkeys 暂时加载失败",
@@ -262,9 +260,7 @@ export const ApiKeysPage = () => {
         void apiKeysQuery.refetch();
       }}
       onRetryPasskeys={() => {
-        if (passkeySupport.backendConfigured) {
-          void passkeysQuery.refetch();
-        }
+        void passkeysQuery.refetch();
       }}
       onActiveTabChange={(tab) => {
         setSearchParams((current) => {
