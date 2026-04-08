@@ -3,30 +3,19 @@ import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type UserConfig } from "vite";
 
-const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
-
-export const DEFAULT_LOCAL_API_PROXY_TARGET = "http://127.0.0.1:8787";
-
-export const resolveApiProxyTarget = (value: string | undefined) => {
-  const configuredValue = value?.trim();
-  return configuredValue
-    ? trimTrailingSlash(configuredValue)
-    : DEFAULT_LOCAL_API_PROXY_TARGET;
-};
+import {
+  createApiProxy,
+  resolveApiProxyTarget,
+} from "./src/lib/vite-proxy";
 
 export const createWebViteConfig = ({
   port = Number(process.env.PORT ?? 4173),
-  apiProxyTarget = DEFAULT_LOCAL_API_PROXY_TARGET,
+  apiProxyTarget,
 }: {
   port?: number;
-  apiProxyTarget?: string;
-} = {}): UserConfig => {
-  const proxy = {
-    "/api": {
-      target: apiProxyTarget,
-      changeOrigin: true,
-    },
-  };
+  apiProxyTarget: string;
+}): UserConfig => {
+  const proxy = createApiProxy(apiProxyTarget);
 
   return {
     plugins: [react()],

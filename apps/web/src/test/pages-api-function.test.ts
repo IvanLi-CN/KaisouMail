@@ -54,22 +54,20 @@ describe("Pages same-origin API proxy", () => {
       request: new Request("https://cfm.707979.xyz/api/messages/msg/raw"),
       env: {
         API: {
-          fetch: vi.fn(async () =>
-            new Response(bytes, {
-              headers: {
-                "content-type": "application/octet-stream",
-              },
-            }),
+          fetch: vi.fn(
+            async () =>
+              new Response(bytes, {
+                headers: {
+                  "content-type": "application/octet-stream",
+                },
+              }),
           ),
         },
       },
     });
 
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([
-      1,
-      2,
-      3,
-      4,
+      1, 2, 3, 4,
     ]);
     expect(response.headers.get("content-type")).toBe(
       "application/octet-stream",

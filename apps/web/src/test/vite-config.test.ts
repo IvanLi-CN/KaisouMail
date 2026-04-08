@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createWebViteConfig,
+  createApiProxy,
   DEFAULT_LOCAL_API_PROXY_TARGET,
   resolveApiProxyTarget,
-} from "../../vite.config";
+} from "@/lib/vite-proxy";
 
 describe("web vite config", () => {
   it("normalizes an explicit API proxy target", () => {
@@ -18,19 +18,9 @@ describe("web vite config", () => {
   });
 
   it("proxies same-origin /api requests in dev and preview", () => {
-    const config = createWebViteConfig({
-      port: 4200,
-      apiProxyTarget: "http://127.0.0.1:8788",
-    });
+    const proxy = createApiProxy("http://127.0.0.1:8788");
 
-    const serverProxy = (
-      config.server as { proxy: Record<string, { target: string }> }
-    ).proxy["/api"];
-    const previewProxy = (
-      config.preview as { proxy: Record<string, { target: string }> }
-    ).proxy["/api"];
-
-    expect(serverProxy.target).toBe("http://127.0.0.1:8788");
-    expect(previewProxy.target).toBe("http://127.0.0.1:8788");
+    expect(proxy["/api"]?.target).toBe("http://127.0.0.1:8788");
+    expect(proxy["/api"]?.changeOrigin).toBe(true);
   });
 });
