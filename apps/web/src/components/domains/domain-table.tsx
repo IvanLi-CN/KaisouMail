@@ -216,7 +216,10 @@ export const DomainTable = ({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-2">
+                    <div
+                      className="flex flex-wrap gap-2"
+                      data-testid={`cloudflare-status-group-${domain.rootDomain}`}
+                    >
                       <Badge
                         className={cn(
                           "border",
