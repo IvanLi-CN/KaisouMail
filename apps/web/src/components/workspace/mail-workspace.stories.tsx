@@ -21,6 +21,12 @@ import {
 import { projectViewportGlobals } from "@/storybook/viewports";
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
+const demoSelectedMailbox = demoMailboxes[1] ?? demoMailboxes[0];
+const demoSelectedMailboxMessages = demoMessages.filter(
+  (message) => message.mailboxId === demoSelectedMailbox?.id,
+);
+const demoSelectedMailboxDetail =
+  demoDetailMap.msg_beta ?? demoMessageDetails.msg_alpha;
 
 const buildMailboxMessageCounts = (
   mailboxes: Mailbox[],
@@ -706,6 +712,48 @@ export const DesktopThreePane: Story = {
       canvas.getByRole("button", { name: /Spec review notes/i }),
     );
     await expect(args.onSelectMessage).toHaveBeenCalledWith("msg_beta");
+  },
+};
+
+export const DesktopSelectedMailboxAddress: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    selectedMailboxId: demoSelectedMailbox?.id ?? "all",
+    selectedMailbox: demoSelectedMailbox ?? null,
+    messages: demoSelectedMailboxMessages,
+    selectedMessageId: demoSelectedMailboxDetail.id,
+    selectedMessage: demoSelectedMailboxDetail,
+    totalMessageCount: demoSelectedMailboxMessages.length,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const writeText = fn(async () => undefined);
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    const addressInput = canvas.getByRole("textbox", {
+      name: "当前邮箱地址",
+    }) as HTMLInputElement;
+
+    await expect(addressInput).toHaveValue(
+      demoSelectedMailbox?.address ?? "spec@ops.beta.mail.example.net",
+    );
+    await expect(addressInput).toHaveAttribute("readonly");
+
+    await userEvent.click(addressInput);
+    await waitFor(() => {
+      expect(addressInput.selectionStart).toBe(0);
+      expect(addressInput.selectionEnd).toBe(addressInput.value.length);
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "复制邮箱地址" }));
+    await expect(writeText).toHaveBeenCalledWith(addressInput.value);
+    await expect(canvas.getByText("邮箱地址已复制")).toBeInTheDocument();
   },
 };
 

@@ -1,6 +1,8 @@
 import {
   ArrowDownUp,
+  Check,
   CircleHelp,
+  Copy,
   Inbox,
   ListTree,
   MailOpen,
@@ -8,7 +10,14 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import {
+  type FocusEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
@@ -105,6 +114,8 @@ type MailWorkspaceProps = {
   onSelectMessage: (messageId: string) => void;
 };
 
+type MailboxAddressCopyState = "idle" | "success" | "error";
+
 export const MailWorkspace = ({
   createMailboxAction,
   mailboxesError = null,
@@ -139,6 +150,14 @@ export const MailWorkspace = ({
   const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
     mode: "segmented",
   });
+  const [mailboxAddressCopyState, setMailboxAddressCopyState] = useState<{
+    address: string | null;
+    state: MailboxAddressCopyState;
+  }>({
+    address: null,
+    state: "idle",
+  });
+  const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
@@ -147,6 +166,62 @@ export const MailWorkspace = ({
   const selectedMessageIndex = messages.findIndex(
     (message) => message.id === selectedMessageId,
   );
+  const resolvedMailboxAddressCopyState =
+    mailboxAddressCopyState.address === selectedMailbox?.address
+      ? mailboxAddressCopyState.state
+      : "idle";
+
+  useEffect(
+    () => () => {
+      if (mailboxAddressCopyResetRef.current !== null) {
+        window.clearTimeout(mailboxAddressCopyResetRef.current);
+      }
+    },
+    [],
+  );
+
+  const scheduleMailboxAddressCopyStateReset = () => {
+    if (mailboxAddressCopyResetRef.current !== null) {
+      window.clearTimeout(mailboxAddressCopyResetRef.current);
+    }
+
+    mailboxAddressCopyResetRef.current = window.setTimeout(() => {
+      setMailboxAddressCopyState({
+        address: null,
+        state: "idle",
+      });
+      mailboxAddressCopyResetRef.current = null;
+    }, 2000);
+  };
+
+  const handleMailboxAddressFocus = (event: FocusEvent<HTMLInputElement>) => {
+    event.currentTarget.select();
+  };
+
+  const handleMailboxAddressClick = (event: MouseEvent<HTMLInputElement>) => {
+    event.currentTarget.select();
+  };
+
+  const handleCopyMailboxAddress = async () => {
+    if (!selectedMailbox?.address) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(selectedMailbox.address);
+      setMailboxAddressCopyState({
+        address: selectedMailbox.address,
+        state: "success",
+      });
+    } catch {
+      setMailboxAddressCopyState({
+        address: selectedMailbox.address,
+        state: "error",
+      });
+    }
+
+    scheduleMailboxAddressCopyStateReset();
+  };
 
   const renderMailboxError = () => (
     <ErrorState
@@ -570,14 +645,82 @@ export const MailWorkspace = ({
         <section aria-label="邮件列表" className="min-w-0 xl:min-h-0">
           <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
             <div className="space-y-2 border-b border-border px-4 py-4">
-              <p className="text-sm font-semibold text-foreground">
-                {selectedMailbox
-                  ? `${selectedMailbox.address} 的邮件`
-                  : "全部邮箱邮件"}
-              </p>
+              {selectedMailbox ? (
+                <div className="space-y-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <label
+                      className="sr-only"
+                      htmlFor="workspace-selected-mailbox-address"
+                    >
+                      当前邮箱地址
+                    </label>
+                    <Input
+                      id="workspace-selected-mailbox-address"
+                      readOnly
+                      aria-label="当前邮箱地址"
+                      className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-semibold text-foreground shadow-none focus:border-transparent focus:ring-0 focus:ring-transparent"
+                      value={selectedMailbox.address}
+                      onClick={handleMailboxAddressClick}
+                      onFocus={handleMailboxAddressFocus}
+                    />
+                    <ActionButton
+                      density="dense"
+                      forceIconOnly
+                      icon={
+                        resolvedMailboxAddressCopyState === "success"
+                          ? Check
+                          : Copy
+                      }
+                      label={
+                        resolvedMailboxAddressCopyState === "success"
+                          ? "已复制邮箱地址"
+                          : "复制邮箱地址"
+                      }
+                      priority="secondary"
+                      size="sm"
+                      tooltip={
+                        resolvedMailboxAddressCopyState === "success"
+                          ? "已复制邮箱地址"
+                          : "复制邮箱地址"
+                      }
+                      variant="outline"
+                      onClick={handleCopyMailboxAddress}
+                    />
+                    <span className="text-sm font-semibold text-foreground">
+                      的邮件
+                    </span>
+                  </div>
+                  <div className="flex min-h-5 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      切换左栏地址后，中栏会自动聚合该邮箱的邮件流。
+                    </p>
+                    <p
+                      aria-live="polite"
+                      className={cn(
+                        "min-h-4 text-xs transition-colors",
+                        resolvedMailboxAddressCopyState === "success"
+                          ? "text-primary"
+                          : resolvedMailboxAddressCopyState === "error"
+                            ? "text-destructive"
+                            : "text-transparent",
+                      )}
+                    >
+                      {resolvedMailboxAddressCopyState === "success"
+                        ? "邮箱地址已复制"
+                        : resolvedMailboxAddressCopyState === "error"
+                          ? "复制失败，请手动复制"
+                          : ""}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-foreground">
+                  全部邮箱邮件
+                </p>
+              )}
               <p className="text-xs leading-5 text-muted-foreground">
                 {selectedMailbox
-                  ? "切换左栏地址后，中栏会自动聚合该邮箱的邮件流。"
+                  ? "需要时可直接聚焦地址输入框或点击复制按钮，快速分享当前邮箱。"
                   : "默认聚合所有邮箱的收件流，方便按主题与发件人快速巡检。"}
               </p>
             </div>

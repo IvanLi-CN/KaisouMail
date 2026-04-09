@@ -314,6 +314,135 @@ describe("MailWorkspace", () => {
     );
   });
 
+  it("renders the selected mailbox as a readonly input and auto-selects the address on focus", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    const addressInput = screen.getByRole("textbox", {
+      name: "当前邮箱地址",
+    }) as HTMLInputElement;
+
+    expect(addressInput).toHaveValue("spec@ops.beta.mail.example.net");
+    expect(addressInput).toHaveAttribute("readonly");
+    expect(
+      screen.getByRole("button", { name: "复制邮箱地址" }),
+    ).toBeInTheDocument();
+
+    fireEvent.focus(addressInput);
+
+    expect(addressInput.selectionStart).toBe(0);
+    expect(addressInput.selectionEnd).toBe(addressInput.value.length);
+  });
+
+  it("keeps the aggregate workspace title when all mailboxes are selected", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("textbox", { name: "当前邮箱地址" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("全部邮箱邮件")).toBeInTheDocument();
+  });
+
+  it("copies the selected mailbox address and shows success feedback", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制邮箱地址" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
+      expect(screen.getByText("邮箱地址已复制")).toBeInTheDocument();
+    });
+  });
+
+  it("shows non-blocking feedback when clipboard copy fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard denied"));
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制邮箱地址" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
+      expect(screen.getByText("复制失败，请手动复制")).toBeInTheDocument();
+    });
+  });
+
   it("submits normalized full addresses from the create popover", () => {
     const onSubmit = vi.fn();
 
