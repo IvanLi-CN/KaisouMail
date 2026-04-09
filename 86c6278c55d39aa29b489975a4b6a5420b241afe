@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.18.2",
+  "base_stable_version": "0.18.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-09T03:33:30Z",
+  "next_stable_version": "0.18.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "3470eee8c03ec3506bab2539bf37fcc0e77e5d7f",
+  "pr_number": 34,
+  "pr_title": "fix: inject Cloudflare account ID into API worker runtime",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.18.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.18.2",
+  "target_sha": "86c6278c55d39aa29b489975a4b6a5420b241afe",
+  "type_label": "type:patch"
+}
