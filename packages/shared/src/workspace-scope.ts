@@ -37,9 +37,8 @@ export const filterMailboxesForWorkspaceScope = <
     )
     .slice(0, workspaceDestroyedMailboxMaxVisible);
 
-  return mailboxes.filter(
-    (mailbox) =>
-      mailbox.status !== "destroyed" ||
-      visibleDestroyedMailboxes.includes(mailbox),
-  );
+  return [
+    ...mailboxes.filter((mailbox) => mailbox.status !== "destroyed"),
+    ...visibleDestroyedMailboxes,
+  ];
 };

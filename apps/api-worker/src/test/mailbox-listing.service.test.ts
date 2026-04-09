@@ -90,6 +90,13 @@ describe("mailbox listing helpers", () => {
     expect(
       visible.some((row: (typeof rows)[number]) => row.id === "mbx_010"),
     ).toBe(false);
+    expect(
+      visible
+        .filter((row: (typeof rows)[number]) => row.status === "destroyed")
+        .map((row: (typeof rows)[number]) => row.id)
+        .slice(0, 3),
+    ).toEqual(["mbx_064", "mbx_063", "mbx_062"]);
+    expect(visible.at(-1)?.id).toBe("mbx_015");
   });
 
   it("loads mailbox recency in batches of 50 ids", async () => {
@@ -141,5 +148,42 @@ describe("mailbox listing helpers", () => {
     expect(listed).toHaveLength(70);
     expect(listed[0]?.lastReceivedAt).toBe("2026-04-08T11:58:00.000Z");
     expect(listed[60]?.lastReceivedAt).toBe("2026-04-08T11:59:00.000Z");
+  });
+
+  it("does not hydrate lastReceivedAt for destroying mailboxes", async () => {
+    const rows = [buildMailbox(1, { status: "destroying" })];
+    const orderBy = vi.fn();
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              orderBy: vi.fn(async () => rows),
+              where: vi.fn(() => ({
+                orderBy: vi.fn(async () => rows),
+                limit: vi.fn(async () => rows),
+              })),
+            };
+          }
+
+          if (table === messages) {
+            return {
+              where: vi.fn(() => ({
+                orderBy,
+              })),
+            };
+          }
+
+          throw new Error("Unexpected table");
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+
+    const [listed] = await listMailboxesForUser({} as never, adminUser);
+
+    expect(orderBy).not.toHaveBeenCalled();
+    expect(listed?.status).toBe("destroying");
+    expect(listed?.lastReceivedAt).toBeNull();
   });
 });

@@ -370,7 +370,9 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
   const recentMap = new Map<string, string | null>(
     hydratedRows.map((row) => [row.id, null]),
   );
-  const mailboxIds = hydratedRows.map((row) => row.id);
+  const mailboxIds = hydratedRows
+    .filter((row) => row.status !== "destroying")
+    .map((row) => row.id);
 
   for (const mailboxIdChunk of chunkD1InValues(mailboxIds)) {
     const recentRows = await db
@@ -422,12 +424,15 @@ export const getMailboxForUser = async (
   }
 
   const [hydrated] = await attachRootDomains(env, [row]);
-  const recentRows = await db
-    .select({ receivedAt: messages.receivedAt })
-    .from(messages)
-    .where(eq(messages.mailboxId, row.id))
-    .orderBy(desc(messages.receivedAt))
-    .limit(1);
+  const recentRows =
+    row.status === "destroying"
+      ? []
+      : await db
+          .select({ receivedAt: messages.receivedAt })
+          .from(messages)
+          .where(eq(messages.mailboxId, row.id))
+          .orderBy(desc(messages.receivedAt))
+          .limit(1);
 
   return toMailboxDto(hydrated, recentRows[0]?.receivedAt ?? null);
 };
