@@ -87,27 +87,25 @@ export const listMessagesForUser = async (
       mailboxAddresses.map((address) => normalizeMailboxAddress(address)),
     ),
   ];
-  const scopedMailboxAddresses =
+  const scopedMailboxRows =
     scope === "workspace"
-      ? [
-          ...new Set(
-            (await listScopedMailboxRowsForUser(env, user, "workspace")).map(
-              (mailbox) => mailbox.address,
-            ),
-          ),
-        ]
+      ? await listScopedMailboxRowsForUser(env, user, "workspace")
       : null;
-  const candidateMailboxAddresses =
-    scopedMailboxAddresses === null
-      ? normalizedMailboxAddresses
+  const candidateMailboxIds =
+    scopedMailboxRows === null
+      ? []
       : normalizedMailboxAddresses.length > 0
-        ? normalizedMailboxAddresses.filter((address) =>
-            scopedMailboxAddresses.includes(address),
-          )
-        : scopedMailboxAddresses;
+        ? scopedMailboxRows
+            .filter((mailbox) =>
+              normalizedMailboxAddresses.includes(mailbox.address),
+            )
+            .map((mailbox) => mailbox.id)
+        : scopedMailboxRows.map((mailbox) => mailbox.id);
   if (
     (normalizedMailboxAddresses.length > 0 || scope === "workspace") &&
-    candidateMailboxAddresses.length === 0
+    (scope === "workspace"
+      ? candidateMailboxIds.length === 0
+      : normalizedMailboxAddresses.length === 0)
   ) {
     return [];
   }
@@ -120,21 +118,17 @@ export const listMessagesForUser = async (
   }
 
   const rows =
-    candidateMailboxAddresses.length > 0
+    scope === "workspace" && candidateMailboxIds.length > 0
       ? (
           await Promise.all(
-            chunkD1InValues(candidateMailboxAddresses).map(
-              (mailboxAddressChunk) =>
-                db
-                  .select()
-                  .from(messages)
-                  .where(
-                    and(
-                      ...filters,
-                      inArray(messages.mailboxAddress, mailboxAddressChunk),
-                    ),
-                  )
-                  .orderBy(desc(messages.receivedAt)),
+            chunkD1InValues(candidateMailboxIds).map((mailboxIdChunk) =>
+              db
+                .select()
+                .from(messages)
+                .where(
+                  and(...filters, inArray(messages.mailboxId, mailboxIdChunk)),
+                )
+                .orderBy(desc(messages.receivedAt)),
             ),
           )
         )
@@ -142,13 +136,35 @@ export const listMessagesForUser = async (
           .sort((left, right) =>
             right.receivedAt.localeCompare(left.receivedAt),
           )
-      : filters.length > 0
-        ? await db
-            .select()
-            .from(messages)
-            .where(and(...filters))
-            .orderBy(desc(messages.receivedAt))
-        : await db.select().from(messages).orderBy(desc(messages.receivedAt));
+      : normalizedMailboxAddresses.length > 0
+        ? (
+            await Promise.all(
+              chunkD1InValues(normalizedMailboxAddresses).map(
+                (mailboxAddressChunk) =>
+                  db
+                    .select()
+                    .from(messages)
+                    .where(
+                      and(
+                        ...filters,
+                        inArray(messages.mailboxAddress, mailboxAddressChunk),
+                      ),
+                    )
+                    .orderBy(desc(messages.receivedAt)),
+              ),
+            )
+          )
+            .flat()
+            .sort((left, right) =>
+              right.receivedAt.localeCompare(left.receivedAt),
+            )
+        : filters.length > 0
+          ? await db
+              .select()
+              .from(messages)
+              .where(and(...filters))
+              .orderBy(desc(messages.receivedAt))
+          : await db.select().from(messages).orderBy(desc(messages.receivedAt));
   return rows.map(mapSummary);
 };
 
