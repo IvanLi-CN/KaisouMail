@@ -331,7 +331,7 @@ export const demoApi = {
   async listMessages(
     mailboxAddresses: string[],
     input?: { after?: string; since?: string },
-    options?: { scope?: MailboxListScope },
+    options?: { mailboxIds?: string[]; scope?: MailboxListScope },
   ) {
     const receivedAfter = [input?.after, input?.since]
       .map((value) => {
@@ -346,17 +346,22 @@ export const demoApi = {
       options?.scope === "workspace"
         ? filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO)
         : null;
+    const normalizedMailboxIds = [...new Set(options?.mailboxIds ?? [])];
     const normalizedMailboxAddresses = mailboxAddresses.map(normalizeAddress);
     const visibleMailboxIds =
       scopedMailboxes === null
         ? []
-        : normalizedMailboxAddresses.length > 0
+        : normalizedMailboxIds.length > 0
           ? scopedMailboxes
-              .filter((mailbox) =>
-                normalizedMailboxAddresses.includes(mailbox.address),
-              )
+              .filter((mailbox) => normalizedMailboxIds.includes(mailbox.id))
               .map((mailbox) => mailbox.id)
-          : scopedMailboxes.map((mailbox) => mailbox.id);
+          : normalizedMailboxAddresses.length > 0
+            ? scopedMailboxes
+                .filter((mailbox) =>
+                  normalizedMailboxAddresses.includes(mailbox.address),
+                )
+                .map((mailbox) => mailbox.id)
+            : scopedMailboxes.map((mailbox) => mailbox.id);
     const visibleMailboxAddresses =
       scopedMailboxes === null
         ? normalizedMailboxAddresses
@@ -374,11 +379,15 @@ export const demoApi = {
               visibleMailboxIds.includes(message.mailboxId),
             )
           : []
-        : visibleMailboxAddresses.length > 0
+        : normalizedMailboxIds.length > 0
           ? state.messages.filter((message) =>
-              visibleMailboxAddresses.includes(message.mailboxAddress),
+              normalizedMailboxIds.includes(message.mailboxId),
             )
-          : state.messages;
+          : visibleMailboxAddresses.length > 0
+            ? state.messages.filter((message) =>
+                visibleMailboxAddresses.includes(message.mailboxAddress),
+              )
+            : state.messages;
     return clone(
       messages
         .filter((message) =>

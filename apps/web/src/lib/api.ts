@@ -251,11 +251,14 @@ export const apiClient = {
   async listMessages(
     mailboxes: string[] = [],
     filters?: { after?: string; since?: string },
-    options?: { scope?: MailboxListScope },
+    options?: { mailboxIds?: string[]; scope?: MailboxListScope },
   ) {
     if (DEMO_MODE) return demoApi.listMessages(mailboxes, filters, options);
     const params = new URLSearchParams();
     for (const mailbox of mailboxes) params.append("mailbox", mailbox);
+    for (const mailboxId of options?.mailboxIds ?? []) {
+      params.append("mailboxId", mailboxId);
+    }
     if (filters?.after) params.set("after", filters.after);
     if (filters?.since) params.set("since", filters.since);
     appendScopeParam(params, options?.scope);

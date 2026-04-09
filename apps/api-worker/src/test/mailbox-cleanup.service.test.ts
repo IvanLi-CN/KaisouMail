@@ -105,7 +105,7 @@ describe("mailbox cleanup service", () => {
       runtimeConfig,
     );
 
-    expect(mailboxIds).toEqual(["mbx_expired", "mbx_destroying"]);
+    expect(mailboxIds).toEqual(["mbx_destroying", "mbx_expired"]);
   });
 
   it("always reserves one cleanup slot for destroying mailboxes", async () => {
@@ -142,9 +142,9 @@ describe("mailbox cleanup service", () => {
     );
 
     expect(mailboxIds).toEqual([
+      "mbx_destroying",
       "mbx_expired_1",
       "mbx_expired_2",
-      "mbx_destroying",
     ]);
   });
 

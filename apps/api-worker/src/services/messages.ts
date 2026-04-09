@@ -121,10 +121,12 @@ export const listMessagesForUser = async (
   env: WorkerEnv,
   user: AuthUser,
   mailboxAddresses: string[],
+  mailboxIds: string[],
   after?: string | null,
   scope: MailboxListScope = "default",
 ) => {
   const db = getDb(env);
+  const normalizedMailboxIds = [...new Set(mailboxIds)];
   const normalizedMailboxAddresses = [
     ...new Set(
       mailboxAddresses.map((address) => normalizeMailboxAddress(address)),
@@ -137,18 +139,25 @@ export const listMessagesForUser = async (
   const candidateMailboxIds =
     scopedMailboxRows === null
       ? []
-      : normalizedMailboxAddresses.length > 0
+      : normalizedMailboxIds.length > 0
         ? scopedMailboxRows
-            .filter((mailbox) =>
-              normalizedMailboxAddresses.includes(mailbox.address),
-            )
+            .filter((mailbox) => normalizedMailboxIds.includes(mailbox.id))
             .map((mailbox) => mailbox.id)
-        : scopedMailboxRows.map((mailbox) => mailbox.id);
+        : normalizedMailboxAddresses.length > 0
+          ? scopedMailboxRows
+              .filter((mailbox) =>
+                normalizedMailboxAddresses.includes(mailbox.address),
+              )
+              .map((mailbox) => mailbox.id)
+          : scopedMailboxRows.map((mailbox) => mailbox.id);
   if (
-    (normalizedMailboxAddresses.length > 0 || scope === "workspace") &&
+    (normalizedMailboxIds.length > 0 ||
+      normalizedMailboxAddresses.length > 0 ||
+      scope === "workspace") &&
     (scope === "workspace"
       ? candidateMailboxIds.length === 0
-      : normalizedMailboxAddresses.length === 0)
+      : normalizedMailboxIds.length === 0 &&
+        normalizedMailboxAddresses.length === 0)
   ) {
     return [];
   }
@@ -177,16 +186,15 @@ export const listMessagesForUser = async (
           .sort((left, right) =>
             right.receivedAt.localeCompare(left.receivedAt),
           )
-      : normalizedMailboxAddresses.length > 0
+      : normalizedMailboxIds.length > 0
         ? (
             await Promise.all(
-              chunkD1InValues(normalizedMailboxAddresses).map(
-                (mailboxAddressChunk) =>
-                  queryMessageRows(
-                    db,
-                    filters,
-                    inArray(messages.mailboxAddress, mailboxAddressChunk),
-                  ),
+              chunkD1InValues(normalizedMailboxIds).map((mailboxIdChunk) =>
+                queryMessageRows(
+                  db,
+                  filters,
+                  inArray(messages.mailboxId, mailboxIdChunk),
+                ),
               ),
             )
           )
@@ -194,7 +202,24 @@ export const listMessagesForUser = async (
             .sort((left, right) =>
               right.receivedAt.localeCompare(left.receivedAt),
             )
-        : await queryMessageRows(db, filters);
+        : normalizedMailboxAddresses.length > 0
+          ? (
+              await Promise.all(
+                chunkD1InValues(normalizedMailboxAddresses).map(
+                  (mailboxAddressChunk) =>
+                    queryMessageRows(
+                      db,
+                      filters,
+                      inArray(messages.mailboxAddress, mailboxAddressChunk),
+                    ),
+                ),
+              )
+            )
+              .flat()
+              .sort((left, right) =>
+                right.receivedAt.localeCompare(left.receivedAt),
+              )
+          : await queryMessageRows(db, filters);
   return rows.map(mapSummary);
 };
 

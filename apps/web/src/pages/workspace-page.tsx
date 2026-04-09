@@ -125,14 +125,11 @@ export const WorkspacePage = () => {
     }, true);
   }, [selectedMailbox, selectedMailboxId, updateSearchParams]);
 
-  const messagesQuery = useMessagesQuery(
-    selectedMailbox ? [selectedMailbox.address] : [],
-    undefined,
-    {
-      pollingIntervalMs: 15_000,
-      scope: "workspace",
-    },
-  );
+  const messagesQuery = useMessagesQuery([], undefined, {
+    mailboxIds: selectedMailbox ? [selectedMailbox.id] : [],
+    pollingIntervalMs: 15_000,
+    scope: "workspace",
+  });
   const messages = messagesQuery.data ?? [];
   const allMessages = allMessagesQuery.data ?? [];
   const selectedMessageId = searchParams.get("message");
@@ -208,9 +205,10 @@ export const WorkspacePage = () => {
       { queryKey: messageKeys.list([], undefined, "workspace") },
       {
         queryKey: messageKeys.list(
-          selectedMailbox ? [selectedMailbox.address] : [],
+          [],
           undefined,
           "workspace",
+          selectedMailbox ? [selectedMailbox.id] : [],
         ),
       },
       ...(selectedMessageId

@@ -58,6 +58,7 @@ describe("message routes", () => {
       env,
       authUser,
       ["build@alpha.707979.xyz"],
+      [],
       "2026-04-03T12:05:00.000Z",
       "default",
     );
@@ -75,6 +76,7 @@ describe("message routes", () => {
       env,
       authUser,
       [],
+      [],
       "2026-04-03T06:30:00.000Z",
       "default",
     );
@@ -90,6 +92,23 @@ describe("message routes", () => {
       env,
       authUser,
       [],
+      [],
+      null,
+      "workspace",
+    );
+  });
+
+  it("passes mailboxId filters through to the service", async () => {
+    await messageRoutes.fetch(
+      new Request("http://localhost/?mailboxId=mbx_alpha&scope=workspace"),
+      env,
+    );
+
+    expect(listMessagesForUser).toHaveBeenCalledWith(
+      env,
+      authUser,
+      [],
+      ["mbx_alpha"],
       null,
       "workspace",
     );

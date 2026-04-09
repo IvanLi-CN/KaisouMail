@@ -9,6 +9,7 @@ type MessageQueryFilters = { after?: string; since?: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
 type MessageQueryOptions = {
   enabled?: boolean;
+  mailboxIds?: string[];
   pollingIntervalMs?: number;
   scope?: MailboxListScope;
 };
@@ -19,11 +20,13 @@ export const messageKeys = {
     mailboxes: string[] = [],
     filters?: MessageQueryFilters,
     scope: MailboxListScope = "default",
+    mailboxIds: string[] = [],
   ) =>
     [
       "messages",
       {
         mailboxes,
+        mailboxIds,
         after: filters?.after ?? null,
         since: filters?.since ?? null,
         scope,
@@ -40,9 +43,17 @@ export const useMessagesQuery = (
   const { isDocumentVisible, isOnline } = usePageActivity();
 
   return useQuery({
-    queryKey: messageKeys.list(mailboxes, filters, options?.scope),
+    queryKey: messageKeys.list(
+      mailboxes,
+      filters,
+      options?.scope,
+      options?.mailboxIds,
+    ),
     queryFn: () =>
-      apiClient.listMessages(mailboxes, filters, { scope: options?.scope }),
+      apiClient.listMessages(mailboxes, filters, {
+        scope: options?.scope,
+        mailboxIds: options?.mailboxIds,
+      }),
     enabled: options?.enabled ?? true,
     refetchInterval: resolveAutoRefreshInterval({
       requestedIntervalMs: options?.pollingIntervalMs,

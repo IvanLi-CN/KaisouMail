@@ -809,7 +809,7 @@ export const listMailboxIdsPendingCleanup = async (
     Math.max(config.CLEANUP_BATCH_SIZE - activeRows.length, 0),
   );
 
-  return [...activeRows, ...additionalDestroyingRows]
+  return [...additionalDestroyingRows, ...activeRows]
     .filter((row) => row.id && row.id.length > 0)
     .map((row) => row.id);
 };

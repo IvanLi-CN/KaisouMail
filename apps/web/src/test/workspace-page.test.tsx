@@ -38,6 +38,7 @@ const workspacePropsState = {
   visibleMailboxAddresses: [] as string[],
   mailboxScope: null as string | null,
   allMessagesScope: null as string | null,
+  selectedMailboxIds: [] as string[],
   selectedMessagesScope: null as string | null,
 };
 const localStorageState = {
@@ -101,18 +102,31 @@ vi.mock("@/hooks/use-mailboxes", () => ({
 
 vi.mock("@/hooks/use-messages", () => ({
   messageKeys: {
-    list: (mailboxes: string[] = [], _filters?: unknown, scope = "default") => [
-      "messages",
-      mailboxes,
-      scope,
-    ],
+    list: (
+      mailboxes: string[] = [],
+      _filters?: unknown,
+      scope = "default",
+      mailboxIds: string[] = [],
+    ) => ["messages", mailboxes, scope, mailboxIds],
     detail: (messageId: string) => ["message", messageId],
   },
   useMessagesQuery: (
     mailboxes: string[] = [],
     _filters?: unknown,
-    options?: { scope?: string },
+    options?: { mailboxIds?: string[]; scope?: string },
   ) => {
+    if ((options?.mailboxIds?.length ?? 0) > 0) {
+      workspacePropsState.selectedMessagesScope = options?.scope ?? "default";
+      workspacePropsState.selectedMailboxIds = options?.mailboxIds ?? [];
+      return {
+        data: workspacePageState.mailboxMessages,
+        error: workspacePageState.mailboxMessagesError,
+        isLoading: false,
+        isFetching: false,
+        dataUpdatedAt: 1_713_526_800_000,
+      };
+    }
+
     if (mailboxes.length === 0) {
       workspacePropsState.allMessagesScope = options?.scope ?? "default";
       return {
@@ -178,6 +192,7 @@ afterEach(() => {
   workspacePropsState.visibleMailboxAddresses = [];
   workspacePropsState.mailboxScope = null;
   workspacePropsState.allMessagesScope = null;
+  workspacePropsState.selectedMailboxIds = [];
   workspacePropsState.selectedMessagesScope = null;
   localStorageState.getItem = vi.fn(() => null);
   localStorageState.setItem = vi.fn();
@@ -232,5 +247,6 @@ describe("workspace page", () => {
     expect(workspacePropsState.mailboxScope).toBe("workspace");
     expect(workspacePropsState.allMessagesScope).toBe("workspace");
     expect(workspacePropsState.selectedMessagesScope).toBe("workspace");
+    expect(workspacePropsState.selectedMailboxIds).toEqual(["mbx_alpha"]);
   });
 });
