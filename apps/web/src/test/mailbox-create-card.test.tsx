@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MailboxCreateCard } from "@/components/mailboxes/mailbox-create-card";
@@ -23,7 +23,7 @@ describe("MailboxCreateCard", () => {
     expect(screen.getByLabelText("生命周期值")).toBeEnabled();
   });
 
-  it("switches preview copy when full-address mode is selected", () => {
+  it("keeps helper copy out of the default document flow", () => {
     render(
       <MailboxCreateCard
         onSubmit={vi.fn()}
@@ -33,36 +33,27 @@ describe("MailboxCreateCard", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "完整" }));
-
+    expect(screen.queryByText(/默认 .*自动回收/)).not.toBeInTheDocument();
     expect(
-      screen.getByText(/支持直接输入完整邮箱地址，并校验是否属于当前支持域名/),
-    ).toBeInTheDocument();
+      screen.queryByText(/有限范围 .* 到 .*支持无限/),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText(/只有当前支持域名下的地址才可提交/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("ava-lin@desk.hub.<当前支持的完整邮箱地址>"),
-    ).toBeInTheDocument();
+      screen.queryByText(/双击编辑；支持 m \/ h \/ d \/ w \/ mo/),
+    ).not.toBeInTheDocument();
   });
 
-  it("does not promise random allocation when no active domains are available", () => {
+  it("shows only loading state copy when metadata is still loading", () => {
     render(
       <MailboxCreateCard
         onSubmit={vi.fn()}
-        domains={[]}
+        domains={["relay.example.test"]}
         defaultTtlMinutes={60}
         maxTtlMinutes={1440}
+        isMetaLoading
       />,
     );
 
-    expect(
-      screen.getByText(
-        /当前没有 active 邮箱域名可供分配；启用域名后才能创建邮箱。/,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("ava-lin@desk.hub.<启用后可用的域名>"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("正在读取邮箱规则…")).toBeInTheDocument();
+    expect(screen.queryByText(/默认 .*自动回收/)).not.toBeInTheDocument();
   });
 });

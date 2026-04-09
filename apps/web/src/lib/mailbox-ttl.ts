@@ -1,7 +1,7 @@
 import { maxMailboxTtlMinutes, minMailboxTtlMinutes } from "@kaisoumail/shared";
 
 export const mailboxTtlSliderMax = 1000;
-const mailboxTtlSliderFiniteMax = mailboxTtlSliderMax - 1;
+export const mailboxTtlSliderFiniteMax = mailboxTtlSliderMax - 1;
 const mailboxTtlMinutesPerHour = 60;
 const mailboxTtlMinutesPerDay = 24 * mailboxTtlMinutesPerHour;
 const mailboxTtlMinutesPerWeek = 7 * mailboxTtlMinutesPerDay;

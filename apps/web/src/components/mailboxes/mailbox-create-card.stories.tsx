@@ -40,6 +40,10 @@ export const RandomDefault: Story = {
         }) as HTMLOptionElement
       ).selected,
     ).toBe(true);
+    await expect(canvas.queryByText(/默认 .*自动回收/)).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByText(/双击编辑；支持 m \/ h \/ d \/ w \/ mo/),
+    ).not.toBeInTheDocument();
     await expect(
       canvas.getByText(randomDomainPreviewAddress),
     ).toBeInTheDocument();

@@ -6,6 +6,8 @@ import { Slider } from "@/components/ui/slider";
 import {
   formatMailboxTtl,
   formatMailboxTtlEditorValue,
+  mailboxTtlSliderFiniteMax,
+  mailboxTtlSliderMax,
   mailboxTtlToSliderPosition,
   parseMailboxTtlInputWithOptions,
   resolveMailboxTtlSliderMax,
@@ -61,6 +63,10 @@ export const MailboxTtlControl = ({
     [maxMinutes, minMinutes, supportsUnlimited, value],
   );
   const resolvedError = editError ?? errorMessage;
+  const finiteLabelLeft = useMemo(() => {
+    if (!supportsUnlimited) return "100%";
+    return `${(mailboxTtlSliderFiniteMax / mailboxTtlSliderMax) * 100}%`;
+  }, [supportsUnlimited]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -132,15 +138,26 @@ export const MailboxTtlControl = ({
             onChange(nextTtl);
           }}
         />
-        <div
-          className={cn(
-            "flex text-xs text-muted-foreground",
-            supportsUnlimited ? "justify-between" : "justify-between gap-4",
-          )}
-        >
-          <span>{formatMailboxTtl(minMinutes)}</span>
-          <span>{formatMailboxTtl(maxMinutes)}</span>
-          {supportsUnlimited ? <span>无限</span> : null}
+        <div className="relative h-5 text-xs text-muted-foreground">
+          <span className="absolute left-0 top-0">
+            {formatMailboxTtl(minMinutes)}
+          </span>
+          <span
+            className={cn(
+              "absolute top-0 whitespace-nowrap",
+              supportsUnlimited
+                ? "-translate-x-full pr-12"
+                : "-translate-x-full",
+            )}
+            style={{ left: finiteLabelLeft }}
+          >
+            {formatMailboxTtl(maxMinutes)}
+          </span>
+          {supportsUnlimited ? (
+            <span className="absolute right-0 top-0 whitespace-nowrap">
+              无限
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -182,7 +199,7 @@ export const MailboxTtlControl = ({
               resolvedError ? "border-destructive" : undefined,
             )}
             disabled={disabled}
-            title="双击编辑，未带单位默认按小时解析"
+            title="双击编辑"
             type="button"
             onDoubleClick={beginEditing}
             onKeyDown={(event) => {
@@ -195,10 +212,6 @@ export const MailboxTtlControl = ({
             {displayValue}
           </button>
         )}
-        <p className="text-right text-xs text-muted-foreground">
-          双击编辑；支持 m / h / d / w / mo，未带单位默认按小时
-          {supportsUnlimited ? "，也支持 无限。" : "。"}
-        </p>
       </div>
 
       {resolvedError ? (

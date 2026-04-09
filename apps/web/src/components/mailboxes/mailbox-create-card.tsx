@@ -1,11 +1,5 @@
 import { minMailboxTtlMinutes } from "@kaisoumail/shared";
-import { useState } from "react";
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
-import {
-  buildMailboxCreateAddressExample,
-  buildMailboxCreateDomainHint,
-  type MailboxCreatePreviewState,
-} from "@/components/mailboxes/mailbox-create-preview";
 import {
   Card,
   CardContent,
@@ -13,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatMailboxTtl } from "@/lib/mailbox-ttl";
 
 export const MailboxCreateCard = ({
   onSubmit,
@@ -43,59 +36,19 @@ export const MailboxCreateCard = ({
   metaError?: string | null;
   submitError?: string | null;
 }) => {
-  const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
-    mode: "segmented",
-  });
+  const statusDescription = metaError ? (
+    <span className="text-destructive">邮箱规则加载失败：{metaError}</span>
+  ) : isMetaLoading ? (
+    "正在读取邮箱规则…"
+  ) : null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>创建邮箱</CardTitle>
-        <CardDescription>
-          {metaError ? (
-            <span className="text-destructive">
-              邮箱规则加载失败：{metaError}
-              。仍可继续创建邮箱，但地址示例将暂时隐藏。
-            </span>
-          ) : isMetaLoading ? (
-            "正在读取邮箱规则与默认 TTL…"
-          ) : previewState.mode === "address" ? (
-            "支持直接输入完整邮箱地址，并校验是否属于当前支持域名。"
-          ) : (
-            "随机或指定用户名 / 子域。支持多级子域，例如"
-          )}
-          {!metaError ? (
-            <>
-              {previewState.mode === "segmented" ? (
-                <>
-                  <span className="ml-1 font-medium text-foreground">
-                    alpha
-                  </span>
-                  或
-                  <span className="ml-1 font-medium text-foreground">
-                    ops.alpha
-                  </span>
-                  。
-                </>
-              ) : null}
-              {buildMailboxCreateDomainHint({
-                ...previewState,
-                hasAvailableDomains: domains.length > 0,
-              })}
-              地址示例为
-              <span className="ml-1 font-medium text-foreground">
-                {buildMailboxCreateAddressExample({
-                  ...previewState,
-                  hasAvailableDomains: domains.length > 0,
-                })}
-              </span>
-              ，默认 {formatMailboxTtl(defaultTtlMinutes)}
-              后自动回收，有限生命周期范围为 {formatMailboxTtl(minTtlMinutes)}{" "}
-              到 {formatMailboxTtl(maxTtlMinutes)}
-              {supportsUnlimitedTtl ? "，另支持无限。" : "。"}
-            </>
-          ) : null}
-        </CardDescription>
+        {statusDescription ? (
+          <CardDescription>{statusDescription}</CardDescription>
+        ) : null}
       </CardHeader>
       <CardContent>
         <MailboxCreateForm
@@ -105,7 +58,6 @@ export const MailboxCreateCard = ({
           isPending={isPending}
           maxTtlMinutes={maxTtlMinutes}
           minTtlMinutes={minTtlMinutes}
-          onPreviewChange={setPreviewState}
           supportsUnlimitedTtl={supportsUnlimitedTtl}
           submitError={submitError}
           onSubmit={onSubmit}
