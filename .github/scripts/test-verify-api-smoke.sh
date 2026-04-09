@@ -6,15 +6,29 @@ trap 'rm -rf "${tmp_dir}"' EXIT
 
 health_file="${tmp_dir}/health.json"
 version_file="${tmp_dir}/version.json"
+meta_file="${tmp_dir}/meta.json"
 
 printf '%s\n' '{"ok":true}' > "${health_file}"
 printf '%s\n' '{"commitSha":"abc1234"}' > "${version_file}"
+printf '%s\n' '{"cloudflareDomainLifecycleEnabled":true,"cloudflareDomainBindingEnabled":true}' > "${meta_file}"
 
 HEALTH_CODE=200 \
 VERSION_CODE=200 \
 HEALTH_FILE="${health_file}" \
 VERSION_FILE="${version_file}" \
 EXPECTED_SHA=abc1234 \
+SMOKE_LABEL=Preview \
+node .github/scripts/verify_api_smoke.mjs > /dev/null
+
+HEALTH_CODE=200 \
+VERSION_CODE=200 \
+META_CODE=200 \
+HEALTH_FILE="${health_file}" \
+VERSION_FILE="${version_file}" \
+META_FILE="${meta_file}" \
+EXPECTED_SHA=abc1234 \
+EXPECT_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED=true \
+EXPECT_CLOUDFLARE_DOMAIN_BINDING_ENABLED=true \
 SMOKE_LABEL=Preview \
 node .github/scripts/verify_api_smoke.mjs > /dev/null
 
@@ -36,6 +50,22 @@ if HEALTH_CODE=200 \
   EXPECTED_SHA=abc1234 \
   node .github/scripts/verify_api_smoke.mjs > /dev/null 2>&1; then
   echo "verify_api_smoke should fail on mismatched commit SHA" >&2
+  exit 1
+fi
+
+printf '%s\n' '{"commitSha":"abc1234"}' > "${version_file}"
+printf '%s\n' '{"cloudflareDomainLifecycleEnabled":true,"cloudflareDomainBindingEnabled":false}' > "${meta_file}"
+if HEALTH_CODE=200 \
+  VERSION_CODE=200 \
+  META_CODE=200 \
+  HEALTH_FILE="${health_file}" \
+  VERSION_FILE="${version_file}" \
+  META_FILE="${meta_file}" \
+  EXPECTED_SHA=abc1234 \
+  EXPECT_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED=true \
+  EXPECT_CLOUDFLARE_DOMAIN_BINDING_ENABLED=true \
+  node .github/scripts/verify_api_smoke.mjs > /dev/null 2>&1; then
+  echo "verify_api_smoke should fail on mismatched /api/meta expectations" >&2
   exit 1
 fi
 

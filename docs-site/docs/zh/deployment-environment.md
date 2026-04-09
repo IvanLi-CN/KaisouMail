@@ -28,6 +28,7 @@
 | `DEFAULT_MAILBOX_TTL_MINUTES` | 默认 TTL |
 | `CLEANUP_BATCH_SIZE` | 清理批次大小 |
 | `EMAIL_ROUTING_MANAGEMENT_ENABLED` | 是否允许项目直接改 Cloudflare Email Routing |
+| `CLOUDFLARE_ACCOUNT_ID` | 暴露给 API Worker 运行时的 Cloudflare 账户 ID；`/domains` 直绑新域名必需 |
 | `BOOTSTRAP_ADMIN_EMAIL` | 首个管理员邮箱 |
 | `BOOTSTRAP_ADMIN_NAME` | 首个管理员名称 |
 | `CF_ROUTE_RULESET_TAG` | Worker route 管理标记 |
@@ -53,6 +54,7 @@
 
 如果 `VITE_DOCS_SITE_ORIGIN` 不填，控制台仍能用站内速查页，但不会显示公开站入口。
 `VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式；一方浏览器流量默认统一走同源 `/api`。
+deploy workflow 会先渲染一份生成态的 API Worker 配置，再把 GitHub repository secret `CLOUDFLARE_ACCOUNT_ID` 注入 Worker 运行时变量。只把这个值放进 GitHub Actions job 环境还不够，`/api/meta` 和 `/domains` 的直绑入口不会因此自动开启。
 
 ## Pages 同源 `/api` 代理
 

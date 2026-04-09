@@ -112,6 +112,7 @@ scope 必须覆盖所有要接入、绑定、启用或删除的 KaisouMail zones
 
 Worker 侧重点变量：
 
+- `CLOUDFLARE_ACCOUNT_ID`（运行时变量；`/domains` 直绑新域名必需）
 - `SESSION_SECRET`
 - `BOOTSTRAP_ADMIN_API_KEY`（仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
 - `CLOUDFLARE_API_TOKEN`
@@ -130,6 +131,7 @@ Web 侧重点变量：
 `VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
 一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + `API` Service Binding 转发。这个仓库跟随当前线上配置，把 Pages 项目名固定为 `kaisoumail`，并让代理绑定到现有的 `kaisoumail-api` 服务；对于 `.pages.dev` 预览域名，请求会在代理层直接 fail-closed，避免误打到线上控制面。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
 `VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release；如果变量里有格式错误的域名项，workflow 现在会直接失败而不是静默跳过。
+deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Worker 的运行时配置里；只把它放进 GitHub Actions job 环境是不够的，否则 `/api/meta` 会继续返回 `cloudflareDomainBindingEnabled=false`。
 
 ## 发布工作流门禁
 
@@ -150,7 +152,7 @@ Web 侧重点变量：
 2. 给 Pages 绑定一个或多个控制台域名（例如 `cfm.example.com`、`km.example.com`），同时给 API Worker 绑定对应的 API 自定义域（例如 `api.cfm.example.com`、`api.km.example.com`）
 3. 配置 Worker runtime secret `SESSION_SECRET`；只有在你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 做首次管理员引导时，才再配置 `BOOTSTRAP_ADMIN_API_KEY`
 4. 把 `EMAIL_WORKER_NAME` 指向收信 Worker 脚本
-5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`
+5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`；workflow 会在发布前把 `CLOUDFLARE_ACCOUNT_ID` 注入 API Worker 运行时配置，缺失时直接失败，而不是发布一个直绑入口被隐藏的版本
 6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=<你的 Pages 项目>`、`VITE_API_BASE_URL=<你的 canonical 直连 API 域名，用于 deploy smoke>`、`CF_PAGES_SMOKE_ORIGINS=<逗号分隔的控制台域名列表，用于 Pages 发布后的同源 /api/version smoke>`
 7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源直连 API 配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
 8. 如果是从历史单域实例升级，首次部署时保留 `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID`，让 bootstrap 回填初始 `domains` 记录
