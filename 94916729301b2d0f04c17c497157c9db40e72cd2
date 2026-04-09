@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.18.3",
+  "base_stable_version": "0.18.2",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-09T07:10:35Z",
+  "next_stable_version": "0.18.3",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "281644073b054de99c65c1d109d7e0e15c2c441c",
+  "pr_number": 36,
+  "pr_title": "fix: align domains bind form and status badges",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.18.3",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.18.3",
+  "target_sha": "94916729301b2d0f04c17c497157c9db40e72cd2",
+  "type_label": "type:patch"
+}
