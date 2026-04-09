@@ -16,7 +16,7 @@ import {
 } from "../db/schema";
 import type { WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { chunkD1InValues } from "../lib/d1-batches";
+import { chunkD1InsertValues, chunkD1InValues } from "../lib/d1-batches";
 import {
   extractPreviewText,
   normalizeMailboxAddress,
@@ -336,27 +336,29 @@ export const storeIncomingMessage = async (
     })),
   ];
   if (allRecipients.length > 0) {
-    await db.insert(messageRecipients).values(
-      allRecipients.map((recipient) => ({
-        id: randomId("rcp"),
-        messageId,
-        kind: recipient.kind,
-        name: recipient.name,
-        address: recipient.address,
-      })),
-    );
+    const recipientRows = allRecipients.map((recipient) => ({
+      id: randomId("rcp"),
+      messageId,
+      kind: recipient.kind,
+      name: recipient.name,
+      address: recipient.address,
+    }));
+    for (const recipientChunk of chunkD1InsertValues(recipientRows)) {
+      await db.insert(messageRecipients).values(recipientChunk);
+    }
   }
   if (attachments.length > 0) {
-    await db.insert(messageAttachments).values(
-      attachments.map((attachment) => ({
-        id: attachment.id,
-        messageId,
-        filename: attachment.filename,
-        contentType: attachment.contentType,
-        sizeBytes: attachment.sizeBytes,
-        contentId: attachment.contentId,
-        disposition: attachment.disposition,
-      })),
-    );
+    const attachmentRows = attachments.map((attachment) => ({
+      id: attachment.id,
+      messageId,
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      sizeBytes: attachment.sizeBytes,
+      contentId: attachment.contentId,
+      disposition: attachment.disposition,
+    }));
+    for (const attachmentChunk of chunkD1InsertValues(attachmentRows)) {
+      await db.insert(messageAttachments).values(attachmentChunk);
+    }
   }
 };

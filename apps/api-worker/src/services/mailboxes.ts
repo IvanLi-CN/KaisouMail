@@ -19,7 +19,7 @@ import {
 } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { chunkD1InValues } from "../lib/d1-batches";
+import { chunkD1InsertValues, chunkD1InValues } from "../lib/d1-batches";
 import {
   buildMailboxAddress,
   extractRootDomainFromAddress,
@@ -404,13 +404,21 @@ const restoreDestroyedMessageRows = async (
   },
 ) => {
   if (deletedRows.messages.length > 0) {
-    await db.insert(messages).values(deletedRows.messages);
+    for (const messageChunk of chunkD1InsertValues(deletedRows.messages)) {
+      await db.insert(messages).values(messageChunk);
+    }
   }
   if (deletedRows.recipients.length > 0) {
-    await db.insert(messageRecipients).values(deletedRows.recipients);
+    for (const recipientChunk of chunkD1InsertValues(deletedRows.recipients)) {
+      await db.insert(messageRecipients).values(recipientChunk);
+    }
   }
   if (deletedRows.attachments.length > 0) {
-    await db.insert(messageAttachments).values(deletedRows.attachments);
+    for (const attachmentChunk of chunkD1InsertValues(
+      deletedRows.attachments,
+    )) {
+      await db.insert(messageAttachments).values(attachmentChunk);
+    }
   }
 };
 
@@ -857,13 +865,24 @@ export const listMailboxIdsPendingCleanup = async (
     .where(eq(mailboxes.status, "destroying"))
     .orderBy(mailboxes.createdAt)
     .limit(config.CLEANUP_BATCH_SIZE);
-  const reservedDestroyingCount = destroyingRows.length > 0 ? 1 : 0;
+  const shouldAlternateSingleSlotCleanup =
+    config.CLEANUP_BATCH_SIZE === 1 && destroyingRows.length > 0;
+  const reservedDestroyingCount =
+    destroyingRows.length > 0 && config.CLEANUP_BATCH_SIZE > 1 ? 1 : 0;
   const activeRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
     .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
     .orderBy(mailboxes.expiresAt)
     .limit(Math.max(config.CLEANUP_BATCH_SIZE - reservedDestroyingCount, 0));
+  if (shouldAlternateSingleSlotCleanup && activeRows.length > 0) {
+    const shouldRetryDestroyingFirst =
+      Math.floor(new Date(now).getTime() / (60 * 1000)) % 2 === 0;
+    const selectedRow = shouldRetryDestroyingFirst
+      ? destroyingRows[0]
+      : activeRows[0];
+    return selectedRow?.id ? [selectedRow.id] : [];
+  }
   const additionalDestroyingRows = destroyingRows.slice(
     0,
     Math.max(config.CLEANUP_BATCH_SIZE - activeRows.length, 0),

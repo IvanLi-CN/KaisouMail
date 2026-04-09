@@ -9,10 +9,22 @@ const { deleteRoutingRule } = vi.hoisted(() => ({
 const { resolveMailboxDomain } = vi.hoisted(() => ({
   resolveMailboxDomain: vi.fn(),
 }));
+const { nowIso } = vi.hoisted(() => ({
+  nowIso: vi.fn(() => "2026-04-08T12:00:00.000Z"),
+}));
 
 vi.mock("../db/client", () => ({
   getDb,
 }));
+
+vi.mock("../lib/crypto", async () => {
+  const actual =
+    await vi.importActual<typeof import("../lib/crypto")>("../lib/crypto");
+  return {
+    ...actual,
+    nowIso,
+  };
+});
 
 vi.mock("../services/emailRouting", async () => {
   const actual = await vi.importActual<
@@ -60,6 +72,7 @@ const runtimeConfig = {
 describe("mailbox cleanup service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    nowIso.mockReturnValue("2026-04-08T12:00:00.000Z");
   });
 
   it("retries destroying mailboxes after expired active rows", async () => {
@@ -133,6 +146,54 @@ describe("mailbox cleanup service", () => {
       "mbx_expired_2",
       "mbx_destroying",
     ]);
+  });
+
+  it("alternates single-slot cleanup between expired and destroying mailboxes", async () => {
+    const destroyingQuery = {
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(async () => [{ id: "mbx_destroying" }]),
+          })),
+        })),
+      })),
+    };
+    const activeQuery = {
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(async () => [{ id: "mbx_expired" }]),
+          })),
+        })),
+      })),
+    };
+    const db = {
+      select: vi
+        .fn()
+        .mockReturnValueOnce(destroyingQuery)
+        .mockReturnValueOnce(activeQuery)
+        .mockReturnValueOnce(destroyingQuery)
+        .mockReturnValueOnce(activeQuery),
+    };
+    getDb.mockReturnValue(db);
+
+    nowIso.mockReturnValueOnce("2026-04-08T12:00:00.000Z");
+    const firstBatch = await listMailboxIdsPendingCleanup({} as never, {
+      ...runtimeConfig,
+      CLEANUP_BATCH_SIZE: 1,
+    });
+
+    nowIso.mockReturnValueOnce("2026-04-08T12:01:00.000Z");
+    const secondBatch = await listMailboxIdsPendingCleanup({} as never, {
+      ...runtimeConfig,
+      CLEANUP_BATCH_SIZE: 1,
+    });
+
+    expect(firstBatch).toHaveLength(1);
+    expect(secondBatch).toHaveLength(1);
+    expect(new Set([...firstBatch, ...secondBatch])).toEqual(
+      new Set(["mbx_destroying", "mbx_expired"]),
+    );
   });
 
   it("deletes message rows in 50-id chunks before removing R2 objects and only marks destroyed after bucket cleanup", async () => {
@@ -272,50 +333,49 @@ describe("mailbox cleanup service", () => {
       expiresAt: "2026-04-08T12:00:00.000Z",
       destroyedAt: null,
     };
-    const relatedMessages = [
-      {
-        id: "msg_retry",
-        userId: mailbox.userId,
-        mailboxId: mailbox.id,
-        mailboxAddress: mailbox.address,
-        envelopeFrom: null,
-        envelopeTo: mailbox.address,
-        fromName: null,
-        fromAddress: null,
-        subject: "Retry me",
-        previewText: "Retry me",
-        messageIdHeader: null,
-        dateHeader: null,
-        receivedAt: "2026-04-08T11:00:00.000Z",
-        sizeBytes: 128,
-        attachmentCount: 0,
-        hasHtml: false,
-        parseStatus: "parsed",
-        rawR2Key: "raw/retry.eml",
-        parsedR2Key: "parsed/retry.json",
-      },
-    ];
-    const relatedRecipients = [
-      {
-        id: "rcpt_retry",
-        messageId: "msg_retry",
-        kind: "to",
-        name: null,
-        address: mailbox.address,
-      },
-    ];
-    const relatedAttachments = [
-      {
-        id: "att_retry",
-        messageId: "msg_retry",
-        filename: "retry.txt",
-        contentType: "text/plain",
-        sizeBytes: 8,
-        contentId: null,
-        disposition: "attachment",
-      },
-    ];
+    const relatedMessages = Array.from({ length: 25 }, (_, index) => ({
+      id: `msg_retry_${index.toString().padStart(2, "0")}`,
+      userId: mailbox.userId,
+      mailboxId: mailbox.id,
+      mailboxAddress: mailbox.address,
+      envelopeFrom: null,
+      envelopeTo: mailbox.address,
+      fromName: null,
+      fromAddress: null,
+      subject: `Retry me ${index}`,
+      previewText: `Retry me ${index}`,
+      messageIdHeader: null,
+      dateHeader: null,
+      receivedAt: "2026-04-08T11:00:00.000Z",
+      sizeBytes: 128,
+      attachmentCount: 1,
+      hasHtml: false,
+      parseStatus: "parsed",
+      rawR2Key: `raw/retry-${index}.eml`,
+      parsedR2Key: `parsed/retry-${index}.json`,
+    }));
+    const relatedRecipients = relatedMessages.map((message) => ({
+      id: `rcpt_${message.id}`,
+      messageId: message.id,
+      kind: "to" as const,
+      name: null,
+      address: mailbox.address,
+    }));
+    const relatedAttachments = relatedMessages.map((message) => ({
+      id: `att_${message.id}`,
+      messageId: message.id,
+      filename: "retry.txt",
+      contentType: "text/plain",
+      sizeBytes: 8,
+      contentId: null,
+      disposition: "attachment" as const,
+    }));
     const operationLog: string[] = [];
+    const restoreInsertSizes = {
+      messages: [] as number[],
+      recipients: [] as number[],
+      attachments: [] as number[],
+    };
     const db = {
       select: vi.fn(() => ({
         from: vi.fn((table: unknown) => {
@@ -365,12 +425,20 @@ describe("mailbox cleanup service", () => {
         }),
       })),
       insert: vi.fn((table: unknown) => ({
-        values: vi.fn(async () => {
-          if (table === messages) operationLog.push("restore:messages");
-          if (table === messageRecipients)
+        values: vi.fn(async (rows: unknown | unknown[]) => {
+          const length = Array.isArray(rows) ? rows.length : 1;
+          if (table === messages) {
+            operationLog.push("restore:messages");
+            restoreInsertSizes.messages.push(length);
+          }
+          if (table === messageRecipients) {
             operationLog.push("restore:recipients");
-          if (table === messageAttachments)
+            restoreInsertSizes.recipients.push(length);
+          }
+          if (table === messageAttachments) {
             operationLog.push("restore:attachments");
+            restoreInsertSizes.attachments.push(length);
+          }
         }),
       })),
     };
@@ -396,6 +464,12 @@ describe("mailbox cleanup service", () => {
     expect(operationLog).toContain("restore:messages");
     expect(operationLog).toContain("restore:recipients");
     expect(operationLog).toContain("restore:attachments");
+    expect(restoreInsertSizes.messages.length).toBeGreaterThan(1);
+    expect(restoreInsertSizes.recipients.length).toBeGreaterThan(1);
+    expect(restoreInsertSizes.attachments.length).toBeGreaterThan(1);
+    expect(Math.max(...restoreInsertSizes.messages)).toBeLessThanOrEqual(5);
+    expect(Math.max(...restoreInsertSizes.recipients)).toBeLessThanOrEqual(20);
+    expect(Math.max(...restoreInsertSizes.attachments)).toBeLessThanOrEqual(14);
     expect(operationLog).not.toContain("mailbox:destroyed");
   });
 });
