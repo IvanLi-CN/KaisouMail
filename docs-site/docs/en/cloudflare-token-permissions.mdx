@@ -10,6 +10,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 | Deploy workflow | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 This repository already supports split tokens. No code change is required.
+Direct binding from `/domains` also requires the GitHub repository secret `CLOUDFLARE_ACCOUNT_ID`. The deploy workflow injects that value into the API Worker runtime variables; it is not a token permission, but without it `/api/meta` reports `cloudflareDomainBindingEnabled=false`.
 
 ### Runtime token example
 

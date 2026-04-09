@@ -11,6 +11,7 @@ apps/web/.vite
 apps/web/storybook-static
 apps/web/playwright/.cache
 apps/api-worker/.wrangler
+apps/api-worker/wrangler.deploy.generated.jsonc
 docs-site/.rspress
 docs-site/doc_build
 screenshots

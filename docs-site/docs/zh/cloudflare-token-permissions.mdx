@@ -10,6 +10,7 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 | 部署流水线 | GitHub repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
 
 项目已经支持拆分 token，不需要改代码。
+另外，直接在 `/domains` 里绑定新域名还需要 GitHub repository secret `CLOUDFLARE_ACCOUNT_ID`。deploy workflow 会把它注入 API Worker 运行时变量；这不是 token 权限，但如果缺失，`/api/meta` 会返回 `cloudflareDomainBindingEnabled=false`。
 
 ### Runtime token 示意配置
 

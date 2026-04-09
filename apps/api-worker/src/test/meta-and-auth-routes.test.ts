@@ -139,6 +139,41 @@ describe("meta and auth routes", () => {
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
   });
 
+  it("keeps direct domain binding disabled when the runtime account id is missing", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/api/meta"), {
+      ...env,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "true",
+      CLOUDFLARE_API_TOKEN: "runtime_token",
+    } as never);
+    const payload = (await response.json()) as {
+      cloudflareDomainBindingEnabled: boolean;
+      cloudflareDomainLifecycleEnabled: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.cloudflareDomainBindingEnabled).toBe(false);
+    expect(payload.cloudflareDomainLifecycleEnabled).toBe(true);
+  });
+
+  it("enables direct domain binding when both the runtime token and account id are configured", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/api/meta"), {
+      ...env,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "true",
+      CLOUDFLARE_API_TOKEN: "runtime_token",
+      CLOUDFLARE_ACCOUNT_ID: "account_123",
+    } as never);
+    const payload = (await response.json()) as {
+      cloudflareDomainBindingEnabled: boolean;
+      cloudflareDomainLifecycleEnabled: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.cloudflareDomainBindingEnabled).toBe(true);
+    expect(payload.cloudflareDomainLifecycleEnabled).toBe(true);
+  });
+
   it("returns the unified auth failure envelope for invalid api keys", async () => {
     authenticateApiKey.mockResolvedValue(null);
 
