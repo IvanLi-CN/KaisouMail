@@ -1,5 +1,6 @@
 export const userRoles = ["admin", "member"] as const;
 export const mailboxStatuses = ["active", "destroying", "destroyed"] as const;
+export const mailboxListScopes = ["default", "workspace"] as const;
 export const domainStatuses = [
   "active",
   "disabled",
@@ -19,6 +20,8 @@ export const attachmentDispositions = [
   "inline",
   "unknown",
 ] as const;
+export const workspaceDestroyedMailboxRetentionDays = 7;
+export const workspaceDestroyedMailboxMaxVisible = 50;
 export const minMailboxTtlMinutes = 5;
 export const maxMailboxTtlMinutes = 24 * 60;
 

@@ -1,12 +1,17 @@
 import { mailboxSchema } from "@kaisoumail/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createMailboxForUser, ensureMailboxForUser, resolveMailboxForUser } =
-  vi.hoisted(() => ({
-    createMailboxForUser: vi.fn(),
-    ensureMailboxForUser: vi.fn(),
-    resolveMailboxForUser: vi.fn(),
-  }));
+const {
+  createMailboxForUser,
+  ensureMailboxForUser,
+  listMailboxesForUser,
+  resolveMailboxForUser,
+} = vi.hoisted(() => ({
+  createMailboxForUser: vi.fn(),
+  ensureMailboxForUser: vi.fn(),
+  listMailboxesForUser: vi.fn(),
+  resolveMailboxForUser: vi.fn(),
+}));
 
 vi.mock("../services/auth", () => ({
   requireAuth:
@@ -30,7 +35,7 @@ vi.mock("../services/mailboxes", () => ({
   destroyMailbox: vi.fn(),
   ensureMailboxForUser,
   getMailboxForUser: vi.fn(),
-  listMailboxesForUser: vi.fn(),
+  listMailboxesForUser,
   resolveMailboxForUser,
 }));
 
@@ -87,6 +92,22 @@ describe("mailbox routes", () => {
     );
 
     expect(response.status).toBe(201);
+  });
+
+  it("passes workspace scope to mailbox listing", async () => {
+    listMailboxesForUser.mockResolvedValue([activeMailbox]);
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/?scope=workspace"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listMailboxesForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "workspace",
+    );
   });
 
   it("allows mailbox creation without an explicit root domain", async () => {

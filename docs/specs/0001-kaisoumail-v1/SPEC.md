@@ -18,16 +18,17 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Responsive mail workbench for mailbox filtering, aggregated message browsing, and inline message reading: single-column on phones, two-pane split from `lg`, and full three-pane reading from `xl+`
 - Desktop `xl+` workspace layout is clamped to the remaining AppShell viewport height; each pane keeps its own vertical scroll area instead of letting long lists stretch the whole page
 - Mailbox and message rails support dynamic-height virtualized rendering for unusually long datasets, while the right-side reader keeps inline content scrolling local to the pane
+- Workspace-scoped data intentionally hides stale destroyed history: `active` / `destroying` mailboxes always stay visible, while `destroyed` rows are limited to the most recent 7 days and at most 50 entries so the operator rail stays dense and query-safe
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
-- Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh
+- Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh; workspace message streams must stay aligned with the same mailbox visibility window used by the left rail
 
 ### Mailboxes
 - `/mailboxes`
 - `/mailboxes/:mailboxId`
 - Lightweight mailbox inventory and lifecycle management surface
-- Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace
+- Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace, while `/mailboxes` itself keeps the full mailbox history and does not inherit the workspace trimming window
 - API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
 - The shared mailbox-creation form now supports both segmented entry (`localPart + subdomain + rootDomain`) and a full-address mode; supported full addresses normalize to lowercase, unsupported domains are blocked client-side, and pasting a supported full address into segmented fields offers a one-click mode switch with auto-filled values
 - When `localPart` and/or `subdomain` are omitted, generated mailbox aliases come from a readable mixed pool instead of machine-looking `mail-*` / `box-*` prefixes, and collisions retry within a bounded attempt budget before falling back to a short natural suffix
@@ -66,10 +67,13 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
+- `GET /api/mailboxes` accepts optional `scope=workspace`; the default scope returns the caller's full mailbox history, while workspace scope keeps all `active` / `destroying` rows and only the newest 50 `destroyed` rows whose `destroyedAt` is within the last 7 days, preserving that destroyed-history slice in descending `destroyedAt` order
 - Destroyed mailboxes no longer reserve their address; the same address can be created again after destroy completes
 - Disabled mailbox domains are excluded from new mailbox creation but do not revoke previously created mailbox routing rules
 - `POST /api/domains/:id/delete` is restricted to `bindingSource=project_bind`, deletes the Cloudflare zone first, then soft-deletes the local domain record and clears cached `subdomains` rows for that domain
-- `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters; when both cursor aliases are present, the later timestamp is used as the strict lower bound
+- `GET /api/messages` accepts repeated `mailbox` params, optional repeated `mailboxId` params, plus `after` / `since` ISO datetime filters and optional `scope=workspace`; when both cursor aliases are present, the later timestamp is used as the strict lower bound, and workspace scope can pin reused-address mailbox selection by `mailboxId` so the middle pane does not mix message history across visible mailbox generations
+- All D1-backed dynamic `IN (...)` lookups used by workspace mailbox hydration, message mailbox filtering, and mailbox cleanup are chunked in batches of 50 to stay below Cloudflare D1 parameter limits
+- Mailbox destroy/cleanup now keeps message metadata until R2 deletion succeeds, hides `destroying` mailbox messages from read APIs, clears `lastReceivedAt` hydration for `destroying` mailboxes so the rail stays aligned with the visible message feed, and scheduled cleanup retries mailboxes stuck in `destroying` ahead of fresh `active` cleanup work while continuing through the rest of the batch even after an earlier mailbox failure
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
 - `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API without depending on bootstrap side effects
@@ -124,6 +128,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
+- 2026-04-09: Aligned workspace mailbox recency with the hidden `destroying` message feed and fixed workspace-scoped destroyed-history ordering so the API now returns the retained destroyed slice in descending `destroyedAt` order.
+- 2026-04-08: Added workspace-scoped mailbox/message reads with a `destroyed` retention window (`7 days ∩ newest 50 rows`), chunked all D1 dynamic `IN (...)` queries to 50 ids per batch, and hardened mailbox destroy cleanup so stuck `destroying` rows are retried safely without losing the R2 keys needed for later cleanup retries.
 - 2026-04-08: The first-party Web control plane now uses same-origin `/api` through a Pages Function plus Service Binding, while direct `api.cfm.707979.xyz` / `api.km.707979.xyz` aliases remain available for compatibility, automation, deploy smoke, and direct API consumers.
 - 2026-04-08: Added dual-mode mailbox creation with supported full-address input, segmented-field paste-to-switch guidance, normalized auto-fill when switching modes, and refreshed mailbox-creation visual evidence for both the classic segmented flow and the new full-address states.
 - 2026-04-07: Renamed the `/api-keys` control-plane surface to an identity-auth page, added explicit `API Keys` / `Passkey` tabs, and refreshed the page evidence to show each tab separately.
@@ -176,6 +182,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ![Workspace on desktop with the restored three-pane reading layout](./assets/workspace-desktop-three-pane-responsive.png)
 
 ![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
+
+![Workspace scope trims destroyed history to the latest seven-day / 50-row window](./assets/workspace-scope-destroyed-window.png)
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)

@@ -13,6 +13,7 @@ import {
   listMessagesResponseSchema,
   listPasskeysResponseSchema,
   listUsersResponseSchema,
+  type mailboxListScopes,
   mailboxSchema,
   messageDetailResponseSchema,
   passkeySchema,
@@ -83,6 +84,7 @@ export const resolveApiOrigin = ({
 
 const API_BASE = resolveApiBase();
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
+type MailboxListScope = (typeof mailboxListScopes)[number];
 
 export class ApiClientError extends Error {
   constructor(
@@ -93,6 +95,15 @@ export class ApiClientError extends Error {
     super(message);
   }
 }
+
+const appendScopeParam = (
+  params: URLSearchParams,
+  scope?: MailboxListScope,
+) => {
+  if (scope && scope !== "default") {
+    params.set("scope", scope);
+  }
+};
 
 const requestJson = async <T>(
   path: string,
@@ -175,10 +186,12 @@ export const apiClient = {
       apiMetaResponseSchema.parse(value),
     );
   },
-  async listMailboxes() {
-    if (DEMO_MODE) return demoApi.listMailboxes();
+  async listMailboxes(options?: { scope?: MailboxListScope }) {
+    if (DEMO_MODE) return demoApi.listMailboxes(options);
+    const params = new URLSearchParams();
+    appendScopeParam(params, options?.scope);
     const payload = await requestJson(
-      "/api/mailboxes",
+      `/api/mailboxes${params.size > 0 ? `?${params.toString()}` : ""}`,
       { method: "GET" },
       (value) => listMailboxesResponseSchema.parse(value),
     );
@@ -238,12 +251,17 @@ export const apiClient = {
   async listMessages(
     mailboxes: string[] = [],
     filters?: { after?: string; since?: string },
+    options?: { mailboxIds?: string[]; scope?: MailboxListScope },
   ) {
-    if (DEMO_MODE) return demoApi.listMessages(mailboxes, filters);
+    if (DEMO_MODE) return demoApi.listMessages(mailboxes, filters, options);
     const params = new URLSearchParams();
     for (const mailbox of mailboxes) params.append("mailbox", mailbox);
+    for (const mailboxId of options?.mailboxIds ?? []) {
+      params.append("mailboxId", mailboxId);
+    }
     if (filters?.after) params.set("after", filters.after);
     if (filters?.since) params.set("since", filters.since);
+    appendScopeParam(params, options?.scope);
     const payload = await requestJson(
       `/api/messages${params.size > 0 ? `?${params.toString()}` : ""}`,
       { method: "GET" },

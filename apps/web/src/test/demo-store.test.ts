@@ -102,6 +102,17 @@ describe("demoApi", () => {
     expect(messages[0]?.id).toBe("msg_beta");
   });
 
+  it("hides stale destroyed mailboxes from workspace-scoped lists", async () => {
+    const mailboxes = await demoApi.listMailboxes({
+      scope: "workspace",
+    });
+
+    expect(mailboxes.some((mailbox) => mailbox.id === "mbx_gamma")).toBe(false);
+    expect(mailboxes.every((mailbox) => mailbox.status !== "destroyed")).toBe(
+      true,
+    );
+  });
+
   it("allows re-enabling a discovered non-active domain", async () => {
     const repaired = await demoApi.createDomain({
       rootDomain: "staging.example.dev",
