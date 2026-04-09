@@ -60,6 +60,7 @@ jobs:
           bash .github/scripts/test-verify-pages-api-smoke.sh
           bash .github/scripts/test-resolve-api-smoke-urls.sh
           bash .github/scripts/test-resolve-pages-smoke-origins.sh
+          bash .github/scripts/test-pages-deploy-command.sh
           bash .github/scripts/test-release-snapshot.sh
 
       - name: Lint and format check
