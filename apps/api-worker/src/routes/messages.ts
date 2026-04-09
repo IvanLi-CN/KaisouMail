@@ -23,12 +23,15 @@ export const messageRoutes = new Hono<AppBindings>()
     async (c) => {
       const user = c.get("authUser");
       const mailboxAddresses = c.req.queries("mailbox") ?? [];
+      const mailboxIds = c.req.queries("mailboxId") ?? [];
       const query = c.req.valid("query");
       const messages = await listMessagesForUser(
         c.env,
         user,
         mailboxAddresses,
+        mailboxIds,
         resolveReceivedAfter(query),
+        query.scope ?? "default",
       );
       return c.json(listMessagesResponseSchema.parse({ messages }));
     },

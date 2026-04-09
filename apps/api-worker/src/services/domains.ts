@@ -5,6 +5,7 @@ import { getDb } from "../db/client";
 import { domains, mailboxes, subdomains } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
+import { chunkD1InsertValues } from "../lib/d1-batches";
 import {
   extractRootDomainFromAddress,
   normalizeRootDomain,
@@ -435,7 +436,9 @@ const restoreSoftDeletedDomainLocally = async (
 
   if ((options?.reinsertSubdomains ?? true) && cachedSubdomains.length > 0) {
     await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
-    await db.insert(subdomains).values(cachedSubdomains);
+    for (const subdomainChunk of chunkD1InsertValues(cachedSubdomains)) {
+      await db.insert(subdomains).values(subdomainChunk);
+    }
   }
 };
 

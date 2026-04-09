@@ -453,6 +453,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "列表响应包装在 `{ mailboxes: [...] }` 下。",
             "字段集合由 `mailboxSchema` 定义，包含 `lastReceivedAt`、`expiresAt` 与 `routingRuleId`。",
+            "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条。",
+            "服务端会把大批量 D1 `IN (...)` 查询拆成每批最多 50 条，避免 admin 工作区因为历史邮箱过多而触发参数上限。",
           ],
         },
         {
@@ -682,7 +684,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       endpoints: [
         {
           method: "GET",
-          path: "/api/messages?mailbox=<address>&after=<iso>&since=<iso>",
+          path: "/api/messages?mailbox=<address>&after=<iso>&since=<iso>&scope=<default|workspace>",
           summary:
             "按邮箱地址和时间下界过滤消息列表；`mailbox` 查询参数可重复出现。",
           auth: "Bearer 或 `kaisoumail_session` cookie",
@@ -707,6 +709,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "不过滤时返回当前用户可见的全部消息摘要。",
             "`after` 与 `since` 都接受 ISO datetime，语义相同；若同时传入，服务端会取较晚的那个作为严格下界。",
             "适合验证码轮询或增量收件场景，避免反复扫描旧邮件。",
+            "`scope=workspace` 会先套用工作区可见邮箱集合，再返回对应消息，确保左侧邮箱 rail、聚合计数和中栏邮件流一致。",
           ],
         },
         {

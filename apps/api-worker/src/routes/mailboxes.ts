@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   createMailboxRequestSchema,
   ensureMailboxRequestSchema,
+  listMailboxesQuerySchema,
   listMailboxesResponseSchema,
   mailboxSchema,
   resolveMailboxQuerySchema,
@@ -9,6 +10,7 @@ import {
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";
+import { apiValidationHook } from "../lib/validation";
 import { requireAuth } from "../services/auth";
 import {
   createMailboxForUser,
@@ -22,14 +24,23 @@ import type { AppBindings } from "../types";
 
 export const mailboxRoutes = new Hono<AppBindings>()
   .use("*", requireAuth())
-  .get("/", async (c) => {
-    const user = c.get("authUser");
-    return c.json(
-      listMailboxesResponseSchema.parse({
-        mailboxes: await listMailboxesForUser(c.env, user),
-      }),
-    );
-  })
+  .get(
+    "/",
+    zValidator("query", listMailboxesQuerySchema, apiValidationHook),
+    async (c) => {
+      const user = c.get("authUser");
+      const query = c.req.valid("query");
+      return c.json(
+        listMailboxesResponseSchema.parse({
+          mailboxes: await listMailboxesForUser(
+            c.env,
+            user,
+            query.scope ?? "default",
+          ),
+        }),
+      );
+    },
+  )
   .post("/", zValidator("json", createMailboxRequestSchema), async (c) => {
     const user = c.get("authUser");
     const mailbox = await createMailboxForUser(

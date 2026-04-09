@@ -36,6 +36,10 @@ const workspacePageState: {
 const workspacePropsState = {
   mailboxesError: null as null | { title: string },
   visibleMailboxAddresses: [] as string[],
+  mailboxScope: null as string | null,
+  allMessagesScope: null as string | null,
+  selectedMailboxIds: [] as string[],
+  selectedMessagesScope: null as string | null,
 };
 const localStorageState = {
   getItem: vi.fn(() => null),
@@ -78,14 +82,18 @@ vi.mock("@/hooks/use-meta", () => ({
 vi.mock("@/hooks/use-mailboxes", () => ({
   mailboxKeys: {
     all: ["mailboxes"],
+    list: (scope = "default") => ["mailboxes", { scope }],
   },
-  useMailboxesQuery: () => ({
-    data: workspacePageState.mailboxes,
-    error: workspacePageState.mailboxesError,
-    isLoading: false,
-    isFetching: false,
-    dataUpdatedAt: 1_713_526_800_000,
-  }),
+  useMailboxesQuery: (options?: { scope?: string }) => {
+    workspacePropsState.mailboxScope = options?.scope ?? "default";
+    return {
+      data: workspacePageState.mailboxes,
+      error: workspacePageState.mailboxesError,
+      isLoading: false,
+      isFetching: false,
+      dataUpdatedAt: 1_713_526_800_000,
+    };
+  },
   useCreateMailboxMutation: () => ({
     isPending: false,
     mutateAsync: vi.fn(),
@@ -94,25 +102,51 @@ vi.mock("@/hooks/use-mailboxes", () => ({
 
 vi.mock("@/hooks/use-messages", () => ({
   messageKeys: {
-    list: (mailboxes: string[] = []) => ["messages", mailboxes],
+    list: (
+      mailboxes: string[] = [],
+      _filters?: unknown,
+      scope = "default",
+      mailboxIds: string[] = [],
+    ) => ["messages", mailboxes, scope, mailboxIds],
     detail: (messageId: string) => ["message", messageId],
   },
-  useMessagesQuery: (mailboxes: string[] = []) =>
-    mailboxes.length === 0
-      ? {
-          data: workspacePageState.allMessages,
-          error: workspacePageState.allMessagesError,
-          isLoading: false,
-          isFetching: false,
-          dataUpdatedAt: 1_713_526_800_000,
-        }
-      : {
-          data: workspacePageState.mailboxMessages,
-          error: workspacePageState.mailboxMessagesError,
-          isLoading: false,
-          isFetching: false,
-          dataUpdatedAt: 1_713_526_800_000,
-        },
+  useMessagesQuery: (
+    mailboxes: string[] = [],
+    _filters?: unknown,
+    options?: { mailboxIds?: string[]; scope?: string },
+  ) => {
+    if ((options?.mailboxIds?.length ?? 0) > 0) {
+      workspacePropsState.selectedMessagesScope = options?.scope ?? "default";
+      workspacePropsState.selectedMailboxIds = options?.mailboxIds ?? [];
+      return {
+        data: workspacePageState.mailboxMessages,
+        error: workspacePageState.mailboxMessagesError,
+        isLoading: false,
+        isFetching: false,
+        dataUpdatedAt: 1_713_526_800_000,
+      };
+    }
+
+    if (mailboxes.length === 0) {
+      workspacePropsState.allMessagesScope = options?.scope ?? "default";
+      return {
+        data: workspacePageState.allMessages,
+        error: workspacePageState.allMessagesError,
+        isLoading: false,
+        isFetching: false,
+        dataUpdatedAt: 1_713_526_800_000,
+      };
+    }
+
+    workspacePropsState.selectedMessagesScope = options?.scope ?? "default";
+    return {
+      data: workspacePageState.mailboxMessages,
+      error: workspacePageState.mailboxMessagesError,
+      isLoading: false,
+      isFetching: false,
+      dataUpdatedAt: 1_713_526_800_000,
+    };
+  },
   useMessageDetailQuery: () => ({
     data: workspacePageState.detail,
     error: workspacePageState.detailError,
@@ -156,6 +190,10 @@ afterEach(() => {
   workspacePageState.refresh = vi.fn();
   workspacePropsState.mailboxesError = null;
   workspacePropsState.visibleMailboxAddresses = [];
+  workspacePropsState.mailboxScope = null;
+  workspacePropsState.allMessagesScope = null;
+  workspacePropsState.selectedMailboxIds = [];
+  workspacePropsState.selectedMessagesScope = null;
   localStorageState.getItem = vi.fn(() => null);
   localStorageState.setItem = vi.fn();
 });
@@ -188,5 +226,27 @@ describe("workspace page", () => {
     expect(
       screen.getByText("spec@ops.beta.mail.example.net"),
     ).toBeInTheDocument();
+  });
+
+  it("uses workspace-scoped mailbox and message queries", () => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
+      >
+        <Routes>
+          <Route path="/workspace" element={<WorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(workspacePropsState.mailboxScope).toBe("workspace");
+    expect(workspacePropsState.allMessagesScope).toBe("workspace");
+    expect(workspacePropsState.selectedMessagesScope).toBe("workspace");
+    expect(workspacePropsState.selectedMailboxIds).toEqual(["mbx_alpha"]);
   });
 });

@@ -1,7 +1,9 @@
 import {
+  filterMailboxesForWorkspaceScope,
   generatedMailboxMaxAttempts,
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
+  type mailboxListScopes,
   mailboxSchema,
 } from "@kaisoumail/shared";
 import { and, desc, eq, inArray, lte } from "drizzle-orm";
@@ -17,6 +19,7 @@ import {
 } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
+import { chunkD1InValues } from "../lib/d1-batches";
 import {
   buildMailboxAddress,
   extractRootDomainFromAddress,
@@ -42,6 +45,7 @@ import {
 type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
+type MailboxListScope = (typeof mailboxListScopes)[number];
 
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
@@ -73,6 +77,27 @@ const toMailboxDto = (
 
 const isVisibleMailbox = (row: MailboxLookupRow, user: AuthUser) =>
   user.role === "admin" || row.userId === user.id;
+
+const listMailboxRowsForUser = async (env: WorkerEnv, user: AuthUser) => {
+  const db = getDb(env);
+  return user.role === "admin"
+    ? db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt))
+    : db
+        .select()
+        .from(mailboxes)
+        .where(eq(mailboxes.userId, user.id))
+        .orderBy(desc(mailboxes.createdAt));
+};
+
+export const listScopedMailboxRowsForUser = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  scope: MailboxListScope = "default",
+) => {
+  const rows = await listMailboxRowsForUser(env, user);
+  if (scope !== "workspace") return rows;
+  return filterMailboxesForWorkspaceScope(rows, nowIso());
+};
 
 export const classifyMailboxAddressState = (
   rows: MailboxLookupRow[],
@@ -314,16 +339,18 @@ const attachRootDomains = async (
   const domainMap = new Map<string, string>();
 
   if (domainIds.length > 0) {
-    const domainRows = await db
-      .select({
-        id: domains.id,
-        rootDomain: domains.rootDomain,
-      })
-      .from(domains)
-      .where(inArray(domains.id, domainIds));
+    for (const domainIdChunk of chunkD1InValues(domainIds)) {
+      const domainRows = await db
+        .select({
+          id: domains.id,
+          rootDomain: domains.rootDomain,
+        })
+        .from(domains)
+        .where(inArray(domains.id, domainIdChunk));
 
-    for (const domainRow of domainRows) {
-      domainMap.set(domainRow.id, domainRow.rootDomain);
+      for (const domainRow of domainRows) {
+        domainMap.set(domainRow.id, domainRow.rootDomain);
+      }
     }
   }
 
@@ -343,24 +370,25 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
   const recentMap = new Map<string, string | null>(
     hydratedRows.map((row) => [row.id, null]),
   );
-  const recentRows = await db
-    .select({
-      mailboxId: messages.mailboxId,
-      receivedAt: messages.receivedAt,
-    })
-    .from(messages)
-    .where(
-      inArray(
-        messages.mailboxId,
-        hydratedRows.map((row) => row.id),
-      ),
-    )
-    .orderBy(desc(messages.receivedAt));
+  const mailboxIds = hydratedRows
+    .filter((row) => row.status !== "destroying")
+    .map((row) => row.id);
 
-  for (const recentRow of recentRows) {
-    if (!recentMap.has(recentRow.mailboxId)) continue;
-    if (!recentMap.get(recentRow.mailboxId)) {
-      recentMap.set(recentRow.mailboxId, recentRow.receivedAt);
+  for (const mailboxIdChunk of chunkD1InValues(mailboxIds)) {
+    const recentRows = await db
+      .select({
+        mailboxId: messages.mailboxId,
+        receivedAt: messages.receivedAt,
+      })
+      .from(messages)
+      .where(inArray(messages.mailboxId, mailboxIdChunk))
+      .orderBy(desc(messages.receivedAt));
+
+    for (const recentRow of recentRows) {
+      if (!recentMap.has(recentRow.mailboxId)) continue;
+      if (!recentMap.get(recentRow.mailboxId)) {
+        recentMap.set(recentRow.mailboxId, recentRow.receivedAt);
+      }
     }
   }
 
@@ -369,17 +397,12 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
   );
 };
 
-export const listMailboxesForUser = async (env: WorkerEnv, user: AuthUser) => {
-  const db = getDb(env);
-  const rows =
-    user.role === "admin"
-      ? await db.select().from(mailboxes).orderBy(desc(mailboxes.createdAt))
-      : await db
-          .select()
-          .from(mailboxes)
-          .where(eq(mailboxes.userId, user.id))
-          .orderBy(desc(mailboxes.createdAt));
-
+export const listMailboxesForUser = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  scope: MailboxListScope = "default",
+) => {
+  const rows = await listScopedMailboxRowsForUser(env, user, scope);
   return attachLastReceivedAt(env, rows);
 };
 
@@ -401,12 +424,15 @@ export const getMailboxForUser = async (
   }
 
   const [hydrated] = await attachRootDomains(env, [row]);
-  const recentRows = await db
-    .select({ receivedAt: messages.receivedAt })
-    .from(messages)
-    .where(eq(messages.mailboxId, row.id))
-    .orderBy(desc(messages.receivedAt))
-    .limit(1);
+  const recentRows =
+    row.status === "destroying"
+      ? []
+      : await db
+          .select({ receivedAt: messages.receivedAt })
+          .from(messages)
+          .where(eq(messages.mailboxId, row.id))
+          .orderBy(desc(messages.receivedAt))
+          .limit(1);
 
   return toMailboxDto(hydrated, recentRows[0]?.receivedAt ?? null);
 };
@@ -719,21 +745,21 @@ export const destroyMailbox = async (
     .select()
     .from(messages)
     .where(eq(messages.mailboxId, mailbox.id));
+  const messageIds = relatedMessages.map((message) => message.id);
   for (const message of relatedMessages) {
     await env.MAIL_BUCKET.delete(message.rawR2Key);
     await env.MAIL_BUCKET.delete(message.parsedR2Key);
   }
-
-  const messageIds = relatedMessages.map((message) => message.id);
   if (messageIds.length > 0) {
-    await db
-      .delete(messageAttachments)
-      .where(inArray(messageAttachments.messageId, messageIds));
-    await db
-      .delete(messageRecipients)
-      .where(inArray(messageRecipients.messageId, messageIds));
+    for (const messageIdChunk of chunkD1InValues(messageIds)) {
+      await db
+        .delete(messageAttachments)
+        .where(inArray(messageAttachments.messageId, messageIdChunk));
+      await db
+        .delete(messageRecipients)
+        .where(inArray(messageRecipients.messageId, messageIdChunk));
+    }
   }
-
   await db.delete(messages).where(eq(messages.mailboxId, mailbox.id));
   const destroyedAt = nowIso();
   await db
@@ -753,18 +779,42 @@ export const destroyMailbox = async (
   );
 };
 
-export const listExpiredMailboxIds = async (
+export const listMailboxIdsPendingCleanup = async (
   env: WorkerEnv,
   config: RuntimeConfig,
 ) => {
   const db = getDb(env);
   const now = nowIso();
-  const rows = await db
+  const destroyingRows = await db
+    .select({ id: mailboxes.id })
+    .from(mailboxes)
+    .where(eq(mailboxes.status, "destroying"))
+    .orderBy(mailboxes.createdAt)
+    .limit(config.CLEANUP_BATCH_SIZE);
+  const shouldAlternateSingleSlotCleanup =
+    config.CLEANUP_BATCH_SIZE === 1 && destroyingRows.length > 0;
+  const reservedDestroyingCount =
+    destroyingRows.length > 0 && config.CLEANUP_BATCH_SIZE > 1 ? 1 : 0;
+  const activeRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
     .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
     .orderBy(mailboxes.expiresAt)
-    .limit(config.CLEANUP_BATCH_SIZE);
+    .limit(Math.max(config.CLEANUP_BATCH_SIZE - reservedDestroyingCount, 0));
+  if (shouldAlternateSingleSlotCleanup && activeRows.length > 0) {
+    const shouldRetryDestroyingFirst =
+      Math.floor(new Date(now).getTime() / (60 * 1000)) % 2 === 0;
+    const selectedRow = shouldRetryDestroyingFirst
+      ? destroyingRows[0]
+      : activeRows[0];
+    return selectedRow?.id ? [selectedRow.id] : [];
+  }
+  const additionalDestroyingRows = destroyingRows.slice(
+    0,
+    Math.max(config.CLEANUP_BATCH_SIZE - activeRows.length, 0),
+  );
 
-  return rows.filter((row) => row.id && row.id.length > 0).map((row) => row.id);
+  return [...additionalDestroyingRows, ...activeRows]
+    .filter((row) => row.id && row.id.length > 0)
+    .map((row) => row.id);
 };
