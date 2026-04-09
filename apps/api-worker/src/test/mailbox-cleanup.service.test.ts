@@ -196,7 +196,7 @@ describe("mailbox cleanup service", () => {
     );
   });
 
-  it("deletes message rows in 50-id chunks before removing R2 objects and only marks destroyed after bucket cleanup", async () => {
+  it("deletes R2 objects before removing message rows and only marks destroyed after bucket cleanup", async () => {
     const mailbox = {
       id: "mbx_alpha",
       userId: "usr_1",
@@ -302,24 +302,27 @@ describe("mailbox cleanup service", () => {
     );
 
     expect(
+      operationLog.findIndex((entry) => entry.startsWith("bucket:")),
+    ).toBeLessThan(operationLog.indexOf("attachments"));
+    expect(operationLog.indexOf("attachments")).toBeLessThan(
+      operationLog.indexOf("messages"),
+    );
+    expect(
       operationLog.filter((entry) => entry === "attachments"),
     ).toHaveLength(2);
     expect(operationLog.filter((entry) => entry === "recipients")).toHaveLength(
       2,
     );
     expect(operationLog.indexOf("messages")).toBeLessThan(
-      operationLog.findIndex((entry) => entry.startsWith("bucket:")),
+      operationLog.indexOf("mailbox:destroyed"),
     );
-    expect(
-      operationLog.findIndex((entry) => entry.startsWith("bucket:")),
-    ).toBeLessThan(operationLog.indexOf("mailbox:destroyed"));
     expect(operationLog.indexOf("mailbox:destroying")).toBeLessThan(
       operationLog.findIndex((entry) => entry.startsWith("bucket:")),
     );
     expect(bucketDelete).toHaveBeenCalledTimes(110);
   });
 
-  it("restores message metadata when bucket cleanup fails so destroying cleanup can retry", async () => {
+  it("keeps message metadata when bucket cleanup fails so destroying cleanup can retry", async () => {
     const mailbox = {
       id: "mbx_retry",
       userId: "usr_1",
@@ -354,28 +357,7 @@ describe("mailbox cleanup service", () => {
       rawR2Key: `raw/retry-${index}.eml`,
       parsedR2Key: `parsed/retry-${index}.json`,
     }));
-    const relatedRecipients = relatedMessages.map((message) => ({
-      id: `rcpt_${message.id}`,
-      messageId: message.id,
-      kind: "to" as const,
-      name: null,
-      address: mailbox.address,
-    }));
-    const relatedAttachments = relatedMessages.map((message) => ({
-      id: `att_${message.id}`,
-      messageId: message.id,
-      filename: "retry.txt",
-      contentType: "text/plain",
-      sizeBytes: 8,
-      contentId: null,
-      disposition: "attachment" as const,
-    }));
     const operationLog: string[] = [];
-    const restoreInsertSizes = {
-      messages: [] as number[],
-      recipients: [] as number[],
-      attachments: [] as number[],
-    };
     const db = {
       select: vi.fn(() => ({
         from: vi.fn((table: unknown) => {
@@ -389,16 +371,6 @@ describe("mailbox cleanup service", () => {
           if (table === messages) {
             return {
               where: vi.fn(async () => relatedMessages),
-            };
-          }
-          if (table === messageRecipients) {
-            return {
-              where: vi.fn(async () => relatedRecipients),
-            };
-          }
-          if (table === messageAttachments) {
-            return {
-              where: vi.fn(async () => relatedAttachments),
             };
           }
 
@@ -424,23 +396,6 @@ describe("mailbox cleanup service", () => {
           if (table === messages) operationLog.push("messages");
         }),
       })),
-      insert: vi.fn((table: unknown) => ({
-        values: vi.fn(async (rows: unknown | unknown[]) => {
-          const length = Array.isArray(rows) ? rows.length : 1;
-          if (table === messages) {
-            operationLog.push("restore:messages");
-            restoreInsertSizes.messages.push(length);
-          }
-          if (table === messageRecipients) {
-            operationLog.push("restore:recipients");
-            restoreInsertSizes.recipients.push(length);
-          }
-          if (table === messageAttachments) {
-            operationLog.push("restore:attachments");
-            restoreInsertSizes.attachments.push(length);
-          }
-        }),
-      })),
     };
     getDb.mockReturnValue(db);
 
@@ -461,15 +416,9 @@ describe("mailbox cleanup service", () => {
       ),
     ).rejects.toThrow("R2 temporary failure");
 
-    expect(operationLog).toContain("restore:messages");
-    expect(operationLog).toContain("restore:recipients");
-    expect(operationLog).toContain("restore:attachments");
-    expect(restoreInsertSizes.messages.length).toBeGreaterThan(1);
-    expect(restoreInsertSizes.recipients.length).toBeGreaterThan(1);
-    expect(restoreInsertSizes.attachments.length).toBeGreaterThan(1);
-    expect(Math.max(...restoreInsertSizes.messages)).toBeLessThanOrEqual(5);
-    expect(Math.max(...restoreInsertSizes.recipients)).toBeLessThanOrEqual(20);
-    expect(Math.max(...restoreInsertSizes.attachments)).toBeLessThanOrEqual(14);
+    expect(operationLog).not.toContain("attachments");
+    expect(operationLog).not.toContain("recipients");
+    expect(operationLog).not.toContain("messages");
     expect(operationLog).not.toContain("mailbox:destroyed");
   });
 });

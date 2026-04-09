@@ -15,8 +15,12 @@ vi.mock("../services/mailboxes", () => ({
   listScopedMailboxRowsForUser,
 }));
 
-import { messages } from "../db/schema";
-import { listMessagesForUser } from "../services/messages";
+import { mailboxes, messages } from "../db/schema";
+import {
+  getMessageDetailForUser,
+  getRawMessageResponseForUser,
+  listMessagesForUser,
+} from "../services/messages";
 
 const adminUser = {
   id: "usr_admin",
@@ -51,10 +55,40 @@ const buildMessageRow = (
   parsedR2Key: `parsed/${id}.json`,
 });
 
+const asJoinedMessage = (row: ReturnType<typeof buildMessageRow>) => ({
+  message: row,
+});
+
 describe("message service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listScopedMailboxRowsForUser.mockResolvedValue([]);
+  });
+
+  const buildMessageDb = (orderBy: ReturnType<typeof vi.fn>) => ({
+    select: vi.fn((fields?: unknown) => ({
+      from: vi.fn((table: unknown) => {
+        if (
+          table !== messages ||
+          !fields ||
+          !("message" in (fields as Record<string, unknown>))
+        ) {
+          throw new Error("Unexpected table");
+        }
+        return {
+          innerJoin: vi.fn((joinedTable: unknown) => {
+            if (joinedTable !== mailboxes) {
+              throw new Error("Unexpected join table");
+            }
+            return {
+              where: vi.fn(() => ({
+                orderBy,
+              })),
+            };
+          }),
+        };
+      }),
+    })),
   });
 
   it("batches mailbox address filters at 50 and returns a globally sorted list", async () => {
@@ -65,32 +99,24 @@ describe("message service", () => {
     const orderBy = vi
       .fn()
       .mockResolvedValueOnce([
-        buildMessageRow(
-          "msg_old",
-          mailboxAddresses[0] ?? "box-000@ops.707979.xyz",
-          "2026-04-08T11:58:00.000Z",
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_old",
+            mailboxAddresses[0] ?? "box-000@ops.707979.xyz",
+            "2026-04-08T11:58:00.000Z",
+          ),
         ),
       ])
       .mockResolvedValueOnce([
-        buildMessageRow(
-          "msg_new",
-          mailboxAddresses[60] ?? "box-060@ops.707979.xyz",
-          "2026-04-08T11:59:00.000Z",
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_new",
+            mailboxAddresses[60] ?? "box-060@ops.707979.xyz",
+            "2026-04-08T11:59:00.000Z",
+          ),
         ),
       ]);
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn((table: unknown) => {
-          if (table !== messages) throw new Error("Unexpected table");
-          return {
-            where: vi.fn(() => ({
-              orderBy,
-            })),
-            orderBy,
-          };
-        }),
-      })),
-    };
+    const db = buildMessageDb(orderBy);
     getDb.mockReturnValue(db);
 
     const listed = await listMessagesForUser(
@@ -124,25 +150,15 @@ describe("message service", () => {
     const orderBy = vi
       .fn()
       .mockResolvedValue([
-        buildMessageRow(
-          "msg_visible",
-          visibleAddress,
-          "2026-04-08T11:59:00.000Z",
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_visible",
+            visibleAddress,
+            "2026-04-08T11:59:00.000Z",
+          ),
         ),
       ]);
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn((table: unknown) => {
-          if (table !== messages) throw new Error("Unexpected table");
-          return {
-            where: vi.fn(() => ({
-              orderBy,
-            })),
-            orderBy,
-          };
-        }),
-      })),
-    };
+    const db = buildMessageDb(orderBy);
     getDb.mockReturnValue(db);
 
     const listed = await listMessagesForUser(
@@ -183,25 +199,15 @@ describe("message service", () => {
     const orderBy = vi
       .fn()
       .mockResolvedValue([
-        buildMessageRow(
-          "msg_visible",
-          reusedAddress,
-          "2026-04-08T11:59:00.000Z",
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_visible",
+            reusedAddress,
+            "2026-04-08T11:59:00.000Z",
+          ),
         ),
       ]);
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn((table: unknown) => {
-          if (table !== messages) throw new Error("Unexpected table");
-          return {
-            where: vi.fn(() => ({
-              orderBy,
-            })),
-            orderBy,
-          };
-        }),
-      })),
-    };
+    const db = buildMessageDb(orderBy);
     getDb.mockReturnValue(db);
 
     const listed = await listMessagesForUser(
@@ -220,5 +226,68 @@ describe("message service", () => {
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toHaveLength(1);
     expect(listed[0]?.id).toBe("msg_visible");
+  });
+
+  it("hides destroying mailbox messages from the shared message feed", async () => {
+    const orderBy = vi.fn().mockResolvedValue([]);
+    const db = buildMessageDb(orderBy);
+    getDb.mockReturnValue(db);
+
+    const listed = await listMessagesForUser({} as never, adminUser, [], null);
+
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    expect(listed).toEqual([]);
+  });
+
+  it("blocks detail and raw reads while the mailbox is destroying", async () => {
+    const joinedRow = {
+      message: buildMessageRow(
+        "msg_hidden",
+        "hidden@ops.707979.xyz",
+        "2026-04-08T11:59:00.000Z",
+      ),
+      mailboxStatus: "destroying",
+    };
+    const db = {
+      select: vi.fn((fields?: unknown) => ({
+        from: vi.fn((table: unknown) => {
+          if (
+            table !== messages ||
+            !fields ||
+            !("message" in (fields as Record<string, unknown>))
+          ) {
+            throw new Error("Unexpected table");
+          }
+          return {
+            innerJoin: vi.fn((joinedTable: unknown) => {
+              if (joinedTable !== mailboxes) {
+                throw new Error("Unexpected join table");
+              }
+              return {
+                where: vi.fn(() => ({
+                  limit: vi.fn(async () => [joinedRow]),
+                })),
+              };
+            }),
+          };
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+
+    await expect(
+      getMessageDetailForUser(
+        { MAIL_BUCKET: { get: vi.fn() } } as never,
+        adminUser,
+        "msg_hidden",
+      ),
+    ).rejects.toThrow("Message not found");
+    await expect(
+      getRawMessageResponseForUser(
+        { MAIL_BUCKET: { get: vi.fn() } } as never,
+        adminUser,
+        "msg_hidden",
+      ),
+    ).rejects.toThrow("Message not found");
   });
 });

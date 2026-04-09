@@ -4,7 +4,7 @@ import {
   messageSummarySchema,
 } from "@kaisoumail/shared";
 import type { SQLWrapper } from "drizzle-orm";
-import { and, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import PostalMime from "postal-mime";
 
 import { getDb } from "../db/client";
@@ -57,6 +57,49 @@ const mapSummary = (row: typeof messages.$inferSelect) =>
     attachmentCount: row.attachmentCount,
     hasHtml: row.hasHtml,
   });
+
+const visibleMessageMailboxFilter = ne(mailboxes.status, "destroying");
+
+const buildMessageFilters = (filters: SQLWrapper[], extraFilter?: SQLWrapper) =>
+  and(
+    ...(extraFilter ? [...filters, extraFilter] : filters),
+    visibleMessageMailboxFilter,
+  );
+
+const queryMessageRows = async (
+  db: ReturnType<typeof getDb>,
+  filters: SQLWrapper[],
+  extraFilter?: SQLWrapper,
+) => {
+  const rows = await db
+    .select({ message: messages })
+    .from(messages)
+    .innerJoin(mailboxes, eq(messages.mailboxId, mailboxes.id))
+    .where(buildMessageFilters(filters, extraFilter))
+    .orderBy(desc(messages.receivedAt));
+
+  return rows.map((row) => row.message);
+};
+
+const getReadableMessageRow = async (
+  db: ReturnType<typeof getDb>,
+  messageId: string,
+) => {
+  const rows = await db
+    .select({
+      message: messages,
+      mailboxStatus: mailboxes.status,
+    })
+    .from(messages)
+    .innerJoin(mailboxes, eq(messages.mailboxId, mailboxes.id))
+    .where(eq(messages.id, messageId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.mailboxStatus === "destroying") {
+    throw new ApiError(404, "Message not found");
+  }
+  return row.message;
+};
 
 export const resolveReceivedAfter = (input: {
   after?: string;
@@ -122,13 +165,11 @@ export const listMessagesForUser = async (
       ? (
           await Promise.all(
             chunkD1InValues(candidateMailboxIds).map((mailboxIdChunk) =>
-              db
-                .select()
-                .from(messages)
-                .where(
-                  and(...filters, inArray(messages.mailboxId, mailboxIdChunk)),
-                )
-                .orderBy(desc(messages.receivedAt)),
+              queryMessageRows(
+                db,
+                filters,
+                inArray(messages.mailboxId, mailboxIdChunk),
+              ),
             ),
           )
         )
@@ -141,16 +182,11 @@ export const listMessagesForUser = async (
             await Promise.all(
               chunkD1InValues(normalizedMailboxAddresses).map(
                 (mailboxAddressChunk) =>
-                  db
-                    .select()
-                    .from(messages)
-                    .where(
-                      and(
-                        ...filters,
-                        inArray(messages.mailboxAddress, mailboxAddressChunk),
-                      ),
-                    )
-                    .orderBy(desc(messages.receivedAt)),
+                  queryMessageRows(
+                    db,
+                    filters,
+                    inArray(messages.mailboxAddress, mailboxAddressChunk),
+                  ),
               ),
             )
           )
@@ -158,13 +194,7 @@ export const listMessagesForUser = async (
             .sort((left, right) =>
               right.receivedAt.localeCompare(left.receivedAt),
             )
-        : filters.length > 0
-          ? await db
-              .select()
-              .from(messages)
-              .where(and(...filters))
-              .orderBy(desc(messages.receivedAt))
-          : await db.select().from(messages).orderBy(desc(messages.receivedAt));
+        : await queryMessageRows(db, filters);
   return rows.map(mapSummary);
 };
 
@@ -174,13 +204,7 @@ export const getMessageDetailForUser = async (
   messageId: string,
 ) => {
   const db = getDb(env);
-  const rows = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.id, messageId))
-    .limit(1);
-  const message = rows[0];
-  if (!message) throw new ApiError(404, "Message not found");
+  const message = await getReadableMessageRow(db, messageId);
   if (message.userId !== user.id && user.role !== "admin")
     throw new ApiError(403, "Forbidden");
   const parsedObject = await env.MAIL_BUCKET.get(message.parsedR2Key);
@@ -232,13 +256,7 @@ export const getRawMessageResponseForUser = async (
   messageId: string,
 ) => {
   const db = getDb(env);
-  const rows = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.id, messageId))
-    .limit(1);
-  const message = rows[0];
-  if (!message) throw new ApiError(404, "Message not found");
+  const message = await getReadableMessageRow(db, messageId);
   if (message.userId !== user.id && user.role !== "admin")
     throw new ApiError(403, "Forbidden");
   const object = await env.MAIL_BUCKET.get(message.rawR2Key);

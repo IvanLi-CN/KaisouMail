@@ -19,7 +19,7 @@ import {
 } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { chunkD1InsertValues, chunkD1InValues } from "../lib/d1-batches";
+import { chunkD1InValues } from "../lib/d1-batches";
 import {
   buildMailboxAddress,
   extractRootDomainFromAddress,
@@ -395,33 +395,6 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
   );
 };
 
-const restoreDestroyedMessageRows = async (
-  db: ReturnType<typeof getDb>,
-  deletedRows: {
-    messages: (typeof messages.$inferSelect)[];
-    recipients: (typeof messageRecipients.$inferSelect)[];
-    attachments: (typeof messageAttachments.$inferSelect)[];
-  },
-) => {
-  if (deletedRows.messages.length > 0) {
-    for (const messageChunk of chunkD1InsertValues(deletedRows.messages)) {
-      await db.insert(messages).values(messageChunk);
-    }
-  }
-  if (deletedRows.recipients.length > 0) {
-    for (const recipientChunk of chunkD1InsertValues(deletedRows.recipients)) {
-      await db.insert(messageRecipients).values(recipientChunk);
-    }
-  }
-  if (deletedRows.attachments.length > 0) {
-    for (const attachmentChunk of chunkD1InsertValues(
-      deletedRows.attachments,
-    )) {
-      await db.insert(messageAttachments).values(attachmentChunk);
-    }
-  }
-};
-
 export const listMailboxesForUser = async (
   env: WorkerEnv,
   user: AuthUser,
@@ -768,32 +741,10 @@ export const destroyMailbox = async (
     .from(messages)
     .where(eq(messages.mailboxId, mailbox.id));
   const messageIds = relatedMessages.map((message) => message.id);
-  const relatedRecipients =
-    messageIds.length > 0
-      ? (
-          await Promise.all(
-            chunkD1InValues(messageIds).map((messageIdChunk) =>
-              db
-                .select()
-                .from(messageRecipients)
-                .where(inArray(messageRecipients.messageId, messageIdChunk)),
-            ),
-          )
-        ).flat()
-      : [];
-  const relatedAttachments =
-    messageIds.length > 0
-      ? (
-          await Promise.all(
-            chunkD1InValues(messageIds).map((messageIdChunk) =>
-              db
-                .select()
-                .from(messageAttachments)
-                .where(inArray(messageAttachments.messageId, messageIdChunk)),
-            ),
-          )
-        ).flat()
-      : [];
+  for (const message of relatedMessages) {
+    await env.MAIL_BUCKET.delete(message.rawR2Key);
+    await env.MAIL_BUCKET.delete(message.parsedR2Key);
+  }
   if (messageIds.length > 0) {
     for (const messageIdChunk of chunkD1InValues(messageIds)) {
       await db
@@ -804,37 +755,7 @@ export const destroyMailbox = async (
         .where(inArray(messageRecipients.messageId, messageIdChunk));
     }
   }
-
   await db.delete(messages).where(eq(messages.mailboxId, mailbox.id));
-  try {
-    for (const message of relatedMessages) {
-      await env.MAIL_BUCKET.delete(message.rawR2Key);
-      await env.MAIL_BUCKET.delete(message.parsedR2Key);
-    }
-  } catch (error) {
-    try {
-      await restoreDestroyedMessageRows(db, {
-        messages: relatedMessages,
-        recipients: relatedRecipients,
-        attachments: relatedAttachments,
-      });
-    } catch (restoreError) {
-      throw new ApiError(
-        502,
-        "Failed to restore mailbox message metadata after R2 cleanup error",
-        {
-          mailboxId: mailbox.id,
-          address: mailbox.address,
-          cause: error instanceof Error ? error.message : String(error),
-          restoreError:
-            restoreError instanceof Error
-              ? restoreError.message
-              : String(restoreError),
-        },
-      );
-    }
-    throw error;
-  }
   const destroyedAt = nowIso();
   await db
     .update(mailboxes)

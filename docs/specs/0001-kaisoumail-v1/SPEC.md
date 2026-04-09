@@ -73,7 +73,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/domains/:id/delete` is restricted to `bindingSource=project_bind`, deletes the Cloudflare zone first, then soft-deletes the local domain record and clears cached `subdomains` rows for that domain
 - `GET /api/messages` accepts repeated `mailbox` params plus `after` / `since` ISO datetime filters and optional `scope=workspace`; when both cursor aliases are present, the later timestamp is used as the strict lower bound, and workspace scope filters messages against the same visible mailbox set used by the workspace rail
 - All D1-backed dynamic `IN (...)` lookups used by workspace mailbox hydration, message mailbox filtering, and mailbox cleanup are chunked in batches of 50 to stay below Cloudflare D1 parameter limits
-- Mailbox destroy/cleanup now removes related DB rows before deleting R2 message bodies, and scheduled cleanup retries mailboxes stuck in `destroying` so partial destroy failures converge automatically
+- Mailbox destroy/cleanup now keeps message metadata until R2 deletion succeeds, hides `destroying` mailbox messages from read APIs, and scheduled cleanup retries mailboxes stuck in `destroying` so partial destroy failures converge automatically without orphaning blobs
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
 - `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API without depending on bootstrap side effects
@@ -126,7 +126,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
-- 2026-04-08: Added workspace-scoped mailbox/message reads with a `destroyed` retention window (`7 days ∩ newest 50 rows`), chunked all D1 dynamic `IN (...)` queries to 50 ids per batch, and hardened mailbox destroy cleanup so stuck `destroying` rows are retried safely.
+- 2026-04-08: Added workspace-scoped mailbox/message reads with a `destroyed` retention window (`7 days ∩ newest 50 rows`), chunked all D1 dynamic `IN (...)` queries to 50 ids per batch, and hardened mailbox destroy cleanup so stuck `destroying` rows are retried safely without losing the R2 keys needed for later cleanup retries.
 - 2026-04-08: The first-party Web control plane now uses same-origin `/api` through a Pages Function plus Service Binding, while direct `api.cfm.707979.xyz` / `api.km.707979.xyz` aliases remain available for compatibility, automation, deploy smoke, and direct API consumers.
 - 2026-04-08: Added dual-mode mailbox creation with supported full-address input, segmented-field paste-to-switch guidance, normalized auto-fill when switching modes, and refreshed mailbox-creation visual evidence for both the classic segmented flow and the new full-address states.
 - 2026-04-07: Renamed the `/api-keys` control-plane surface to an identity-auth page, added explicit `API Keys` / `Passkey` tabs, and refreshed the page evidence to show each tab separately.
