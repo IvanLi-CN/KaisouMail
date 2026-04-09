@@ -36,9 +36,9 @@ export const Overview: Story = {};
 
 export const BindSubmitError: Story = {
   args: {
-    onBind: async () => {
+    onBind: fn(async () => {
       throw new Error("Mailbox domain already exists");
-    },
+    }),
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
