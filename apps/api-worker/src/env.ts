@@ -15,7 +15,12 @@ const runtimeConfigSchema = z.object({
   APP_ENV: z.string().default("development"),
   MAIL_DOMAIN: z.string().min(1).optional(),
   EMAIL_WORKER_NAME: z.string().min(1).optional(),
-  DEFAULT_MAILBOX_TTL_MINUTES: z.coerce.number().int().min(5).default(60),
+  DEFAULT_MAILBOX_TTL_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(30 * 24 * 60)
+    .default(60),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(3),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),

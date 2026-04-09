@@ -22,8 +22,8 @@ export const attachmentDispositions = [
 ] as const;
 export const workspaceDestroyedMailboxRetentionDays = 7;
 export const workspaceDestroyedMailboxMaxVisible = 50;
-export const minMailboxTtlMinutes = 5;
-export const maxMailboxTtlMinutes = 24 * 60;
+export const minMailboxTtlMinutes = 60;
+export const maxMailboxTtlMinutes = 30 * 24 * 60;
 
 export const mailboxLocalPartRegex = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 

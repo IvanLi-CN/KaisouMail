@@ -6,7 +6,7 @@ import {
   type mailboxListScopes,
   mailboxSchema,
 } from "@kaisoumail/shared";
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lte } from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
@@ -212,7 +212,7 @@ const insertMailboxIfDomainStillActive = async (
     routingRuleId: string | null;
     status: string;
     createdAt: string;
-    expiresAt: string;
+    expiresAt: string | null;
     destroyedAt: string | null;
   },
   expectedZoneId: string | null,
@@ -285,12 +285,12 @@ const activateMailbox = async (
 
 export const resolveRequestedMailboxAddress = (
   input:
-    | { address: string; expiresInMinutes?: number }
+    | { address: string; expiresInMinutes?: number | null }
     | {
         localPart: string;
         subdomain: string;
         rootDomain?: string;
-        expiresInMinutes?: number;
+        expiresInMinutes?: number | null;
       },
   activeRootDomains: string[],
 ) => {
@@ -445,7 +445,7 @@ export const createMailboxForUser = async (
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
-    expiresInMinutes?: number;
+    expiresInMinutes?: number | null;
   },
 ) => {
   const db = getDb(env);
@@ -453,7 +453,9 @@ export const createMailboxForUser = async (
     ? await requireActiveDomainByRootDomain(env, input.rootDomain)
     : await pickRandomActiveDomain(env);
   const expiresInMinutes =
-    input.expiresInMinutes ?? config.DEFAULT_MAILBOX_TTL_MINUTES;
+    input.expiresInMinutes === undefined
+      ? config.DEFAULT_MAILBOX_TTL_MINUTES
+      : input.expiresInMinutes;
   const canRetryGeneratedAddress = !input.localPart || !input.subdomain;
 
   const currentDomainRows = await db
@@ -511,9 +513,10 @@ export const createMailboxForUser = async (
       .limit(1);
 
     const now = nowIso();
-    const expiresAt = new Date(
-      Date.now() + expiresInMinutes * 60_000,
-    ).toISOString();
+    const expiresAt =
+      expiresInMinutes === null
+        ? null
+        : new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
 
     const created = {
       id: randomId("mbx"),
@@ -641,12 +644,12 @@ export const ensureMailboxForUser = async (
   config: RuntimeConfig,
   user: AuthUser,
   input:
-    | { address: string; expiresInMinutes?: number }
+    | { address: string; expiresInMinutes?: number | null }
     | {
         localPart: string;
         subdomain: string;
         rootDomain?: string;
-        expiresInMinutes?: number;
+        expiresInMinutes?: number | null;
       },
 ) => {
   const activeRootDomains = await listActiveRootDomains(env);
@@ -798,7 +801,13 @@ export const listMailboxIdsPendingCleanup = async (
   const activeRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
-    .where(and(eq(mailboxes.status, "active"), lte(mailboxes.expiresAt, now)))
+    .where(
+      and(
+        eq(mailboxes.status, "active"),
+        isNotNull(mailboxes.expiresAt),
+        lte(mailboxes.expiresAt, now),
+      ),
+    )
     .orderBy(mailboxes.expiresAt)
     .limit(Math.max(config.CLEANUP_BATCH_SIZE - reservedDestroyingCount, 0));
   if (shouldAlternateSingleSlotCleanup && activeRows.length > 0) {

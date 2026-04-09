@@ -2,6 +2,7 @@ import {
   buildMailboxAddress,
   mailboxLocalPartRegex,
   mailboxSubdomainRegex,
+  minMailboxTtlMinutes,
   normalizeMailboxAddress,
   normalizeMailboxLabel,
   normalizeRootDomain,
@@ -22,6 +23,7 @@ import {
   type MailboxCreatePreviewState,
   RANDOM_ROOT_DOMAIN_OPTION_LABEL,
 } from "@/components/mailboxes/mailbox-create-preview";
+import { MailboxTtlControl } from "@/components/mailboxes/mailbox-ttl-control";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +32,10 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  formatMailboxTtl,
+  parseMailboxTtlInputWithOptions,
+} from "@/lib/mailbox-ttl";
 import { cn } from "@/lib/utils";
 
 const mailboxFieldClassName =
@@ -51,7 +57,7 @@ type CreateMailboxValues = {
   subdomain: string;
   rootDomain: string;
   address: string;
-  expiresInMinutes: number;
+  expiresInMinutes: number | null;
 };
 
 type SegmentFieldName = "localPart" | "subdomain";
@@ -72,6 +78,12 @@ type SegmentedDraftState = Pick<
   CreateMailboxValues,
   "localPart" | "subdomain" | "rootDomain"
 >;
+
+type TtlEditorState = {
+  isEditing: boolean;
+  draftValue: string;
+  hasError: boolean;
+};
 
 const normalizeOptionalValue = (value: string) => {
   const normalized = normalizeMailboxLabel(value);
@@ -121,7 +133,9 @@ export const MailboxCreateForm = ({
   isPending = false,
   domains = [],
   defaultTtlMinutes,
+  minTtlMinutes = minMailboxTtlMinutes,
   maxTtlMinutes,
+  supportsUnlimitedTtl = true,
   isMetaLoading = false,
   submitError = null,
   autoFocusFirstField = false,
@@ -132,13 +146,15 @@ export const MailboxCreateForm = ({
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
-    expiresInMinutes: number;
+    expiresInMinutes: number | null;
   }) => Promise<void> | void;
   onCancel?: () => void;
   isPending?: boolean;
   domains?: string[];
   defaultTtlMinutes: number;
+  minTtlMinutes?: number;
   maxTtlMinutes: number;
+  supportsUnlimitedTtl?: boolean;
   isMetaLoading?: boolean;
   submitError?: string | null;
   autoFocusFirstField?: boolean;
@@ -153,6 +169,11 @@ export const MailboxCreateForm = ({
     useState<DismissedPasteSuggestionState | null>(null);
   const [segmentedDraftBeforeAddressMode, setSegmentedDraftBeforeAddressMode] =
     useState<SegmentedDraftState | null>(null);
+  const [ttlEditorState, setTtlEditorState] = useState<TtlEditorState>({
+    isEditing: false,
+    draftValue: `${defaultTtlMinutes / 60}h`,
+    hasError: false,
+  });
   const pasteDetectionTimeoutRef = useRef<number | null>(null);
   const normalizedDomains = useMemo(
     () => domains.map((domain) => normalizeRootDomain(domain)),
@@ -270,6 +291,9 @@ export const MailboxCreateForm = ({
     form.formState.errors.subdomain?.message ??
     null;
   const addressErrorMessage = form.formState.errors.address?.message ?? null;
+  const ttlErrorMessage =
+    (form.formState.errors.expiresInMinutes?.message as string | undefined) ??
+    null;
 
   const switchToAddressMode = ({
     parsed,
@@ -449,7 +473,43 @@ export const MailboxCreateForm = ({
     <form
       className={cn("grid gap-4", className)}
       onSubmit={form.handleSubmit((values) => {
+        const ttlResult = ttlEditorState.isEditing
+          ? parseMailboxTtlInputWithOptions(ttlEditorState.draftValue, {
+              minMinutes: minTtlMinutes,
+              maxMinutes: maxTtlMinutes,
+              supportsUnlimited: supportsUnlimitedTtl,
+            })
+          : ({
+              ok: true,
+              value: values.expiresInMinutes,
+            } as const);
+        if (!ttlResult.ok) {
+          form.setError("expiresInMinutes", {
+            message: ttlResult.message,
+          });
+          return;
+        }
+
+        const resolvedExpiresInMinutes = ttlResult.value;
+        if (resolvedExpiresInMinutes !== values.expiresInMinutes) {
+          form.setValue("expiresInMinutes", resolvedExpiresInMinutes, {
+            shouldDirty: true,
+            shouldTouch: true,
+            shouldValidate: false,
+          });
+        }
+
         if (inputMode === "address") {
+          if (
+            resolvedExpiresInMinutes !== null &&
+            !Number.isInteger(resolvedExpiresInMinutes)
+          ) {
+            form.setError("expiresInMinutes", {
+              message: "请输入有效的生命周期",
+            });
+            return;
+          }
+
           const parsed = parseMailboxAddressAgainstDomains(
             values.address,
             normalizedDomains,
@@ -468,13 +528,40 @@ export const MailboxCreateForm = ({
             localPart: parsed.localPart,
             subdomain: parsed.subdomain,
             rootDomain: parsed.rootDomain,
-            expiresInMinutes: values.expiresInMinutes,
+            expiresInMinutes: resolvedExpiresInMinutes,
           });
         }
 
         const normalizedLocalPart = normalizeOptionalValue(values.localPart);
         const normalizedSubdomain = normalizeOptionalValue(values.subdomain);
         const normalizedRootDomain = normalizeRootDomain(values.rootDomain);
+        if (
+          resolvedExpiresInMinutes !== null &&
+          !Number.isInteger(resolvedExpiresInMinutes)
+        ) {
+          form.setError("expiresInMinutes", {
+            message: "请输入有效的生命周期",
+          });
+          return;
+        }
+        if (
+          typeof resolvedExpiresInMinutes === "number" &&
+          resolvedExpiresInMinutes < minTtlMinutes
+        ) {
+          form.setError("expiresInMinutes", {
+            message: `生命周期不能低于 ${formatMailboxTtl(minTtlMinutes)}`,
+          });
+          return;
+        }
+        if (
+          typeof resolvedExpiresInMinutes === "number" &&
+          resolvedExpiresInMinutes > maxTtlMinutes
+        ) {
+          form.setError("expiresInMinutes", {
+            message: `生命周期不能超过 ${formatMailboxTtl(maxTtlMinutes)}`,
+          });
+          return;
+        }
 
         if (
           normalizedLocalPart &&
@@ -499,7 +586,7 @@ export const MailboxCreateForm = ({
           ...(normalizedLocalPart ? { localPart: normalizedLocalPart } : {}),
           ...(normalizedSubdomain ? { subdomain: normalizedSubdomain } : {}),
           ...(normalizedRootDomain ? { rootDomain: normalizedRootDomain } : {}),
-          expiresInMinutes: values.expiresInMinutes,
+          expiresInMinutes: resolvedExpiresInMinutes,
         });
       })}
     >
@@ -725,23 +812,24 @@ export const MailboxCreateForm = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="ttl">生命周期（分钟）</Label>
-          <Input
-            id="ttl"
-            max={maxTtlMinutes}
-            min={5}
-            type="number"
-            {...form.register("expiresInMinutes", {
-              valueAsNumber: true,
-              validate: (value) => {
-                if (!Number.isInteger(value)) return "请输入有效的生命周期";
-                if (value < 5) return "生命周期不能低于 5 分钟";
-                if (value > maxTtlMinutes) {
-                  return `生命周期不能超过 ${maxTtlMinutes} 分钟`;
-                }
-                return true;
-              },
-            })}
+          <Label htmlFor="ttl-display">生命周期</Label>
+          <MailboxTtlControl
+            id="ttl-display"
+            disabled={isPending}
+            errorMessage={ttlErrorMessage}
+            maxMinutes={maxTtlMinutes}
+            minMinutes={minTtlMinutes}
+            supportsUnlimited={supportsUnlimitedTtl}
+            value={form.watch("expiresInMinutes")}
+            onEditorStateChange={setTtlEditorState}
+            onChange={(nextValue) => {
+              form.clearErrors("expiresInMinutes");
+              form.setValue("expiresInMinutes", nextValue, {
+                shouldDirty: true,
+                shouldTouch: true,
+                shouldValidate: false,
+              });
+            }}
           />
         </div>
       </fieldset>

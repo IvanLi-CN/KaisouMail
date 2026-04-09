@@ -36,7 +36,7 @@ describe("mailboxes page view", () => {
     expect(
       screen.getByText(/ava-lin@desk\.hub\.<随机 active 域名>/i),
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("60")).toBeInTheDocument();
+    expect(screen.getByLabelText("生命周期值")).toHaveTextContent("1 小时");
   });
 
   it("shows a list error instead of pretending there are no mailboxes", () => {

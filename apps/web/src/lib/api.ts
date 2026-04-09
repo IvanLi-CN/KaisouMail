@@ -207,7 +207,7 @@ export const apiClient = {
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
-    expiresInMinutes: number;
+    expiresInMinutes?: number | null;
   }) {
     if (DEMO_MODE) return demoApi.createMailbox(input);
     return requestJson(
@@ -218,12 +218,12 @@ export const apiClient = {
   },
   async ensureMailbox(
     input:
-      | { address: string; expiresInMinutes?: number }
+      | { address: string; expiresInMinutes?: number | null }
       | {
           localPart: string;
           subdomain: string;
           rootDomain?: string;
-          expiresInMinutes?: number;
+          expiresInMinutes?: number | null;
         },
   ) {
     if (DEMO_MODE) return demoApi.ensureMailbox(input);

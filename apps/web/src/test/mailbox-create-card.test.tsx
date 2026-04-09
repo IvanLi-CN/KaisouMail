@@ -20,7 +20,7 @@ describe("MailboxCreateCard", () => {
     expect(screen.getByRole("button", { name: "创建邮箱" })).toBeEnabled();
     expect(screen.getByLabelText("用户名")).toBeEnabled();
     expect(screen.getByLabelText("子域名")).toBeEnabled();
-    expect(screen.getByLabelText("生命周期（分钟）")).toBeEnabled();
+    expect(screen.getByLabelText("生命周期值")).toBeEnabled();
   });
 
   it("switches preview copy when full-address mode is selected", () => {

@@ -16,7 +16,7 @@ const meta = {
     isPending: false,
     domains: ["relay.example.test", "mail.example.net"],
     defaultTtlMinutes: 60,
-    maxTtlMinutes: 1440,
+    maxTtlMinutes: 43200,
     isMetaLoading: false,
   },
 } satisfies Meta<typeof MailboxCreateCard>;
@@ -65,8 +65,9 @@ export const ManualDomainSelected: Story = {
     await expect(
       canvas.getByText(selectedDomainPreviewAddress),
     ).toBeInTheDocument();
-    await userEvent.clear(canvas.getByLabelText("生命周期（分钟）"));
-    await userEvent.type(canvas.getByLabelText("生命周期（分钟）"), "90");
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "90m");
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
       localPart: "nightly",
@@ -74,6 +75,73 @@ export const ManualDomainSelected: Story = {
       rootDomain: "mail.example.net",
       expiresInMinutes: 90,
     });
+  },
+};
+
+export const UnlimitedTtl: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "无限");
+    await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
+
+    await expect(args.onSubmit).toHaveBeenCalledWith({
+      expiresInMinutes: null,
+    });
+  },
+};
+
+export const MaxFiniteTtl: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "30d");
+    await userEvent.keyboard("{Enter}");
+
+    await expect(canvas.getByLabelText("生命周期值")).toHaveTextContent(
+      "30 天",
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
+
+    await expect(args.onSubmit).toHaveBeenCalledWith({
+      expiresInMinutes: 43200,
+    });
+  },
+};
+
+export const InlineTtlEditing: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByLabelText("生命周期值")).toHaveTextContent(
+      "1 小时",
+    );
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "36h");
+    await userEvent.keyboard("{Enter}");
+
+    await expect(canvas.getByLabelText("生命周期值")).toHaveTextContent(
+      "1 天 12 小时",
+    );
+  },
+};
+
+export const InvalidTtlInput: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "0.5h");
+    await userEvent.keyboard("{Enter}");
+
+    await expect(canvas.getByRole("alert")).toHaveTextContent(
+      "有限生命周期需在 1 小时到 30 天之间，或输入 无限",
+    );
   },
 };
 
@@ -162,7 +230,7 @@ export const CustomDomain: Story = {
   args: {
     domains: ["mail.example.net", "ops.example.org"],
     defaultTtlMinutes: 120,
-    maxTtlMinutes: 720,
+    maxTtlMinutes: 43200,
   },
 };
 

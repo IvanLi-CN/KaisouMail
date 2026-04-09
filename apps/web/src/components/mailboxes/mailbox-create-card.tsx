@@ -1,3 +1,4 @@
+import { minMailboxTtlMinutes } from "@kaisoumail/shared";
 import { useState } from "react";
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
 import {
@@ -12,13 +13,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatMailboxTtl } from "@/lib/mailbox-ttl";
 
 export const MailboxCreateCard = ({
   onSubmit,
   isPending,
   domains = [],
   defaultTtlMinutes,
+  minTtlMinutes = minMailboxTtlMinutes,
   maxTtlMinutes,
+  supportsUnlimitedTtl = true,
   isMetaLoading = false,
   metaError = null,
   submitError = null,
@@ -27,12 +31,14 @@ export const MailboxCreateCard = ({
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
-    expiresInMinutes: number;
+    expiresInMinutes: number | null;
   }) => Promise<void> | void;
   isPending?: boolean;
   domains?: string[];
   defaultTtlMinutes: number;
+  minTtlMinutes?: number;
   maxTtlMinutes: number;
+  supportsUnlimitedTtl?: boolean;
   isMetaLoading?: boolean;
   metaError?: string | null;
   submitError?: string | null;
@@ -83,8 +89,10 @@ export const MailboxCreateCard = ({
                   hasAvailableDomains: domains.length > 0,
                 })}
               </span>
-              ，默认 {defaultTtlMinutes} 分钟后自动回收，最长 {maxTtlMinutes}{" "}
-              分钟。
+              ，默认 {formatMailboxTtl(defaultTtlMinutes)}
+              后自动回收，有限生命周期范围为 {formatMailboxTtl(minTtlMinutes)}{" "}
+              到 {formatMailboxTtl(maxTtlMinutes)}
+              {supportsUnlimitedTtl ? "，另支持无限。" : "。"}
             </>
           ) : null}
         </CardDescription>
@@ -96,7 +104,9 @@ export const MailboxCreateCard = ({
           isMetaLoading={isMetaLoading}
           isPending={isPending}
           maxTtlMinutes={maxTtlMinutes}
+          minTtlMinutes={minTtlMinutes}
           onPreviewChange={setPreviewState}
+          supportsUnlimitedTtl={supportsUnlimitedTtl}
           submitError={submitError}
           onSubmit={onSubmit}
         />

@@ -126,7 +126,7 @@ export const mailboxes = sqliteTable(
     routingRuleId: text("routing_rule_id"),
     status: text("status").notNull(),
     createdAt: text("created_at").notNull(),
-    expiresAt: text("expires_at").notNull(),
+    expiresAt: text("expires_at"),
     destroyedAt: text("destroyed_at"),
   },
   (table) => [
