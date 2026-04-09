@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.18.4",
+  "base_stable_version": "0.18.3",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-09T07:20:49Z",
+  "next_stable_version": "0.18.4",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "428efdc86bb8857fefba6bdc7c2b52d1fad9b292",
+  "pr_number": 35,
+  "pr_title": "fix: scope workspace mailbox history and batch cleanup",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.18.4",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.18.4",
+  "target_sha": "2284bb6ebe46df60927563f598793b6ffdbd7775",
+  "type_label": "type:patch"
+}
