@@ -34,6 +34,22 @@ type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {};
 
+export const BindSubmitError: Story = {
+  args: {
+    onBind: fn(async () => {
+      throw new Error("Mailbox domain already exists");
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    await canvas.findByText("Mailbox domain already exists");
+  },
+};
+
 export const BindFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);

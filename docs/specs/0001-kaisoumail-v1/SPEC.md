@@ -121,6 +121,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
 - 2026-04-08: The first-party Web control plane now uses same-origin `/api` through a Pages Function plus Service Binding, while direct `api.cfm.707979.xyz` / `api.km.707979.xyz` aliases remain available for compatibility, automation, deploy smoke, and direct API consumers.
 - 2026-04-08: Added dual-mode mailbox creation with supported full-address input, segmented-field paste-to-switch guidance, normalized auto-fill when switching modes, and refreshed mailbox-creation visual evidence for both the classic segmented flow and the new full-address states.
@@ -206,9 +207,13 @@ PR: include
 
 ### Domains
 
+PR: include
 ![Domains page overview](./assets/domains-page-overview.png)
 
 ![Domains bind form with Cloudflare status columns](./assets/domains-bind-overview.png)
+
+PR: include
+![Domains bind form submit error with aligned action button](./assets/domains-bind-submit-error.png)
 
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 

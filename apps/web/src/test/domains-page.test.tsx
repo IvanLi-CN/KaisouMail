@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -112,6 +118,94 @@ describe("domains page view", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText("确认删除", { selector: "button" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
+  });
+
+  it("uses a gapped inline layout for Cloudflare status badges", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const badgeGroup = screen.getByTestId(
+      "cloudflare-status-group-relay.example.test",
+    );
+
+    expect(badgeGroup).toHaveClass("flex", "flex-wrap", "gap-2");
+    expect(within(badgeGroup).getByText("available")).toBeInTheDocument();
+    expect(within(badgeGroup).getByText("active")).toBeInTheDocument();
+  });
+
+  it("keeps the bind form layout stable for validation and submit errors", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error("Mailbox domain already exists");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const form = screen.getByTestId("domain-bind-form");
+    const error = screen.getByTestId("domain-bind-error");
+    const submitSlot = screen.getByTestId("domain-bind-submit-slot");
+    const input = screen.getByLabelText("根域名");
+    const submitButton = screen.getByRole("button", {
+      name: "绑定到 Cloudflare",
+    });
+
+    expect(form).toHaveClass(
+      "grid",
+      "gap-x-4",
+      "gap-y-2",
+      "md:grid-cols-[minmax(0,1fr)_auto]",
+      "md:grid-rows-[auto_auto]",
+    );
+    expect(error).toHaveClass("min-h-5", "md:col-start-1", "md:row-start-2");
+    expect(submitSlot).toHaveClass(
+      "md:col-start-2",
+      "md:row-start-1",
+      "md:items-end",
+    );
+
+    fireEvent.change(input, { target: { value: "bad" } });
+    fireEvent.click(submitButton);
+
+    expect(
+      await screen.findByText("请输入有效根域名，例如 example.com"),
+    ).toBeInTheDocument();
+    expect(onBind).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "bound.example.org" } });
+    fireEvent.click(submitButton);
+
+    expect(
+      await screen.findByText("Mailbox domain already exists"),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(onBind).toHaveBeenCalledWith({
+        rootDomain: "bound.example.org",
+      }),
+    );
   });
 
   it("hides Cloudflare lifecycle actions when runtime management is off", () => {
