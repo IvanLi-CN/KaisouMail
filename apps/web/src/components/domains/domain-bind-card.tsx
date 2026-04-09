@@ -55,7 +55,8 @@ export const DomainBindCard = ({
       </CardHeader>
       <CardContent>
         <form
-          className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]"
+          className="grid gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_auto]"
+          data-testid="domain-bind-form"
           onSubmit={form.handleSubmit(async (values) => {
             setSubmitError(null);
             try {
@@ -68,7 +69,7 @@ export const DomainBindCard = ({
             }
           })}
         >
-          <div className="space-y-2">
+          <div className="order-1 min-w-0 space-y-2 md:col-start-1 md:row-start-1">
             <Label htmlFor="rootDomain">根域名</Label>
             <Input
               id="rootDomain"
@@ -76,11 +77,18 @@ export const DomainBindCard = ({
               autoComplete="off"
               {...form.register("rootDomain")}
             />
-            <p className="text-sm text-destructive" role="alert">
-              {form.formState.errors.rootDomain?.message ?? submitError ?? " "}
-            </p>
           </div>
-          <div className="flex items-end">
+          <p
+            className="order-2 min-h-5 text-sm text-destructive md:col-start-1 md:row-start-2"
+            data-testid="domain-bind-error"
+            role="alert"
+          >
+            {form.formState.errors.rootDomain?.message ?? submitError ?? " "}
+          </p>
+          <div
+            className="order-3 flex md:col-start-2 md:row-start-1 md:items-end"
+            data-testid="domain-bind-submit-slot"
+          >
             <Button
               type="submit"
               className="w-full md:w-auto"

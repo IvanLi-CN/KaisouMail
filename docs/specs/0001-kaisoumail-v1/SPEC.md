@@ -125,6 +125,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
 - 2026-04-09: Aligned workspace mailbox recency with the hidden `destroying` message feed and fixed workspace-scoped destroyed-history ordering so the API now returns the retained destroyed slice in descending `destroyedAt` order.
 - 2026-04-08: Added workspace-scoped mailbox/message reads with a `destroyed` retention window (`7 days ∩ newest 50 rows`), chunked all D1 dynamic `IN (...)` queries to 50 ids per batch, and hardened mailbox destroy cleanup so stuck `destroying` rows are retried safely without losing the R2 keys needed for later cleanup retries.
@@ -214,9 +215,13 @@ PR: include
 
 ### Domains
 
+PR: include
 ![Domains page overview](./assets/domains-page-overview.png)
 
 ![Domains bind form with Cloudflare status columns](./assets/domains-bind-overview.png)
+
+PR: include
+![Domains bind form submit error with aligned action button](./assets/domains-bind-submit-error.png)
 
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
