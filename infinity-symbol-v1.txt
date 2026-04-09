@@ -1,0 +1,4 @@
+v1
+svg=/Users/ivan/.codex/worktrees/50ca/cf-mail/infinity-symbol-v1.svg
+preview=/Users/ivan/.codex/worktrees/50ca/cf-mail/infinity-symbol-v1-preview.png
+diff=/Users/ivan/.codex/worktrees/50ca/cf-mail/infinity-symbol-v1-diff.png
