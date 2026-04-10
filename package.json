@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "prepare": "lefthook install",
+    "brand:generate": "python3 ./scripts/generate-brand-assets.py",
     "version:write": "node ./scripts/write-version.mjs",
     "check": "bun run check:root && bun run --cwd packages/shared check && bun run --cwd apps/api-worker check && bun run --cwd apps/web check && bun run --cwd docs-site check",
     "check:root": "biome check .",
