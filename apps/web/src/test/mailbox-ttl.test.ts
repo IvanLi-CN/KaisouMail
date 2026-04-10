@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatMailboxTtl,
+  mailboxTtlSliderFiniteStop,
+  mailboxTtlToSliderPosition,
   parseMailboxTtlInput,
   parseMailboxTtlInputWithOptions,
   sliderPositionToMailboxTtl,
@@ -56,5 +58,13 @@ describe("mailbox TTL helpers", () => {
 
   it("maps the final slider slot to unlimited", () => {
     expect(sliderPositionToMailboxTtl(1000)).toBeNull();
+  });
+
+  it("keeps the max finite TTL on a dedicated stop before unlimited", () => {
+    expect(mailboxTtlToSliderPosition(43200, 60)).toBe(
+      mailboxTtlSliderFiniteStop,
+    );
+    expect(mailboxTtlToSliderPosition(null, 60)).toBe(1000);
+    expect(sliderPositionToMailboxTtl(mailboxTtlSliderFiniteStop)).toBe(43200);
   });
 });

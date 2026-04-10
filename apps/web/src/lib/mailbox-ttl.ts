@@ -2,6 +2,8 @@ import { maxMailboxTtlMinutes, minMailboxTtlMinutes } from "@kaisoumail/shared";
 
 export const mailboxTtlSliderMax = 1000;
 export const mailboxTtlSliderFiniteMax = mailboxTtlSliderMax - 1;
+export const mailboxTtlSliderFiniteStop = 920;
+export const mailboxTtlSliderUnlimitedThreshold = 960;
 const mailboxTtlMinutesPerHour = 60;
 const mailboxTtlMinutesPerDay = 24 * mailboxTtlMinutesPerHour;
 const mailboxTtlMinutesPerWeek = 7 * mailboxTtlMinutesPerDay;
@@ -80,9 +82,12 @@ export const mailboxTtlToSliderPosition = (
     maxMinutes,
   );
   const ratio = (Math.log(finiteMinutes) - logMin) / (logMax - logMin);
+  const finiteRangeMax = supportsUnlimited
+    ? mailboxTtlSliderFiniteStop
+    : mailboxTtlSliderFiniteMax;
 
   return clamp(
-    Math.round(ratio * mailboxTtlSliderFiniteMax),
+    Math.round(ratio * finiteRangeMax),
     0,
     resolveMailboxTtlSliderMax(supportsUnlimited),
   );
@@ -95,9 +100,21 @@ export const sliderPositionToMailboxTtl = (
   const { logMin, logMax, supportsUnlimited } = getMailboxTtlLogBounds(options);
   const sliderMax = resolveMailboxTtlSliderMax(supportsUnlimited);
   const clampedPosition = clamp(position, 0, sliderMax);
-  if (supportsUnlimited && clampedPosition >= mailboxTtlSliderMax) return null;
+  if (
+    supportsUnlimited &&
+    clampedPosition >= mailboxTtlSliderUnlimitedThreshold
+  ) {
+    return null;
+  }
 
-  const ratio = clampedPosition / mailboxTtlSliderFiniteMax;
+  const finitePosition = supportsUnlimited
+    ? clamp(clampedPosition, 0, mailboxTtlSliderFiniteStop)
+    : clampedPosition;
+  const finiteRangeMax = supportsUnlimited
+    ? mailboxTtlSliderFiniteStop
+    : mailboxTtlSliderFiniteMax;
+
+  const ratio = finitePosition / finiteRangeMax;
   const minutes = Math.exp(logMin + ratio * (logMax - logMin));
 
   return quantizeSliderFiniteTtl(minutes, options);

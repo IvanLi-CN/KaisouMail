@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import {
   formatMailboxTtl,
   formatMailboxTtlEditorValue,
-  mailboxTtlSliderFiniteMax,
+  mailboxTtlSliderFiniteStop,
   mailboxTtlSliderMax,
   mailboxTtlToSliderPosition,
   parseMailboxTtlInputWithOptions,
@@ -65,7 +65,7 @@ export const MailboxTtlControl = ({
   const resolvedError = editError ?? errorMessage;
   const finiteLabelLeft = useMemo(() => {
     if (!supportsUnlimited) return "100%";
-    return `${(mailboxTtlSliderFiniteMax / mailboxTtlSliderMax) * 100}%`;
+    return `${(mailboxTtlSliderFiniteStop / mailboxTtlSliderMax) * 100}%`;
   }, [supportsUnlimited]);
 
   useEffect(() => {
@@ -120,43 +120,37 @@ export const MailboxTtlControl = ({
 
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-start">
-      <div className="space-y-2 pt-2 sm:pt-3">
-        <Slider
-          aria-label="生命周期滑块"
-          disabled={disabled}
-          max={sliderMax}
-          min={0}
-          step={1}
-          value={sliderValue}
-          onValueChange={(nextValue) => {
-            const nextTtl = sliderPositionToMailboxTtl(nextValue[0] ?? 0, {
-              minMinutes,
-              maxMinutes,
-              supportsUnlimited,
-            });
-            setEditError(null);
-            onChange(nextTtl);
-          }}
-        />
-        <div className="relative h-5 text-xs text-muted-foreground">
-          <span className="absolute left-0 top-0">
-            {formatMailboxTtl(minMinutes)}
-          </span>
-          <span
-            className={cn(
-              "absolute top-0 whitespace-nowrap",
-              supportsUnlimited
-                ? "-translate-x-full pr-12"
-                : "-translate-x-full",
-            )}
-            style={{ left: finiteLabelLeft }}
-          >
-            {formatMailboxTtl(maxMinutes)}
-          </span>
+      <div className="pt-2 sm:pt-3">
+        <div className="relative">
+          <Slider
+            aria-label="生命周期滑块"
+            disabled={disabled}
+            max={sliderMax}
+            min={0}
+            step={1}
+            value={sliderValue}
+            onValueChange={(nextValue) => {
+              const nextTtl = sliderPositionToMailboxTtl(nextValue[0] ?? 0, {
+                minMinutes,
+                maxMinutes,
+                supportsUnlimited,
+              });
+              setEditError(null);
+              onChange(nextTtl);
+            }}
+          />
           {supportsUnlimited ? (
-            <span className="absolute right-0 top-0 whitespace-nowrap">
-              无限
-            </span>
+            <>
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 h-5 w-px -translate-x-1/2 -translate-y-1/2 bg-border"
+                style={{ left: finiteLabelLeft }}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-border bg-background"
+              />
+            </>
           ) : null}
         </div>
       </div>
