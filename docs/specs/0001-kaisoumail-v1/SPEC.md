@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-10
+Last: 2026-04-11
 
 ## Objective
 
@@ -12,6 +12,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Auth
 - `/login`
 - Passkey-first browser sign-in with API key fallback that exchanges credentials for the same browser session cookie
+- The login screen leads with the KaisouMail lockup and keeps passkey plus API-key entry inside one primary card without nested inset panels
 
 ### Workspace
 - `/workspace`
@@ -100,7 +101,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - Dark, minimal, utility-first control plane
 - Dense information layout optimized for repeated operational tasks
-- Login keeps a prominent passkey CTA with explicit API key fallback in the same card, and the identity-auth page uses explicit `API Keys` / `Passkey` tabs instead of stacking both inventories together
+- Login keeps a prominent passkey CTA with explicit API key fallback in the same primary card (no nested inset panel chrome), and the identity-auth page uses explicit `API Keys` / `Passkey` tabs instead of stacking both inventories together
 - Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
@@ -127,6 +128,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
@@ -160,7 +162,11 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### Auth
 
-![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
+PR: include
+![KaisouMail login page with the branded lockup and single-card sign-in surface](./assets/login-page-kaisoumail.png)
+
+PR: include
+![Login card with passkey-first sign-in and API key fallback in a single card](./assets/login-card-kaisoumail.png)
 
 ![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
 
