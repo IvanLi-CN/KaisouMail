@@ -181,7 +181,7 @@ export const MailboxTtlControl = ({
             min={0}
             step={1}
             value={sliderValue}
-            onValueChange={(nextValue) => {
+            onValueChange={(nextValue: number[]) => {
               const nextTtl = sliderPositionToMailboxTtl(nextValue[0] ?? 0, {
                 minMinutes,
                 maxMinutes,
