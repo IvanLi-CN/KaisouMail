@@ -21,6 +21,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Mailbox and message rails support dynamic-height virtualized rendering for unusually long datasets, while the right-side reader keeps inline content scrolling local to the pane
 - Workspace-scoped data intentionally hides stale destroyed history: `active` / `destroying` mailboxes always stay visible, while `destroyed` rows are limited to the most recent 7 days and at most 50 entries so the operator rail stays dense and query-safe
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
+- When a concrete mailbox is selected, the middle-pane title renders the address inside a read-only input with focus-to-select behavior plus a dedicated copy action so operators can grab the exact address without reflowing the three-pane workspace
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
 - Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh; workspace message streams must stay aligned with the same mailbox visibility window used by the left rail
@@ -130,6 +131,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
+- 2026-04-10: Replaced the selected-mailbox workspace heading with a read-only address input that auto-selects on focus, added a dedicated copy action with local success/failure feedback, and refreshed the workspace visual evidence for the new operator-facing copy surface.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
@@ -196,6 +198,13 @@ PR: include
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
+
+PR: include
+![Workspace selected mailbox header with wrapped address text and inline copy button](./assets/workspace-selected-mailbox-address.png)
+
+![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
+
+![Workspace long mailbox addresses wrap in the reader header while the rail keeps truncation](./assets/workspace-long-mailbox-address.png)
 
 ![Workspace message row with the repaired focus halo](./assets/workspace-message-row-focus-ring.png)
 

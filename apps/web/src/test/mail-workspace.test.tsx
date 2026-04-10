@@ -84,6 +84,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const getMailboxRowByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(container)
+    .getByText(address)
+    .closest(".workspace-mailbox-item") as HTMLElement;
+
+const getMailboxRowTriggerByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) => within(container).getByRole("button", { name: address });
+
 describe("MailWorkspace", () => {
   it("only closes the create popover via cancel or escape when idle", () => {
     const onCancel = vi.fn();
@@ -141,9 +154,10 @@ describe("MailWorkspace", () => {
 
     expect(onCancel).not.toHaveBeenCalled();
     expect(
-      within(mailboxList).getByRole("button", {
-        name: /spec@ops\.beta\.mail\.example\.net/i,
-      }),
+      getMailboxRowByAddress(
+        mailboxList,
+        /spec@ops\.beta\.mail\.example\.net/i,
+      ),
     ).toHaveTextContent("新建");
   });
 
@@ -166,12 +180,14 @@ describe("MailWorkspace", () => {
     const allMailRow = within(mailboxList).getByRole("button", {
       name: /全部邮箱/i,
     });
-    const normalRow = within(mailboxList).getByRole("button", {
-      name: /build@alpha\.relay\.example\.test/i,
-    });
-    const highlightedRow = within(mailboxList).getByRole("button", {
-      name: /spec@ops\.beta\.mail\.example\.net/i,
-    });
+    const normalRow = getMailboxRowByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const highlightedRow = getMailboxRowByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
     const messageList = screen.getByRole("region", { name: "邮件列表" });
     const activeMessageRow = within(messageList).getByRole("button", {
       name: /Build artifacts ready/i,
@@ -196,8 +212,13 @@ describe("MailWorkspace", () => {
     expect(activeMessageRow.className).not.toContain("focus-visible:ring-ring");
     expect(activeMessageRow.className).not.toContain("focus-visible:ring-2");
 
-    highlightedRow.focus();
-    expect(highlightedRow).toHaveFocus();
+    const highlightedTrigger = getMailboxRowTriggerByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
+
+    highlightedTrigger.focus();
+    expect(highlightedTrigger).toHaveFocus();
   });
 
   it("renders pane-specific errors instead of empty placeholders", () => {
@@ -312,6 +333,260 @@ describe("MailWorkspace", () => {
       "style",
       expect.stringContaining("height: 22880px;"),
     );
+  });
+
+  it("renders the selected mailbox as selectable text and auto-selects the address on focus", () => {
+    const addRange = vi.fn();
+    const removeAllRanges = vi.fn();
+    const selectNodeContents = vi.fn();
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      addRange,
+      removeAllRanges,
+    } as unknown as Selection);
+    vi.spyOn(document, "createRange").mockReturnValue({
+      selectNodeContents,
+    } as unknown as Range);
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    const addressText = screen.getByTestId(
+      "workspace-selected-mailbox-address",
+    );
+
+    expect(addressText).toHaveTextContent("spec@ops.beta.mail.example.net");
+    expect(
+      screen.getByRole("button", { name: "复制当前邮箱地址" }),
+    ).toBeInTheDocument();
+
+    fireEvent.focus(addressText);
+
+    expect(selectNodeContents).toHaveBeenCalledWith(addressText);
+    expect(removeAllRanges).toHaveBeenCalled();
+    expect(addRange).toHaveBeenCalled();
+  });
+
+  it("keeps the aggregate workspace title when all mailboxes are selected", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByTestId("workspace-selected-mailbox-address"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("全部邮箱邮件")).toBeInTheDocument();
+  });
+
+  it("copies a mailbox address from the left rail without selecting the row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onSelectMailbox = vi.fn();
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      within(
+        getMailboxRowByAddress(
+          screen.getByRole("region", { name: "邮箱列表" }),
+          /build@alpha\.relay\.example\.test/i,
+        ),
+      ).getByRole("button", { name: "复制邮箱地址" }),
+    );
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("build@alpha.relay.example.test");
+    });
+
+    expect(onSelectMailbox).not.toHaveBeenCalled();
+  });
+
+  it("keeps a dedicated row trigger while preserving the count badge", () => {
+    const onSelectMailbox = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
+    const mailboxRow = getMailboxRowByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const mailboxTrigger = getMailboxRowTriggerByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+
+    expect(within(mailboxRow).getByText("1")).toBeInTheDocument();
+    fireEvent.click(mailboxTrigger);
+
+    expect(onSelectMailbox).toHaveBeenCalledWith("mbx_alpha");
+  });
+
+  it("copies the selected mailbox address and shows success feedback", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制当前邮箱地址" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
+      expect(screen.getByText("邮箱地址已复制")).toBeInTheDocument();
+    });
+  });
+
+  it("shows non-blocking feedback when clipboard copy fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard denied"));
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制当前邮箱地址" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
+      expect(screen.getByText("复制失败，请手动复制")).toBeInTheDocument();
+    });
+  });
+
+  it("marks left-rail copy failures visibly without selecting the row", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard denied"));
+    const onSelectMailbox = vi.fn();
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    const copyButton = within(
+      getMailboxRowByAddress(
+        screen.getByRole("region", { name: "邮箱列表" }),
+        /build@alpha\.relay\.example\.test/i,
+      ),
+    ).getByRole("button", { name: "复制邮箱地址" });
+
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("build@alpha.relay.example.test");
+      expect(onSelectMailbox).not.toHaveBeenCalled();
+      expect(copyButton).toHaveAttribute("aria-label", "复制失败，请手动复制");
+      expect(copyButton.className).toContain("text-destructive");
+    });
   });
 
   it("submits normalized full addresses from the create popover", () => {
