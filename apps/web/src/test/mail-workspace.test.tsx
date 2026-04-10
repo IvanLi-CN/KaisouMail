@@ -1,4 +1,5 @@
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -105,7 +106,9 @@ const stubDesktopMatchMedia = () => {
   return matchMediaMock;
 };
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup();
+  await new Promise((resolve) => window.setTimeout(resolve, 0));
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

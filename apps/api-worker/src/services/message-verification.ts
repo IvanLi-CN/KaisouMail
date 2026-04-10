@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "../db/client";
@@ -14,7 +14,8 @@ import { getRuntimeStateValue, setRuntimeStateValue } from "./runtime-state";
 
 const WORKERS_AI_PAUSED_UNTIL_KEY = "workers_ai_verification_paused_until";
 const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
-const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Z])(?=.*\d)[A-Z0-9]{4,8})$/;
+const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
+const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const CODE_TOKEN_PATTERN = /[A-Za-z0-9]{4,8}/g;
 const VERIFICATION_KEYWORDS = [
   "verification code",
@@ -45,6 +46,10 @@ const DIRECT_CODE_PATTERNS = [
     "gi",
   ),
 ] as const;
+const GENERIC_CODE_CONTEXT_PATTERN =
+  /\b(your|use|enter|copy|paste|this|the|one[- ]time|login|verification|security|confirm|access)\s+code\b/i;
+const VERIFICATION_CONTEXT_PATTERN =
+  /\b(verification|verify|otp|passcode|login|confirm|security|one[- ]time)\b|验证码|校验码|动态码|认证码|登入码|登录码/i;
 
 const aiDecisionSchema = z.object({
   verdict: z.enum(["match", "none"]),
@@ -68,20 +73,31 @@ type RuleDetection = {
 export type VerificationDetectionResult = {
   verification: StoredVerification | null;
   shouldRetry: boolean;
+  retryAfter: string | null;
 };
 
 const normalizeWhitespace = (value: string) =>
   value.replace(/\s+/g, " ").trim();
 
+const normalizeBodyText = (value: string | null | undefined) =>
+  (value ?? "")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean)
+    .join("\n");
+
 const normalizeVerificationCode = (value: string | null | undefined) => {
-  const normalized = value?.replace(/\s+/g, "").trim().toUpperCase() ?? "";
+  const normalized = value?.replace(/\s+/g, "").trim() ?? "";
   return CODE_PATTERN.test(normalized) ? normalized : null;
 };
+
+const compareVerificationCodes = (left: string, right: string) =>
+  left.localeCompare(right, undefined, { sensitivity: "accent" }) === 0;
 
 const stripHtmlToText = (html: string | null | undefined) => {
   if (!html) return "";
 
-  return normalizeWhitespace(
+  return normalizeBodyText(
     html
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -101,6 +117,11 @@ const findKeywordHit = (value: string) => {
   const lowered = value.toLowerCase();
   return VERIFICATION_KEYWORDS.some((keyword) => lowered.includes(keyword));
 };
+
+const hasVerificationContextSignal = (value: string) =>
+  findKeywordHit(value) ||
+  GENERIC_CODE_CONTEXT_PATTERN.test(value) ||
+  VERIFICATION_CONTEXT_PATTERN.test(value);
 
 const isSafeBoundary = (value: string | undefined) =>
   !value || !/[A-Za-z0-9]/.test(value);
@@ -129,6 +150,11 @@ const extractCodeTokens = (value: string) => {
   return [...matches.entries()].map(([token, index]) => ({ token, index }));
 };
 
+const findVerificationCodeInSource = (value: string, code: string) =>
+  extractCodeTokens(value).find(({ token }) =>
+    compareVerificationCodes(token, code),
+  )?.token ?? null;
+
 const scoreToken = (
   value: string,
   token: string,
@@ -141,17 +167,20 @@ const scoreToken = (
       Math.min(value.length, index + token.length + 40),
     )
     .toLowerCase();
+  const hasContextSignal = hasVerificationContextSignal(window);
   let score = /^\d+$/.test(token) ? 120 : 95;
 
   if (source === "subject") score += 40;
   if (findKeywordHit(window)) score += 120;
-  if (/\b(is|code|otp|passcode)\b|验证码|校验码|动态码/i.test(window))
-    score += 40;
+  if (hasContextSignal) score += 40;
   if (/^\d{6}$/.test(token)) score += 15;
   if (/^(19|20)\d{2}$/.test(token) && !findKeywordHit(window)) score -= 160;
   if (/kb|mb|gb|am|pm/.test(window)) score -= 60;
 
-  return score;
+  return {
+    score,
+    hasContextSignal,
+  };
 };
 
 const uniqueStrings = (values: string[]) => [...new Set(values)];
@@ -198,16 +227,28 @@ const detectWithRules = (
   const scored = extractCodeTokens(value)
     .map(({ token, index }) => ({
       token,
-      score: scoreToken(value, token, index, source),
+      ...scoreToken(value, token, index, source),
     }))
     .sort((left, right) => right.score - left.score);
 
   const candidates = uniqueStrings(scored.map(({ token }) => token));
   const best = scored[0];
   const second = scored.find(({ token }) => token !== best?.token);
-  const hasSignal = candidates.length > 0 || findKeywordHit(value);
+  const hasSignal =
+    directMatches.length > 0 ||
+    scored.some(({ hasContextSignal }) => hasContextSignal) ||
+    hasVerificationContextSignal(value);
 
   if (!best || best.score < 150) {
+    return {
+      match: null,
+      candidates,
+      ambiguous: false,
+      hadSignal: hasSignal,
+    };
+  }
+
+  if (source === "subject" && !best.hasContextSignal) {
     return {
       match: null,
       candidates,
@@ -290,6 +331,11 @@ const resolveNextUtcMidnightIso = () => {
   return next.toISOString();
 };
 
+export const resolveNextVerificationRetryAtIso = (
+  baseTime = Date.now(),
+  backoffMs = MESSAGE_VERIFICATION_RETRY_BACKOFF_MS,
+) => new Date(baseTime + backoffMs).toISOString();
+
 const extractErrorStatus = (error: unknown) => {
   if (!error || typeof error !== "object") return null;
 
@@ -313,17 +359,19 @@ const shouldPauseWorkersAi = (error: unknown) => {
   );
 };
 
-const isWorkersAiPaused = async (env: WorkerEnv) => {
+const getWorkersAiPausedUntil = async (env: WorkerEnv) => {
   const pausedUntil = await getRuntimeStateValue(
     env,
     WORKERS_AI_PAUSED_UNTIL_KEY,
   );
-  if (!pausedUntil) return false;
+  if (!pausedUntil) return null;
 
   const pausedUntilTime = new Date(pausedUntil).getTime();
-  if (Number.isNaN(pausedUntilTime)) return false;
+  if (Number.isNaN(pausedUntilTime)) return null;
 
-  return pausedUntilTime > Date.now();
+  return pausedUntilTime > Date.now()
+    ? new Date(pausedUntilTime).toISOString()
+    : null;
 };
 
 const pauseWorkersAiUntilReset = async (env: WorkerEnv) =>
@@ -340,15 +388,14 @@ const maybeVerifyWithAi = async (
   candidates: string[],
 ): Promise<VerificationDetectionResult> => {
   if (!env.AI) {
-    return {
-      verification: null,
-      shouldRetry: false,
-    };
+    return createRetryableVerificationFallback();
   }
-  if (await isWorkersAiPaused(env)) {
+  const pausedUntil = await getWorkersAiPausedUntil(env);
+  if (pausedUntil) {
     return {
       verification: null,
       shouldRetry: true,
+      retryAfter: pausedUntil,
     };
   }
 
@@ -394,6 +441,7 @@ const maybeVerifyWithAi = async (
       return {
         verification: null,
         shouldRetry: true,
+        retryAfter: resolveNextVerificationRetryAtIso(),
       };
     }
 
@@ -402,6 +450,7 @@ const maybeVerifyWithAi = async (
       return {
         verification: null,
         shouldRetry: false,
+        retryAfter: null,
       };
     }
 
@@ -410,34 +459,36 @@ const maybeVerifyWithAi = async (
       return {
         verification: null,
         shouldRetry: false,
+        retryAfter: null,
       };
     }
 
-    const sourceText =
-      parsed.data.source === "subject"
-        ? subject.toUpperCase()
-        : body.toUpperCase();
-    if (!sourceText.includes(normalizedCode)) {
+    const sourceText = parsed.data.source === "subject" ? subject : body;
+    const sourceCode = findVerificationCodeInSource(sourceText, normalizedCode);
+    if (!sourceCode) {
       return {
         verification: null,
         shouldRetry: false,
+        retryAfter: null,
       };
     }
 
     return {
       verification: {
-        code: normalizedCode,
+        code: sourceCode,
         source: parsed.data.source,
         method: "ai",
       },
       shouldRetry: false,
+      retryAfter: null,
     };
   } catch (error) {
     if (shouldPauseWorkersAi(error)) {
-      await pauseWorkersAiUntilReset(env);
+      const retryAfter = await pauseWorkersAiUntilReset(env);
       return {
         verification: null,
         shouldRetry: true,
+        retryAfter,
       };
     }
 
@@ -447,6 +498,7 @@ const maybeVerifyWithAi = async (
         return {
           verification: null,
           shouldRetry: true,
+          retryAfter: resolveNextVerificationRetryAtIso(),
         };
       }
     }
@@ -454,9 +506,18 @@ const maybeVerifyWithAi = async (
     return {
       verification: null,
       shouldRetry: true,
+      retryAfter: resolveNextVerificationRetryAtIso(),
     };
   }
 };
+
+export const createRetryableVerificationFallback = (
+  retryAfter = resolveNextVerificationRetryAtIso(),
+): VerificationDetectionResult => ({
+  verification: null,
+  shouldRetry: true,
+  retryAfter,
+});
 
 export const resolveVerificationDetectionForMessage = async (
   env: WorkerEnv,
@@ -467,8 +528,8 @@ export const resolveVerificationDetectionForMessage = async (
   },
 ): Promise<VerificationDetectionResult> => {
   const subject = normalizeWhitespace(input.subject ?? "");
-  const textBody = normalizeWhitespace(input.text ?? "");
-  const htmlBody = normalizeWhitespace(stripHtmlToText(input.html));
+  const textBody = normalizeBodyText(input.text);
+  const htmlBody = stripHtmlToText(input.html);
   const bodyVariants = [textBody];
   if (htmlBody && htmlBody !== textBody) {
     bodyVariants.push(htmlBody);
@@ -479,6 +540,7 @@ export const resolveVerificationDetectionForMessage = async (
     return {
       verification: subjectDetection.match,
       shouldRetry: false,
+      retryAfter: null,
     };
   }
 
@@ -490,6 +552,7 @@ export const resolveVerificationDetectionForMessage = async (
     return {
       verification: bodyMatch,
       shouldRetry: false,
+      retryAfter: null,
     };
   }
 
@@ -507,6 +570,7 @@ export const resolveVerificationDetectionForMessage = async (
     return {
       verification: null,
       shouldRetry: false,
+      retryAfter: null,
     };
   }
 
@@ -533,14 +597,22 @@ export const listMessageIdsPendingVerification = async (
   config: Pick<RuntimeConfig, "CLEANUP_BATCH_SIZE">,
 ) => {
   const db = getDb(env);
-  const limit = Math.max(
+  const limit = Math.min(
     config.CLEANUP_BATCH_SIZE,
     MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE,
   );
   const rows = await db
     .select({ id: messages.id })
     .from(messages)
-    .where(isNull(messages.verificationCheckedAt))
+    .where(
+      and(
+        isNull(messages.verificationCheckedAt),
+        or(
+          isNull(messages.verificationRetryAfter),
+          lte(messages.verificationRetryAfter, nowIso()),
+        ),
+      ),
+    )
     .orderBy(asc(messages.receivedAt))
     .limit(limit);
 
@@ -579,34 +651,46 @@ export const backfillMessageVerification = async (
           verificationSource: null,
           verificationMethod: null,
           verificationCheckedAt: nowIso(),
+          verificationRetryAfter: null,
         })
         .where(eq(messages.id, message.id));
       processed += 1;
       continue;
     }
 
-    let verification: StoredVerification | null = null;
+    let detection: VerificationDetectionResult = {
+      verification: null,
+      shouldRetry: false,
+      retryAfter: null,
+    };
     try {
       const parsedPayload = JSON.parse(await parsedObject.text()) as {
         html: string | null;
         text: string | null;
       };
-      verification = await detectVerificationForMessage(env, {
+      detection = await resolveVerificationDetectionForMessage(env, {
         subject: message.subject,
         text: parsedPayload.text,
         html: parsedPayload.html,
       });
     } catch {
-      verification = null;
+      detection = {
+        verification: null,
+        shouldRetry: false,
+        retryAfter: null,
+      };
     }
 
     await db
       .update(messages)
       .set({
-        verificationCode: verification?.code ?? null,
-        verificationSource: verification?.source ?? null,
-        verificationMethod: verification?.method ?? null,
-        verificationCheckedAt: nowIso(),
+        verificationCode: detection.verification?.code ?? null,
+        verificationSource: detection.verification?.source ?? null,
+        verificationMethod: detection.verification?.method ?? null,
+        verificationCheckedAt: detection.shouldRetry ? null : nowIso(),
+        verificationRetryAfter: detection.shouldRetry
+          ? (detection.retryAfter ?? resolveNextVerificationRetryAtIso())
+          : null,
       })
       .where(eq(messages.id, message.id));
     processed += 1;

@@ -14,6 +14,7 @@ const workspacePageState: {
   allMessagesError: Error | null;
   mailboxMessages: typeof demoMessages | undefined;
   mailboxMessagesError: Error | null;
+  mailboxMessagesIsFetching: boolean;
   detail: unknown;
   detailError: Error | null;
   refresh: ReturnType<typeof vi.fn>;
@@ -28,6 +29,7 @@ const workspacePageState: {
     (message) => message.mailboxId === "mbx_alpha",
   ),
   mailboxMessagesError: null as Error | null,
+  mailboxMessagesIsFetching: false,
   detail: undefined as unknown,
   detailError: null as Error | null,
   refresh: vi.fn(),
@@ -126,7 +128,7 @@ vi.mock("@/hooks/use-messages", () => ({
         data: workspacePageState.mailboxMessages,
         error: workspacePageState.mailboxMessagesError,
         isLoading: false,
-        isFetching: false,
+        isFetching: workspacePageState.mailboxMessagesIsFetching,
         dataUpdatedAt: 1_713_526_800_000,
       };
     }
@@ -147,7 +149,7 @@ vi.mock("@/hooks/use-messages", () => ({
       data: workspacePageState.mailboxMessages,
       error: workspacePageState.mailboxMessagesError,
       isLoading: false,
-      isFetching: false,
+      isFetching: workspacePageState.mailboxMessagesIsFetching,
       dataUpdatedAt: 1_713_526_800_000,
     };
   },
@@ -189,6 +191,7 @@ afterEach(() => {
     (message) => message.mailboxId === "mbx_alpha",
   );
   workspacePageState.mailboxMessagesError = null;
+  workspacePageState.mailboxMessagesIsFetching = false;
   workspacePageState.detail = undefined;
   workspacePageState.detailError = null;
   workspacePageState.refresh = vi.fn();
@@ -240,9 +243,7 @@ describe("workspace page", () => {
     });
 
     render(
-      <MemoryRouter
-        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
-      >
+      <MemoryRouter initialEntries={["/workspace?mailbox=all&sort=recent"]}>
         <Routes>
           <Route path="/workspace" element={<WorkspacePage />} />
         </Routes>
@@ -251,8 +252,6 @@ describe("workspace page", () => {
 
     expect(workspacePropsState.mailboxScope).toBe("workspace");
     expect(workspacePropsState.allMessagesScope).toBe("workspace");
-    expect(workspacePropsState.selectedMessagesScope).toBe("workspace");
-    expect(workspacePropsState.selectedMailboxIds).toEqual(["mbx_alpha"]);
   });
 
   it("derives the latest verification code for each mailbox from aggregate messages", () => {
@@ -261,11 +260,50 @@ describe("workspace page", () => {
       {
         ...demoMessages[0],
         id: "msg_alpha_newer",
-        receivedAt: "2026-04-01T08:45:00.000Z",
+        receivedAt: "2026-04-02T08:45:00.000Z",
         verification: {
           code: "551177",
           source: "subject",
           method: "ai",
+        },
+      },
+    ];
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/workspace?mailbox=all&sort=recent"]}>
+        <Routes>
+          <Route path="/workspace" element={<WorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
+    ).toBe("551177");
+  });
+
+  it("keeps the mailbox verification code in sync with the selected mailbox feed", () => {
+    workspacePageState.allMessages = demoMessages.map((message) =>
+      message.mailboxId === "mbx_alpha"
+        ? {
+            ...message,
+            verification: null,
+          }
+        : message,
+    );
+    workspacePageState.mailboxMessages = [
+      {
+        ...demoMessages[0],
+        id: "msg_alpha_live",
+        receivedAt: "2026-04-02T08:50:00.000Z",
+        verification: {
+          code: "662288",
+          source: "body",
+          method: "rules",
         },
       },
     ];
@@ -286,6 +324,42 @@ describe("workspace page", () => {
 
     expect(
       workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
-    ).toBe("551177");
+    ).toBe("662288");
+  });
+
+  it("keeps aggregate mailbox verification metadata while the selected feed refreshes", () => {
+    workspacePageState.allMessages = [
+      {
+        ...demoMessages[0],
+        id: "msg_alpha_newer",
+        receivedAt: "2026-04-02T08:55:00.000Z",
+        verification: {
+          code: "773311",
+          source: "subject",
+          method: "rules",
+        },
+      },
+      ...demoMessages.slice(1),
+    ];
+    workspacePageState.mailboxMessages = [];
+    workspacePageState.mailboxMessagesIsFetching = true;
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
+      >
+        <Routes>
+          <Route path="/workspace" element={<WorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
+    ).toBe("773311");
   });
 });

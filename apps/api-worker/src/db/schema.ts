@@ -172,6 +172,7 @@ export const messages = sqliteTable(
     verificationSource: text("verification_source"),
     verificationMethod: text("verification_method"),
     verificationCheckedAt: text("verification_checked_at"),
+    verificationRetryAfter: text("verification_retry_after"),
     parseStatus: text("parse_status").notNull(),
     rawR2Key: text("raw_r2_key").notNull(),
     parsedR2Key: text("parsed_r2_key").notNull(),
@@ -184,6 +185,11 @@ export const messages = sqliteTable(
     index("messages_user_received_idx").on(table.userId, table.receivedAt),
     index("messages_verification_backfill_idx").on(
       table.verificationCheckedAt,
+      table.receivedAt,
+    ),
+    index("messages_verification_retry_idx").on(
+      table.verificationCheckedAt,
+      table.verificationRetryAfter,
       table.receivedAt,
     ),
   ],

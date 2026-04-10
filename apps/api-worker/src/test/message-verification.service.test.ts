@@ -20,6 +20,7 @@ vi.mock("../services/runtime-state", () => ({
 import {
   backfillMessageVerification,
   detectVerificationForMessage,
+  listMessageIdsPendingVerification,
   resolveVerificationDetectionForMessage,
 } from "../services/message-verification";
 
@@ -46,7 +47,7 @@ describe("message verification service", () => {
 
   it("falls back to body text when the subject has no usable code", async () => {
     const verification = await detectVerificationForMessage({} as never, {
-      subject: "Build artifacts ready",
+      subject: "Build 551177 ready",
       text: "Use verification code 551177 to unlock the preview URL.",
       html: null,
     });
@@ -72,6 +73,30 @@ describe("message verification service", () => {
     });
   });
 
+  it("preserves the original casing for alphanumeric verification codes", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your verification code is ab12Cd",
+      text: null,
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "ab12Cd",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
+  it("ignores generic code-review subjects that only contain build numbers", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Code review for build 123456",
+      text: null,
+      html: null,
+    });
+
+    expect(verification).toBeNull();
+  });
+
   it("uses Workers AI as a fallback for ambiguous candidates", async () => {
     const run = vi.fn().mockResolvedValue({
       response: '{"verdict":"match","code":"662288","source":"body"}',
@@ -83,12 +108,70 @@ describe("message verification service", () => {
       } as never,
       {
         subject: "Verification request",
-        text: "Candidate list: 551177 662288",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
         html: null,
       },
     );
 
     expect(run).toHaveBeenCalledTimes(1);
+    expect(verification).toEqual({
+      code: "662288",
+      source: "body",
+      method: "ai",
+    });
+  });
+
+  it("maps AI matches back to the original source casing", async () => {
+    const run = vi.fn().mockResolvedValue({
+      response: '{"verdict":"match","code":"AB12CD","source":"body"}',
+    });
+
+    const verification = await detectVerificationForMessage(
+      {
+        AI: { run },
+      } as never,
+      {
+        subject: "Verification request",
+        text: "Your verification codes are ab12Cd and z9y8x7. Use the latest one to continue.",
+        html: null,
+      },
+    );
+
+    expect(verification).toEqual({
+      code: "ab12Cd",
+      source: "body",
+      method: "ai",
+    });
+  });
+
+  it("keeps the relevant verification line in the AI body snippet for long emails", async () => {
+    const run = vi.fn().mockResolvedValue({
+      response: '{"verdict":"match","code":"662288","source":"body"}',
+    });
+    const longBody = [
+      ...Array.from({ length: 40 }, () => "This is boilerplate legal text."),
+      "Your verification codes are 551177 and 662288. Use the latest one to continue.",
+    ].join("\n");
+
+    const verification = await detectVerificationForMessage(
+      {
+        AI: { run },
+      } as never,
+      {
+        subject: "Verification request",
+        text: longBody,
+        html: null,
+      },
+    );
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        run.mock.calls[0]?.[1] as {
+          messages: Array<{ content: string }>;
+        }
+      ).messages[1]?.content,
+    ).toContain("Your verification codes are 551177 and 662288.");
     expect(verification).toEqual({
       code: "662288",
       source: "body",
@@ -114,7 +197,7 @@ describe("message verification service", () => {
       } as never,
       {
         subject: "Verification request",
-        text: "Candidate list: 551177 662288",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
         html: null,
       },
     );
@@ -140,6 +223,7 @@ describe("message verification service", () => {
     expect(detection).toEqual({
       verification: null,
       shouldRetry: false,
+      retryAfter: null,
     });
   });
 
@@ -152,7 +236,7 @@ describe("message verification service", () => {
       } as never,
       {
         subject: "Verification request",
-        text: "Candidate list: 551177 662288",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
         html: null,
       },
     );
@@ -160,7 +244,23 @@ describe("message verification service", () => {
     expect(detection).toEqual({
       verification: null,
       shouldRetry: true,
+      retryAfter: "2099-01-01T00:00:00.000Z",
     });
+  });
+
+  it("keeps ambiguous messages retryable when the AI binding is unavailable", async () => {
+    const detection = await resolveVerificationDetectionForMessage(
+      {} as never,
+      {
+        subject: "Verification request",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
+        html: null,
+      },
+    );
+
+    expect(detection.verification).toBeNull();
+    expect(detection.shouldRetry).toBe(true);
+    expect(detection.retryAfter).toEqual(expect.any(String));
   });
 
   it("backfills verification metadata for unchecked messages", async () => {
@@ -229,6 +329,80 @@ describe("message verification service", () => {
         verificationSource: "body",
         verificationMethod: "rules",
         verificationCheckedAt: expect.any(String),
+        verificationRetryAfter: null,
+      }),
+    );
+  });
+
+  it("keeps retryable backfill messages unchecked while Workers AI is paused", async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const select = vi.fn((fields?: Record<string, unknown>) => {
+      if (fields && Object.keys(fields).length === 1 && "id" in fields) {
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({
+                limit: vi.fn(async () => [{ id: "msg_retry" }]),
+              })),
+            })),
+          })),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(async () => [
+              {
+                id: "msg_retry",
+                subject: "Verification request",
+                parsedR2Key: "parsed/msg_retry.json",
+              },
+            ]),
+          })),
+        })),
+      };
+    });
+    const update = vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => ({
+        where: vi.fn(async () => {
+          updates.push(values);
+        }),
+      })),
+    }));
+
+    getDb.mockReturnValue({
+      select,
+      update,
+    });
+    getRuntimeStateValue.mockResolvedValue("2099-01-01T00:00:00.000Z");
+
+    const processed = await backfillMessageVerification(
+      {
+        AI: { run: vi.fn() },
+        MAIL_BUCKET: {
+          get: vi.fn(async () => ({
+            text: async () =>
+              JSON.stringify({
+                html: null,
+                text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
+              }),
+          })),
+        },
+      } as never,
+      {
+        CLEANUP_BATCH_SIZE: 1,
+      },
+    );
+
+    expect(processed).toBe(1);
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        verificationCode: null,
+        verificationSource: null,
+        verificationMethod: null,
+        verificationCheckedAt: null,
+        verificationRetryAfter: "2099-01-01T00:00:00.000Z",
       }),
     );
   });
@@ -318,6 +492,7 @@ describe("message verification service", () => {
         verificationSource: null,
         verificationMethod: null,
         verificationCheckedAt: expect.any(String),
+        verificationRetryAfter: null,
       }),
     );
     expect(updates).toContainEqual(
@@ -326,7 +501,30 @@ describe("message verification service", () => {
         verificationSource: "body",
         verificationMethod: "rules",
         verificationCheckedAt: expect.any(String),
+        verificationRetryAfter: null,
       }),
     );
+  });
+
+  it("limits pending verification selection to the configured cleanup batch size", async () => {
+    const limit = vi.fn(async () => []);
+
+    getDb.mockReturnValue({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            orderBy: vi.fn(() => ({
+              limit,
+            })),
+          })),
+        })),
+      })),
+    });
+
+    await listMessageIdsPendingVerification({} as never, {
+      CLEANUP_BATCH_SIZE: 3,
+    });
+
+    expect(limit).toHaveBeenCalledWith(3);
   });
 });
