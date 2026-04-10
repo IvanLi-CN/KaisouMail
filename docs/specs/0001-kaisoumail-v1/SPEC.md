@@ -194,7 +194,11 @@ PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
 
 PR: include
-![Workspace selected mailbox header with copy-ready address input](./assets/workspace-selected-mailbox-address.png)
+![Workspace selected mailbox header with wrapped address text and inline copy button](./assets/workspace-selected-mailbox-address.png)
+
+![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
+
+![Workspace long mailbox addresses wrap in the reader header while the rail keeps truncation](./assets/workspace-long-mailbox-address.png)
 
 ![Workspace message row with the repaired focus halo](./assets/workspace-message-row-focus-ring.png)
 

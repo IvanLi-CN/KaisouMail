@@ -84,6 +84,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const getMailboxRowByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(container)
+    .getByText(address)
+    .closest(".workspace-mailbox-item") as HTMLElement;
+
+const getMailboxRowTriggerByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(getMailboxRowByAddress(container, address)).getByRole("button", {
+    name: address,
+  });
+
 describe("MailWorkspace", () => {
   it("only closes the create popover via cancel or escape when idle", () => {
     const onCancel = vi.fn();
@@ -141,9 +157,10 @@ describe("MailWorkspace", () => {
 
     expect(onCancel).not.toHaveBeenCalled();
     expect(
-      within(mailboxList).getByRole("button", {
-        name: /spec@ops\.beta\.mail\.example\.net/i,
-      }),
+      getMailboxRowByAddress(
+        mailboxList,
+        /spec@ops\.beta\.mail\.example\.net/i,
+      ),
     ).toHaveTextContent("新建");
   });
 
@@ -166,12 +183,14 @@ describe("MailWorkspace", () => {
     const allMailRow = within(mailboxList).getByRole("button", {
       name: /全部邮箱/i,
     });
-    const normalRow = within(mailboxList).getByRole("button", {
-      name: /build@alpha\.relay\.example\.test/i,
-    });
-    const highlightedRow = within(mailboxList).getByRole("button", {
-      name: /spec@ops\.beta\.mail\.example\.net/i,
-    });
+    const normalRow = getMailboxRowByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const highlightedRow = getMailboxRowByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
     const messageList = screen.getByRole("region", { name: "邮件列表" });
     const activeMessageRow = within(messageList).getByRole("button", {
       name: /Build artifacts ready/i,
@@ -196,8 +215,13 @@ describe("MailWorkspace", () => {
     expect(activeMessageRow.className).not.toContain("focus-visible:ring-ring");
     expect(activeMessageRow.className).not.toContain("focus-visible:ring-2");
 
-    highlightedRow.focus();
-    expect(highlightedRow).toHaveFocus();
+    const highlightedTrigger = getMailboxRowTriggerByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
+
+    highlightedTrigger.focus();
+    expect(highlightedTrigger).toHaveFocus();
   });
 
   it("renders pane-specific errors instead of empty placeholders", () => {
@@ -315,6 +339,18 @@ describe("MailWorkspace", () => {
   });
 
   it("renders the selected mailbox as a readonly input and auto-selects the address on focus", () => {
+    const addRange = vi.fn();
+    const removeAllRanges = vi.fn();
+    const selectNodeContents = vi.fn();
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      addRange,
+      removeAllRanges,
+    } as unknown as Selection);
+    vi.spyOn(document, "createRange").mockReturnValue({
+      selectNodeContents,
+    } as unknown as Range);
+
     render(
       <MemoryRouter>
         <MailWorkspace
@@ -334,20 +370,20 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    const addressInput = screen.getByRole("textbox", {
-      name: "当前邮箱地址",
-    }) as HTMLInputElement;
+    const addressText = screen.getByTestId(
+      "workspace-selected-mailbox-address",
+    );
 
-    expect(addressInput).toHaveValue("spec@ops.beta.mail.example.net");
-    expect(addressInput).toHaveAttribute("readonly");
+    expect(addressText).toHaveTextContent("spec@ops.beta.mail.example.net");
     expect(
-      screen.getByRole("button", { name: "复制邮箱地址" }),
+      screen.getByRole("button", { name: "复制当前邮箱地址" }),
     ).toBeInTheDocument();
 
-    fireEvent.focus(addressInput);
+    fireEvent.focus(addressText);
 
-    expect(addressInput.selectionStart).toBe(0);
-    expect(addressInput.selectionEnd).toBe(addressInput.value.length);
+    expect(selectNodeContents).toHaveBeenCalledWith(addressText);
+    expect(removeAllRanges).toHaveBeenCalled();
+    expect(addRange).toHaveBeenCalled();
   });
 
   it("keeps the aggregate workspace title when all mailboxes are selected", () => {
@@ -364,9 +400,49 @@ describe("MailWorkspace", () => {
     );
 
     expect(
-      screen.queryByRole("textbox", { name: "当前邮箱地址" }),
+      screen.queryByTestId("workspace-selected-mailbox-address"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("全部邮箱邮件")).toBeInTheDocument();
+  });
+
+  it("copies a mailbox address from the left rail without selecting the row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onSelectMailbox = vi.fn();
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      within(
+        getMailboxRowByAddress(
+          screen.getByRole("region", { name: "邮箱列表" }),
+          /build@alpha\.relay\.example\.test/i,
+        ),
+      ).getByRole("button", { name: "复制邮箱地址" }),
+    );
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("build@alpha.relay.example.test");
+    });
+
+    expect(onSelectMailbox).not.toHaveBeenCalled();
   });
 
   it("copies the selected mailbox address and shows success feedback", async () => {
@@ -398,7 +474,7 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "复制邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "复制当前邮箱地址" }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
@@ -435,7 +511,7 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "复制邮箱地址" }));
+    fireEvent.click(screen.getByRole("button", { name: "复制当前邮箱地址" }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith("spec@ops.beta.mail.example.net");
