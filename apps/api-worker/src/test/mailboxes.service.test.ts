@@ -238,6 +238,50 @@ describe("mailbox service helpers", () => {
     }
   });
 
+  it("creates unlimited mailboxes with a null expiresAt", async () => {
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: "dom_primary",
+          status: "active",
+          zoneId: "zone_primary",
+          deletedAt: null,
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    pickRandomActiveDomain.mockResolvedValue({
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+    });
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_created");
+
+    const created = await createMailboxForUser(
+      {
+        DB: {
+          prepare: vi.fn(() => ({
+            bind: vi.fn(() => ({
+              run: vi.fn(async () => ({ meta: { changes: 1 } })),
+            })),
+          })),
+        },
+      } as never,
+      runtimeConfig,
+      memberUser,
+      {
+        localPart: "build",
+        subdomain: "alpha",
+        expiresInMinutes: null,
+      },
+    );
+
+    expect(created.expiresAt).toBeNull();
+  });
+
   it("retries generated mailbox candidates when the first readable address is already taken", async () => {
     const originalRandom = Math.random;
     Math.random = () => 0;

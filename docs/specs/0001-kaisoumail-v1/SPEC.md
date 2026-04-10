@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-09
+Last: 2026-04-10
 
 ## Objective
 
@@ -31,6 +31,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace, while `/mailboxes` itself keeps the full mailbox history and does not inherit the workspace trimming window
 - API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
 - The shared mailbox-creation form now supports both segmented entry (`localPart + subdomain + rootDomain`) and a full-address mode; supported full addresses normalize to lowercase, unsupported domains are blocked client-side, and pasting a supported full address into segmented fields offers a one-click mode switch with auto-filled values
+- Mailbox TTL entry now uses a non-linear slider plus inline editable display: finite values span `1 hour .. 1 year` on a logarithmic scale, with compact key anchors such as `30 days` and `180 days`; an explicit final slot and `expiresInMinutes: null` represent long-term lifetime
 - When `localPart` and/or `subdomain` are omitted, generated mailbox aliases come from a readable mixed pool instead of machine-looking `mail-*` / `box-*` prefixes, and collisions retry within a bounded attempt budget before falling back to a short natural suffix
 
 ### Domains
@@ -60,10 +61,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against the configured control-plane origin set (`WEB_APP_ORIGIN` + `WEB_APP_ORIGINS`), derives one shared non-public RP ID from that trusted origin set, rejects raw IP-literal origins in favor of `localhost`/domain hosts, then issues the same `kaisoumail_session` cookie used by the API key exchange flow
 - `GET /api/passkeys` plus `POST /api/passkeys/registration/options|verify` and `DELETE /api/passkeys/:id` manage per-user passkeys with revocation-aware audit history
-- `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, address validation hints, and whether browser passkey auth is currently enabled
+- `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, unlimited-TTL capability, address validation hints, and whether browser passkey auth is currently enabled
 - `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`
 - `GET|POST /api/domains` plus `POST /api/domains/bind` and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
-- `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side
+- `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
@@ -117,6 +118,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 嵌入页面主体的错误态（如工作台内联 404 / pane failure）使用单栏堆叠布局；仅路由级全屏错误页允许使用更宽的恢复信息布局
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox creation guidance stays mode-aware: segmented mode can still promise random active-domain allocation, while full-address mode instead explains supported-domain validation and keeps the current normalized address preview visible
+- Mailbox lifetime control now keeps the dense dialog compact: a log-scale slider covers short-lived to long-lived finite mailboxes up to one year, the current resolved TTL is shown inline at the right edge, double-click inline editing accepts common human units, and the terminal slider slot exposes explicit long-term lifetime
 - Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
 - Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
 - Destroyed mailboxes collapse to a muted single-line row in dense lists to avoid wasting vertical space
@@ -125,6 +127,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
@@ -231,16 +234,21 @@ PR: include
 ### Mailbox Creation
 
 PR: include
-![Mailbox create card with the default random-domain placeholder selected](./assets/mailbox-create-unselected-domain.png)
+![Mailbox create card with the default random-domain placeholder and 1-hour TTL slider state](./assets/mailbox-create-ttl-random-slider.png)
+
+![Mailbox create card on mobile keeps the `30 天` anchor while the right edge stays on `长期`](./assets/mailbox-create-ttl-mobile-priority-30d.png)
 
 PR: include
-![Mailbox create card with explicit root domain selected](./assets/mailbox-create-selected-domain.png)
+![Mailbox create card with the finite TTL slider pushed to the 1-year cap while keeping the 30-day and 180-day anchors visible](./assets/mailbox-create-ttl-max-finite.png)
 
 PR: include
-![Mailbox create card switched to full-address mode with a supported address preview](./assets/mailbox-create-full-address-mode.png)
+![Mailbox create card with the explicit long-term TTL slot selected](./assets/mailbox-create-ttl-unlimited.png)
 
 PR: include
-![Mailbox create card showing the paste-to-switch prompt for a supported full address](./assets/mailbox-create-paste-switch-prompt.png)
+![Mailbox create card after inline TTL editing parses `36h` into `1 天 12 小时`](./assets/mailbox-create-ttl-inline-36h.png)
+
+PR: include
+![Mailbox create card after inline TTL editing accepts `300d` as `300 天`](./assets/mailbox-create-ttl-inline-300d.png)
 
 ### Mailbox Detail
 

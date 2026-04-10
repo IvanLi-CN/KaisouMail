@@ -1,4 +1,4 @@
-import { maxMailboxTtlMinutes } from "@kaisoumail/shared";
+import { maxMailboxTtlMinutes, minMailboxTtlMinutes } from "@kaisoumail/shared";
 import {
   useCallback,
   useDeferredValue,
@@ -290,7 +290,7 @@ export const WorkspacePage = () => {
       localPart?: string;
       subdomain?: string;
       rootDomain?: string;
-      expiresInMinutes: number;
+      expiresInMinutes: number | null;
     }) => {
       setCreateMailboxError(null);
 
@@ -373,12 +373,16 @@ export const WorkspacePage = () => {
           isMetaLoading: metaQuery.isLoading,
           isOpen: isCreateMailboxOpen,
           isPending: createMailboxMutation.isPending,
+          minTtlMinutes:
+            metaQuery.data?.minMailboxTtlMinutes ?? minMailboxTtlMinutes,
           maxTtlMinutes:
             metaQuery.data?.maxMailboxTtlMinutes ?? maxMailboxTtlMinutes,
           metaError: workspaceMetaError,
           onCancel: handleCancelCreateMailbox,
           onOpen: handleOpenCreateMailbox,
           onSubmit: handleCreateMailbox,
+          supportsUnlimitedTtl:
+            metaQuery.data?.supportsUnlimitedMailboxTtl ?? false,
         }}
         mailboxesError={mailboxesPaneError}
         messagesError={messagesPaneError}

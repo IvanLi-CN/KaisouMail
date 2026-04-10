@@ -80,8 +80,9 @@ export const CreateFlow: Story = {
       canvas.getByLabelText("邮箱域名"),
       "mail.example.net",
     );
-    await userEvent.clear(canvas.getByLabelText("生命周期（分钟）"));
-    await userEvent.type(canvas.getByLabelText("生命周期（分钟）"), "90");
+    await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
+    await userEvent.clear(canvas.getByLabelText("生命周期值"));
+    await userEvent.type(canvas.getByLabelText("生命周期值"), "90m");
     await userEvent.click(canvas.getByRole("button", { name: "创建邮箱" }));
 
     await expect(args.onCreate).toHaveBeenCalledWith({

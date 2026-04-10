@@ -33,10 +33,8 @@ describe("mailboxes page view", () => {
       "邮箱域名",
     ) as HTMLSelectElement;
     expect(rootDomainField.value).toBe("");
-    expect(
-      screen.getByText(/ava-lin@desk\.hub\.<随机 active 域名>/i),
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("60")).toBeInTheDocument();
+    expect(screen.getByLabelText("生命周期值")).toHaveTextContent("1 小时");
+    expect(screen.queryByText(/默认 .*自动回收/)).not.toBeInTheDocument();
   });
 
   it("shows a list error instead of pretending there are no mailboxes", () => {

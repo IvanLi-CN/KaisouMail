@@ -218,7 +218,7 @@ export const demoApi = {
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
-    expiresInMinutes: number;
+    expiresInMinutes?: number | null;
   }) {
     const rootDomain = (
       input.rootDomain?.trim().toLowerCase() ??
@@ -236,6 +236,10 @@ export const demoApi = {
       rootDomain,
     });
     const createdAt = new Date().toISOString();
+    const expiresInMinutes =
+      input.expiresInMinutes === undefined
+        ? state.meta.defaultMailboxTtlMinutes
+        : input.expiresInMinutes;
     const mailbox: Mailbox = {
       id: randomId("mbx"),
       userId: demoSessionUser.id,
@@ -246,9 +250,10 @@ export const demoApi = {
       status: "active",
       createdAt,
       lastReceivedAt: null,
-      expiresAt: new Date(
-        Date.now() + input.expiresInMinutes * 60_000,
-      ).toISOString(),
+      expiresAt:
+        expiresInMinutes === null
+          ? null
+          : new Date(Date.now() + expiresInMinutes * 60_000).toISOString(),
       destroyedAt: null,
       routingRuleId: randomId("rule"),
     };
@@ -257,12 +262,12 @@ export const demoApi = {
   },
   async ensureMailbox(
     input:
-      | { address: string; expiresInMinutes?: number }
+      | { address: string; expiresInMinutes?: number | null }
       | {
           localPart: string;
           subdomain: string;
           rootDomain?: string;
-          expiresInMinutes?: number;
+          expiresInMinutes?: number | null;
         },
   ) {
     const address =
@@ -302,7 +307,9 @@ export const demoApi = {
       subdomain,
       rootDomain,
       expiresInMinutes:
-        input.expiresInMinutes ?? state.meta.defaultMailboxTtlMinutes,
+        input.expiresInMinutes === undefined
+          ? state.meta.defaultMailboxTtlMinutes
+          : input.expiresInMinutes,
     });
   },
   async resolveMailbox(address: string) {

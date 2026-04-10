@@ -141,6 +141,37 @@ describe("mailbox routes", () => {
     );
   });
 
+  it("passes unlimited TTL through mailbox creation", async () => {
+    createMailboxForUser.mockResolvedValue(activeMailbox);
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          localPart: "build",
+          subdomain: "alpha",
+          expiresInMinutes: null,
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    expect(createMailboxForUser).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      expect.objectContaining({ id: "usr_1" }),
+      expect.objectContaining({
+        localPart: "build",
+        subdomain: "alpha",
+        expiresInMinutes: null,
+      }),
+    );
+  });
+
   it("returns 200 when ensure reuses an active mailbox", async () => {
     ensureMailboxForUser.mockResolvedValue({
       mailbox: activeMailbox,

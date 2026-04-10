@@ -555,9 +555,10 @@ export const demoMeta: ApiMeta = {
     "http://localhost:6006",
     "http://127.0.0.1:6006",
   ],
+  supportsUnlimitedMailboxTtl: true,
   defaultMailboxTtlMinutes: 60,
-  minMailboxTtlMinutes: 5,
-  maxMailboxTtlMinutes: 1440,
+  minMailboxTtlMinutes: 60,
+  maxMailboxTtlMinutes: 525600,
   addressRules: {
     format: "localPart@subdomain.rootDomain",
     localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",

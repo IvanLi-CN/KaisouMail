@@ -148,7 +148,9 @@ export const MailboxesPageView = ({
         maxTtlMinutes={meta.maxMailboxTtlMinutes}
         isMetaLoading={isMetaLoading}
         isPending={isCreatePending}
+        minTtlMinutes={meta.minMailboxTtlMinutes}
         onSubmit={onCreate}
+        supportsUnlimitedTtl={meta.supportsUnlimitedMailboxTtl}
       />
     ) : (
       <Card>
