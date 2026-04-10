@@ -332,7 +332,7 @@ export const storeIncomingMessage = async (
     forwardable.setReject("Mailbox unavailable");
     return;
   }
-  if (Date.now() > new Date(mailbox.expiresAt).getTime()) {
+  if (mailbox.expiresAt && Date.now() > new Date(mailbox.expiresAt).getTime()) {
     forwardable.setReject("Mailbox expired");
     return;
   }

@@ -139,6 +139,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "domains": ${JSON.stringify(meta.domains, null, 2)},
   "passkeyAuthEnabled": ${meta.passkeyAuthEnabled},
   "passkeyTrustedOrigins": ${JSON.stringify(meta.passkeyTrustedOrigins, null, 2)},
+  "supportsUnlimitedMailboxTtl": ${meta.supportsUnlimitedMailboxTtl},
   "defaultMailboxTtlMinutes": ${ttl},
   "minMailboxTtlMinutes": ${meta.minMailboxTtlMinutes},
   "maxMailboxTtlMinutes": ${maxTtl},
@@ -152,6 +153,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `rootDomain`。",
             "创建邮箱时如果省略 `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
+            "有限 TTL 统一按分钟表达；传 `expiresInMinutes: null` 表示长期，省略该字段则回退到默认 TTL。",
             "浏览器登录页与身份认证页会同时检查 `passkeyAuthEnabled` 与 `passkeyTrustedOrigins`，只有当前页面 origin 命中可信列表时才启用 passkey CTA。",
           ],
         },
@@ -452,7 +454,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "列表响应包装在 `{ mailboxes: [...] }` 下。",
-            "字段集合由 `mailboxSchema` 定义，包含 `lastReceivedAt`、`expiresAt` 与 `routingRuleId`。",
+            "字段集合由 `mailboxSchema` 定义，包含 `lastReceivedAt`、`expiresAt` 与 `routingRuleId`；长期邮箱的 `expiresAt` 会是 null。",
             "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条。",
             "服务端会把大批量 D1 `IN (...)` 查询拆成每批最多 50 条，避免 admin 工作区因为历史邮箱过多而触发参数上限。",
           ],
@@ -485,7 +487,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "`localPart` 与 `subdomain` 都是可选字段，但会经过 shared 正则校验。",
             "`rootDomain` 可选；省略时服务端会从当前 active 域名里随机挑一个。",
-            `expiresInMinutes 必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；未传时默认 ${ttl}。`,
+            `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
           ],
         },
         {
@@ -516,6 +518,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `rootDomain` 可选。",
             "命中现有 active mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
+            "若要创建长期邮箱，可显式传 `expiresInMinutes: null`。",
           ],
         },
         {
@@ -863,8 +866,10 @@ const ApiKeysDocsPageView = ({
                 可用域名列表应通过 <code>GET /api/meta</code>{" "}
                 动态读取；创建邮箱时既可以显式传 <code>rootDomain</code>
                 ，也可以省略后让服务端从 active 域名中随机分配。 默认 TTL 为{" "}
-                <code>{meta.defaultMailboxTtlMinutes}</code> 分钟，最长{" "}
-                <code>{meta.maxMailboxTtlMinutes}</code> 分钟。
+                <code>{meta.defaultMailboxTtlMinutes}</code> 分钟，有限上限为{" "}
+                <code>{meta.maxMailboxTtlMinutes}</code> 分钟；当{" "}
+                <code>supportsUnlimitedMailboxTtl</code> 为 true 时，还可传{" "}
+                <code>expiresInMinutes: null</code> 表示长期。
               </p>
               <p className="mt-2">
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：

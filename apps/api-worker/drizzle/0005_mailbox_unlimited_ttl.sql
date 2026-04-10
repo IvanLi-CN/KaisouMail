@@ -1,0 +1,2 @@
+-- Historical migration slot intentionally kept non-destructive.
+-- Long-term mailbox TTL is handled with runtime-compatible storage in this release.

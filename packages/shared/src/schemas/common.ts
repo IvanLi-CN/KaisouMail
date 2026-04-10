@@ -97,7 +97,7 @@ export const mailboxSchema = z.object({
   status: mailboxStatusSchema,
   createdAt: isoDateSchema,
   lastReceivedAt: isoDateSchema.nullable(),
-  expiresAt: isoDateSchema,
+  expiresAt: isoDateSchema.nullable(),
   destroyedAt: isoDateSchema.nullable(),
   routingRuleId: z.string().nullable(),
 });

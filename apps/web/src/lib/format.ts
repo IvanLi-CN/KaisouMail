@@ -6,7 +6,8 @@ export const formatDateTime = (value: string | null | undefined) => {
   }).format(new Date(value));
 };
 
-export const formatRelativeMinutes = (expiresAt: string) => {
+export const formatRelativeMinutes = (expiresAt: string | null | undefined) => {
+  if (!expiresAt) return "长期";
   const deltaMinutes = Math.round(
     (new Date(expiresAt).getTime() - Date.now()) / 60_000,
   );

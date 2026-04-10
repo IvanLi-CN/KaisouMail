@@ -188,11 +188,13 @@ const buildCreateMailboxAction = (
   isMetaLoading: false,
   isOpen: false,
   isPending: false,
+  minTtlMinutes: demoMeta.minMailboxTtlMinutes,
   maxTtlMinutes: demoMeta.maxMailboxTtlMinutes,
   metaError: null,
   onCancel: fn(),
   onOpen: fn(),
   onSubmit: fn(),
+  supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
   ...overrides,
 });
 
@@ -424,6 +426,7 @@ const WorkspaceStoryHarness = ({
         isMetaLoading: false,
         isOpen: isCreateOpen,
         isPending: isCreatePending,
+        minTtlMinutes: demoMeta.minMailboxTtlMinutes,
         maxTtlMinutes: demoMeta.maxMailboxTtlMinutes,
         metaError: null,
         onCancel: () => {
@@ -436,6 +439,7 @@ const WorkspaceStoryHarness = ({
           setCreateError(null);
           setIsCreateOpen(true);
         },
+        supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
         onSubmit: async (values) => {
           setCreateError(null);
           setIsCreatePending(true);

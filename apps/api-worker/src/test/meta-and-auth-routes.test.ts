@@ -88,7 +88,10 @@ describe("meta and auth routes", () => {
       cloudflareDomainLifecycleEnabled: boolean;
       passkeyAuthEnabled: boolean;
       passkeyTrustedOrigins: string[];
+      supportsUnlimitedMailboxTtl: boolean;
       defaultMailboxTtlMinutes: number;
+      minMailboxTtlMinutes: number;
+      maxMailboxTtlMinutes: number;
       addressRules: { examples: string[] };
     };
 
@@ -98,7 +101,10 @@ describe("meta and auth routes", () => {
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
     expect(payload.passkeyAuthEnabled).toBe(false);
     expect(payload.passkeyTrustedOrigins).toEqual([]);
+    expect(payload.supportsUnlimitedMailboxTtl).toBe(true);
     expect(payload.defaultMailboxTtlMinutes).toBe(60);
+    expect(payload.minMailboxTtlMinutes).toBe(60);
+    expect(payload.maxMailboxTtlMinutes).toBe(525600);
     expect(payload.addressRules.examples[0]).toContain("@desk.hub.707979.xyz");
   });
 

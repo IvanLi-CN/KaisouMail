@@ -107,7 +107,9 @@ type MailWorkspaceProps = {
     isMetaLoading: boolean;
     isOpen: boolean;
     isPending: boolean;
+    minTtlMinutes: number;
     maxTtlMinutes: number;
+    supportsUnlimitedTtl: boolean;
     metaError: string | null;
     onCancel: () => void;
     onOpen: () => void;
@@ -115,7 +117,7 @@ type MailWorkspaceProps = {
       localPart?: string;
       subdomain?: string;
       rootDomain?: string;
-      expiresInMinutes: number;
+      expiresInMinutes: number | null;
     }) => Promise<void> | void;
   };
   mailboxesError?: WorkspacePaneError | null;
@@ -385,7 +387,12 @@ export const MailWorkspace = ({
                     isMetaLoading={createMailboxAction.isMetaLoading}
                     isPending={createMailboxAction.isPending}
                     maxTtlMinutes={createMailboxAction.maxTtlMinutes}
+                    minTtlMinutes={createMailboxAction.minTtlMinutes}
+                    supportsUnlimitedTtl={
+                      createMailboxAction.supportsUnlimitedTtl
+                    }
                     submitError={createMailboxAction.error}
+                    ttlDensity="compact"
                     onCancel={createMailboxAction.onCancel}
                     onPreviewChange={setPreviewState}
                     onSubmit={createMailboxAction.onSubmit}

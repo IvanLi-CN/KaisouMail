@@ -58,7 +58,8 @@ export const createMailboxRequestSchema = z.object({
     .int()
     .min(minMailboxTtlMinutes)
     .max(maxMailboxTtlMinutes)
-    .default(60),
+    .nullable()
+    .optional(),
 });
 
 export const ensureMailboxRequestSchema = z.union([
@@ -70,6 +71,7 @@ export const ensureMailboxRequestSchema = z.union([
         .int()
         .min(minMailboxTtlMinutes)
         .max(maxMailboxTtlMinutes)
+        .nullable()
         .optional(),
     })
     .strict(),
@@ -83,6 +85,7 @@ export const ensureMailboxRequestSchema = z.union([
         .int()
         .min(minMailboxTtlMinutes)
         .max(maxMailboxTtlMinutes)
+        .nullable()
         .optional(),
     })
     .strict(),
@@ -169,6 +172,7 @@ export const apiMetaResponseSchema = z.object({
   cloudflareDomainLifecycleEnabled: z.boolean(),
   passkeyAuthEnabled: z.boolean(),
   passkeyTrustedOrigins: z.array(z.string().url()),
+  supportsUnlimitedMailboxTtl: z.boolean().optional().default(false),
   defaultMailboxTtlMinutes: z
     .number()
     .int()

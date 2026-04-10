@@ -59,6 +59,18 @@ describe("email helpers", () => {
     });
   });
 
+  it("accepts unlimited mailbox TTL with a null payload value", () => {
+    expect(
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops.alpha",
+        expiresInMinutes: null,
+      }),
+    ).toMatchObject({
+      expiresInMinutes: null,
+    });
+  });
+
   it("rejects malformed dotted subdomains", () => {
     expect(() =>
       createMailboxRequestSchema.parse({
