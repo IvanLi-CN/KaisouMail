@@ -1,5 +1,20 @@
 import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
+
+const expectMailboxHighlightBadge = async (
+  rowButton: Locator,
+  visible: boolean,
+) => {
+  const rowShell = rowButton.locator("xpath=..");
+  const badge = rowShell.getByText("新建", { exact: true });
+
+  if (visible) {
+    await expect(badge).toBeVisible();
+    return;
+  }
+
+  await expect(badge).toHaveCount(0);
+};
 
 test("demo console login and workspace mail flow", async ({ page }) => {
   const mailboxLocalPart = `e2e${Date.now().toString().slice(-6)}`;
@@ -48,10 +63,10 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     name: randomMailboxAddress,
   });
   await expect(randomMailboxRow).toBeVisible();
-  await expect(randomMailboxRow.getByText("新建")).toBeVisible();
+  await expectMailboxHighlightBadge(randomMailboxRow, true);
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expect(randomMailboxRow.getByText("新建")).toHaveCount(0);
+  await expectMailboxHighlightBadge(randomMailboxRow, false);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByLabel("用户名").fill(manualMailboxLocalPart);
@@ -66,10 +81,10 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     name: new RegExp(manualMailboxAddress),
   });
   await expect(mailboxRow).toBeVisible();
-  await expect(mailboxRow.getByText("新建")).toBeVisible();
+  await expectMailboxHighlightBadge(mailboxRow, true);
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expect(mailboxRow.getByText("新建")).toHaveCount(0);
+  await expectMailboxHighlightBadge(mailboxRow, false);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByRole("button", { name: "完整" }).click();
@@ -87,10 +102,10 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     name: new RegExp(fullAddressPreview),
   });
   await expect(fullAddressMailboxRow).toBeVisible();
-  await expect(fullAddressMailboxRow.getByText("新建")).toBeVisible();
+  await expectMailboxHighlightBadge(fullAddressMailboxRow, true);
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expect(fullAddressMailboxRow.getByText("新建")).toHaveCount(0);
+  await expectMailboxHighlightBadge(fullAddressMailboxRow, false);
 
   await page.getByRole("button", { name: /全部邮箱/i }).click();
   await page.getByRole("button", { name: /Build artifacts ready/ }).click();
