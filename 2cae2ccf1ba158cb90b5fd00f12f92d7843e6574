@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.19.0",
+  "base_stable_version": "0.18.5",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-10T10:52:59Z",
+  "next_stable_version": "0.19.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "5647aaa7fa5347e5849ba7c1019bc91d50546997",
+  "pr_number": 40,
+  "pr_title": "feat: improve mailbox lifetime controls",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.19.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.19.0",
+  "target_sha": "2cae2ccf1ba158cb90b5fd00f12f92d7843e6574",
+  "type_label": "type:minor"
+}
