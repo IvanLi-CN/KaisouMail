@@ -40,6 +40,9 @@ describe("MailboxCreateCard", () => {
     expect(
       screen.queryByText(/双击编辑；支持 m \/ h \/ d \/ w \/ mo/),
     ).not.toBeInTheDocument();
+    expect(screen.getAllByText("1 小时").length).toBeGreaterThan(0);
+    expect(screen.getByText("1 天")).toBeInTheDocument();
+    expect(screen.getByText("无限")).toBeInTheDocument();
   });
 
   it("shows only loading state copy when metadata is still loading", () => {

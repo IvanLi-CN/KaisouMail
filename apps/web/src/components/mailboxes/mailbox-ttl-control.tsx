@@ -143,6 +143,10 @@ export const MailboxTtlControl = ({
             <>
               <span
                 aria-hidden="true"
+                className="pointer-events-none absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-border"
+              />
+              <span
+                aria-hidden="true"
                 className="pointer-events-none absolute top-1/2 h-5 w-px -translate-x-1/2 -translate-y-1/2 bg-border"
                 style={{ left: finiteLabelLeft }}
               />
@@ -151,6 +155,25 @@ export const MailboxTtlControl = ({
                 className="pointer-events-none absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-border bg-background"
               />
             </>
+          ) : null}
+        </div>
+        <div className="relative mt-2 h-5 text-xs text-muted-foreground">
+          <span className="absolute left-0 top-0 whitespace-nowrap">
+            {formatMailboxTtl(minMinutes)}
+          </span>
+          <span
+            className={cn(
+              "absolute top-0 whitespace-nowrap",
+              supportsUnlimited ? "-translate-x-1/2" : "-translate-x-full",
+            )}
+            style={{ left: finiteLabelLeft }}
+          >
+            {formatMailboxTtl(maxMinutes)}
+          </span>
+          {supportsUnlimited ? (
+            <span className="absolute right-0 top-0 whitespace-nowrap">
+              无限
+            </span>
           ) : null}
         </div>
       </div>

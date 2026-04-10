@@ -44,6 +44,9 @@ export const RandomDefault: Story = {
     await expect(
       canvas.queryByText(/双击编辑；支持 m \/ h \/ d \/ w \/ mo/),
     ).not.toBeInTheDocument();
+    await expect(canvas.getAllByText("1 小时").length).toBeGreaterThan(0);
+    await expect(canvas.getByText("30 天")).toBeInTheDocument();
+    await expect(canvas.getByText("无限")).toBeInTheDocument();
     await expect(
       canvas.getByText(randomDomainPreviewAddress),
     ).toBeInTheDocument();
