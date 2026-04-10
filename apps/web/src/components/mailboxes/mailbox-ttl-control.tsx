@@ -15,12 +15,18 @@ import {
 } from "@/lib/mailbox-ttl";
 import { cn } from "@/lib/utils";
 
-const ttlAnchorCandidates = [
+const comfortableTtlAnchorCandidates = [
   { minutes: 6 * 60, className: "hidden md:block" },
   { minutes: 24 * 60, className: "hidden lg:block" },
   { minutes: 7 * 24 * 60, className: "hidden xl:block" },
   { minutes: 30 * 24 * 60, className: "" },
-  { minutes: 180 * 24 * 60, className: "hidden 2xl:block" },
+  { minutes: 180 * 24 * 60, className: "hidden xl:block" },
+] as const;
+
+const compactTtlAnchorCandidates = [
+  { minutes: 24 * 60, className: "hidden sm:block" },
+  { minutes: 30 * 24 * 60, className: "" },
+  { minutes: 180 * 24 * 60, className: "hidden lg:block" },
 ] as const;
 
 export const MailboxTtlControl = ({
@@ -33,6 +39,7 @@ export const MailboxTtlControl = ({
   maxMinutes = maxMailboxTtlMinutes,
   supportsUnlimited = true,
   onEditorStateChange,
+  density = "comfortable",
 }: {
   id: string;
   value: number | null;
@@ -47,6 +54,7 @@ export const MailboxTtlControl = ({
     draftValue: string;
     hasError: boolean;
   }) => void;
+  density?: "comfortable" | "compact";
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [draftValue, setDraftValue] = useState(() =>
@@ -77,29 +85,31 @@ export const MailboxTtlControl = ({
   }, [supportsUnlimited]);
   const hideFiniteMaxLabelOnCompact =
     supportsUnlimited && maxMinutes > 30 * 24 * 60;
-  const middleAnchors = useMemo(
-    () =>
-      ttlAnchorCandidates
-        .filter(
-          (anchor) =>
-            anchor.minutes > minMinutes && anchor.minutes < maxMinutes,
-        )
-        .sort((left, right) => left.minutes - right.minutes)
-        .map((anchor) => ({
-          ...anchor,
-          label: formatMailboxTtl(anchor.minutes),
-          left: `${
-            (mailboxTtlToSliderPosition(anchor.minutes, minMinutes, {
-              minMinutes,
-              maxMinutes,
-              supportsUnlimited,
-            }) /
-              sliderMax) *
-            100
-          }%`,
-        })),
-    [maxMinutes, minMinutes, sliderMax, supportsUnlimited],
-  );
+  const middleAnchors = useMemo(() => {
+    const ttlAnchorCandidates =
+      density === "compact"
+        ? compactTtlAnchorCandidates
+        : comfortableTtlAnchorCandidates;
+
+    return ttlAnchorCandidates
+      .filter(
+        (anchor) => anchor.minutes > minMinutes && anchor.minutes < maxMinutes,
+      )
+      .sort((left, right) => left.minutes - right.minutes)
+      .map((anchor) => ({
+        ...anchor,
+        label: formatMailboxTtl(anchor.minutes),
+        left: `${
+          (mailboxTtlToSliderPosition(anchor.minutes, minMinutes, {
+            minMinutes,
+            maxMinutes,
+            supportsUnlimited,
+          }) /
+            sliderMax) *
+          100
+        }%`,
+      }));
+  }, [density, maxMinutes, minMinutes, sliderMax, supportsUnlimited]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -152,8 +162,17 @@ export const MailboxTtlControl = ({
   };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-start">
-      <div className="pt-2 sm:pt-3">
+    <div
+      className={cn(
+        "grid gap-3 sm:items-start",
+        density === "compact"
+          ? "sm:grid-cols-[minmax(0,1fr)_6.5rem]"
+          : "sm:grid-cols-[minmax(0,1fr)_9rem]",
+      )}
+    >
+      <div
+        className={cn("pt-2", density === "compact" ? "sm:pt-2" : "sm:pt-3")}
+      >
         <div className="relative">
           <Slider
             aria-label="生命周期滑块"
@@ -221,14 +240,19 @@ export const MailboxTtlControl = ({
             className={cn(
               "absolute top-0 whitespace-nowrap",
               supportsUnlimited ? "-translate-x-1/2" : "-translate-x-full",
-              hideFiniteMaxLabelOnCompact ? "hidden lg:block" : undefined,
+              hideFiniteMaxLabelOnCompact ? "hidden" : undefined,
             )}
             style={{ left: finiteLabelLeft }}
           >
             {formatMailboxTtl(maxMinutes)}
           </span>
           {supportsUnlimited ? (
-            <span className="absolute right-0 top-0 whitespace-nowrap">
+            <span
+              className={cn(
+                "absolute right-0 top-0 whitespace-nowrap",
+                density === "compact" ? "text-[11px]" : undefined,
+              )}
+            >
               长期
             </span>
           ) : null}

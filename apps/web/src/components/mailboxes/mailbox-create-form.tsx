@@ -141,6 +141,7 @@ export const MailboxCreateForm = ({
   autoFocusFirstField = false,
   className,
   onPreviewChange,
+  ttlDensity = "comfortable",
 }: {
   onSubmit: (values: {
     localPart?: string;
@@ -160,6 +161,7 @@ export const MailboxCreateForm = ({
   autoFocusFirstField?: boolean;
   className?: string;
   onPreviewChange?: (preview: MailboxCreatePreviewState) => void;
+  ttlDensity?: "comfortable" | "compact";
 }) => {
   const [inputMode, setInputMode] =
     useState<MailboxCreateInputMode>("segmented");
@@ -821,6 +823,7 @@ export const MailboxCreateForm = ({
             minMinutes={minTtlMinutes}
             supportsUnlimited={supportsUnlimitedTtl}
             value={form.watch("expiresInMinutes")}
+            density={ttlDensity}
             onEditorStateChange={setTtlEditorState}
             onChange={(nextValue) => {
               form.clearErrors("expiresInMinutes");

@@ -60,6 +60,7 @@ export const MailboxCreateCard = ({
           minTtlMinutes={minTtlMinutes}
           supportsUnlimitedTtl={supportsUnlimitedTtl}
           submitError={submitError}
+          ttlDensity="compact"
           onSubmit={onSubmit}
         />
       </CardContent>

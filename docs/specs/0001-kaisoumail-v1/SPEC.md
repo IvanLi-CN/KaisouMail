@@ -31,7 +31,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Message browsing is no longer embedded here; mailbox rows and compatibility routes hand off to the workspace, while `/mailboxes` itself keeps the full mailbox history and does not inherit the workspace trimming window
 - API mailbox creation accepts optional `rootDomain`; the Web console defaults to `随机`, omits `rootDomain` until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
 - The shared mailbox-creation form now supports both segmented entry (`localPart + subdomain + rootDomain`) and a full-address mode; supported full addresses normalize to lowercase, unsupported domains are blocked client-side, and pasting a supported full address into segmented fields offers a one-click mode switch with auto-filled values
-- Mailbox TTL entry now uses a non-linear slider plus inline editable display: finite values span `1 hour .. 1 year` on a logarithmic scale, with key anchors such as `30 days`; an explicit final slot and `expiresInMinutes: null` represent long-term lifetime
+- Mailbox TTL entry now uses a non-linear slider plus inline editable display: finite values span `1 hour .. 1 year` on a logarithmic scale, with compact key anchors such as `30 days` and `180 days`; an explicit final slot and `expiresInMinutes: null` represent long-term lifetime
 - When `localPart` and/or `subdomain` are omitted, generated mailbox aliases come from a readable mixed pool instead of machine-looking `mail-*` / `box-*` prefixes, and collisions retry within a bounded attempt budget before falling back to a short natural suffix
 
 ### Domains
@@ -239,7 +239,7 @@ PR: include
 ![Mailbox create card on mobile keeps the `30 天` anchor while the right edge stays on `长期`](./assets/mailbox-create-ttl-mobile-priority-30d.png)
 
 PR: include
-![Mailbox create card with the finite TTL slider pushed to the 1-year cap while keeping the 30-day anchor visible](./assets/mailbox-create-ttl-max-finite.png)
+![Mailbox create card with the finite TTL slider pushed to the 1-year cap while keeping the 30-day and 180-day anchors visible](./assets/mailbox-create-ttl-max-finite.png)
 
 PR: include
 ![Mailbox create card with the explicit long-term TTL slot selected](./assets/mailbox-create-ttl-unlimited.png)

@@ -347,6 +347,7 @@ export const MailWorkspace = ({
                       createMailboxAction.supportsUnlimitedTtl
                     }
                     submitError={createMailboxAction.error}
+                    ttlDensity="compact"
                     onCancel={createMailboxAction.onCancel}
                     onPreviewChange={setPreviewState}
                     onSubmit={createMailboxAction.onSubmit}

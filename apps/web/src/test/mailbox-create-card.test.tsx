@@ -41,9 +41,10 @@ describe("MailboxCreateCard", () => {
       screen.queryByText(/双击编辑；支持 m \/ h \/ d \/ w \/ mo/),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("1 小时").length).toBeGreaterThan(0);
-    expect(screen.getByText("6 小时")).toBeInTheDocument();
+    expect(screen.queryByText("6 小时")).not.toBeInTheDocument();
     expect(screen.getByText("1 天")).toBeInTheDocument();
     expect(screen.queryByText("7 天")).not.toBeInTheDocument();
+    expect(screen.queryByText("30 天")).not.toBeInTheDocument();
     expect(screen.getByText("长期")).toBeInTheDocument();
   });
 
