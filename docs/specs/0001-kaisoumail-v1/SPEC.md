@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-09
+Last: 2026-04-10
 
 ## Objective
 
@@ -125,6 +125,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
@@ -184,6 +185,8 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 ![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
 
 ![Workspace scope trims destroyed history to the latest seven-day / 50-row window](./assets/workspace-scope-destroyed-window.png)
+
+![Workspace verification copy affordances](./assets/workspace-verification-copy.png)
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)

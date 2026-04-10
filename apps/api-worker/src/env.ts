@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
+export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 
 const envBooleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -29,9 +30,11 @@ const runtimeConfigSchema = z.object({
   CF_ROUTE_RULESET_TAG: z.string().default("kaisoumail"),
   WEB_APP_ORIGIN: z.string().url().optional(),
   WEB_APP_ORIGINS: z.string().optional(),
+  WORKERS_AI_MODEL: z.string().min(1).default(DEFAULT_WORKERS_AI_MODEL),
 });
 
 export interface WorkerEnv {
+  AI?: Ai;
   DB: D1Database;
   MAIL_BUCKET: R2Bucket;
   APP_ENV: string;
@@ -51,15 +54,17 @@ export interface WorkerEnv {
   CF_ROUTE_RULESET_TAG?: string;
   WEB_APP_ORIGIN?: string;
   WEB_APP_ORIGINS?: string;
+  WORKERS_AI_MODEL?: string;
 }
 
 export interface RuntimeConfig
   extends Omit<
-    z.infer<typeof runtimeConfigSchema>,
-    "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS"
+    z.output<typeof runtimeConfigSchema>,
+    "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS" | "WORKERS_AI_MODEL"
   > {
   WEB_APP_ORIGIN?: string;
   WEB_APP_ORIGINS?: string[];
+  WORKERS_AI_MODEL?: string;
 }
 
 export type RuntimeConfigParseResult =
@@ -108,7 +113,7 @@ export const resolveConfiguredWebAppOrigins = (
 };
 
 const normalizeRuntimeConfig = (
-  config: z.infer<typeof runtimeConfigSchema>,
+  config: z.output<typeof runtimeConfigSchema>,
 ): RuntimeConfig => {
   const webAppOrigins = resolveConfiguredWebAppOrigins({
     WEB_APP_ORIGIN: config.WEB_APP_ORIGIN,

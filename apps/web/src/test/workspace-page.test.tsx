@@ -36,6 +36,7 @@ const workspacePageState: {
 const workspacePropsState = {
   mailboxesError: null as null | { title: string },
   visibleMailboxAddresses: [] as string[],
+  mailboxLatestVerificationCodes: new Map<string, string>(),
   mailboxScope: null as string | null,
   allMessagesScope: null as string | null,
   selectedMailboxIds: [] as string[],
@@ -50,11 +51,14 @@ vi.mock("@/components/workspace/mail-workspace", () => ({
   MailWorkspace: (props: {
     mailboxesError?: { title: string } | null;
     visibleMailboxes: Array<{ address: string }>;
+    mailboxLatestVerificationCodes: Map<string, string>;
   }) => {
     workspacePropsState.mailboxesError = props.mailboxesError ?? null;
     workspacePropsState.visibleMailboxAddresses = props.visibleMailboxes.map(
       (mailbox) => mailbox.address,
     );
+    workspacePropsState.mailboxLatestVerificationCodes =
+      props.mailboxLatestVerificationCodes;
 
     return (
       <div>
@@ -190,6 +194,7 @@ afterEach(() => {
   workspacePageState.refresh = vi.fn();
   workspacePropsState.mailboxesError = null;
   workspacePropsState.visibleMailboxAddresses = [];
+  workspacePropsState.mailboxLatestVerificationCodes = new Map();
   workspacePropsState.mailboxScope = null;
   workspacePropsState.allMessagesScope = null;
   workspacePropsState.selectedMailboxIds = [];
@@ -248,5 +253,39 @@ describe("workspace page", () => {
     expect(workspacePropsState.allMessagesScope).toBe("workspace");
     expect(workspacePropsState.selectedMessagesScope).toBe("workspace");
     expect(workspacePropsState.selectedMailboxIds).toEqual(["mbx_alpha"]);
+  });
+
+  it("derives the latest verification code for each mailbox from aggregate messages", () => {
+    workspacePageState.allMessages = [
+      ...demoMessages,
+      {
+        ...demoMessages[0],
+        id: "msg_alpha_newer",
+        receivedAt: "2026-04-01T08:45:00.000Z",
+        verification: {
+          code: "551177",
+          source: "subject",
+          method: "ai",
+        },
+      },
+    ];
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
+      >
+        <Routes>
+          <Route path="/workspace" element={<WorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
+    ).toBe("551177");
   });
 });

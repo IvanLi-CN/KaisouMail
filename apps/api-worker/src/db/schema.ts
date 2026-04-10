@@ -110,6 +110,12 @@ export const subdomains = sqliteTable(
   ],
 );
 
+export const runtimeState = sqliteTable("runtime_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const mailboxes = sqliteTable(
   "mailboxes",
   {
@@ -162,6 +168,10 @@ export const messages = sqliteTable(
     sizeBytes: integer("size_bytes").notNull(),
     attachmentCount: integer("attachment_count").notNull(),
     hasHtml: integer("has_html", { mode: "boolean" }).notNull(),
+    verificationCode: text("verification_code"),
+    verificationSource: text("verification_source"),
+    verificationMethod: text("verification_method"),
+    verificationCheckedAt: text("verification_checked_at"),
     parseStatus: text("parse_status").notNull(),
     rawR2Key: text("raw_r2_key").notNull(),
     parsedR2Key: text("parsed_r2_key").notNull(),
@@ -172,6 +182,10 @@ export const messages = sqliteTable(
       table.receivedAt,
     ),
     index("messages_user_received_idx").on(table.userId, table.receivedAt),
+    index("messages_verification_backfill_idx").on(
+      table.verificationCheckedAt,
+      table.receivedAt,
+    ),
   ],
 );
 

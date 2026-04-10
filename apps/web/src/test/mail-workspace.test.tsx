@@ -24,6 +24,33 @@ const buildMailboxMessageCounts = () =>
     ]),
   );
 
+const buildMailboxLatestVerificationCodes = () => {
+  const latestByMailboxId = new Map<
+    string,
+    { code: string; receivedAt: string }
+  >();
+
+  for (const message of demoMessages) {
+    const code = message.verification?.code;
+    if (!code) continue;
+
+    const current = latestByMailboxId.get(message.mailboxId);
+    if (!current || message.receivedAt.localeCompare(current.receivedAt) > 0) {
+      latestByMailboxId.set(message.mailboxId, {
+        code,
+        receivedAt: message.receivedAt,
+      });
+    }
+  }
+
+  return new Map(
+    [...latestByMailboxId.entries()].map(([mailboxId, value]) => [
+      mailboxId,
+      value.code,
+    ]),
+  );
+};
+
 const baseProps = {
   createMailboxAction: {
     defaultTtlMinutes: demoMeta.defaultMailboxTtlMinutes,
@@ -44,6 +71,7 @@ const baseProps = {
   totalMessageCount: demoMessages.length,
   totalAggregatedMessageCount: demoMessages.length,
   mailboxMessageCounts: buildMailboxMessageCounts(),
+  mailboxLatestVerificationCodes: buildMailboxLatestVerificationCodes(),
   selectedMailboxId: "all",
   selectedMailbox: null,
   messages: demoMessages,
@@ -138,11 +166,7 @@ describe("MailWorkspace", () => {
     const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
 
     expect(onCancel).not.toHaveBeenCalled();
-    expect(
-      within(mailboxList).getByRole("button", {
-        name: /spec@ops\.beta\.mail\.example\.net/i,
-      }),
-    ).toHaveTextContent("新建");
+    expect(within(mailboxList).getByText("新建")).toBeInTheDocument();
   });
 
   it("uses semantic state hooks instead of stacked ring utilities across workspace rails", () => {
@@ -174,28 +198,120 @@ describe("MailWorkspace", () => {
     const activeMessageRow = within(messageList).getByRole("button", {
       name: /Build artifacts ready/i,
     });
+    const normalRowShell = normalRow.closest(".workspace-mailbox-item");
+    const highlightedRowShell = highlightedRow.closest(
+      ".workspace-mailbox-item",
+    );
+    const activeMessageRowShell = activeMessageRow.closest(
+      ".workspace-message-item",
+    );
 
     expect(allMailRow).toHaveClass("workspace-mailbox-item");
     expect(allMailRow).toHaveAttribute("data-active", "true");
     expect(allMailRow.className).not.toContain("focus-visible:ring-ring");
     expect(allMailRow.className).not.toContain("focus-visible:ring-2");
 
-    expect(normalRow).toHaveClass("workspace-mailbox-item");
-    expect(normalRow).not.toHaveAttribute("data-active");
-    expect(normalRow).not.toHaveAttribute("data-highlighted");
+    expect(normalRowShell).not.toBeNull();
+    expect(normalRowShell).not.toHaveAttribute("data-active");
+    expect(normalRowShell).not.toHaveAttribute("data-highlighted");
 
-    expect(highlightedRow).toHaveClass("workspace-mailbox-item");
-    expect(highlightedRow).toHaveAttribute("data-highlighted", "true");
-    expect(highlightedRow.className).not.toContain("ring-1");
-    expect(highlightedRow.className).not.toContain("ring-primary/35");
+    expect(highlightedRowShell).not.toBeNull();
+    expect(highlightedRowShell).toHaveAttribute("data-highlighted", "true");
+    expect(highlightedRowShell?.className).not.toContain("ring-1");
+    expect(highlightedRowShell?.className).not.toContain("ring-primary/35");
 
-    expect(activeMessageRow).toHaveClass("workspace-message-item");
-    expect(activeMessageRow).toHaveAttribute("data-active", "true");
-    expect(activeMessageRow.className).not.toContain("focus-visible:ring-ring");
-    expect(activeMessageRow.className).not.toContain("focus-visible:ring-2");
+    expect(activeMessageRowShell).not.toBeNull();
+    expect(activeMessageRowShell).toHaveAttribute("data-active", "true");
+    expect(activeMessageRowShell?.className).not.toContain(
+      "focus-visible:ring-ring",
+    );
+    expect(activeMessageRowShell?.className).not.toContain(
+      "focus-visible:ring-2",
+    );
 
     highlightedRow.focus();
     expect(highlightedRow).toHaveFocus();
+  });
+
+  it("copies the verification code without changing the selected mailbox or message", async () => {
+    const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: clipboardWriteText,
+      },
+    });
+    const onSelectMailbox = vi.fn();
+    const onSelectMessage = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+          onSelectMessage={onSelectMessage}
+        />
+      </MemoryRouter>,
+    );
+
+    const verificationCopyButtons = screen.getAllByRole("button", {
+      name: "复制验证码 842911",
+    });
+    fireEvent.click(verificationCopyButtons[0] as HTMLElement);
+    expect(verificationCopyButtons[1]).toBeDefined();
+    fireEvent.click(verificationCopyButtons[1] as HTMLElement);
+
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledTimes(2);
+    });
+    expect(clipboardWriteText).toHaveBeenNthCalledWith(1, "842911");
+    expect(clipboardWriteText).toHaveBeenNthCalledWith(2, "842911");
+    expect(onSelectMailbox).not.toHaveBeenCalled();
+    expect(onSelectMessage).not.toHaveBeenCalled();
+    expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
+  });
+
+  it("keeps mailbox and message rows clickable across the full card shell", () => {
+    const onSelectMailbox = vi.fn();
+    const onSelectMessage = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+          onSelectMessage={onSelectMessage}
+        />
+      </MemoryRouter>,
+    );
+
+    const mailboxShell = within(
+      screen.getByRole("region", { name: "邮箱列表" }),
+    )
+      .getByRole("button", { name: /build@alpha\.relay\.example\.test/i })
+      .closest(".workspace-mailbox-item");
+    const messageShell = within(
+      screen.getByRole("region", { name: "邮件列表" }),
+    )
+      .getByRole("button", { name: /Build artifacts ready/i })
+      .closest(".workspace-message-item");
+
+    expect(mailboxShell).not.toBeNull();
+    expect(messageShell).not.toBeNull();
+
+    fireEvent.click(mailboxShell as HTMLElement);
+    fireEvent.click(messageShell as HTMLElement);
+
+    expect(onSelectMailbox).toHaveBeenCalledWith("mbx_alpha");
+    expect(onSelectMessage).toHaveBeenCalledWith("msg_alpha");
   });
 
   it("renders pane-specific errors instead of empty placeholders", () => {
@@ -280,6 +396,7 @@ describe("MailWorkspace", () => {
           mailboxMessageCounts={
             new Map(longMailboxes.map((mailbox) => [mailbox.id, 1]))
           }
+          mailboxLatestVerificationCodes={new Map()}
           selectedMailboxId="all"
           selectedMailbox={null}
           messages={longMessages}

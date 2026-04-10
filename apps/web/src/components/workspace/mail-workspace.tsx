@@ -24,6 +24,7 @@ import {
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { VerificationCopyButton } from "@/components/shared/verification-copy-button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,48 @@ const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
   { label: "最近收信", value: "recent" },
   { label: "创建时间", value: "created" },
 ];
+
+const buildMailboxRowLabel = (input: {
+  address: string;
+  isDestroyed: boolean;
+  isHighlighted: boolean;
+  messageCount: number;
+  verificationCode: string | null;
+}) => {
+  const parts = [input.address];
+
+  if (input.isDestroyed) {
+    parts.push("已销毁");
+  }
+
+  if (input.isHighlighted) {
+    parts.push("新建");
+  }
+
+  parts.push(`${input.messageCount} 封邮件`);
+
+  if (input.verificationCode) {
+    parts.push(`可复制验证码 ${input.verificationCode}`);
+  }
+
+  return parts.join("，");
+};
+
+const buildMessageRowLabel = (message: MessageSummary) => {
+  const parts = [
+    message.subject,
+    message.previewText,
+    message.fromAddress ?? "Unknown",
+    formatDateTime(message.receivedAt),
+    message.mailboxAddress,
+  ];
+
+  if (message.verification?.code) {
+    parts.push(`验证码 ${message.verification.code}`);
+  }
+
+  return parts.join("，");
+};
 
 type WorkspacePaneError = {
   variant: ErrorStateVariant;
@@ -84,6 +127,7 @@ type MailWorkspaceProps = {
   totalMessageCount: number;
   totalAggregatedMessageCount: number;
   mailboxMessageCounts: Map<string, number>;
+  mailboxLatestVerificationCodes: Map<string, string>;
   selectedMailboxId: string;
   selectedMailbox: Mailbox | null;
   messages: MessageSummary[];
@@ -114,6 +158,7 @@ export const MailWorkspace = ({
   totalMessageCount,
   totalAggregatedMessageCount,
   mailboxMessageCounts,
+  mailboxLatestVerificationCodes,
   selectedMailboxId,
   selectedMailbox,
   messages,
@@ -488,26 +533,41 @@ export const MailWorkspace = ({
                       const isHighlighted = highlightedMailboxId === mailbox.id;
                       const messageCount =
                         mailboxMessageCounts.get(mailbox.id) ?? 0;
+                      const verificationCode =
+                        mailboxLatestVerificationCodes.get(mailbox.id) ?? null;
+                      const mailboxRowLabel = buildMailboxRowLabel({
+                        address: mailbox.address,
+                        isDestroyed,
+                        isHighlighted,
+                        messageCount,
+                        verificationCode,
+                      });
 
                       return (
-                        <button
-                          type="button"
-                          disabled={isDestroyed}
-                          data-active={isActive ? "true" : undefined}
-                          data-highlighted={isHighlighted ? "true" : undefined}
-                          className={cn(
-                            "flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
-                            isDestroyed
-                              ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                              : "workspace-mailbox-item cursor-pointer flex-col gap-3",
-                            !isDestroyed && isHighlighted
-                              ? "text-foreground"
-                              : null,
-                          )}
-                          onClick={() => onSelectMailbox(mailbox.id)}
-                        >
-                          <div className="flex w-full items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-2">
+                        <div className="relative">
+                          <button
+                            aria-label={mailboxRowLabel}
+                            className={cn(
+                              "workspace-mailbox-item absolute inset-0 rounded-xl border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
+                              isDestroyed
+                                ? "cursor-not-allowed border-border/80 bg-muted/5 text-muted-foreground opacity-55"
+                                : "cursor-pointer",
+                              !isDestroyed && isHighlighted
+                                ? "text-foreground"
+                                : null,
+                            )}
+                            data-active={isActive ? "true" : undefined}
+                            data-highlighted={
+                              isHighlighted ? "true" : undefined
+                            }
+                            disabled={isDestroyed}
+                            type="button"
+                            onClick={() => onSelectMailbox(mailbox.id)}
+                          >
+                            <span className="sr-only">{mailbox.address}</span>
+                          </button>
+                          <div className="relative z-10 flex items-start gap-2 px-3 py-3 pointer-events-none">
+                            <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
                               <p
                                 className={cn(
                                   "min-w-0 text-sm font-medium",
@@ -524,6 +584,14 @@ export const MailWorkspace = ({
                                 </Badge>
                               ) : null}
                             </div>
+                            {!isDestroyed && verificationCode ? (
+                              <div className="pointer-events-auto">
+                                <VerificationCopyButton
+                                  code={verificationCode}
+                                  variant="compact"
+                                />
+                              </div>
+                            ) : null}
                             <Badge
                               className={cn(
                                 "min-w-7 justify-center px-2",
@@ -535,7 +603,7 @@ export const MailWorkspace = ({
                               {messageCount}
                             </Badge>
                           </div>
-                        </button>
+                        </div>
                       );
                     }}
                   />
@@ -606,40 +674,61 @@ export const MailWorkspace = ({
                     scrollTestId="workspace-message-scroll"
                     renderItem={(message) => {
                       const active = message.id === selectedMessageId;
+                      const verificationCode =
+                        message.verification?.code ?? null;
+                      const messageRowLabel = buildMessageRowLabel(message);
 
                       return (
-                        <button
-                          type="button"
-                          data-active={active ? "true" : undefined}
-                          className={cn(
-                            "workspace-message-item flex w-full cursor-pointer flex-col gap-3 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
-                          )}
-                          onClick={() => onSelectMessage(message.id)}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-foreground">
-                                {message.subject}
-                              </p>
-                              <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                                {message.previewText}
-                              </p>
+                        <div className="relative">
+                          <button
+                            aria-label={messageRowLabel}
+                            className="workspace-message-item absolute inset-0 rounded-xl border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none"
+                            data-active={active ? "true" : undefined}
+                            type="button"
+                            onClick={() => onSelectMessage(message.id)}
+                          >
+                            <span className="sr-only">{message.subject}</span>
+                          </button>
+                          <div className="relative z-10 flex items-start gap-3 px-3 py-3 pointer-events-none">
+                            <div className="flex min-w-0 flex-1 flex-col gap-3">
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium text-foreground">
+                                  {message.subject}
+                                </p>
+                                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                  {message.previewText}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span>{message.fromAddress ?? "Unknown"}</span>
+                                <span>
+                                  {formatDateTime(message.receivedAt)}
+                                </span>
+                                <span>{message.mailboxAddress}</span>
+                              </div>
                             </div>
-                            <MailOpen
-                              className={cn(
-                                "mt-1 h-4 w-4 shrink-0",
-                                active
-                                  ? "text-primary"
-                                  : "text-muted-foreground",
-                              )}
-                            />
+                            {verificationCode ? (
+                              <div className="pointer-events-auto">
+                                <VerificationCopyButton
+                                  className="self-stretch"
+                                  code={verificationCode}
+                                  variant="panel"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex w-8 shrink-0 items-start justify-end pt-1">
+                                <MailOpen
+                                  className={cn(
+                                    "h-4 w-4 shrink-0",
+                                    active
+                                      ? "text-primary"
+                                      : "text-muted-foreground",
+                                  )}
+                                />
+                              </div>
+                            )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                            <span>{message.fromAddress ?? "Unknown"}</span>
-                            <span>{formatDateTime(message.receivedAt)}</span>
-                            <span>{message.mailboxAddress}</span>
-                          </div>
-                        </button>
+                        </div>
                       );
                     }}
                   />

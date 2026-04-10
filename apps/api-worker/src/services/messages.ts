@@ -25,6 +25,10 @@ import {
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
 import { listScopedMailboxRowsForUser } from "./mailboxes";
+import {
+  resolveVerificationDetectionForMessage,
+  type StoredVerification,
+} from "./message-verification";
 
 type MailboxListScope = (typeof mailboxListScopes)[number];
 
@@ -43,6 +47,22 @@ const normalizePeople = (value: unknown) => {
     );
 };
 
+const mapVerification = (row: typeof messages.$inferSelect) => {
+  if (
+    !row.verificationCode ||
+    !row.verificationSource ||
+    !row.verificationMethod
+  ) {
+    return null;
+  }
+
+  return {
+    code: row.verificationCode,
+    source: row.verificationSource,
+    method: row.verificationMethod,
+  } as StoredVerification;
+};
+
 const mapSummary = (row: typeof messages.$inferSelect) =>
   messageSummarySchema.parse({
     id: row.id,
@@ -56,6 +76,7 @@ const mapSummary = (row: typeof messages.$inferSelect) =>
     sizeBytes: row.sizeBytes,
     attachmentCount: row.attachmentCount,
     hasHtml: row.hasHtml,
+    verification: mapVerification(row),
   });
 
 const visibleMessageMailboxFilter = ne(mailboxes.status, "destroying");
@@ -317,6 +338,15 @@ export const storeIncomingMessage = async (
   const rawBuffer = await new Response(forwardable.raw).arrayBuffer();
   const parser = new PostalMime();
   const parsed = await parser.parse(rawBuffer);
+  const verificationDetection = await resolveVerificationDetectionForMessage(
+    env,
+    {
+      subject: parsed.subject ?? null,
+      text: parsed.text ?? null,
+      html: parsed.html ?? null,
+    },
+  );
+  const verification = verificationDetection.verification;
   const messageId = randomId("msg");
   const receivedAt = nowIso();
   const rawR2Key = `raw/${mailbox.userId}/${mailbox.id}/${messageId}.eml`;
@@ -371,6 +401,10 @@ export const storeIncomingMessage = async (
     ),
     attachmentCount: attachments.length,
     hasHtml: Boolean(parsed.html),
+    verificationCode: verification?.code ?? null,
+    verificationSource: verification?.source ?? null,
+    verificationMethod: verification?.method ?? null,
+    verificationCheckedAt: verificationDetection.shouldRetry ? null : nowIso(),
     parseStatus: "parsed",
     rawR2Key,
     parsedR2Key,

@@ -98,7 +98,19 @@ body {
   box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
 }
 
+.workspace-mailbox-item:focus-within {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.56);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
+}
+
 .workspace-mailbox-item[data-highlighted="true"]:focus-visible {
+  box-shadow:
+    0 0 0 2px hsl(var(--ring) / 0.34),
+    inset 0 0 0 1px hsl(var(--primary) / 0.16);
+}
+
+.workspace-mailbox-item[data-highlighted="true"]:focus-within {
   box-shadow:
     0 0 0 2px hsl(var(--ring) / 0.34),
     inset 0 0 0 1px hsl(var(--primary) / 0.16);
@@ -107,6 +119,12 @@ body {
 .workspace-mailbox-item[data-active="true"]:not(
     [data-highlighted="true"]
   ):focus-visible {
+  background: hsl(var(--primary) / 0.12);
+}
+
+.workspace-mailbox-item[data-active="true"]:not(
+    [data-highlighted="true"]
+  ):focus-within {
   background: hsl(var(--primary) / 0.12);
 }
 
@@ -130,7 +148,17 @@ body {
   box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
 }
 
+.workspace-message-item:focus-within {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.56);
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.34);
+}
+
 .workspace-message-item[data-active="true"]:focus-visible {
+  background: hsl(var(--primary) / 0.12);
+}
+
+.workspace-message-item[data-active="true"]:focus-within {
   background: hsl(var(--primary) / 0.12);
 }
 

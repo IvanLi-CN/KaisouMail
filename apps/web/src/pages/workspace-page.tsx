@@ -42,6 +42,39 @@ import {
 const DEFAULT_SORT_MODE: MailboxSortMode = "recent";
 const DEFAULT_WORKSPACE_TTL_MINUTES = 60;
 
+const buildMailboxLatestVerificationCodes = (
+  messages: Array<{
+    mailboxId: string;
+    receivedAt: string;
+    verification: { code: string } | null;
+  }>,
+) => {
+  const latestByMailboxId = new Map<
+    string,
+    { code: string; receivedAt: string }
+  >();
+
+  for (const message of messages) {
+    const code = message.verification?.code;
+    if (!code) continue;
+
+    const current = latestByMailboxId.get(message.mailboxId);
+    if (!current || message.receivedAt.localeCompare(current.receivedAt) > 0) {
+      latestByMailboxId.set(message.mailboxId, {
+        code,
+        receivedAt: message.receivedAt,
+      });
+    }
+  }
+
+  return new Map(
+    [...latestByMailboxId.entries()].map(([mailboxId, value]) => [
+      mailboxId,
+      value.code,
+    ]),
+  );
+};
+
 const readStoredSortMode = () => {
   if (typeof window === "undefined") return DEFAULT_SORT_MODE;
   const value = window.localStorage.getItem(MAILBOX_SORT_STORAGE_KEY);
@@ -171,6 +204,10 @@ export const WorkspacePage = () => {
 
     return counts;
   }, [allMessages, mailboxes]);
+  const mailboxLatestVerificationCodes = useMemo(
+    () => buildMailboxLatestVerificationCodes(allMessages),
+    [allMessages],
+  );
 
   useEffect(() => {
     if (messagesQuery.isLoading) return;
@@ -389,6 +426,7 @@ export const WorkspacePage = () => {
         totalMessageCount={messages.length}
         totalAggregatedMessageCount={allMessages.length}
         mailboxMessageCounts={mailboxMessageCounts}
+        mailboxLatestVerificationCodes={mailboxLatestVerificationCodes}
         selectedMailboxId={selectedMailboxId}
         selectedMailbox={selectedMailbox}
         messages={messages}

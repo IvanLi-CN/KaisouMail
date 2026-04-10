@@ -7,6 +7,9 @@ const { destroyMailbox, listMailboxIdsPendingCleanup } = vi.hoisted(() => ({
   destroyMailbox: vi.fn(),
   listMailboxIdsPendingCleanup: vi.fn(),
 }));
+const { backfillMessageVerification } = vi.hoisted(() => ({
+  backfillMessageVerification: vi.fn(),
+}));
 
 vi.mock("../env", () => ({
   parseRuntimeConfig,
@@ -15,6 +18,10 @@ vi.mock("../env", () => ({
 vi.mock("../services/mailboxes", () => ({
   destroyMailbox,
   listMailboxIdsPendingCleanup,
+}));
+
+vi.mock("../services/message-verification", () => ({
+  backfillMessageVerification,
 }));
 
 import { runMailboxCleanup } from "../services/cleanup";
@@ -27,6 +34,7 @@ describe("cleanup runner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     parseRuntimeConfig.mockReturnValue(config);
+    backfillMessageVerification.mockResolvedValue(0);
   });
 
   it("continues later cleanup retries even when an earlier mailbox fails", async () => {
@@ -52,6 +60,10 @@ describe("cleanup runner", () => {
       {} as never,
       config,
       "mbx_destroying_retry",
+    );
+    expect(backfillMessageVerification).toHaveBeenCalledWith(
+      {} as never,
+      config,
     );
   });
 });

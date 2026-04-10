@@ -259,12 +259,17 @@ const demoDetails: MessageDetail[] = [
     sizeBytes: 182340,
     attachmentCount: 1,
     hasHtml: true,
+    verification: {
+      code: "842911",
+      source: "body",
+      method: "rules",
+    },
     envelopeFrom: "ci@example.net",
     envelopeTo: primaryMailboxAddress,
     messageId: "<demo-alpha@example.net>",
     dateHeader: "2026-04-01T08:32:00.000Z",
-    html: "<p><strong>Nightly bundle</strong> is ready. Preview URL has been pre-warmed.</p>",
-    text: "Nightly bundle is ready. Preview URL has been pre-warmed.",
+    html: "<p><strong>Nightly bundle</strong> is ready. Use verification code <strong>842911</strong> to unlock the preview URL.</p>",
+    text: "Nightly bundle is ready. Use verification code 842911 to unlock the preview URL.",
     headers: [
       { key: "From", value: "CI Runner <ci@example.net>" },
       { key: "To", value: primaryMailboxAddress },
@@ -316,6 +321,7 @@ const demoDetails: MessageDetail[] = [
     sizeBytes: 8421,
     attachmentCount: 0,
     hasHtml: false,
+    verification: null,
     envelopeFrom: "reviewer@example.org",
     envelopeTo: "spec@ops.beta.mail.example.net",
     messageId: "<demo-beta@example.org>",
@@ -364,6 +370,7 @@ export const demoMessages: MessageSummary[] = demoDetails.map((message) => ({
   sizeBytes: message.sizeBytes,
   attachmentCount: message.attachmentCount,
   hasHtml: message.hasHtml,
+  verification: message.verification,
 }));
 
 export const demoMessageDetails = Object.fromEntries(

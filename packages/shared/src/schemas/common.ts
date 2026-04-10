@@ -23,6 +23,8 @@ export const domainCatalogAvailabilitySchema = z.enum(
 export const domainProjectStatusSchema = z.enum(domainProjectStatuses);
 export const recipientKindSchema = z.enum(recipientKinds);
 export const attachmentDispositionSchema = z.enum(attachmentDispositions);
+export const verificationSourceSchema = z.enum(["subject", "body"]);
+export const verificationMethodSchema = z.enum(["rules", "ai"]);
 
 export const addressLabelSchema = z.object({
   name: z.string().nullable(),
@@ -48,6 +50,12 @@ export const attachmentSchema = z.object({
   sizeBytes: z.number().int().nonnegative(),
   contentId: z.string().nullable(),
   disposition: attachmentDispositionSchema,
+});
+
+export const verificationSchema = z.object({
+  code: z.string().min(4).max(8),
+  source: verificationSourceSchema,
+  method: verificationMethodSchema,
 });
 
 export const sessionUserSchema = z.object({
@@ -135,6 +143,7 @@ export const messageSummarySchema = z.object({
   sizeBytes: z.number().int().nonnegative(),
   attachmentCount: z.number().int().nonnegative(),
   hasHtml: z.boolean(),
+  verification: verificationSchema.nullable(),
 });
 
 export const messageDetailSchema = messageSummarySchema.extend({

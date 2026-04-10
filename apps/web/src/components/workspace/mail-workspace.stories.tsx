@@ -33,6 +33,33 @@ const buildMailboxMessageCounts = (
     ]),
   );
 
+const buildMailboxLatestVerificationCodes = (messages: MessageSummary[]) => {
+  const latestByMailboxId = new Map<
+    string,
+    { code: string; receivedAt: string }
+  >();
+
+  for (const message of messages) {
+    const code = message.verification?.code;
+    if (!code) continue;
+
+    const current = latestByMailboxId.get(message.mailboxId);
+    if (!current || message.receivedAt.localeCompare(current.receivedAt) > 0) {
+      latestByMailboxId.set(message.mailboxId, {
+        code,
+        receivedAt: message.receivedAt,
+      });
+    }
+  }
+
+  return new Map(
+    [...latestByMailboxId.entries()].map(([mailboxId, value]) => [
+      mailboxId,
+      value.code,
+    ]),
+  );
+};
+
 const createLongMailboxes = (count: number) =>
   Array.from({ length: count }, (_, index) => ({
     ...demoMailboxes[0],
@@ -176,6 +203,12 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     disableStoryPadding: true,
+    docs: {
+      description: {
+        component:
+          "Workspace now surfaces the latest recognized verification code directly in the mailbox rail and message stream. Mailbox rows expose a compact copy action, while message rows expose a larger code panel that copies without changing the current selection.",
+      },
+    },
   },
   decorators: [
     (Story) => (
@@ -195,6 +228,8 @@ const meta = {
       demoMailboxes,
       demoMessages,
     ),
+    mailboxLatestVerificationCodes:
+      buildMailboxLatestVerificationCodes(demoMessages),
     selectedMailboxId: "all",
     selectedMailbox: null,
     messages: demoMessages,
@@ -281,6 +316,19 @@ const focusMailboxByTab = async (
   }
 
   await expect(target).toHaveFocus();
+};
+
+const installClipboardMock = () => {
+  const writeText = fn(async () => undefined);
+
+  Object.defineProperty(window.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText,
+    },
+  });
+
+  return writeText;
 };
 
 const WorkspaceStoryHarness = ({
@@ -436,6 +484,9 @@ const WorkspaceStoryHarness = ({
       isMessagesLoading={false}
       mailboxManagementHref="/mailboxes"
       mailboxMessageCounts={buildMailboxMessageCounts(mailboxes, demoMessages)}
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
+        demoMessages,
+      )}
       messageDetailHref={
         selectedMessageId
           ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}`
@@ -527,6 +578,9 @@ const DesktopVirtualizedHarness = () => {
       mailboxMessageCounts={
         new Map(longMailboxes.map((mailbox) => [mailbox.id, 1]))
       }
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
+        longMessages,
+      )}
       messageDetailHref={
         selectedMessageId
           ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}`
@@ -603,6 +657,9 @@ const WorkspaceScopeHistoryHarness = () => {
       mailboxManagementHref="/mailboxes"
       mailboxMessageCounts={buildMailboxMessageCounts(
         visibleMailboxes,
+        scopedMessages,
+      )}
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
         scopedMessages,
       )}
       messageDetailHref="/messages/msg_scope_active?mailbox=all&sort=recent"
@@ -702,6 +759,67 @@ export const DesktopThreePane: Story = {
       canvas.getByRole("button", { name: /Spec review notes/i }),
     );
     await expect(args.onSelectMessage).toHaveBeenCalledWith("msg_beta");
+  },
+};
+
+export const VerificationSignals: Story = {
+  globals: projectViewportGlobals.desktop,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Shows both verification affordances together: the mailbox rail gets a compact `验证码` button for the latest recognized code in that mailbox, while the message list renders a larger code panel that copies inline without stealing selection.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const writeText = installClipboardMock();
+    const copyButtons = canvas.getAllByRole("button", {
+      name: "复制验证码 842911",
+    });
+
+    await userEvent.click(copyButtons[0] ?? document.body);
+    await userEvent.click(copyButtons[1] ?? document.body);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(2);
+    });
+    expect(writeText).toHaveBeenNthCalledWith(1, "842911");
+    expect(writeText).toHaveBeenNthCalledWith(2, "842911");
+    await expect(
+      canvas.getByRole("button", { name: /Build artifacts ready/i }),
+    ).toBeInTheDocument();
+    await expect(canvas.getAllByText("已复制").length).toBeGreaterThan(0);
+  },
+};
+
+export const WithoutVerificationSignals: Story = {
+  args: {
+    messages: demoMessages.map((message) => ({
+      ...message,
+      verification: null,
+    })),
+    mailboxLatestVerificationCodes: new Map<string, string>(),
+    selectedMessage: {
+      ...demoMessageDetails.msg_alpha,
+      verification: null,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Verification copy actions stay completely hidden when the API returns `verification: null` for the current mailbox/message set.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.queryByRole("button", { name: /复制验证码/i }),
+    ).not.toBeInTheDocument();
   },
 };
 

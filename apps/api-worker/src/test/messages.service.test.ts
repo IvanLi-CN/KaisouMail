@@ -33,6 +33,11 @@ const buildMessageRow = (
   id: string,
   mailboxAddress: string,
   receivedAt: string,
+  verification?: {
+    code: string;
+    source: "subject" | "body";
+    method: "rules" | "ai";
+  } | null,
 ) => ({
   id,
   userId: adminUser.id,
@@ -50,6 +55,10 @@ const buildMessageRow = (
   sizeBytes: 128,
   attachmentCount: 0,
   hasHtml: false,
+  verificationCode: verification?.code ?? null,
+  verificationSource: verification?.source ?? null,
+  verificationMethod: verification?.method ?? null,
+  verificationCheckedAt: verification ? receivedAt : null,
   parseStatus: "parsed",
   rawR2Key: `raw/${id}.eml`,
   parsedR2Key: `parsed/${id}.json`,
@@ -129,6 +138,39 @@ describe("message service", () => {
 
     expect(orderBy).toHaveBeenCalledTimes(2);
     expect(listed.map((message) => message.id)).toEqual(["msg_new", "msg_old"]);
+  });
+
+  it("maps verification metadata into message summaries", async () => {
+    const orderBy = vi.fn().mockResolvedValue([
+      asJoinedMessage(
+        buildMessageRow(
+          "msg_verify",
+          "verify@ops.707979.xyz",
+          "2026-04-08T11:59:00.000Z",
+          {
+            code: "551177",
+            source: "subject",
+            method: "ai",
+          },
+        ),
+      ),
+    ]);
+    const db = buildMessageDb(orderBy);
+    getDb.mockReturnValue(db);
+
+    const listed = await listMessagesForUser(
+      {} as never,
+      adminUser,
+      [],
+      [],
+      null,
+    );
+
+    expect(listed[0]?.verification).toEqual({
+      code: "551177",
+      source: "subject",
+      method: "ai",
+    });
   });
 
   it("intersects explicit mailbox filters with workspace-visible mailboxes", async () => {
@@ -309,6 +351,82 @@ describe("message service", () => {
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toHaveLength(1);
     expect(listed[0]?.id).toBe("msg_visible_new");
+  });
+
+  it("includes verification metadata in message details", async () => {
+    const joinedRow = {
+      message: buildMessageRow(
+        "msg_detail_verify",
+        "verify@ops.707979.xyz",
+        "2026-04-08T11:59:00.000Z",
+        {
+          code: "842911",
+          source: "body",
+          method: "rules",
+        },
+      ),
+      mailboxStatus: "active",
+    };
+    const db = {
+      select: vi.fn((fields?: unknown) => {
+        if (!fields) {
+          return {
+            from: vi.fn(() => ({
+              where: vi.fn(async () => []),
+            })),
+          };
+        }
+
+        return {
+          from: vi.fn((table: unknown) => {
+            if (
+              table !== messages ||
+              !("message" in (fields as Record<string, unknown>))
+            ) {
+              throw new Error("Unexpected table");
+            }
+
+            return {
+              innerJoin: vi.fn((joinedTable: unknown) => {
+                if (joinedTable !== mailboxes) {
+                  throw new Error("Unexpected join table");
+                }
+
+                return {
+                  where: vi.fn(() => ({
+                    limit: vi.fn(async () => [joinedRow]),
+                  })),
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    };
+    getDb.mockReturnValue(db);
+
+    const detail = await getMessageDetailForUser(
+      {
+        MAIL_BUCKET: {
+          get: vi.fn(async () => ({
+            text: async () =>
+              JSON.stringify({
+                html: null,
+                text: "Use verification code 842911 to continue.",
+                headers: [],
+              }),
+          })),
+        },
+      } as never,
+      adminUser,
+      "msg_detail_verify",
+    );
+
+    expect(detail.verification).toEqual({
+      code: "842911",
+      source: "body",
+      method: "rules",
+    });
   });
 
   it("blocks detail and raw reads while the mailbox is destroying", async () => {
