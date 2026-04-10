@@ -1,6 +1,7 @@
 import {
   CheckCircle2,
   CloudOff,
+  ExternalLink,
   RefreshCcw,
   ShieldBan,
   Trash2,
@@ -31,7 +32,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { DomainCatalogItem } from "@/lib/contracts";
+import { needsNameserverDelegation } from "@/lib/domain-catalog";
 import { formatDateTime } from "@/lib/format";
+import type { PublicDocsLinks } from "@/lib/public-docs";
 import { cn } from "@/lib/utils";
 
 const projectStatusTone = (status: DomainCatalogItem["projectStatus"]) => {
@@ -97,6 +100,7 @@ export const DomainTable = ({
   onDisable,
   onDelete,
   onRetry,
+  docsLinks = null,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
 }: {
@@ -108,6 +112,7 @@ export const DomainTable = ({
   onDisable: (domainId: string) => Promise<void> | void;
   onDelete: (domainId: string) => Promise<void> | void;
   onRetry: (domainId: string) => Promise<void> | void;
+  docsLinks?: PublicDocsLinks | null;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
 }) => {
@@ -124,6 +129,12 @@ export const DomainTable = ({
   const projectBoundCount = domains.filter(
     (domain) => domain.bindingSource === "project_bind",
   ).length;
+  const delegationPendingCount = domains.filter(
+    needsNameserverDelegation,
+  ).length;
+  const nameserverGuideHref = docsLinks?.projectDomainBinding
+    ? `${docsLinks.projectDomainBinding}#zone-pending-or-nameserver-not-delegated`
+    : null;
 
   return (
     <Card>
@@ -148,6 +159,28 @@ export const DomainTable = ({
             </Badge>
           </div>
         </div>
+        {delegationPendingCount > 0 ? (
+          <div
+            className="flex flex-wrap items-center gap-2 text-xs"
+            data-testid="domain-catalog-delegation-guide"
+          >
+            <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+              有 {delegationPendingCount} 个项目直绑域名待完成 NS 委派；先改
+              NS，再点“重试接入”。
+            </p>
+            {nameserverGuideHref ? (
+              <a
+                href={nameserverGuideHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+              >
+                查看步骤
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent>
         <Table>
@@ -177,6 +210,8 @@ export const DomainTable = ({
                 isDomainLifecycleEnabled &&
                 domain.bindingSource === "project_bind" &&
                 Boolean(domain.id);
+              const requiresNameserverDelegation =
+                needsNameserverDelegation(domain);
               const zoneId = domain.zoneId ?? "";
               const domainId = domain.id ?? "";
               const isDeleteOpen = deleteTargetId === domainId;
@@ -256,6 +291,25 @@ export const DomainTable = ({
                       ) : (
                         <p>nameservers 暂不可见</p>
                       )}
+                      {requiresNameserverDelegation ? (
+                        <div
+                          className="flex flex-wrap items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] leading-5 text-amber-100"
+                          data-testid={`domain-row-delegation-guide-${domainId || domain.rootDomain}`}
+                        >
+                          <span>先改 NS，再重试。</span>
+                          {nameserverGuideHref ? (
+                            <a
+                              href={nameserverGuideHref}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+                            >
+                              查看步骤
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell>

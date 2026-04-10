@@ -1,7 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { rootDomainRegex } from "@kaisoumail/shared";
-import { Globe2 } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy, ExternalLink, Globe2 } from "lucide-react";
+import type { FocusEvent, MouseEvent } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -15,6 +16,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { DomainCatalogItem, DomainRecord } from "@/lib/contracts";
+import {
+  classifyDomainBindError,
+  type DomainBindErrorHint,
+} from "@/lib/domain-bind-errors";
+import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
   rootDomain: z
@@ -26,11 +33,107 @@ const bindDomainSchema = z.object({
 
 type BindDomainValues = z.infer<typeof bindDomainSchema>;
 
+type BindSuccessGuide = {
+  rootDomain: string;
+  title: string;
+  summary: string;
+  steps: string[];
+  nameServers: string[];
+  cloudflareStatus?: string | null;
+  projectStatus: DomainCatalogItem["projectStatus"] | DomainRecord["status"];
+};
+
+type BindSuccessGuideState = {
+  rootDomain: string;
+  fallbackResult: DomainRecord | DomainCatalogItem;
+};
+
+const buildNameserverGuideHref = (docsLinks?: PublicDocsLinks | null) =>
+  docsLinks?.projectDomainBinding
+    ? `${docsLinks.projectDomainBinding}#zone-pending-or-nameserver-not-delegated`
+    : null;
+
+const buildBindSuccessGuide = ({
+  result,
+}: {
+  result: DomainRecord | DomainCatalogItem;
+}): BindSuccessGuide => {
+  const rootDomain = result.rootDomain;
+  const projectStatus =
+    "projectStatus" in result ? result.projectStatus : result.status;
+  const cloudflareStatus =
+    "cloudflareStatus" in result ? result.cloudflareStatus : null;
+  const nameServers = "nameServers" in result ? result.nameServers : [];
+
+  if (projectStatus === "active") {
+    return {
+      rootDomain,
+      title: "域名已接入，可继续使用",
+      summary: "当前域名已经可用，可以直接继续创建邮箱。",
+      nameServers,
+      cloudflareStatus,
+      projectStatus,
+      steps: [
+        "保持当前页面即可，后续新建邮箱时可直接选择这个域名。",
+        "如果你需要确认接入状态，可在域名目录中看到 active。",
+        "如果后续状态又变更，再按页面里的提示继续处理。",
+      ],
+    };
+  }
+
+  return {
+    rootDomain,
+    title: "还差一步：完成域名委派",
+    summary:
+      nameServers.length > 0
+        ? "Cloudflare 已分配 nameserver。请把域名 NS 改成下面这组值，完成后再回来重试。"
+        : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
+    nameServers,
+    cloudflareStatus,
+    projectStatus,
+    steps:
+      nameServers.length > 0
+        ? [
+            "将当前域名的 NS 改成下面显示的 Cloudflare nameserver。",
+            "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+            "状态变成 active 后，对该域名点击“重试接入”。",
+          ]
+        : [
+            "先保留当前页面。",
+            "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+            "拿到 nameserver 后，把域名 NS 改成对应值，再等待状态继续刷新。",
+          ],
+  };
+};
+
+const isDomainRecord = (value: unknown): value is DomainRecord =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  "rootDomain" in value &&
+  "status" in value;
+
+const isDomainCatalogItem = (value: unknown): value is DomainCatalogItem =>
+  typeof value === "object" &&
+  value !== null &&
+  "rootDomain" in value &&
+  "projectStatus" in value;
+
 export const DomainBindCard = ({
   onSubmit,
+  domains = [],
+  docsLinks = null,
   isPending = false,
 }: {
-  onSubmit: (values: BindDomainValues) => Promise<void> | void;
+  onSubmit: (
+    values: BindDomainValues,
+  ) =>
+    | Promise<DomainRecord | DomainCatalogItem | undefined>
+    | DomainRecord
+    | DomainCatalogItem
+    | undefined;
+  domains?: DomainCatalogItem[];
+  docsLinks?: PublicDocsLinks | null;
   isPending?: boolean;
 }) => {
   const form = useForm<BindDomainValues>({
@@ -39,66 +142,287 @@ export const DomainBindCard = ({
       rootDomain: "",
     },
   });
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<DomainBindErrorHint | null>(
+    null,
+  );
+  const [successGuideState, setSuccessGuideState] =
+    useState<BindSuccessGuideState | null>(null);
+  const [copiedNameserver, setCopiedNameserver] = useState<string | null>(null);
+  const successGuide = useMemo<BindSuccessGuide | null>(() => {
+    if (!successGuideState) return null;
+
+    const latestDomain = domains.find(
+      (domain) => domain.rootDomain === successGuideState.rootDomain,
+    );
+
+    return buildBindSuccessGuide({
+      result: latestDomain ?? successGuideState.fallbackResult,
+    });
+  }, [domains, successGuideState]);
+  const nameserverGuideHref = buildNameserverGuideHref(docsLinks);
+  const successGuideTitleId = useId();
+
+  useEffect(() => {
+    setCopiedNameserver((current) => {
+      if (!current) return null;
+      return successGuide?.nameServers.includes(current) ? current : null;
+    });
+  }, [successGuide]);
+
+  const selectInputValue = (
+    event: FocusEvent<HTMLInputElement> | MouseEvent<HTMLInputElement>,
+  ) => {
+    event.currentTarget.select();
+  };
+
+  useEffect(() => {
+    if (!successGuide) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSuccessGuideState(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [successGuide]);
+
+  const openSuccessGuide = (result: DomainRecord | DomainCatalogItem) => {
+    setCopiedNameserver(null);
+    setSuccessGuideState({
+      rootDomain: result.rootDomain,
+      fallbackResult: result,
+    });
+  };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Globe2 className="h-4 w-4" />
-          绑定新域名
-        </CardTitle>
-        <CardDescription>
-          直接通过 Cloudflare API 创建 full zone，并立即尝试启用邮箱路由。 如果
-          zone 还没完成激活，域名会保留在项目里等待你后续重试。
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="grid gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_auto]"
-          data-testid="domain-bind-form"
-          onSubmit={form.handleSubmit(async (values) => {
-            setSubmitError(null);
-            try {
-              await onSubmit(values);
-              form.reset();
-            } catch (reason) {
-              setSubmitError(
-                reason instanceof Error ? reason.message : "绑定域名失败",
-              );
-            }
-          })}
-        >
-          <div className="order-1 min-w-0 space-y-2 md:col-start-1 md:row-start-1">
-            <Label htmlFor="rootDomain">根域名</Label>
-            <Input
-              id="rootDomain"
-              placeholder="example.com"
-              autoComplete="off"
-              {...form.register("rootDomain")}
-            />
-          </div>
-          <p
-            className="order-2 min-h-5 text-sm text-destructive md:col-start-1 md:row-start-2"
-            data-testid="domain-bind-error"
-            role="alert"
-          >
-            {form.formState.errors.rootDomain?.message ?? submitError ?? " "}
-          </p>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe2 className="h-4 w-4" />
+            绑定新域名
+          </CardTitle>
+          <CardDescription>
+            直接通过 Cloudflare API 创建 full zone，并立即尝试启用邮箱路由。
+            如果 zone 还没完成激活，域名会保留在项目里等待你后续重试。
+          </CardDescription>
           <div
-            className="order-3 flex md:col-start-2 md:row-start-1 md:items-end"
-            data-testid="domain-bind-submit-slot"
+            className="flex flex-wrap items-center gap-2 text-xs"
+            data-testid="domain-bind-delegation-guide"
           >
-            <Button
-              type="submit"
-              className="w-full md:w-auto"
-              disabled={isPending}
-            >
-              {isPending ? "绑定中…" : "绑定到 Cloudflare"}
-            </Button>
+            <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+              直绑后若停在 <code>pending</code> /{" "}
+              <code>provisioning_error</code>：先改 NS，再重试。
+            </p>
+            {nameserverGuideHref ? (
+              <a
+                href={nameserverGuideHref}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+              >
+                查看步骤
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="grid gap-x-4 gap-y-2 md:grid-cols-[minmax(0,1fr)_auto] md:grid-rows-[auto_auto]"
+            data-testid="domain-bind-form"
+            onSubmit={form.handleSubmit(async (values) => {
+              setSubmitError(null);
+              try {
+                const result = await onSubmit(values);
+                form.reset();
+                if (isDomainRecord(result) || isDomainCatalogItem(result)) {
+                  openSuccessGuide(result);
+                }
+              } catch (reason) {
+                setSubmitError(classifyDomainBindError(reason, docsLinks));
+              }
+            })}
+          >
+            <div className="order-1 min-w-0 space-y-2 md:col-start-1 md:row-start-1">
+              <Label htmlFor="rootDomain">根域名</Label>
+              <Input
+                id="rootDomain"
+                placeholder="example.com"
+                autoComplete="off"
+                {...form.register("rootDomain")}
+              />
+            </div>
+            <div
+              className="order-2 min-h-5 text-sm md:col-start-1 md:row-start-2"
+              data-testid="domain-bind-error"
+              role={
+                form.formState.errors.rootDomain?.message || submitError
+                  ? "alert"
+                  : undefined
+              }
+            >
+              {form.formState.errors.rootDomain?.message ? (
+                <p className="text-destructive">
+                  {form.formState.errors.rootDomain.message}
+                </p>
+              ) : submitError ? (
+                <div className="relative inline-flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-destructive/30 bg-background/95 px-3 py-2 text-xs shadow-sm">
+                  <span className="absolute -top-1 left-4 h-2 w-2 rotate-45 border-l border-t border-destructive/30 bg-background/95" />
+                  <p className="font-medium text-destructive">
+                    {submitError.title}
+                  </p>
+                  {submitError.docsHref ? (
+                    <a
+                      href={submitError.docsHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+                    >
+                      查看处理步骤
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : null}
+                </div>
+              ) : (
+                " "
+              )}
+            </div>
+            <div
+              className="order-3 flex md:col-start-2 md:row-start-1 md:items-end"
+              data-testid="domain-bind-submit-slot"
+            >
+              <Button
+                type="submit"
+                className="w-full md:w-auto"
+                disabled={isPending}
+              >
+                {isPending ? "绑定中…" : "绑定到 Cloudflare"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      {successGuide ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+          data-testid="domain-bind-success-guide-dialog"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={successGuideTitleId}
+            className="w-full max-w-lg rounded-3xl border border-border bg-card p-6 shadow-[0_36px_120px_rgba(2,6,23,0.58)]"
+          >
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                后续步骤
+              </p>
+              <h3
+                id={successGuideTitleId}
+                className="text-xl font-semibold tracking-tight text-foreground"
+              >
+                {successGuide.title}
+              </h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {successGuide.rootDomain}
+                </span>
+                。{successGuide.summary}
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-primary">
+                  项目状态：{successGuide.projectStatus}
+                </span>
+                {successGuide.cloudflareStatus ? (
+                  <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
+                    Cloudflare：{successGuide.cloudflareStatus}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            {successGuide.nameServers.length > 0 ? (
+              <div className="mt-5 rounded-2xl border border-border/80 bg-background/60 p-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    需要使用的 nameserver
+                  </p>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    把域名 NS
+                    改成下面这组值，顺序不限；点击输入框会自动全选，每条可单独复制。
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {successGuide.nameServers.map((nameServer) => (
+                    <div
+                      key={`${successGuide.rootDomain}:${nameServer}`}
+                      className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2"
+                    >
+                      <Input
+                        readOnly
+                        value={nameServer}
+                        aria-label={`Nameserver ${nameServer}`}
+                        className="h-auto flex-1 border-0 bg-transparent px-0 font-mono text-sm text-foreground shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        onFocus={selectInputValue}
+                        onClick={selectInputValue}
+                      />
+                      <Button
+                        size="icon-sm"
+                        variant="outline"
+                        aria-label={`复制 ${nameServer}`}
+                        className="shrink-0"
+                        onClick={async () => {
+                          try {
+                            if (!navigator.clipboard?.writeText) {
+                              setCopiedNameserver(null);
+                              return;
+                            }
+                            await navigator.clipboard.writeText(nameServer);
+                            setCopiedNameserver(nameServer);
+                          } catch {
+                            setCopiedNameserver(null);
+                          }
+                        }}
+                      >
+                        {copiedNameserver === nameServer ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <ol className="mt-5 space-y-3">
+              {successGuide.steps.map((step, index) => (
+                <li
+                  key={`${successGuide.rootDomain}:${step}`}
+                  className="flex gap-3 rounded-2xl border border-border/80 bg-background/50 px-4 py-3"
+                >
+                  <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <p className="text-sm leading-6 text-foreground">{step}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <Button
+                autoFocus
+                onClick={() => {
+                  setSuccessGuideState(null);
+                }}
+              >
+                我知道了
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 };

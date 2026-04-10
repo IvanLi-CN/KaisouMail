@@ -1,6 +1,6 @@
 export const versionInfo = {
-  version: "0.1.0",
+  version: "0.18.5",
   commitSha: "a2ef066",
-  branch: "th/mailbox-ttl-slider-unlimited",
-  builtAt: "2026-04-09T20:04:16.779Z",
+  branch: "th/domain-bind-doc-hints",
+  builtAt: "2026-04-10T13:47:03.335Z",
 } as const;

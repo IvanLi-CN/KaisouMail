@@ -20,12 +20,14 @@ import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
 import { getErrorDetails } from "@/lib/error-utils";
+import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
   isDomainBindingEnabled?: boolean;
   isDomainLifecycleEnabled?: boolean;
+  docsLinks?: PublicDocsLinks | null;
   isBindPending?: boolean;
   isEnablePending?: boolean;
   error?: {
@@ -46,6 +48,7 @@ export const DomainsPageView = ({
   domains,
   isDomainBindingEnabled = true,
   isDomainLifecycleEnabled = true,
+  docsLinks = null,
   isBindPending = false,
   isEnablePending = false,
   error = null,
@@ -85,10 +88,16 @@ export const DomainsPageView = ({
     ) : (
       <>
         {isDomainBindingEnabled ? (
-          <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
+          <DomainBindCard
+            domains={domains}
+            isPending={isBindPending}
+            docsLinks={docsLinks}
+            onSubmit={onBind}
+          />
         ) : null}
         <DomainTable
           domains={domains}
+          docsLinks={docsLinks}
           isDomainLifecycleEnabled={isDomainLifecycleEnabled}
           isEnablePending={isEnablePending}
           onEnable={onEnable}
@@ -158,10 +167,17 @@ export const DomainsPage = () => {
       isDomainLifecycleEnabled={
         metaQuery.data?.cloudflareDomainLifecycleEnabled ?? false
       }
+      docsLinks={publicDocsLinks}
       isBindPending={bindDomainMutation.isPending}
       isEnablePending={createDomainMutation.isPending}
       onBind={async (values) => {
-        await bindDomainMutation.mutateAsync(values);
+        const boundDomain = await bindDomainMutation.mutateAsync(values);
+        const refreshedCatalog = await domainCatalogQuery.refetch();
+        return (
+          refreshedCatalog.data?.find(
+            (domain) => domain.rootDomain === boundDomain.rootDomain,
+          ) ?? boundDomain
+        );
       }}
       onEnable={async (values) => {
         await createDomainMutation.mutateAsync(values);

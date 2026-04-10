@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { usePageActivity } from "@/hooks/use-page-activity";
 import { apiClient } from "@/lib/api";
+import { resolveDomainCatalogPollingInterval } from "@/lib/domain-catalog";
 
 const domainsKey = ["domains"] as const;
 const domainCatalogKey = ["domains", "catalog"] as const;
 const metaKey = ["meta"] as const;
+const DOMAIN_CATALOG_POLLING_INTERVAL_MS = 15_000;
 
 export const useDomainsQuery = () =>
   useQuery({
@@ -12,11 +15,24 @@ export const useDomainsQuery = () =>
     queryFn: () => apiClient.listDomains(),
   });
 
-export const useDomainCatalogQuery = () =>
-  useQuery({
+export const useDomainCatalogQuery = () => {
+  const { isDocumentVisible, isOnline } = usePageActivity();
+
+  return useQuery({
     queryKey: domainCatalogKey,
     queryFn: () => apiClient.listDomainCatalog(),
+    refetchInterval: (query) =>
+      resolveDomainCatalogPollingInterval({
+        domains: query.state.data,
+        requestedIntervalMs: DOMAIN_CATALOG_POLLING_INTERVAL_MS,
+        isDocumentVisible,
+        isOnline,
+      }),
+    refetchIntervalInBackground: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
+};
 
 export const useCreateDomainMutation = () => {
   const queryClient = useQueryClient();
