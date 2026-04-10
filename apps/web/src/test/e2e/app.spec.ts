@@ -14,6 +14,10 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     `${mailboxLocalPart}@ops\\.alpha\\.(relay\\.example\\.test|mail\\.example\\.net)`,
   );
   const manualMailboxAddress = `${manualMailboxLocalPart}@ops.alpha.mail.example.net`;
+  const getMailboxRowByTriggerName = (name: RegExp | string) =>
+    page.locator(".workspace-mailbox-item").filter({
+      has: page.getByRole("button", { name }),
+    });
 
   await page.goto("/login");
 
@@ -44,9 +48,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const randomMailboxRow = page.getByRole("button", {
-    name: randomMailboxAddress,
-  });
+  const randomMailboxRow = getMailboxRowByTriggerName(randomMailboxAddress);
   await expect(randomMailboxRow).toBeVisible();
   await expect(randomMailboxRow.getByText("新建")).toBeVisible();
 
@@ -62,9 +64,9 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const mailboxRow = page.getByRole("button", {
-    name: new RegExp(manualMailboxAddress),
-  });
+  const mailboxRow = getMailboxRowByTriggerName(
+    new RegExp(manualMailboxAddress),
+  );
   await expect(mailboxRow).toBeVisible();
   await expect(mailboxRow.getByText("新建")).toBeVisible();
 
@@ -83,9 +85,9 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const fullAddressMailboxRow = page.getByRole("button", {
-    name: new RegExp(fullAddressPreview),
-  });
+  const fullAddressMailboxRow = getMailboxRowByTriggerName(
+    new RegExp(fullAddressPreview),
+  );
   await expect(fullAddressMailboxRow).toBeVisible();
   await expect(fullAddressMailboxRow.getByText("新建")).toBeVisible();
 

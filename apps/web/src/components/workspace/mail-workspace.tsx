@@ -1,6 +1,9 @@
 import {
   ArrowDownUp,
+  Check,
+  CircleAlert,
   CircleHelp,
+  Copy,
   Inbox,
   ListTree,
   MailOpen,
@@ -8,7 +11,14 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import {
+  type FocusEvent,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 
 import { MailboxCreateForm } from "@/components/mailboxes/mailbox-create-form";
@@ -34,6 +44,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
@@ -105,6 +116,8 @@ type MailWorkspaceProps = {
   onSelectMessage: (messageId: string) => void;
 };
 
+type MailboxAddressCopyState = "idle" | "success" | "error";
+
 export const MailWorkspace = ({
   createMailboxAction,
   mailboxesError = null,
@@ -139,6 +152,14 @@ export const MailWorkspace = ({
   const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
     mode: "segmented",
   });
+  const [mailboxAddressCopyState, setMailboxAddressCopyState] = useState<{
+    address: string | null;
+    state: MailboxAddressCopyState;
+  }>({
+    address: null,
+    state: "idle",
+  });
+  const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
@@ -147,6 +168,105 @@ export const MailWorkspace = ({
   const selectedMessageIndex = messages.findIndex(
     (message) => message.id === selectedMessageId,
   );
+  const getMailboxAddressCopyState = (address: string) =>
+    mailboxAddressCopyState.address === address
+      ? mailboxAddressCopyState.state
+      : "idle";
+
+  const resolvedMailboxAddressCopyState = selectedMailbox?.address
+    ? getMailboxAddressCopyState(selectedMailbox.address)
+    : "idle";
+
+  useEffect(
+    () => () => {
+      if (mailboxAddressCopyResetRef.current !== null) {
+        window.clearTimeout(mailboxAddressCopyResetRef.current);
+      }
+    },
+    [],
+  );
+
+  const scheduleMailboxAddressCopyStateReset = () => {
+    if (mailboxAddressCopyResetRef.current !== null) {
+      window.clearTimeout(mailboxAddressCopyResetRef.current);
+    }
+
+    mailboxAddressCopyResetRef.current = window.setTimeout(() => {
+      setMailboxAddressCopyState({
+        address: null,
+        state: "idle",
+      });
+      mailboxAddressCopyResetRef.current = null;
+    }, 2000);
+  };
+
+  const handleMailboxAddressFocus = (event: FocusEvent<HTMLButtonElement>) => {
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(event.currentTarget);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const handleMailboxAddressClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(event.currentTarget);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+
+  const handleCopyMailboxAddress = async (address: string) => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setMailboxAddressCopyState({
+        address,
+        state: "success",
+      });
+    } catch {
+      setMailboxAddressCopyState({
+        address,
+        state: "error",
+      });
+    }
+
+    scheduleMailboxAddressCopyStateReset();
+  };
+
+  const getMailboxAddressCopyTooltipContent = (
+    state: MailboxAddressCopyState,
+    scope: "selected" | "row",
+  ) => {
+    if (state === "success") {
+      return scope === "selected" ? "已复制当前邮箱地址" : "已复制邮箱地址";
+    }
+
+    if (state === "error") {
+      return "复制失败，请手动复制";
+    }
+
+    return scope === "selected" ? "复制当前邮箱地址" : "复制邮箱地址";
+  };
+
+  const getMailboxAddressCopyButtonClassName = (
+    state: MailboxAddressCopyState,
+  ) =>
+    cn(
+      "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border bg-background/40 p-0 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      state === "success"
+        ? "border-primary/40 text-primary hover:border-primary/60 hover:bg-primary/10"
+        : state === "error"
+          ? "border-destructive/45 text-destructive hover:border-destructive/65 hover:bg-destructive/10"
+          : "border-border text-muted-foreground hover:border-border/80 hover:bg-white/5 hover:text-foreground",
+    );
 
   const renderMailboxError = () => (
     <ErrorState
@@ -495,54 +615,122 @@ export const MailWorkspace = ({
                       const isHighlighted = highlightedMailboxId === mailbox.id;
                       const messageCount =
                         mailboxMessageCounts.get(mailbox.id) ?? 0;
+                      const mailboxAddressCopyStateForRow =
+                        getMailboxAddressCopyState(mailbox.address);
 
                       return (
-                        <button
-                          type="button"
-                          disabled={isDestroyed}
+                        <div
                           data-active={isActive ? "true" : undefined}
                           data-highlighted={isHighlighted ? "true" : undefined}
                           className={cn(
-                            "flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
+                            "workspace-mailbox-item relative flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200",
                             isDestroyed
                               ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                              : "workspace-mailbox-item cursor-pointer flex-col gap-3",
+                              : "cursor-pointer items-center gap-3",
                             !isDestroyed && isHighlighted
                               ? "text-foreground"
                               : null,
                           )}
-                          onClick={() => onSelectMailbox(mailbox.id)}
                         >
-                          <div className="flex w-full items-center justify-between gap-3">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <p
+                          {isDestroyed ? (
+                            <button
+                              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                              disabled
+                              type="button"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium leading-6 text-muted-foreground">
+                                {mailbox.address}
+                              </span>
+                              <Badge
                                 className={cn(
-                                  "min-w-0 text-sm font-medium",
-                                  isDestroyed
-                                    ? "truncate text-muted-foreground"
-                                    : "break-all text-foreground",
+                                  "min-w-7 shrink-0 justify-center px-2",
+                                  "border-border bg-muted/20 text-muted-foreground",
                                 )}
                               >
-                                {mailbox.address}
-                              </p>
-                              {isHighlighted ? (
-                                <Badge className="border-primary/40 bg-primary/20 text-primary">
-                                  新建
+                                {messageCount}
+                              </Badge>
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                aria-label={mailbox.address}
+                                className="absolute inset-0 rounded-xl focus-visible:outline-none"
+                                type="button"
+                                onClick={() => onSelectMailbox(mailbox.id)}
+                              />
+                              <div className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-3">
+                                <div className="min-w-0 flex flex-1 items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm font-medium leading-6 text-foreground">
+                                    {mailbox.address}
+                                  </span>
+                                  {isHighlighted ? (
+                                    <Badge className="shrink-0 border-primary/40 bg-primary/20 text-primary">
+                                      新建
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <Badge
+                                  className={cn(
+                                    "min-w-7 shrink-0 justify-center px-2",
+                                    messageCount === 0
+                                      ? "border-border bg-muted/20 text-muted-foreground"
+                                      : "border-primary/30 bg-primary/15 text-primary",
+                                  )}
+                                >
+                                  {messageCount}
                                 </Badge>
-                              ) : null}
-                            </div>
-                            <Badge
-                              className={cn(
-                                "min-w-7 justify-center px-2",
-                                isDestroyed || messageCount === 0
-                                  ? "border-border bg-muted/20 text-muted-foreground"
-                                  : "border-primary/30 bg-primary/15 text-primary",
-                              )}
-                            >
-                              {messageCount}
-                            </Badge>
-                          </div>
-                        </button>
+                              </div>
+                              <div className="pointer-events-none relative z-10 shrink-0 pl-2">
+                                <Tooltip
+                                  delayDuration={120}
+                                  tooltipContent={getMailboxAddressCopyTooltipContent(
+                                    mailboxAddressCopyStateForRow,
+                                    "row",
+                                  )}
+                                >
+                                  <button
+                                    aria-label={getMailboxAddressCopyTooltipContent(
+                                      mailboxAddressCopyStateForRow,
+                                      "row",
+                                    )}
+                                    className={cn(
+                                      "pointer-events-auto",
+                                      getMailboxAddressCopyButtonClassName(
+                                        mailboxAddressCopyStateForRow,
+                                      ),
+                                    )}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleCopyMailboxAddress(
+                                        mailbox.address,
+                                      );
+                                    }}
+                                  >
+                                    {mailboxAddressCopyStateForRow ===
+                                    "success" ? (
+                                      <Check
+                                        aria-hidden
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    ) : mailboxAddressCopyStateForRow ===
+                                      "error" ? (
+                                      <CircleAlert
+                                        aria-hidden
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    ) : (
+                                      <Copy
+                                        aria-hidden
+                                        className="h-3.5 w-3.5"
+                                      />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       );
                     }}
                   />
@@ -570,14 +758,85 @@ export const MailWorkspace = ({
         <section aria-label="邮件列表" className="min-w-0 xl:min-h-0">
           <div className="flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card lg:min-h-[25rem] xl:h-full xl:min-h-0">
             <div className="space-y-2 border-b border-border px-4 py-4">
-              <p className="text-sm font-semibold text-foreground">
-                {selectedMailbox
-                  ? `${selectedMailbox.address} 的邮件`
-                  : "全部邮箱邮件"}
-              </p>
+              {selectedMailbox ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold leading-6 text-foreground">
+                    <button
+                      className="cursor-text break-all bg-transparent p-0 text-left outline-none focus:outline-none"
+                      data-testid="workspace-selected-mailbox-address"
+                      type="button"
+                      onClick={handleMailboxAddressClick}
+                      onFocus={handleMailboxAddressFocus}
+                    >
+                      {selectedMailbox.address}
+                    </button>
+                    <Tooltip
+                      delayDuration={120}
+                      tooltipContent={getMailboxAddressCopyTooltipContent(
+                        resolvedMailboxAddressCopyState,
+                        "selected",
+                      )}
+                    >
+                      <button
+                        aria-label={getMailboxAddressCopyTooltipContent(
+                          resolvedMailboxAddressCopyState,
+                          "selected",
+                        )}
+                        className={cn(
+                          "ml-1.5 align-middle",
+                          getMailboxAddressCopyButtonClassName(
+                            resolvedMailboxAddressCopyState,
+                          ),
+                        )}
+                        type="button"
+                        onClick={() =>
+                          handleCopyMailboxAddress(selectedMailbox.address)
+                        }
+                      >
+                        {resolvedMailboxAddressCopyState === "success" ? (
+                          <Check aria-hidden className="h-3.5 w-3.5" />
+                        ) : resolvedMailboxAddressCopyState === "error" ? (
+                          <CircleAlert aria-hidden className="h-3.5 w-3.5" />
+                        ) : (
+                          <Copy aria-hidden className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </Tooltip>
+                    <span className="ml-1.5 text-sm font-semibold text-foreground">
+                      的邮件
+                    </span>
+                  </div>
+                  <div className="flex min-h-5 items-center justify-between gap-3">
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      切换左栏地址后，中栏会自动聚合该邮箱的邮件流。
+                    </p>
+                    <span
+                      aria-live="polite"
+                      className={cn(
+                        "text-xs leading-5",
+                        resolvedMailboxAddressCopyState === "success"
+                          ? "text-primary"
+                          : resolvedMailboxAddressCopyState === "error"
+                            ? "text-destructive"
+                            : "sr-only",
+                      )}
+                    >
+                      {resolvedMailboxAddressCopyState === "success"
+                        ? "邮箱地址已复制"
+                        : resolvedMailboxAddressCopyState === "error"
+                          ? "复制失败，请手动复制"
+                          : ""}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-foreground">
+                  全部邮箱邮件
+                </p>
+              )}
               <p className="text-xs leading-5 text-muted-foreground">
                 {selectedMailbox
-                  ? "切换左栏地址后，中栏会自动聚合该邮箱的邮件流。"
+                  ? "需要时可直接点选地址文本或点击复制按钮，快速分享当前邮箱。"
                   : "默认聚合所有邮箱的收件流，方便按主题与发件人快速巡检。"}
               </p>
             </div>
