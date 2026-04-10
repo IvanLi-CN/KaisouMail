@@ -127,7 +127,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
-- 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes persist with `expiresAt = null`.
+- 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.

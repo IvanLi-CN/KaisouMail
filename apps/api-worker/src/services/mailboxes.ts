@@ -47,6 +47,11 @@ type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
 
+const longTermMailboxExpirySentinel = "9999-12-31T23:59:59.999Z";
+
+const toMailboxApiExpiresAt = (expiresAt: string | null) =>
+  expiresAt === longTermMailboxExpirySentinel ? null : expiresAt;
+
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
   if (extracted) return extracted;
@@ -70,7 +75,7 @@ const toMailboxDto = (
     status: row.status,
     createdAt: row.createdAt,
     lastReceivedAt,
-    expiresAt: row.expiresAt,
+    expiresAt: toMailboxApiExpiresAt(row.expiresAt),
     destroyedAt: row.destroyedAt,
     routingRuleId: row.routingRuleId,
   });
@@ -515,7 +520,7 @@ export const createMailboxForUser = async (
     const now = nowIso();
     const expiresAt =
       expiresInMinutes === null
-        ? null
+        ? longTermMailboxExpirySentinel
         : new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
 
     const created = {
