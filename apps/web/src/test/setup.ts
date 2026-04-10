@@ -29,6 +29,14 @@ if (typeof globalThis.matchMedia !== "function") {
   globalThis.matchMedia = defaultMatchMedia as typeof globalThis.matchMedia;
 }
 
+if (
+  typeof window !== "undefined" &&
+  typeof window.CustomEvent === "function" &&
+  globalThis.CustomEvent !== window.CustomEvent
+) {
+  globalThis.CustomEvent = window.CustomEvent as typeof globalThis.CustomEvent;
+}
+
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
