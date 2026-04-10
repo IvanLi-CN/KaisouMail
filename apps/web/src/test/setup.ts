@@ -31,6 +31,14 @@ if (typeof globalThis.matchMedia !== "function") {
 
 if (
   typeof window !== "undefined" &&
+  typeof window.Event === "function" &&
+  globalThis.Event !== window.Event
+) {
+  globalThis.Event = window.Event as typeof globalThis.Event;
+}
+
+if (
+  typeof window !== "undefined" &&
   typeof window.CustomEvent === "function" &&
   globalThis.CustomEvent !== window.CustomEvent
 ) {
