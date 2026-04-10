@@ -1,3 +1,4 @@
+import { maxMailboxTtlMinutes, minMailboxTtlMinutes } from "@kaisoumail/shared";
 import { z } from "zod";
 
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
@@ -18,8 +19,8 @@ const runtimeConfigSchema = z.object({
   DEFAULT_MAILBOX_TTL_MINUTES: z.coerce
     .number()
     .int()
-    .min(60)
-    .max(30 * 24 * 60)
+    .min(minMailboxTtlMinutes)
+    .max(maxMailboxTtlMinutes)
     .default(60),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(3),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),

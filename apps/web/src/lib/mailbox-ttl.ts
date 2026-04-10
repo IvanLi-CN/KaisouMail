@@ -121,7 +121,7 @@ export const sliderPositionToMailboxTtl = (
 };
 
 export const formatMailboxTtl = (minutes: number | null | undefined) => {
-  if (minutes === null) return "无限";
+  if (minutes === null) return "长期";
   if (!isFiniteMailboxTtl(minutes)) return "—";
 
   let remaining: number = minutes;
@@ -141,7 +141,7 @@ export const formatMailboxTtl = (minutes: number | null | undefined) => {
 export const formatMailboxTtlEditorValue = (
   minutes: number | null | undefined,
 ) => {
-  if (minutes === null) return "无限";
+  if (minutes === null) return "长期";
   if (!isFiniteMailboxTtl(minutes)) return `${minMailboxTtlMinutes / 60}`;
   if (minutes % mailboxTtlMinutesPerDay === 0) {
     return `${minutes / mailboxTtlMinutesPerDay}d`;
@@ -161,6 +161,7 @@ const unlimitedMailboxTtlTokens = new Set([
   "永久",
   "无限",
   "永不过期",
+  "长期",
 ]);
 
 const mailboxTtlUnitMap = new Map<string, number>([
@@ -210,14 +211,14 @@ export const parseMailboxTtlInputWithOptions = (
   if (!normalized) {
     return {
       ok: false as const,
-      message: "请输入生命周期，例如 36h、2d、1mo 或 无限",
+      message: "请输入生命周期，例如 36h、2d、300d、1mo 或 长期",
     };
   }
   if (unlimitedMailboxTtlTokens.has(normalized)) {
     if (!supportsUnlimited) {
       return {
         ok: false as const,
-        message: "当前环境暂不支持无限生命周期",
+        message: "当前环境暂不支持长期生命周期",
       };
     }
     return { ok: true as const, value: null as number | null };
@@ -245,7 +246,7 @@ export const parseMailboxTtlInputWithOptions = (
   if (!factor) {
     return {
       ok: false as const,
-      message: "仅支持分钟、小时、天、周、月或 无限",
+      message: "仅支持分钟、小时、天、周、月或 长期",
     };
   }
 
@@ -254,7 +255,7 @@ export const parseMailboxTtlInputWithOptions = (
     return {
       ok: false as const,
       message: supportsUnlimited
-        ? `有限生命周期需在 ${formatMailboxTtl(minMinutes)}到 ${formatMailboxTtl(maxMinutes)}之间，或输入 无限`
+        ? `有限生命周期需在 ${formatMailboxTtl(minMinutes)}到 ${formatMailboxTtl(maxMinutes)}之间，或输入 长期`
         : `有限生命周期需在 ${formatMailboxTtl(minMinutes)}到 ${formatMailboxTtl(maxMinutes)}之间`,
     };
   }

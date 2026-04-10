@@ -15,6 +15,14 @@ import {
 } from "@/lib/mailbox-ttl";
 import { cn } from "@/lib/utils";
 
+const ttlAnchorCandidates = [
+  { minutes: 6 * 60, className: "hidden md:block" },
+  { minutes: 24 * 60, className: "hidden lg:block" },
+  { minutes: 7 * 24 * 60, className: "hidden xl:block" },
+  { minutes: 30 * 24 * 60, className: "" },
+  { minutes: 180 * 24 * 60, className: "hidden 2xl:block" },
+] as const;
+
 export const MailboxTtlControl = ({
   id,
   value,
@@ -67,6 +75,31 @@ export const MailboxTtlControl = ({
     if (!supportsUnlimited) return "100%";
     return `${(mailboxTtlSliderFiniteStop / mailboxTtlSliderMax) * 100}%`;
   }, [supportsUnlimited]);
+  const hideFiniteMaxLabelOnCompact =
+    supportsUnlimited && maxMinutes > 30 * 24 * 60;
+  const middleAnchors = useMemo(
+    () =>
+      ttlAnchorCandidates
+        .filter(
+          (anchor) =>
+            anchor.minutes > minMinutes && anchor.minutes < maxMinutes,
+        )
+        .sort((left, right) => left.minutes - right.minutes)
+        .map((anchor) => ({
+          ...anchor,
+          label: formatMailboxTtl(anchor.minutes),
+          left: `${
+            (mailboxTtlToSliderPosition(anchor.minutes, minMinutes, {
+              minMinutes,
+              maxMinutes,
+              supportsUnlimited,
+            }) /
+              sliderMax) *
+            100
+          }%`,
+        })),
+    [maxMinutes, minMinutes, sliderMax, supportsUnlimited],
+  );
 
   useEffect(() => {
     if (!isEditing) {
@@ -156,15 +189,39 @@ export const MailboxTtlControl = ({
               />
             </>
           ) : null}
+          {middleAnchors.map((anchor) => (
+            <span
+              key={anchor.minutes}
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute top-1/2 h-3 w-px -translate-x-1/2 -translate-y-1/2 bg-border/80",
+                anchor.className,
+              )}
+              style={{ left: anchor.left }}
+            />
+          ))}
         </div>
         <div className="relative mt-2 h-5 text-xs text-muted-foreground">
           <span className="absolute left-0 top-0 whitespace-nowrap">
             {formatMailboxTtl(minMinutes)}
           </span>
+          {middleAnchors.map((anchor) => (
+            <span
+              key={`${anchor.minutes}-label`}
+              className={cn(
+                "absolute top-0 -translate-x-1/2 whitespace-nowrap",
+                anchor.className,
+              )}
+              style={{ left: anchor.left }}
+            >
+              {anchor.label}
+            </span>
+          ))}
           <span
             className={cn(
               "absolute top-0 whitespace-nowrap",
               supportsUnlimited ? "-translate-x-1/2" : "-translate-x-full",
+              hideFiniteMaxLabelOnCompact ? "hidden lg:block" : undefined,
             )}
             style={{ left: finiteLabelLeft }}
           >
@@ -172,7 +229,7 @@ export const MailboxTtlControl = ({
           </span>
           {supportsUnlimited ? (
             <span className="absolute right-0 top-0 whitespace-nowrap">
-              无限
+              长期
             </span>
           ) : null}
         </div>
@@ -239,7 +296,7 @@ export const MailboxTtlControl = ({
       <span className="sr-only">
         有限生命周期范围为 {formatMailboxTtl(minMinutes)} 到{" "}
         {formatMailboxTtl(maxMinutes)}
-        {supportsUnlimited ? "，最右侧为无限。" : "。"}
+        {supportsUnlimited ? "，最右侧为长期。" : "。"}
       </span>
     </div>
   );

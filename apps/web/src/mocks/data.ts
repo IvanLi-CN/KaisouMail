@@ -558,7 +558,7 @@ export const demoMeta: ApiMeta = {
   supportsUnlimitedMailboxTtl: true,
   defaultMailboxTtlMinutes: 60,
   minMailboxTtlMinutes: 60,
-  maxMailboxTtlMinutes: 43200,
+  maxMailboxTtlMinutes: 525600,
   addressRules: {
     format: "localPart@subdomain.rootDomain",
     localPartPattern: "^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$",

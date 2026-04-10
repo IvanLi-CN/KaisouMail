@@ -7,7 +7,7 @@ export const formatDateTime = (value: string | null | undefined) => {
 };
 
 export const formatRelativeMinutes = (expiresAt: string | null | undefined) => {
-  if (!expiresAt) return "永不过期";
+  if (!expiresAt) return "长期";
   const deltaMinutes = Math.round(
     (new Date(expiresAt).getTime() - Date.now()) / 60_000,
   );

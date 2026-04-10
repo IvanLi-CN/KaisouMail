@@ -1,3 +1,4 @@
+import { maxMailboxTtlMinutes } from "@kaisoumail/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -175,14 +176,14 @@ describe("MailboxCreateForm", () => {
     });
   });
 
-  it("supports inline TTL editing and unlimited values", async () => {
+  it("supports inline TTL editing, large finite values, and long-term values", async () => {
     const onSubmit = vi.fn();
 
     render(
       <MailboxCreateForm
         defaultTtlMinutes={60}
         domains={["relay.example.test", "mail.example.net"]}
-        maxTtlMinutes={43200}
+        maxTtlMinutes={maxMailboxTtlMinutes}
         onSubmit={onSubmit}
       />,
     );
@@ -200,7 +201,16 @@ describe("MailboxCreateForm", () => {
 
     fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
     fireEvent.change(screen.getByLabelText("生命周期值"), {
-      target: { value: "无限" },
+      target: { value: "300d" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("生命周期值"), {
+      key: "Enter",
+    });
+    expect(screen.getByLabelText("生命周期值")).toHaveTextContent("300 天");
+
+    fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
+    fireEvent.change(screen.getByLabelText("生命周期值"), {
+      target: { value: "长期" },
     });
     fireEvent.keyDown(screen.getByLabelText("生命周期值"), {
       key: "Enter",
@@ -220,23 +230,23 @@ describe("MailboxCreateForm", () => {
       <MailboxCreateForm
         defaultTtlMinutes={60}
         domains={["relay.example.test", "mail.example.net"]}
-        maxTtlMinutes={43200}
+        maxTtlMinutes={maxMailboxTtlMinutes}
         onSubmit={vi.fn()}
       />,
     );
 
     fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
     fireEvent.change(screen.getByLabelText("生命周期值"), {
-      target: { value: "0.5h" },
+      target: { value: "366d" },
     });
     fireEvent.keyDown(screen.getByLabelText("生命周期值"), {
       key: "Enter",
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "有限生命周期需在 1 小时到 30 天之间，或输入 无限",
+      "有限生命周期需在 1 小时到 365 天之间，或输入 长期",
     );
-    expect(screen.getByLabelText("生命周期值")).toHaveValue("0.5h");
+    expect(screen.getByLabelText("生命周期值")).toHaveValue("366d");
 
     fireEvent.keyDown(screen.getByLabelText("生命周期值"), {
       key: "Escape",
@@ -250,14 +260,14 @@ describe("MailboxCreateForm", () => {
       <MailboxCreateForm
         defaultTtlMinutes={60}
         domains={["relay.example.test", "mail.example.net"]}
-        maxTtlMinutes={43200}
+        maxTtlMinutes={maxMailboxTtlMinutes}
         onSubmit={onSubmit}
       />,
     );
 
     fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
     fireEvent.change(screen.getByLabelText("生命周期值"), {
-      target: { value: "0.5h" },
+      target: { value: "366d" },
     });
     fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
 
@@ -265,9 +275,9 @@ describe("MailboxCreateForm", () => {
       expect(onSubmit).not.toHaveBeenCalled();
     });
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "有限生命周期需在 1 小时到 30 天之间，或输入 无限",
+      "有限生命周期需在 1 小时到 365 天之间，或输入 长期",
     );
-    expect(screen.getByLabelText("生命周期值")).toHaveValue("0.5h");
+    expect(screen.getByLabelText("生命周期值")).toHaveValue("366d");
   });
 
   it("auto-fills between segmented mode and full-address mode when switching", () => {
