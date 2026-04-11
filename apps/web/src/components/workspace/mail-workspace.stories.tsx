@@ -29,6 +29,52 @@ const demoSelectedMailboxDetail =
   (demoSelectedMailboxMessages[0]
     ? demoDetailMap[demoSelectedMailboxMessages[0].id]
     : null) ?? demoMessageDetails.msg_alpha;
+const demoAddressMailbox = demoMailboxes[1] ?? demoMailboxes[0] ?? null;
+const demoAddressMailboxMessages = demoMessages.filter(
+  (message) => message.mailboxId === demoAddressMailbox?.id,
+);
+const demoAddressMailboxDetail =
+  (demoAddressMailboxMessages[0]
+    ? demoDetailMap[demoAddressMailboxMessages[0].id]
+    : null) ?? demoMessageDetails.msg_beta;
+const demoLongMailbox: Mailbox = {
+  ...(demoMailboxes[1] ?? demoMailboxes[0]),
+  id: "mbx_long_visual",
+  address:
+    "operations-escalation-and-release-triage-for-super-long-workspace-verification@extremely-long-subdomain-chain.ops.beta.mail.example.net",
+  localPart:
+    "operations-escalation-and-release-triage-for-super-long-workspace-verification",
+  subdomain: "extremely-long-subdomain-chain.ops.beta",
+  rootDomain: "mail.example.net",
+};
+const demoLongMailboxMessages: MessageSummary[] = [
+  {
+    ...(demoMessages.find(
+      (message) => message.mailboxId === (demoMailboxes[1]?.id ?? ""),
+    ) ?? demoMessages[0]),
+    id: "msg_long_visual",
+    mailboxId: demoLongMailbox.id,
+    mailboxAddress: demoLongMailbox.address,
+    subject: "Long mailbox address overflow verification",
+    previewText:
+      "Verify how the workspace behaves when the mailbox address becomes much longer than the available rail width.",
+  },
+];
+const demoLongMailboxDetail: MessageDetail = {
+  ...(demoDetailMap.msg_beta ?? demoMessageDetails.msg_alpha),
+  id: "msg_long_visual",
+  mailboxId: demoLongMailbox.id,
+  mailboxAddress: demoLongMailbox.address,
+  envelopeTo: demoLongMailbox.address,
+  subject: "Long mailbox address overflow verification",
+  previewText:
+    "Verify how the workspace behaves when the mailbox address becomes much longer than the available rail width.",
+};
+const demoLongMailboxList: Mailbox[] = [
+  demoMailboxes[0] ?? demoLongMailbox,
+  demoLongMailbox,
+  ...(demoMailboxes[2] ? [demoMailboxes[2]] : []),
+];
 
 const buildMailboxMessageCounts = (
   mailboxes: Mailbox[],
@@ -302,6 +348,22 @@ const assertTabletSplitLayout = (canvasElement: HTMLElement) => {
   expect(Math.abs(messageList.left - messageContent.left)).toBeLessThan(24);
   expect(messageContent.top).toBeGreaterThan(messageList.bottom - 8);
 };
+
+const getMailboxRowByAddress = (
+  canvasElement: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(canvasElement)
+    .getByRole("button", { name: address })
+    .closest(".workspace-mailbox-item") as HTMLElement;
+
+const getMailboxRowTriggerByAddress = (
+  canvasElement: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(getMailboxRowByAddress(canvasElement, address)).getByRole("button", {
+    name: address,
+  });
 
 const assertDesktopThreePaneLayout = (canvasElement: HTMLElement) => {
   const { mailboxList, messageList, messageContent } =
@@ -761,9 +823,10 @@ export const DesktopThreePane: Story = {
     assertDesktopThreePaneLayout(canvasElement);
 
     await userEvent.click(
-      canvas.getByRole("button", {
-        name: /spec@ops\.beta\.mail\.example\.net/i,
-      }),
+      getMailboxRowTriggerByAddress(
+        canvasElement,
+        /spec@ops\.beta\.mail\.example\.net/i,
+      ),
     );
     await expect(args.onSelectMailbox).toHaveBeenCalledWith("mbx_beta");
 
@@ -788,6 +851,97 @@ export const VerificationSignalsDefault: Story = {
   args: verificationSignalArgs,
 };
 
+export const DesktopSelectedMailboxAddressVisual: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    selectedMailboxId: demoAddressMailbox?.id ?? "all",
+    selectedMailbox: demoAddressMailbox,
+    messages: demoAddressMailboxMessages,
+    selectedMessageId: demoAddressMailboxDetail.id,
+    selectedMessage: demoAddressMailboxDetail,
+    totalMessageCount: demoAddressMailboxMessages.length,
+  },
+};
+
+export const DesktopLongMailboxAddressVisual: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    visibleMailboxes: demoLongMailboxList,
+    totalMailboxCount: demoLongMailboxList.length,
+    mailboxMessageCounts: buildMailboxMessageCounts(
+      demoLongMailboxList,
+      demoLongMailboxMessages,
+    ),
+    mailboxLatestVerificationCodes: buildMailboxLatestVerificationCodes(
+      demoLongMailboxMessages,
+    ),
+    selectedMailboxId: demoLongMailbox.id,
+    selectedMailbox: demoLongMailbox,
+    messages: demoLongMailboxMessages,
+    selectedMessageId: demoLongMailboxDetail.id,
+    selectedMessage: demoLongMailboxDetail,
+    totalMessageCount: demoLongMailboxMessages.length,
+    totalAggregatedMessageCount: demoLongMailboxMessages.length,
+  },
+};
+
+export const DesktopMailboxListCopyButton: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const writeText = installClipboardMock();
+
+    await userEvent.click(
+      within(
+        getMailboxRowByAddress(
+          canvasElement,
+          /build@alpha\.relay\.example\.test/i,
+        ),
+      ).getByRole("button", { name: "复制邮箱地址" }),
+    );
+
+    await expect(writeText).toHaveBeenCalledWith(
+      "build@alpha.relay.example.test",
+    );
+  },
+};
+
+export const DesktopSelectedMailboxAddress: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    selectedMailboxId: demoAddressMailbox?.id ?? "all",
+    selectedMailbox: demoAddressMailbox,
+    messages: demoAddressMailboxMessages,
+    selectedMessageId: demoAddressMailboxDetail.id,
+    selectedMessage: demoAddressMailboxDetail,
+    totalMessageCount: demoAddressMailboxMessages.length,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const writeText = installClipboardMock();
+    const addressText = canvas.getByTestId(
+      "workspace-selected-mailbox-address",
+    );
+
+    await expect(addressText).toHaveTextContent(
+      demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
+    );
+
+    await userEvent.click(addressText);
+    await waitFor(() => {
+      expect(window.getSelection()?.toString()).toBe(
+        demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
+      );
+    });
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "复制当前邮箱地址" }),
+    );
+    await expect(writeText).toHaveBeenCalledWith(
+      demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
+    );
+  },
+};
+
 export const VerificationSignals: Story = {
   globals: projectViewportGlobals.desktop,
   args: verificationSignalArgs,
@@ -802,9 +956,12 @@ export const VerificationSignals: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const writeText = installClipboardMock();
-    const rowAddressCopyButton = canvas.getAllByRole("button", {
-      name: "复制邮箱地址",
-    })[0];
+    const rowAddressCopyButton = within(
+      getMailboxRowByAddress(
+        canvasElement,
+        /build@alpha\.relay\.example\.test/i,
+      ),
+    ).getByRole("button", { name: "复制邮箱地址" });
     const copyButtons = canvas.getAllByRole("button", {
       name: "复制验证码 842911",
     });
@@ -1068,10 +1225,10 @@ export const HighlightedNewMailbox: Story = {
 export const FocusedMailboxRow: Story = {
   globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const mailboxRow = canvas.getByRole("button", {
-      name: /build@alpha\.relay\.example\.test/i,
-    });
+    const mailboxRow = getMailboxRowTriggerByAddress(
+      canvasElement,
+      /build@alpha\.relay\.example\.test/i,
+    );
 
     await focusMailboxByTab(canvasElement, mailboxRow);
   },
@@ -1108,12 +1265,16 @@ export const HighlightedNewMailboxFocused: Story = {
     highlightedMailboxId: "mbx_beta",
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const highlightedRow = canvas.getByRole("button", {
-      name: /spec@ops\.beta\.mail\.example\.net/i,
-    });
+    const highlightedRow = getMailboxRowByAddress(
+      canvasElement,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
+    const highlightedTrigger = getMailboxRowTriggerByAddress(
+      canvasElement,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
 
-    await focusMailboxByTab(canvasElement, highlightedRow);
+    await focusMailboxByTab(canvasElement, highlightedTrigger);
     await expect(within(highlightedRow).getByText("新建")).toBeInTheDocument();
   },
 };

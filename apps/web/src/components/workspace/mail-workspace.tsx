@@ -676,90 +676,102 @@ export const MailWorkspace = ({
                         verificationCode,
                       });
 
+                      const mailboxAddressCopyStateForRow =
+                        getMailboxAddressCopyState(mailbox.address);
+
                       return (
-                        <div className="relative">
-                          <button
-                            aria-label={mailboxRowLabel}
-                            className={cn(
-                              "workspace-mailbox-item absolute inset-0 rounded-xl border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
-                              isDestroyed
-                                ? "cursor-not-allowed border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                                : "cursor-pointer",
-                              !isDestroyed && isHighlighted
-                                ? "text-foreground"
-                                : null,
-                            )}
-                            data-active={isActive ? "true" : undefined}
-                            data-highlighted={
-                              isHighlighted ? "true" : undefined
-                            }
-                            disabled={isDestroyed}
-                            type="button"
-                            onClick={() => onSelectMailbox(mailbox.id)}
-                          >
-                            <span className="sr-only">{mailbox.address}</span>
-                          </button>
-                          <div className="relative z-10 flex items-start gap-2 px-3 py-3 pointer-events-none">
-                            <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                              <p
-                                className={cn(
-                                  "min-w-0 truncate text-sm font-medium",
-                                  isDestroyed
-                                    ? "text-muted-foreground"
-                                    : "text-foreground",
-                                )}
-                                title={mailbox.address}
-                              >
-                                {mailbox.address}
-                              </p>
-                              {isHighlighted ? (
-                                <Badge className="border-primary/40 bg-primary/20 text-primary">
-                                  新建
-                                </Badge>
-                              ) : null}
-                            </div>
-                            {!isDestroyed && verificationCode ? (
-                              <div className="pointer-events-auto">
-                                <VerificationCopyButton
-                                  code={verificationCode}
-                                  variant="compact"
-                                />
-                              </div>
-                            ) : null}
-                            <Badge
-                              className={cn(
-                                "min-w-7 justify-center px-2",
-                                isDestroyed || messageCount === 0
-                                  ? "border-border bg-muted/20 text-muted-foreground"
-                                  : "border-primary/30 bg-primary/15 text-primary",
-                              )}
+                        <div
+                          className={cn(
+                            "workspace-mailbox-item relative flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200",
+                            isDestroyed
+                              ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
+                              : "items-center gap-2",
+                            !isDestroyed && isHighlighted
+                              ? "text-foreground"
+                              : null,
+                          )}
+                          data-active={isActive ? "true" : undefined}
+                          data-disabled={isDestroyed ? "true" : undefined}
+                          data-highlighted={isHighlighted ? "true" : undefined}
+                        >
+                          {isDestroyed ? (
+                            <button
+                              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                              disabled
+                              type="button"
                             >
-                              {messageCount}
-                            </Badge>
-                            {!isDestroyed ? (
-                              <div className="pointer-events-auto">
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium leading-6 text-muted-foreground">
+                                {mailbox.address}
+                              </span>
+                              <Badge className="min-w-7 shrink-0 justify-center border-border bg-muted/20 px-2 text-muted-foreground">
+                                {messageCount}
+                              </Badge>
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                aria-label={mailboxRowLabel}
+                                className="absolute inset-0 rounded-xl focus-visible:outline-none"
+                                type="button"
+                                onClick={() => onSelectMailbox(mailbox.id)}
+                              >
+                                <span className="sr-only">
+                                  {mailbox.address}
+                                </span>
+                              </button>
+                              <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 items-center gap-2">
+                                <div className="min-w-0 flex flex-1 items-center gap-2">
+                                  <p
+                                    className="min-w-0 truncate text-sm font-medium text-foreground"
+                                    title={mailbox.address}
+                                  >
+                                    {mailbox.address}
+                                  </p>
+                                  {isHighlighted ? (
+                                    <Badge className="shrink-0 border-primary/40 bg-primary/20 text-primary">
+                                      新建
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                {verificationCode ? (
+                                  <div className="pointer-events-auto">
+                                    <VerificationCopyButton
+                                      code={verificationCode}
+                                      variant="compact"
+                                    />
+                                  </div>
+                                ) : null}
+                                <Badge
+                                  className={cn(
+                                    "min-w-7 shrink-0 justify-center px-2",
+                                    messageCount === 0
+                                      ? "border-border bg-muted/20 text-muted-foreground"
+                                      : "border-primary/30 bg-primary/15 text-primary",
+                                  )}
+                                >
+                                  {messageCount}
+                                </Badge>
+                              </div>
+                              <div className="pointer-events-none relative z-10 shrink-0 pl-2">
                                 <Tooltip
                                   delayDuration={120}
                                   forceOpen={
-                                    getMailboxAddressCopyState(
-                                      mailbox.address,
-                                    ) !== "idle"
+                                    mailboxAddressCopyStateForRow !== "idle"
                                   }
                                   tooltipContent={getMailboxAddressCopyTooltipContent(
-                                    getMailboxAddressCopyState(mailbox.address),
+                                    mailboxAddressCopyStateForRow,
                                     "row",
                                   )}
                                 >
                                   <button
                                     aria-label={getMailboxAddressCopyLabel(
-                                      getMailboxAddressCopyState(
-                                        mailbox.address,
-                                      ),
+                                      mailboxAddressCopyStateForRow,
                                       "row",
                                     )}
-                                    className={getMailboxAddressCopyButtonClassName(
-                                      getMailboxAddressCopyState(
-                                        mailbox.address,
+                                    className={cn(
+                                      "pointer-events-auto",
+                                      getMailboxAddressCopyButtonClassName(
+                                        mailboxAddressCopyStateForRow,
                                       ),
                                     )}
                                     type="button"
@@ -771,9 +783,8 @@ export const MailWorkspace = ({
                                       );
                                     }}
                                   >
-                                    {getMailboxAddressCopyState(
-                                      mailbox.address,
-                                    ) === "error" ? (
+                                    {mailboxAddressCopyStateForRow ===
+                                    "error" ? (
                                       <CircleAlert
                                         aria-hidden
                                         className="h-3.5 w-3.5"
@@ -787,8 +798,8 @@ export const MailWorkspace = ({
                                   </button>
                                 </Tooltip>
                               </div>
-                            ) : null}
-                          </div>
+                            </>
+                          )}
                         </div>
                       );
                     }}
@@ -819,11 +830,10 @@ export const MailWorkspace = ({
             <div className="space-y-2 border-b border-border px-4 py-4">
               {selectedMailbox ? (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold leading-6 text-foreground">
+                  <div className="text-sm font-semibold leading-6 text-foreground">
                     <button
-                      className="min-w-0 cursor-text truncate bg-transparent p-0 text-left outline-none focus:outline-none"
+                      className="cursor-text break-all bg-transparent p-0 text-left outline-none focus:outline-none"
                       data-testid="workspace-selected-mailbox-address"
-                      title={selectedMailbox.address}
                       type="button"
                       onClick={handleMailboxAddressClick}
                       onFocus={handleMailboxAddressFocus}
@@ -843,8 +853,11 @@ export const MailWorkspace = ({
                           resolvedMailboxAddressCopyState,
                           "selected",
                         )}
-                        className={getMailboxAddressCopyButtonClassName(
-                          resolvedMailboxAddressCopyState,
+                        className={cn(
+                          "ml-1.5 align-middle",
+                          getMailboxAddressCopyButtonClassName(
+                            resolvedMailboxAddressCopyState,
+                          ),
                         )}
                         type="button"
                         onClick={() =>
@@ -858,7 +871,9 @@ export const MailWorkspace = ({
                         )}
                       </button>
                     </Tooltip>
-                    <span className="shrink-0">的邮件</span>
+                    <span className="ml-1.5 text-sm font-semibold text-foreground">
+                      的邮件
+                    </span>
                   </div>
                 </div>
               ) : (
@@ -909,17 +924,19 @@ export const MailWorkspace = ({
                       const messageRowLabel = buildMessageRowLabel(message);
 
                       return (
-                        <div className="relative">
+                        <div
+                          className="workspace-message-item relative rounded-xl border transition-[background-color,border-color,box-shadow] duration-200"
+                          data-active={active ? "true" : undefined}
+                        >
                           <button
                             aria-label={messageRowLabel}
-                            className="workspace-message-item absolute inset-0 rounded-xl border transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none"
-                            data-active={active ? "true" : undefined}
+                            className="absolute inset-0 rounded-xl focus-visible:outline-none"
                             type="button"
                             onClick={() => onSelectMessage(message.id)}
                           >
                             <span className="sr-only">{message.subject}</span>
                           </button>
-                          <div className="relative z-10 flex items-start gap-3 px-3 py-3 pointer-events-none">
+                          <div className="pointer-events-none relative z-10 flex items-start gap-3 px-3 py-3">
                             <div className="flex min-w-0 flex-1 flex-col gap-3">
                               <div className="space-y-1">
                                 <p className="text-sm font-medium text-foreground">

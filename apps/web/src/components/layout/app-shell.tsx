@@ -1,5 +1,4 @@
 import {
-  BriefcaseBusiness,
   Globe,
   KeyRound,
   LayoutPanelTop,
@@ -21,6 +20,7 @@ import {
 } from "react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 
+import { BrandMark } from "@/components/brand/brand-mark";
 import { ActionButton } from "@/components/ui/action-button";
 import {
   Popover,
@@ -362,14 +362,15 @@ export const AppShell = ({
 
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex max-w-[1520px] flex-col gap-4 px-4 py-4 lg:px-6 xl:px-8">
-          <div className="flex flex-wrap items-start gap-3 lg:flex-nowrap lg:items-center lg:justify-between">
-            <div className="flex min-w-0 flex-1 items-center gap-4 lg:gap-6">
-              <Link to="/workspace" className="flex min-w-0 items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-secondary text-primary">
-                  <BriefcaseBusiness className="h-4 w-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-col gap-4">
+              <Link to="/workspace" className="flex items-center gap-3">
+                <BrandMark
+                  className="h-10 w-10"
+                  imageClassName="scale-[0.84]"
+                />
+                <span>
+                  <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
                     {projectMeta.projectName}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">

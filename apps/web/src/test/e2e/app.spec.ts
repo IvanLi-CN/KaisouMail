@@ -1,23 +1,7 @@
 import { buildRealisticMailboxAddressExample } from "@kaisoumail/shared";
-import { expect, type Locator, test } from "@playwright/test";
-
-const expectMailboxHighlightBadge = async (
-  rowButton: Locator,
-  visible: boolean,
-) => {
-  const rowShell = rowButton.locator("xpath=..");
-  const badge = rowShell.getByText("新建", { exact: true });
-
-  if (visible) {
-    await expect(badge).toBeVisible();
-    return;
-  }
-
-  await expect(badge).toHaveCount(0);
-};
+import { expect, test } from "@playwright/test";
 
 test("demo console login and workspace mail flow", async ({ page }) => {
-  const mailboxList = page.getByRole("region", { name: "邮箱列表" });
   const mailboxLocalPart = `e2e${Date.now().toString().slice(-6)}`;
   const manualMailboxLocalPart = `pick${Date.now().toString().slice(-6)}`;
   const fullAddressMailboxLocalPart = `full${Date.now().toString().slice(-6)}`;
@@ -30,6 +14,10 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     `${mailboxLocalPart}@ops\\.alpha\\.(relay\\.example\\.test|mail\\.example\\.net)`,
   );
   const manualMailboxAddress = `${manualMailboxLocalPart}@ops.alpha.mail.example.net`;
+  const getMailboxRowByTriggerName = (name: RegExp | string) =>
+    page.locator(".workspace-mailbox-item").filter({
+      has: page.getByRole("button", { name }),
+    });
 
   await page.goto("/login");
 
@@ -60,14 +48,12 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const randomMailboxRow = mailboxList.getByRole("button", {
-    name: randomMailboxAddress,
-  });
+  const randomMailboxRow = getMailboxRowByTriggerName(randomMailboxAddress);
   await expect(randomMailboxRow).toBeVisible();
-  await expectMailboxHighlightBadge(randomMailboxRow, true);
+  await expect(randomMailboxRow.getByText("新建")).toBeVisible();
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expectMailboxHighlightBadge(randomMailboxRow, false);
+  await expect(randomMailboxRow.getByText("新建")).toHaveCount(0);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByLabel("用户名").fill(manualMailboxLocalPart);
@@ -78,14 +64,14 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const mailboxRow = mailboxList.getByRole("button", {
-    name: new RegExp(manualMailboxAddress),
-  });
+  const mailboxRow = getMailboxRowByTriggerName(
+    new RegExp(manualMailboxAddress),
+  );
   await expect(mailboxRow).toBeVisible();
-  await expectMailboxHighlightBadge(mailboxRow, true);
+  await expect(mailboxRow.getByText("新建")).toBeVisible();
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expectMailboxHighlightBadge(mailboxRow, false);
+  await expect(mailboxRow.getByText("新建")).toHaveCount(0);
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByRole("button", { name: "完整" }).click();
@@ -99,14 +85,14 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const fullAddressMailboxRow = mailboxList.getByRole("button", {
-    name: new RegExp(fullAddressPreview),
-  });
+  const fullAddressMailboxRow = getMailboxRowByTriggerName(
+    new RegExp(fullAddressPreview),
+  );
   await expect(fullAddressMailboxRow).toBeVisible();
-  await expectMailboxHighlightBadge(fullAddressMailboxRow, true);
+  await expect(fullAddressMailboxRow.getByText("新建")).toBeVisible();
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
-  await expectMailboxHighlightBadge(fullAddressMailboxRow, false);
+  await expect(fullAddressMailboxRow.getByText("新建")).toHaveCount(0);
 
   await page.getByRole("button", { name: /全部邮箱/i }).click();
   await page.getByRole("button", { name: /Build artifacts ready/ }).click();

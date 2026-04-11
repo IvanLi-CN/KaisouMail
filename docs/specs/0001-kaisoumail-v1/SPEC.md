@@ -127,6 +127,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
@@ -162,6 +163,9 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 ### Auth
 
+PR: include
+![KaisouMail login page with the branded lockup and single-card sign-in surface](./assets/login-page-kaisoumail.png)
+
 ![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
 ![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
@@ -194,6 +198,13 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
+
+PR: include
+![Workspace selected mailbox header with wrapped address text and inline copy button](./assets/workspace-selected-mailbox-address.png)
+
+![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
+
+![Workspace long mailbox addresses wrap in the reader header while the rail keeps truncation](./assets/workspace-long-mailbox-address.png)
 
 ![Workspace message row with the repaired focus halo](./assets/workspace-message-row-focus-ring.png)
 

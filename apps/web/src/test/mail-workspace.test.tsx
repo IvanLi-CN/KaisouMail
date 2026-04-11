@@ -115,6 +115,19 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+const getMailboxRowByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) =>
+  within(container)
+    .getByRole("button", { name: address })
+    .closest(".workspace-mailbox-item") as HTMLElement;
+
+const getMailboxRowTriggerByAddress = (
+  container: HTMLElement,
+  address: RegExp | string,
+) => within(container).getByRole("button", { name: address });
+
 describe("MailWorkspace", () => {
   it("only closes the create popover via cancel or escape when idle", () => {
     const onCancel = vi.fn();
@@ -171,7 +184,12 @@ describe("MailWorkspace", () => {
     const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
 
     expect(onCancel).not.toHaveBeenCalled();
-    expect(within(mailboxList).getByText("新建")).toBeInTheDocument();
+    expect(
+      getMailboxRowByAddress(
+        mailboxList,
+        /spec@ops\.beta\.mail\.example\.net/i,
+      ),
+    ).toHaveTextContent("新建");
   });
 
   it("uses semantic state hooks instead of stacked ring utilities across workspace rails", () => {
@@ -193,20 +211,18 @@ describe("MailWorkspace", () => {
     const allMailRow = within(mailboxList).getByRole("button", {
       name: /全部邮箱/i,
     });
-    const normalRow = within(mailboxList).getByRole("button", {
-      name: /build@alpha\.relay\.example\.test/i,
-    });
-    const highlightedRow = within(mailboxList).getByRole("button", {
-      name: /spec@ops\.beta\.mail\.example\.net/i,
-    });
+    const normalRow = getMailboxRowByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const highlightedRow = getMailboxRowByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
     const messageList = screen.getByRole("region", { name: "邮件列表" });
     const activeMessageRow = within(messageList).getByRole("button", {
       name: /Build artifacts ready/i,
     });
-    const normalRowShell = normalRow.closest(".workspace-mailbox-item");
-    const highlightedRowShell = highlightedRow.closest(
-      ".workspace-mailbox-item",
-    );
     const activeMessageRowShell = activeMessageRow.closest(
       ".workspace-message-item",
     );
@@ -216,14 +232,14 @@ describe("MailWorkspace", () => {
     expect(allMailRow.className).not.toContain("focus-visible:ring-ring");
     expect(allMailRow.className).not.toContain("focus-visible:ring-2");
 
-    expect(normalRowShell).not.toBeNull();
-    expect(normalRowShell).not.toHaveAttribute("data-active");
-    expect(normalRowShell).not.toHaveAttribute("data-highlighted");
+    expect(normalRow).toHaveClass("workspace-mailbox-item");
+    expect(normalRow).not.toHaveAttribute("data-active");
+    expect(normalRow).not.toHaveAttribute("data-highlighted");
 
-    expect(highlightedRowShell).not.toBeNull();
-    expect(highlightedRowShell).toHaveAttribute("data-highlighted", "true");
-    expect(highlightedRowShell?.className).not.toContain("ring-1");
-    expect(highlightedRowShell?.className).not.toContain("ring-primary/35");
+    expect(highlightedRow).toHaveClass("workspace-mailbox-item");
+    expect(highlightedRow).toHaveAttribute("data-highlighted", "true");
+    expect(highlightedRow.className).not.toContain("ring-1");
+    expect(highlightedRow.className).not.toContain("ring-primary/35");
 
     expect(activeMessageRowShell).not.toBeNull();
     expect(activeMessageRowShell).toHaveAttribute("data-active", "true");
@@ -234,8 +250,13 @@ describe("MailWorkspace", () => {
       "focus-visible:ring-2",
     );
 
-    highlightedRow.focus();
-    expect(highlightedRow).toHaveFocus();
+    const highlightedTrigger = getMailboxRowTriggerByAddress(
+      mailboxList,
+      /spec@ops\.beta\.mail\.example\.net/i,
+    );
+
+    highlightedTrigger.focus();
+    expect(highlightedTrigger).toHaveFocus();
   });
 
   it("copies the verification code without changing the selected mailbox or message", async () => {
@@ -310,12 +331,12 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
     fireEvent.click(
       within(
-        screen
-          .getByTitle("build@alpha.relay.example.test")
-          .closest(".relative") as HTMLElement,
+        getMailboxRowByAddress(
+          screen.getByRole("region", { name: "邮箱列表" }),
+          /build@alpha\.relay\.example\.test/i,
+        ),
       ).getByRole("button", { name: "复制邮箱地址" }),
     );
 
@@ -324,7 +345,7 @@ describe("MailWorkspace", () => {
     });
     expect(onSelectMailbox).not.toHaveBeenCalled();
     expect(
-      within(mailboxList).getByRole("button", { name: "已复制邮箱地址" }),
+      screen.getByRole("button", { name: "已复制邮箱地址" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
   });
@@ -375,7 +396,7 @@ describe("MailWorkspace", () => {
     expect(screen.queryByText("邮箱地址已复制")).not.toBeInTheDocument();
   });
 
-  it("keeps mailbox and message rows clickable across the full card shell", () => {
+  it("keeps mailbox and message row triggers clickable", () => {
     const onSelectMailbox = vi.fn();
     const onSelectMessage = vi.fn();
 
@@ -393,25 +414,51 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    const mailboxShell = within(
+    const mailboxTrigger = getMailboxRowTriggerByAddress(
       screen.getByRole("region", { name: "邮箱列表" }),
-    )
-      .getByRole("button", { name: /build@alpha\.relay\.example\.test/i })
-      .closest(".workspace-mailbox-item");
-    const messageShell = within(
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const messageTrigger = within(
       screen.getByRole("region", { name: "邮件列表" }),
-    )
-      .getByRole("button", { name: /Build artifacts ready/i })
-      .closest(".workspace-message-item");
+    ).getByRole("button", { name: /Build artifacts ready/i });
 
-    expect(mailboxShell).not.toBeNull();
-    expect(messageShell).not.toBeNull();
-
-    fireEvent.click(mailboxShell as HTMLElement);
-    fireEvent.click(messageShell as HTMLElement);
+    fireEvent.click(mailboxTrigger);
+    fireEvent.click(messageTrigger);
 
     expect(onSelectMailbox).toHaveBeenCalledWith("mbx_alpha");
     expect(onSelectMessage).toHaveBeenCalledWith("msg_alpha");
+  });
+
+  it("keeps a dedicated row trigger while preserving the count badge", () => {
+    const onSelectMailbox = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
+    const mailboxRow = getMailboxRowByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+    const mailboxTrigger = getMailboxRowTriggerByAddress(
+      mailboxList,
+      /build@alpha\.relay\.example\.test/i,
+    );
+
+    expect(within(mailboxRow).getByText("1")).toBeInTheDocument();
+    fireEvent.click(mailboxTrigger);
+
+    expect(onSelectMailbox).toHaveBeenCalledWith("mbx_alpha");
   });
 
   it("renders pane-specific errors instead of empty placeholders", () => {
@@ -527,6 +574,73 @@ describe("MailWorkspace", () => {
       "style",
       expect.stringContaining("height: 22880px;"),
     );
+  });
+
+  it("renders the selected mailbox as selectable text and auto-selects the address on focus", () => {
+    const addRange = vi.fn();
+    const removeAllRanges = vi.fn();
+    const selectNodeContents = vi.fn();
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      addRange,
+      removeAllRanges,
+    } as unknown as Selection);
+    vi.spyOn(document, "createRange").mockReturnValue({
+      selectNodeContents,
+    } as unknown as Range);
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    const addressText = screen.getByTestId(
+      "workspace-selected-mailbox-address",
+    );
+
+    expect(addressText).toHaveTextContent("spec@ops.beta.mail.example.net");
+    expect(
+      screen.getByRole("button", { name: "复制当前邮箱地址" }),
+    ).toBeInTheDocument();
+
+    fireEvent.focus(addressText);
+
+    expect(selectNodeContents).toHaveBeenCalledWith(addressText);
+    expect(removeAllRanges).toHaveBeenCalled();
+    expect(addRange).toHaveBeenCalled();
+  });
+
+  it("keeps the aggregate workspace title when all mailboxes are selected", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByTestId("workspace-selected-mailbox-address"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("全部邮箱邮件")).toBeInTheDocument();
   });
 
   it("submits normalized full addresses from the create popover", () => {
