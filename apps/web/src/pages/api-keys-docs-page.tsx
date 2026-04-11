@@ -704,7 +704,12 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "receivedAt": "2026-04-03T12:15:00.000Z",
       "sizeBytes": 182340,
       "attachmentCount": 1,
-      "hasHtml": true
+      "hasHtml": true,
+      "verification": {
+        "code": "842911",
+        "source": "body",
+        "method": "rules"
+      }
     }
   ]
 }`,
@@ -713,6 +718,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "`after` 与 `since` 都接受 ISO datetime，语义相同；若同时传入，服务端会取较晚的那个作为严格下界。",
             "适合验证码轮询或增量收件场景，避免反复扫描旧邮件。",
             "`scope=workspace` 会先套用工作区可见邮箱集合，再返回对应消息，确保左侧邮箱 rail、聚合计数和中栏邮件流一致。",
+            "`verification` 为可选对象；命中时会返回最终验证码值、来源（`subject|body`）与判定方式（`rules|ai`），未命中则为 `null`。",
           ],
         },
         {
@@ -733,6 +739,11 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     "sizeBytes": 182340,
     "attachmentCount": 1,
     "hasHtml": true,
+    "verification": {
+      "code": "842911",
+      "source": "body",
+      "method": "rules"
+    },
     "envelopeFrom": "ci@example.net",
     "envelopeTo": "${addressExample}",
     "messageId": "<demo@example.net>",
@@ -752,6 +763,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "消息详情是在 `message` 对象下返回，结构由 `messageDetailSchema` 定义。",
+            "验证码识别结果会和正文详情一起返回，工作台可以直接复用这一份 `verification` 对象做复制入口。",
             "`rawDownloadPath` 可直接拼接到同源 API Base 后下载原始 EML。",
           ],
         },

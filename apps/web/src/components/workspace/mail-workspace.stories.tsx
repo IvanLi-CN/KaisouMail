@@ -21,12 +21,22 @@ import {
 import { projectViewportGlobals } from "@/storybook/viewports";
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
-const demoSelectedMailbox = demoMailboxes[1] ?? demoMailboxes[0];
+const demoSelectedMailbox = demoMailboxes[0] ?? null;
 const demoSelectedMailboxMessages = demoMessages.filter(
   (message) => message.mailboxId === demoSelectedMailbox?.id,
 );
 const demoSelectedMailboxDetail =
-  demoDetailMap.msg_beta ?? demoMessageDetails.msg_alpha;
+  (demoSelectedMailboxMessages[0]
+    ? demoDetailMap[demoSelectedMailboxMessages[0].id]
+    : null) ?? demoMessageDetails.msg_alpha;
+const demoAddressMailbox = demoMailboxes[1] ?? demoMailboxes[0] ?? null;
+const demoAddressMailboxMessages = demoMessages.filter(
+  (message) => message.mailboxId === demoAddressMailbox?.id,
+);
+const demoAddressMailboxDetail =
+  (demoAddressMailboxMessages[0]
+    ? demoDetailMap[demoAddressMailboxMessages[0].id]
+    : null) ?? demoMessageDetails.msg_beta;
 const demoLongMailbox: Mailbox = {
   ...(demoMailboxes[1] ?? demoMailboxes[0]),
   id: "mbx_long_visual",
@@ -76,6 +86,33 @@ const buildMailboxMessageCounts = (
       messages.filter((message) => message.mailboxId === mailbox.id).length,
     ]),
   );
+
+const buildMailboxLatestVerificationCodes = (messages: MessageSummary[]) => {
+  const latestByMailboxId = new Map<
+    string,
+    { code: string; receivedAt: string }
+  >();
+
+  for (const message of messages) {
+    const code = message.verification?.code;
+    if (!code) continue;
+
+    const current = latestByMailboxId.get(message.mailboxId);
+    if (!current || message.receivedAt.localeCompare(current.receivedAt) > 0) {
+      latestByMailboxId.set(message.mailboxId, {
+        code,
+        receivedAt: message.receivedAt,
+      });
+    }
+  }
+
+  return new Map(
+    [...latestByMailboxId.entries()].map(([mailboxId, value]) => [
+      mailboxId,
+      value.code,
+    ]),
+  );
+};
 
 const createLongMailboxes = (count: number) =>
   Array.from({ length: count }, (_, index) => ({
@@ -222,6 +259,12 @@ const meta = {
   parameters: {
     layout: "fullscreen",
     disableStoryPadding: true,
+    docs: {
+      description: {
+        component:
+          "Workspace now surfaces the latest recognized verification code directly in the mailbox rail and message stream. Mailbox rows expose a verification-code chip, while message rows expose a larger code panel that copies without changing the current selection.",
+      },
+    },
   },
   decorators: [
     (Story) => (
@@ -241,6 +284,8 @@ const meta = {
       demoMailboxes,
       demoMessages,
     ),
+    mailboxLatestVerificationCodes:
+      buildMailboxLatestVerificationCodes(demoMessages),
     selectedMailboxId: "all",
     selectedMailbox: null,
     messages: demoMessages,
@@ -309,7 +354,7 @@ const getMailboxRowByAddress = (
   address: RegExp | string,
 ) =>
   within(canvasElement)
-    .getByText(address)
+    .getByRole("button", { name: address })
     .closest(".workspace-mailbox-item") as HTMLElement;
 
 const getMailboxRowTriggerByAddress = (
@@ -343,6 +388,19 @@ const focusMailboxByTab = async (
   }
 
   await expect(target).toHaveFocus();
+};
+
+const installClipboardMock = () => {
+  const writeText = fn(async () => undefined);
+
+  Object.defineProperty(window.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText,
+    },
+  });
+
+  return writeText;
 };
 
 const WorkspaceStoryHarness = ({
@@ -500,6 +558,9 @@ const WorkspaceStoryHarness = ({
       isMessagesLoading={false}
       mailboxManagementHref="/mailboxes"
       mailboxMessageCounts={buildMailboxMessageCounts(mailboxes, demoMessages)}
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
+        demoMessages,
+      )}
       messageDetailHref={
         selectedMessageId
           ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}`
@@ -591,6 +652,9 @@ const DesktopVirtualizedHarness = () => {
       mailboxMessageCounts={
         new Map(longMailboxes.map((mailbox) => [mailbox.id, 1]))
       }
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
+        longMessages,
+      )}
       messageDetailHref={
         selectedMessageId
           ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}`
@@ -667,6 +731,9 @@ const WorkspaceScopeHistoryHarness = () => {
       mailboxManagementHref="/mailboxes"
       mailboxMessageCounts={buildMailboxMessageCounts(
         visibleMailboxes,
+        scopedMessages,
+      )}
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
         scopedMessages,
       )}
       messageDetailHref="/messages/msg_scope_active?mailbox=all&sort=recent"
@@ -770,15 +837,29 @@ export const DesktopThreePane: Story = {
   },
 };
 
+const verificationSignalArgs = {
+  selectedMailboxId: demoSelectedMailbox?.id ?? "all",
+  selectedMailbox: demoSelectedMailbox,
+  messages: demoSelectedMailboxMessages,
+  selectedMessageId: demoSelectedMailboxDetail.id,
+  selectedMessage: demoSelectedMailboxDetail,
+  totalMessageCount: demoSelectedMailboxMessages.length,
+} satisfies Partial<ComponentProps<typeof MailWorkspace>>;
+
+export const VerificationSignalsDefault: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: verificationSignalArgs,
+};
+
 export const DesktopSelectedMailboxAddressVisual: Story = {
   globals: projectViewportGlobals.desktop,
   args: {
-    selectedMailboxId: demoSelectedMailbox?.id ?? "all",
-    selectedMailbox: demoSelectedMailbox ?? null,
-    messages: demoSelectedMailboxMessages,
-    selectedMessageId: demoSelectedMailboxDetail.id,
-    selectedMessage: demoSelectedMailboxDetail,
-    totalMessageCount: demoSelectedMailboxMessages.length,
+    selectedMailboxId: demoAddressMailbox?.id ?? "all",
+    selectedMailbox: demoAddressMailbox,
+    messages: demoAddressMailboxMessages,
+    selectedMessageId: demoAddressMailboxDetail.id,
+    selectedMessage: demoAddressMailboxDetail,
+    totalMessageCount: demoAddressMailboxMessages.length,
   },
 };
 
@@ -789,6 +870,9 @@ export const DesktopLongMailboxAddressVisual: Story = {
     totalMailboxCount: demoLongMailboxList.length,
     mailboxMessageCounts: buildMailboxMessageCounts(
       demoLongMailboxList,
+      demoLongMailboxMessages,
+    ),
+    mailboxLatestVerificationCodes: buildMailboxLatestVerificationCodes(
       demoLongMailboxMessages,
     ),
     selectedMailboxId: demoLongMailbox.id,
@@ -804,14 +888,7 @@ export const DesktopLongMailboxAddressVisual: Story = {
 export const DesktopMailboxListCopyButton: Story = {
   globals: projectViewportGlobals.desktop,
   play: async ({ canvasElement }) => {
-    const writeText = fn(async () => undefined);
-
-    Object.defineProperty(window.navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText,
-      },
-    });
+    const writeText = installClipboardMock();
 
     await userEvent.click(
       within(
@@ -831,36 +908,28 @@ export const DesktopMailboxListCopyButton: Story = {
 export const DesktopSelectedMailboxAddress: Story = {
   globals: projectViewportGlobals.desktop,
   args: {
-    selectedMailboxId: demoSelectedMailbox?.id ?? "all",
-    selectedMailbox: demoSelectedMailbox ?? null,
-    messages: demoSelectedMailboxMessages,
-    selectedMessageId: demoSelectedMailboxDetail.id,
-    selectedMessage: demoSelectedMailboxDetail,
-    totalMessageCount: demoSelectedMailboxMessages.length,
+    selectedMailboxId: demoAddressMailbox?.id ?? "all",
+    selectedMailbox: demoAddressMailbox,
+    messages: demoAddressMailboxMessages,
+    selectedMessageId: demoAddressMailboxDetail.id,
+    selectedMessage: demoAddressMailboxDetail,
+    totalMessageCount: demoAddressMailboxMessages.length,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const writeText = fn(async () => undefined);
-
-    Object.defineProperty(window.navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText,
-      },
-    });
-
+    const writeText = installClipboardMock();
     const addressText = canvas.getByTestId(
       "workspace-selected-mailbox-address",
     );
 
     await expect(addressText).toHaveTextContent(
-      demoSelectedMailbox?.address ?? "spec@ops.beta.mail.example.net",
+      demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
     );
 
     await userEvent.click(addressText);
     await waitFor(() => {
       expect(window.getSelection()?.toString()).toBe(
-        demoSelectedMailbox?.address ?? "spec@ops.beta.mail.example.net",
+        demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
       );
     });
 
@@ -868,8 +937,92 @@ export const DesktopSelectedMailboxAddress: Story = {
       canvas.getByRole("button", { name: "复制当前邮箱地址" }),
     );
     await expect(writeText).toHaveBeenCalledWith(
-      demoSelectedMailbox?.address ?? "spec@ops.beta.mail.example.net",
+      demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
     );
+  },
+};
+
+export const VerificationSignals: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: verificationSignalArgs,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Shows both mailbox-address and verification copy affordances together: the mailbox rail keeps a dedicated address-copy icon alongside the verification-code chip, while the message header and message row expose their own copy targets without stealing selection.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const writeText = installClipboardMock();
+    const rowAddressCopyButton = within(
+      getMailboxRowByAddress(
+        canvasElement,
+        /build@alpha\.relay\.example\.test/i,
+      ),
+    ).getByRole("button", { name: "复制邮箱地址" });
+    const copyButtons = canvas.getAllByRole("button", {
+      name: "复制验证码 842911",
+    });
+
+    await userEvent.click(rowAddressCopyButton ?? document.body);
+    await userEvent.click(copyButtons[0] ?? document.body);
+    await userEvent.click(copyButtons[1] ?? document.body);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledTimes(3);
+    });
+    const copiedValues = (writeText.mock.calls as unknown as string[][]).map(
+      (call) => call[0],
+    );
+    expect(copiedValues.filter((value) => value === "842911")).toHaveLength(2);
+    expect(
+      copiedValues.filter(
+        (value) => value === "build@alpha.relay.example.test",
+      ),
+    ).toHaveLength(1);
+    await expect(
+      canvas.getByRole("button", { name: "已复制邮箱地址" }),
+    ).toBeInTheDocument();
+    await expect(canvas.queryByText("邮箱地址已复制")).not.toBeInTheDocument();
+    await expect(
+      canvas.getAllByRole("button", { name: "已复制验证码 842911" }).length,
+    ).toBeGreaterThan(0);
+    await expect(
+      canvas.getByRole("button", { name: /Build artifacts ready/i }),
+    ).toBeInTheDocument();
+    await expect(canvas.queryByText("点击复制")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("验证码")).not.toBeInTheDocument();
+  },
+};
+
+export const WithoutVerificationSignals: Story = {
+  args: {
+    messages: demoMessages.map((message) => ({
+      ...message,
+      verification: null,
+    })),
+    mailboxLatestVerificationCodes: new Map<string, string>(),
+    selectedMessage: {
+      ...demoMessageDetails.msg_alpha,
+      verification: null,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Verification copy actions stay completely hidden when the API returns `verification: null` for the current mailbox/message set.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(
+      canvas.queryByRole("button", { name: /复制验证码/i }),
+    ).not.toBeInTheDocument();
   },
 };
 

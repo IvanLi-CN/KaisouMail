@@ -6,6 +6,13 @@ const { getDb } = vi.hoisted(() => ({
 const { listScopedMailboxRowsForUser } = vi.hoisted(() => ({
   listScopedMailboxRowsForUser: vi.fn(),
 }));
+const {
+  resolveVerificationDetectionForMessage,
+  createRetryableVerificationFallback,
+} = vi.hoisted(() => ({
+  resolveVerificationDetectionForMessage: vi.fn(),
+  createRetryableVerificationFallback: vi.fn(),
+}));
 
 vi.mock("../db/client", () => ({
   getDb,
@@ -15,11 +22,24 @@ vi.mock("../services/mailboxes", () => ({
   listScopedMailboxRowsForUser,
 }));
 
+vi.mock("../services/message-verification", async () => {
+  const actual = await vi.importActual<
+    typeof import("../services/message-verification")
+  >("../services/message-verification");
+
+  return {
+    ...actual,
+    resolveVerificationDetectionForMessage,
+    createRetryableVerificationFallback,
+  };
+});
+
 import { mailboxes, messages } from "../db/schema";
 import {
   getMessageDetailForUser,
   getRawMessageResponseForUser,
   listMessagesForUser,
+  storeIncomingMessage,
 } from "../services/messages";
 
 const adminUser = {
@@ -33,6 +53,11 @@ const buildMessageRow = (
   id: string,
   mailboxAddress: string,
   receivedAt: string,
+  verification?: {
+    code: string;
+    source: "subject" | "body";
+    method: "rules" | "ai";
+  } | null,
 ) => ({
   id,
   userId: adminUser.id,
@@ -50,6 +75,11 @@ const buildMessageRow = (
   sizeBytes: 128,
   attachmentCount: 0,
   hasHtml: false,
+  verificationCode: verification?.code ?? null,
+  verificationSource: verification?.source ?? null,
+  verificationMethod: verification?.method ?? null,
+  verificationCheckedAt: verification ? receivedAt : null,
+  verificationRetryAfter: null,
   parseStatus: "parsed",
   rawR2Key: `raw/${id}.eml`,
   parsedR2Key: `parsed/${id}.json`,
@@ -63,6 +93,11 @@ describe("message service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listScopedMailboxRowsForUser.mockResolvedValue([]);
+    createRetryableVerificationFallback.mockReturnValue({
+      verification: null,
+      shouldRetry: true,
+      retryAfter: "2099-01-01T00:00:00.000Z",
+    });
   });
 
   const buildMessageDb = (orderBy: ReturnType<typeof vi.fn>) => ({
@@ -129,6 +164,39 @@ describe("message service", () => {
 
     expect(orderBy).toHaveBeenCalledTimes(2);
     expect(listed.map((message) => message.id)).toEqual(["msg_new", "msg_old"]);
+  });
+
+  it("maps verification metadata into message summaries", async () => {
+    const orderBy = vi.fn().mockResolvedValue([
+      asJoinedMessage(
+        buildMessageRow(
+          "msg_verify",
+          "verify@ops.707979.xyz",
+          "2026-04-08T11:59:00.000Z",
+          {
+            code: "551177",
+            source: "subject",
+            method: "ai",
+          },
+        ),
+      ),
+    ]);
+    const db = buildMessageDb(orderBy);
+    getDb.mockReturnValue(db);
+
+    const listed = await listMessagesForUser(
+      {} as never,
+      adminUser,
+      [],
+      [],
+      null,
+    );
+
+    expect(listed[0]?.verification).toEqual({
+      code: "551177",
+      source: "subject",
+      method: "ai",
+    });
   });
 
   it("intersects explicit mailbox filters with workspace-visible mailboxes", async () => {
@@ -311,6 +379,82 @@ describe("message service", () => {
     expect(listed[0]?.id).toBe("msg_visible_new");
   });
 
+  it("includes verification metadata in message details", async () => {
+    const joinedRow = {
+      message: buildMessageRow(
+        "msg_detail_verify",
+        "verify@ops.707979.xyz",
+        "2026-04-08T11:59:00.000Z",
+        {
+          code: "842911",
+          source: "body",
+          method: "rules",
+        },
+      ),
+      mailboxStatus: "active",
+    };
+    const db = {
+      select: vi.fn((fields?: unknown) => {
+        if (!fields) {
+          return {
+            from: vi.fn(() => ({
+              where: vi.fn(async () => []),
+            })),
+          };
+        }
+
+        return {
+          from: vi.fn((table: unknown) => {
+            if (
+              table !== messages ||
+              !("message" in (fields as Record<string, unknown>))
+            ) {
+              throw new Error("Unexpected table");
+            }
+
+            return {
+              innerJoin: vi.fn((joinedTable: unknown) => {
+                if (joinedTable !== mailboxes) {
+                  throw new Error("Unexpected join table");
+                }
+
+                return {
+                  where: vi.fn(() => ({
+                    limit: vi.fn(async () => [joinedRow]),
+                  })),
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    };
+    getDb.mockReturnValue(db);
+
+    const detail = await getMessageDetailForUser(
+      {
+        MAIL_BUCKET: {
+          get: vi.fn(async () => ({
+            text: async () =>
+              JSON.stringify({
+                html: null,
+                text: "Use verification code 842911 to continue.",
+                headers: [],
+              }),
+          })),
+        },
+      } as never,
+      adminUser,
+      "msg_detail_verify",
+    );
+
+    expect(detail.verification).toEqual({
+      code: "842911",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("blocks detail and raw reads while the mailbox is destroying", async () => {
     const joinedRow = {
       message: buildMessageRow(
@@ -361,5 +505,209 @@ describe("message service", () => {
         "msg_hidden",
       ),
     ).rejects.toThrow("Message not found");
+  });
+
+  it("stores incoming mail even when verification detection throws", async () => {
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const mailboxRow = {
+      id: "mbx_active",
+      userId: adminUser.id,
+      domainId: null,
+      localPart: "verify",
+      subdomain: "ops",
+      address: "verify@ops.707979.xyz",
+      routingRuleId: null,
+      status: "active",
+      createdAt: "2026-04-08T10:00:00.000Z",
+      expiresAt: "2099-04-08T12:00:00.000Z",
+      destroyedAt: null,
+    };
+    const insert = vi.fn((table: unknown) => ({
+      values: vi.fn(
+        async (
+          values: Record<string, unknown> | Array<Record<string, unknown>>,
+        ) => {
+          if (table === messages && !Array.isArray(values)) {
+            insertedMessages.push(values);
+          }
+        },
+      ),
+    }));
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table !== mailboxes) throw new Error("Unexpected table");
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [mailboxRow]),
+            })),
+          };
+        }),
+      })),
+      insert,
+    };
+    getDb.mockReturnValue(db);
+    resolveVerificationDetectionForMessage.mockRejectedValue(
+      new Error("runtime state unavailable"),
+    );
+
+    const bucketPut = vi.fn(async () => undefined);
+    const rawMessage = [
+      "From: Sender <sender@example.com>",
+      "To: verify@ops.707979.xyz",
+      "Subject: Verification email",
+      "",
+      "Use verification code 842911 to continue.",
+    ].join("\r\n");
+
+    await expect(
+      storeIncomingMessage(
+        {
+          MAIL_BUCKET: {
+            put: bucketPut,
+          },
+        } as never,
+        {
+          from: "sender@example.com",
+          to: "verify@ops.707979.xyz",
+          raw: new TextEncoder().encode(rawMessage),
+          setReject: vi.fn(),
+        } as never,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(resolveVerificationDetectionForMessage).toHaveBeenCalledTimes(1);
+    expect(createRetryableVerificationFallback).toHaveBeenCalledTimes(1);
+    expect(bucketPut).toHaveBeenCalledTimes(2);
+    expect(insertedMessages).toHaveLength(1);
+    expect(insertedMessages[0]).toEqual(
+      expect.objectContaining({
+        verificationCode: null,
+        verificationSource: null,
+        verificationMethod: null,
+        verificationCheckedAt: null,
+        verificationRetryAfter: "2099-01-01T00:00:00.000Z",
+      }),
+    );
+  });
+
+  it("persists incoming mail before verification detection resolves", async () => {
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const messageUpdates: Array<Record<string, unknown>> = [];
+    const mailboxRow = {
+      id: "mbx_active",
+      userId: adminUser.id,
+      domainId: null,
+      localPart: "verify",
+      subdomain: "ops",
+      address: "verify@ops.707979.xyz",
+      routingRuleId: null,
+      status: "active",
+      createdAt: "2026-04-08T10:00:00.000Z",
+      expiresAt: "2099-04-08T12:00:00.000Z",
+      destroyedAt: null,
+    };
+    const insert = vi.fn((table: unknown) => ({
+      values: vi.fn(
+        async (
+          values: Record<string, unknown> | Array<Record<string, unknown>>,
+        ) => {
+          if (table === messages && !Array.isArray(values)) {
+            insertedMessages.push(values);
+          }
+        },
+      ),
+    }));
+    const update = vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => ({
+        where: vi.fn(async () => {
+          messageUpdates.push(values);
+        }),
+      })),
+    }));
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table !== mailboxes) throw new Error("Unexpected table");
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [mailboxRow]),
+            })),
+          };
+        }),
+      })),
+      insert,
+      update,
+    };
+    getDb.mockReturnValue(db);
+
+    let resolveDetection:
+      | ((value: {
+          verification: {
+            code: string;
+            source: "subject" | "body";
+            method: "rules" | "ai";
+          };
+          shouldRetry: boolean;
+          retryAfter: string | null;
+        }) => void)
+      | undefined;
+    resolveVerificationDetectionForMessage.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDetection = resolve;
+      }),
+    );
+
+    const storePromise = storeIncomingMessage(
+      {
+        MAIL_BUCKET: {
+          put: vi.fn(async () => undefined),
+        },
+      } as never,
+      {
+        from: "sender@example.com",
+        to: "verify@ops.707979.xyz",
+        raw: new TextEncoder().encode(
+          [
+            "From: Sender <sender@example.com>",
+            "To: verify@ops.707979.xyz",
+            "Subject: Verification email",
+            "",
+            "Use verification code 842911 to continue.",
+          ].join("\r\n"),
+        ),
+        setReject: vi.fn(),
+      } as never,
+    );
+
+    await vi.waitFor(() => {
+      expect(insertedMessages).toHaveLength(1);
+    });
+    expect(messageUpdates).toHaveLength(0);
+
+    if (!resolveDetection) {
+      throw new Error("Expected verification detection resolver");
+    }
+
+    resolveDetection({
+      verification: {
+        code: "842911",
+        source: "body",
+        method: "rules",
+      },
+      shouldRetry: false,
+      retryAfter: null,
+    });
+    await storePromise;
+
+    expect(messageUpdates).toContainEqual(
+      expect.objectContaining({
+        verificationCode: "842911",
+        verificationSource: "body",
+        verificationMethod: "rules",
+        verificationCheckedAt: expect.any(String),
+        verificationRetryAfter: null,
+      }),
+    );
   });
 });

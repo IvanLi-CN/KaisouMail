@@ -101,7 +101,7 @@ describe("message detail page view", () => {
     ).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        "Nightly bundle is ready. Preview URL has been pre-warmed.",
+        "Nightly bundle is ready. Use verification code 842911 to unlock the preview URL.",
       ),
     ).toBeInTheDocument();
   });

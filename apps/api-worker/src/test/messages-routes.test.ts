@@ -98,6 +98,48 @@ describe("message routes", () => {
     );
   });
 
+  it("returns verification metadata when the service provides it", async () => {
+    listMessagesForUser.mockResolvedValue([
+      {
+        id: "msg_verify",
+        mailboxId: "mbx_alpha",
+        mailboxAddress: "build@alpha.707979.xyz",
+        subject: "Build artifacts ready",
+        previewText: "Use verification code 842911 to continue.",
+        fromName: "CI Runner",
+        fromAddress: "ci@example.net",
+        receivedAt: "2026-04-03T12:05:00.000Z",
+        sizeBytes: 128,
+        attachmentCount: 0,
+        hasHtml: false,
+        verification: {
+          code: "842911",
+          source: "body",
+          method: "rules",
+        },
+      },
+    ]);
+
+    const response = await messageRoutes.fetch(
+      new Request("http://localhost/"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      messages: [
+        {
+          id: "msg_verify",
+          verification: {
+            code: "842911",
+            source: "body",
+            method: "rules",
+          },
+        },
+      ],
+    });
+  });
+
   it("passes mailboxId filters through to the service", async () => {
     await messageRoutes.fetch(
       new Request("http://localhost/?mailboxId=mbx_alpha&scope=workspace"),

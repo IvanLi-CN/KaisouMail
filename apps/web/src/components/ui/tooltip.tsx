@@ -64,6 +64,7 @@ export const Tooltip = ({
   delayDuration = 400,
   disableHoverableContent = true,
   touchOpenDelay = 450,
+  forceOpen = false,
   ...props
 }: Omit<
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>,
@@ -74,6 +75,7 @@ export const Tooltip = ({
   delayDuration?: number;
   disableHoverableContent?: boolean;
   touchOpenDelay?: number;
+  forceOpen?: boolean;
 }) => {
   const [open, setOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<number | null>(null);
@@ -135,7 +137,19 @@ export const Tooltip = ({
       disableHoverableContent={disableHoverableContent}
       skipDelayDuration={200}
     >
-      <TooltipPrimitive.Root open={open} onOpenChange={setOpen}>
+      <TooltipPrimitive.Root
+        open={forceOpen || open}
+        onOpenChange={(nextOpen) => {
+          if (!forceOpen) {
+            setOpen(nextOpen);
+            return;
+          }
+
+          if (!nextOpen) {
+            setOpen(false);
+          }
+        }}
+      >
         <TooltipPrimitive.Trigger asChild>
           {enhancedChild}
         </TooltipPrimitive.Trigger>

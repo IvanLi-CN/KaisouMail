@@ -25,6 +25,12 @@ import {
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
 import { listScopedMailboxRowsForUser } from "./mailboxes";
+import {
+  createRetryableVerificationFallback,
+  resolveNextVerificationRetryAtIso,
+  resolveVerificationDetectionForMessage,
+  type StoredVerification,
+} from "./message-verification";
 
 type MailboxListScope = (typeof mailboxListScopes)[number];
 
@@ -43,6 +49,22 @@ const normalizePeople = (value: unknown) => {
     );
 };
 
+const mapVerification = (row: typeof messages.$inferSelect) => {
+  if (
+    !row.verificationCode ||
+    !row.verificationSource ||
+    !row.verificationMethod
+  ) {
+    return null;
+  }
+
+  return {
+    code: row.verificationCode,
+    source: row.verificationSource,
+    method: row.verificationMethod,
+  } as StoredVerification;
+};
+
 const mapSummary = (row: typeof messages.$inferSelect) =>
   messageSummarySchema.parse({
     id: row.id,
@@ -56,6 +78,7 @@ const mapSummary = (row: typeof messages.$inferSelect) =>
     sizeBytes: row.sizeBytes,
     attachmentCount: row.attachmentCount,
     hasHtml: row.hasHtml,
+    verification: mapVerification(row),
   });
 
 const visibleMessageMailboxFilter = ne(mailboxes.status, "destroying");
@@ -317,6 +340,7 @@ export const storeIncomingMessage = async (
   const rawBuffer = await new Response(forwardable.raw).arrayBuffer();
   const parser = new PostalMime();
   const parsed = await parser.parse(rawBuffer);
+  const pendingVerification = createRetryableVerificationFallback();
   const messageId = randomId("msg");
   const receivedAt = nowIso();
   const rawR2Key = `raw/${mailbox.userId}/${mailbox.id}/${messageId}.eml`;
@@ -371,6 +395,12 @@ export const storeIncomingMessage = async (
     ),
     attachmentCount: attachments.length,
     hasHtml: Boolean(parsed.html),
+    verificationCode: null,
+    verificationSource: null,
+    verificationMethod: null,
+    verificationCheckedAt: null,
+    verificationRetryAfter:
+      pendingVerification.retryAfter ?? resolveNextVerificationRetryAtIso(),
     parseStatus: "parsed",
     rawR2Key,
     parsedR2Key,
@@ -419,5 +449,35 @@ export const storeIncomingMessage = async (
     for (const attachmentChunk of chunkD1InsertValues(attachmentRows)) {
       await db.insert(messageAttachments).values(attachmentChunk);
     }
+  }
+
+  try {
+    const verificationDetection = await resolveVerificationDetectionForMessage(
+      env,
+      {
+        subject: parsed.subject ?? null,
+        text: parsed.text ?? null,
+        html: parsed.html ?? null,
+      },
+    );
+
+    await db
+      .update(messages)
+      .set({
+        verificationCode: verificationDetection.verification?.code ?? null,
+        verificationSource: verificationDetection.verification?.source ?? null,
+        verificationMethod: verificationDetection.verification?.method ?? null,
+        verificationCheckedAt: verificationDetection.shouldRetry
+          ? null
+          : nowIso(),
+        verificationRetryAfter: verificationDetection.shouldRetry
+          ? (verificationDetection.retryAfter ??
+            resolveNextVerificationRetryAtIso())
+          : null,
+      })
+      .where(eq(messages.id, messageId));
+  } catch {
+    // Keep the retryable placeholder so scheduled backfill can recover later
+    // without dropping or rejecting the inbound message.
   }
 };

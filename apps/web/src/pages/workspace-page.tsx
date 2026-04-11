@@ -42,6 +42,73 @@ import {
 const DEFAULT_SORT_MODE: MailboxSortMode = "recent";
 const DEFAULT_WORKSPACE_TTL_MINUTES = 60;
 
+const buildMailboxLatestVerificationCodes = (
+  messages: Array<{
+    mailboxId: string;
+    receivedAt: string;
+    verification: { code: string } | null;
+  }>,
+) => {
+  const latestByMailboxId = new Map<
+    string,
+    { code: string; receivedAt: string }
+  >();
+
+  for (const message of messages) {
+    const code = message.verification?.code;
+    if (!code) continue;
+
+    const current = latestByMailboxId.get(message.mailboxId);
+    if (!current || message.receivedAt.localeCompare(current.receivedAt) > 0) {
+      latestByMailboxId.set(message.mailboxId, {
+        code,
+        receivedAt: message.receivedAt,
+      });
+    }
+  }
+
+  return new Map(
+    [...latestByMailboxId.entries()].map(([mailboxId, value]) => [
+      mailboxId,
+      value.code,
+    ]),
+  );
+};
+
+const mergeSelectedMailboxMessages = <
+  TMessage extends {
+    id: string;
+    mailboxId: string;
+  },
+>(
+  aggregateMessages: TMessage[],
+  selectedMailboxId: string | null,
+  selectedMailboxMessages: TMessage[] | undefined,
+  isSelectedMailboxRefreshing: boolean,
+) => {
+  if (!selectedMailboxId) return aggregateMessages;
+  if (!selectedMailboxMessages) return aggregateMessages;
+
+  const aggregateSelectedMailboxMessages = aggregateMessages.filter(
+    (message) => message.mailboxId === selectedMailboxId,
+  );
+  const shouldKeepAggregateMailboxMessages =
+    isSelectedMailboxRefreshing &&
+    selectedMailboxMessages.length === 0 &&
+    aggregateSelectedMailboxMessages.length > 0;
+
+  if (shouldKeepAggregateMailboxMessages) {
+    return aggregateMessages;
+  }
+
+  return [
+    ...aggregateMessages.filter(
+      (message) => message.mailboxId !== selectedMailboxId,
+    ),
+    ...selectedMailboxMessages,
+  ];
+};
+
 const readStoredSortMode = () => {
   if (typeof window === "undefined") return DEFAULT_SORT_MODE;
   const value = window.localStorage.getItem(MAILBOX_SORT_STORAGE_KEY);
@@ -133,10 +200,25 @@ export const WorkspacePage = () => {
   const messages = messagesQuery.data ?? [];
   const allMessages = allMessagesQuery.data ?? [];
   const selectedMessageId = searchParams.get("message");
+  const workspaceMessages = useMemo(
+    () =>
+      mergeSelectedMailboxMessages(
+        allMessages,
+        selectedMailbox?.id ?? null,
+        messagesQuery.data,
+        messagesQuery.isFetching,
+      ),
+    [
+      allMessages,
+      messagesQuery.data,
+      messagesQuery.isFetching,
+      selectedMailbox?.id,
+    ],
+  );
   const mailboxesWithLiveRecency = useMemo(() => {
     const latestByMailboxId = new Map<string, string>();
 
-    for (const message of allMessages) {
+    for (const message of workspaceMessages) {
       const current = latestByMailboxId.get(message.mailboxId);
       if (!current || message.receivedAt.localeCompare(current) > 0) {
         latestByMailboxId.set(message.mailboxId, message.receivedAt);
@@ -148,7 +230,7 @@ export const WorkspacePage = () => {
       lastReceivedAt:
         latestByMailboxId.get(mailbox.id) ?? mailbox.lastReceivedAt,
     }));
-  }, [allMessages, mailboxes]);
+  }, [mailboxes, workspaceMessages]);
   const visibleMailboxes = useMemo(
     () =>
       filterMailboxes(
@@ -164,13 +246,17 @@ export const WorkspacePage = () => {
       counts.set(mailbox.id, 0);
     }
 
-    for (const message of allMessages) {
+    for (const message of workspaceMessages) {
       const current = counts.get(message.mailboxId) ?? 0;
       counts.set(message.mailboxId, current + 1);
     }
 
     return counts;
-  }, [allMessages, mailboxes]);
+  }, [mailboxes, workspaceMessages]);
+  const mailboxLatestVerificationCodes = useMemo(
+    () => buildMailboxLatestVerificationCodes(workspaceMessages),
+    [workspaceMessages],
+  );
 
   useEffect(() => {
     if (messagesQuery.isLoading) return;
@@ -393,6 +479,7 @@ export const WorkspacePage = () => {
         totalMessageCount={messages.length}
         totalAggregatedMessageCount={allMessages.length}
         mailboxMessageCounts={mailboxMessageCounts}
+        mailboxLatestVerificationCodes={mailboxLatestVerificationCodes}
         selectedMailboxId={selectedMailboxId}
         selectedMailbox={selectedMailbox}
         messages={messages}
