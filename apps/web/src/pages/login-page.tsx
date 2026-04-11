@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-
 import { LoginCard } from "@/components/auth/login-card";
+import { BrandLockup } from "@/components/brand/brand-lockup";
 import {
   usePasskeyLoginMutation,
   usePasskeySupport,
 } from "@/hooks/use-passkeys";
 import { useLoginMutation, useSessionQuery } from "@/hooks/use-session";
 import { getPasskeyErrorMessage } from "@/lib/passkeys";
+import { projectMeta } from "@/lib/project-meta";
 
 export const LoginPage = () => {
   const location = useLocation();
@@ -31,12 +32,15 @@ export const LoginPage = () => {
   return (
     <div className="mx-auto grid min-h-screen max-w-[1180px] items-center gap-10 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_480px]">
       <div className="space-y-5">
+        <div className="max-w-[24rem]">
+          <BrandLockup />
+        </div>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Control plane
         </p>
         <div className="space-y-3">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-            Cloudflare 临时邮箱控制台
+            {projectMeta.projectName} 临时邮箱控制台
           </h1>
           <p className="max-w-xl text-sm leading-7 text-muted-foreground">
             创建临时邮箱、查看邮件内容与附件，并按 TTL 自动回收。

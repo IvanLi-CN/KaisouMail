@@ -56,10 +56,15 @@ export const LoginCard = ({
           推荐使用 passkey 登录控制台；API Key 仍保留给自动化与浏览器回退登录。
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="space-y-3 rounded-xl border border-border/80 bg-muted/20 p-4">
+      <CardContent className="space-y-6">
+        <section className="space-y-3" aria-labelledby="passkey-heading">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Passkey</p>
+            <p
+              id="passkey-heading"
+              className="text-sm font-medium text-foreground"
+            >
+              Passkey
+            </p>
             <p className="text-sm leading-6 text-muted-foreground">
               支持设备内认证器、跨设备 passkey 与安全密钥。
             </p>
@@ -86,7 +91,7 @@ export const LoginCard = ({
                 : (passkeySupportMessage ??
                   "当前浏览器或上下文不支持 WebAuthn。"))}
           </p>
-        </div>
+        </section>
 
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
