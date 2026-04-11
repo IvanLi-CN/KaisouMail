@@ -21,7 +21,7 @@ import {
   classifyDomainBindError,
   type DomainBindErrorHint,
 } from "@/lib/domain-bind-errors";
-import { hasDelegationPendingProvisionError } from "@/lib/domain-catalog";
+import { hasDelegationRecoveryStatus } from "@/lib/domain-catalog";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -65,10 +65,10 @@ const buildBindSuccessGuide = ({
   const cloudflareStatus =
     "cloudflareStatus" in result ? result.cloudflareStatus : null;
   const nameServers = "nameServers" in result ? result.nameServers : [];
-  const lastProvisionError = result.lastProvisionError ?? null;
-  const needsDelegationRecovery =
-    (cloudflareStatus === "pending" && !lastProvisionError) ||
-    hasDelegationPendingProvisionError(lastProvisionError);
+  const needsDelegationRecovery = hasDelegationRecoveryStatus({
+    cloudflareStatus,
+    lastProvisionError: result.lastProvisionError,
+  });
 
   if (projectStatus === "active") {
     return {

@@ -20,10 +20,23 @@ export const hasDelegationPendingProvisionError = (
   );
 };
 
+export const hasDelegationRecoveryStatus = ({
+  cloudflareStatus,
+  lastProvisionError,
+}: {
+  cloudflareStatus?: string | null;
+  lastProvisionError?: string | null;
+}) =>
+  cloudflareStatus === "pending" &&
+  (!lastProvisionError ||
+    hasDelegationPendingProvisionError(lastProvisionError));
+
 const hasDelegationRecoveryState = (domain: DomainCatalogItem) =>
   domain.bindingSource === "project_bind" &&
-  ((domain.cloudflareStatus === "pending" && !domain.lastProvisionError) ||
-    hasDelegationPendingProvisionError(domain.lastProvisionError));
+  hasDelegationRecoveryStatus({
+    cloudflareStatus: domain.cloudflareStatus,
+    lastProvisionError: domain.lastProvisionError,
+  });
 
 export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
   domain.nameServers.length > 0 && hasDelegationRecoveryState(domain);

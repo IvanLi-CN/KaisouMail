@@ -63,6 +63,22 @@ describe("domain catalog polling helpers", () => {
     expect(shouldPollDomainCatalog([permissionFailureDomain])).toBe(false);
   });
 
+  it("stops delegation guidance once Cloudflare is no longer pending", () => {
+    const delegatedDomain = {
+      ...demoDomainCatalog[0],
+      bindingSource: "project_bind" as const,
+      cloudflareStatus: "active" as const,
+      projectStatus: "provisioning_error" as const,
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+    };
+
+    expect(needsNameserverDelegation(delegatedDomain)).toBe(false);
+    expect(shouldAutoRefreshDomainCatalogEntry(delegatedDomain)).toBe(false);
+    expect(shouldPollDomainCatalog([delegatedDomain])).toBe(false);
+  });
+
   it("returns a polling interval only while the page is visible and online", () => {
     expect(
       resolveDomainCatalogPollingInterval({
