@@ -49,10 +49,24 @@ const stubMatchMedia = (matches: boolean) => {
   return matchMediaMock;
 };
 
+const resyncWindowEvents = () => {
+  if (typeof window === "undefined") return;
+
+  if (typeof window.Event === "function") {
+    globalThis.Event = window.Event as typeof globalThis.Event;
+  }
+
+  if (typeof window.CustomEvent === "function") {
+    globalThis.CustomEvent =
+      window.CustomEvent as typeof globalThis.CustomEvent;
+  }
+};
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  resyncWindowEvents();
 });
 
 describe("AppShell account trigger", () => {

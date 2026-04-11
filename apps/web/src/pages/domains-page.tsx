@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DomainBindCard } from "@/components/domains/domain-bind-card";
@@ -9,6 +10,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import {
+  domainCatalogQueryKey,
   useBindDomainMutation,
   useCreateDomainMutation,
   useDeleteDomainMutation,
@@ -19,13 +21,19 @@ import {
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
+import {
+  buildFallbackBoundDomainCatalogEntry,
+  isFreshDomainCatalogEntry,
+} from "@/lib/domain-catalog";
 import { getErrorDetails } from "@/lib/error-utils";
+import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
   isDomainBindingEnabled?: boolean;
   isDomainLifecycleEnabled?: boolean;
+  docsLinks?: PublicDocsLinks | null;
   isBindPending?: boolean;
   isEnablePending?: boolean;
   error?: {
@@ -46,6 +54,7 @@ export const DomainsPageView = ({
   domains,
   isDomainBindingEnabled = true,
   isDomainLifecycleEnabled = true,
+  docsLinks = null,
   isBindPending = false,
   isEnablePending = false,
   error = null,
@@ -85,10 +94,16 @@ export const DomainsPageView = ({
     ) : (
       <>
         {isDomainBindingEnabled ? (
-          <DomainBindCard isPending={isBindPending} onSubmit={onBind} />
+          <DomainBindCard
+            domains={domains}
+            isPending={isBindPending}
+            docsLinks={docsLinks}
+            onSubmit={onBind}
+          />
         ) : null}
         <DomainTable
           domains={domains}
+          docsLinks={docsLinks}
           isDomainLifecycleEnabled={isDomainLifecycleEnabled}
           isEnablePending={isEnablePending}
           onEnable={onEnable}
@@ -102,6 +117,7 @@ export const DomainsPageView = ({
 );
 
 export const DomainsPage = () => {
+  const queryClient = useQueryClient();
   const sessionQuery = useSessionQuery();
   const metaQuery = useMetaQuery();
   const domainCatalogQuery = useDomainCatalogQuery();
@@ -158,10 +174,42 @@ export const DomainsPage = () => {
       isDomainLifecycleEnabled={
         metaQuery.data?.cloudflareDomainLifecycleEnabled ?? false
       }
+      docsLinks={publicDocsLinks}
       isBindPending={bindDomainMutation.isPending}
       isEnablePending={createDomainMutation.isPending}
       onBind={async (values) => {
-        await bindDomainMutation.mutateAsync(values);
+        const boundDomain = await bindDomainMutation.mutateAsync(values);
+        const refreshedCatalog = await domainCatalogQuery.refetch();
+        const refreshedMatch = refreshedCatalog.data?.find((domain) =>
+          isFreshDomainCatalogEntry({ domain, result: boundDomain }),
+        );
+        if (refreshedMatch) return refreshedMatch;
+
+        const fallbackCatalogEntry =
+          buildFallbackBoundDomainCatalogEntry(boundDomain);
+        if (fallbackCatalogEntry) {
+          queryClient.setQueryData<DomainCatalogItem[]>(
+            domainCatalogQueryKey,
+            (current) => {
+              const currentDomains = current ?? [];
+              const currentIndex = currentDomains.findIndex(
+                (domain) =>
+                  domain.rootDomain === fallbackCatalogEntry.rootDomain,
+              );
+
+              if (currentIndex >= 0) {
+                return currentDomains.map((domain, index) =>
+                  index === currentIndex ? fallbackCatalogEntry : domain,
+                );
+              }
+
+              return [fallbackCatalogEntry, ...currentDomains];
+            },
+          );
+          return fallbackCatalogEntry;
+        }
+
+        return boundDomain;
       }}
       onEnable={async (values) => {
         await createDomainMutation.mutateAsync(values);

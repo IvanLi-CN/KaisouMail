@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
 
 class ResizeObserverMock {
   observe() {}
@@ -29,21 +29,23 @@ if (typeof globalThis.matchMedia !== "function") {
   globalThis.matchMedia = defaultMatchMedia as typeof globalThis.matchMedia;
 }
 
-if (
-  typeof window !== "undefined" &&
-  typeof window.Event === "function" &&
-  globalThis.Event !== window.Event
-) {
-  globalThis.Event = window.Event as typeof globalThis.Event;
-}
+const resyncWindowEvents = () => {
+  if (typeof window === "undefined") return;
 
-if (
-  typeof window !== "undefined" &&
-  typeof window.CustomEvent === "function" &&
-  globalThis.CustomEvent !== window.CustomEvent
-) {
-  globalThis.CustomEvent = window.CustomEvent as typeof globalThis.CustomEvent;
-}
+  if (typeof window.Event === "function" && globalThis.Event !== window.Event) {
+    globalThis.Event = window.Event as typeof globalThis.Event;
+  }
+
+  if (
+    typeof window.CustomEvent === "function" &&
+    globalThis.CustomEvent !== window.CustomEvent
+  ) {
+    globalThis.CustomEvent =
+      window.CustomEvent as typeof globalThis.CustomEvent;
+  }
+};
+
+resyncWindowEvents();
 
 if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
   Object.defineProperty(window, "matchMedia", {
@@ -73,4 +75,9 @@ if (typeof HTMLElement !== "undefined" && !HTMLElement.prototype.scrollTo) {
 
 afterEach(() => {
   cleanup();
+  resyncWindowEvents();
+});
+
+beforeEach(() => {
+  resyncWindowEvents();
 });

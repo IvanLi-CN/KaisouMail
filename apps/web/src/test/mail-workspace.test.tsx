@@ -108,11 +108,25 @@ const stubDesktopMatchMedia = () => {
   return matchMediaMock;
 };
 
+const resyncWindowEvents = () => {
+  if (typeof window === "undefined") return;
+
+  if (typeof window.Event === "function") {
+    globalThis.Event = window.Event as typeof globalThis.Event;
+  }
+
+  if (typeof window.CustomEvent === "function") {
+    globalThis.CustomEvent =
+      window.CustomEvent as typeof globalThis.CustomEvent;
+  }
+};
+
 afterEach(async () => {
   cleanup();
   await new Promise((resolve) => window.setTimeout(resolve, 0));
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  resyncWindowEvents();
 });
 
 const getMailboxRowByAddress = (

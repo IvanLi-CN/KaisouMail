@@ -2,22 +2,27 @@
 
 ## Reading order
 
-1. Configure tokens in [Cloudflare Token Permissions](/cloudflare-token-permissions).
-2. Configure Worker, Pages, and web variables in [Deployment & Environment](/deployment-environment).
-3. Either bind the domain directly from `/domains`, or add it in Cloudflare first and then enable it by following [Domain Catalog & Enablement](/domain-catalog-enablement).
-4. Use [API Reference](/api-reference) for endpoint discovery, then open `/api-keys/docs` inside the control plane for runtime-aware examples.
+1. Configure runtime and deploy tokens in [Cloudflare Token Permissions](/cloudflare-token-permissions).
+2. Configure Worker, Pages, and runtime variables in [Deployment & Environment](/deployment-environment).
+3. Start with [Domain onboarding overview](/domain-onboarding) to choose the right path.
+4. If you want to **onboard the domain manually in Cloudflare first**, read [Manually bind the domain in Cloudflare and enable it in KaisouMail](/domain-catalog-enablement).
+5. If you want to **bind a brand-new domain directly from `/domains`**, read [Bind a new domain directly from the project](/project-domain-binding).
+6. Use [API Reference](/api-reference) for endpoint discovery, then open `/api-keys/docs` inside the control plane for runtime-aware examples.
 
 ## Documentation map
 
 - [Quick Start](/quick-start)
 - [Deployment & Environment](/deployment-environment)
 - [Cloudflare Token Permissions](/cloudflare-token-permissions)
-- [Domain Catalog & Enablement](/domain-catalog-enablement)
+- [Domain onboarding overview](/domain-onboarding)
+- [Manually bind the domain in Cloudflare and enable it in KaisouMail](/domain-catalog-enablement)
+- [Bind a new domain directly from the project](/project-domain-binding)
 - [API Reference](/api-reference)
 - [FAQ & Troubleshooting](/faq)
 - [Open Storybook](/storybook.html)
 
 ## Key points
 
-- If `/domains` shows `provisioning_error / Authentication error`, check `Zone: Zone Settings: Edit` first, then confirm that the token scope covers the target zone.
-- A zone does not enter `GET /api/meta` or the random mailbox pool until it becomes `active` in `/domains`.
+- `cloudflareDomainLifecycleEnabled=true` means the project can already manage zones that exist in Cloudflare.
+- `cloudflareDomainBindingEnabled=true` is required before the project can create brand-new Cloudflare zones directly.
+- A domain does not enter `GET /api/meta` or the random mailbox pool until it becomes `active` in `/domains`.

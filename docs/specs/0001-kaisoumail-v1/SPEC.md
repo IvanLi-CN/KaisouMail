@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-10
+Last: 2026-04-11
 
 ## Objective
 
@@ -38,6 +38,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/domains`
 - Admin-only mailbox domain catalog and Cloudflare provisioning status surface
 - Discover currently manageable Cloudflare zones in real time, bind new domains directly into Cloudflare, and manage enable/disable/retry/delete flows inside the project
+- Bind-form failures translate Cloudflare permission, configuration, and activation errors into actionable Chinese guidance with deep links to public docs
 
 ### Messages
 - `/messages/:messageId`
@@ -56,6 +57,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - GitHub Pages public docs site
 - GitHub Pages public Storybook surface at `/storybook/` plus `/storybook.html`
 - Public deployment, token permission, domain enablement, API, and troubleshooting guidance outside the authenticated control plane
+- Includes two cross-linked operator guides for manual Cloudflare onboarding and direct project-side binding, with stable deep links into the direct-bind troubleshooting sections used by `/domains` error follow-ups
 
 ## API Behavior
 
@@ -131,6 +133,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
+- 2026-04-10: Replaced the selected-mailbox workspace heading with a read-only address input that auto-selects on focus, added a dedicated copy action with local success/failure feedback, and refreshed the workspace visual evidence for the new operator-facing copy surface.
+- 2026-04-09: Reworked `/domains` bind-error copy into structured actionable guidance with direct links to the public project-direct binding guide, replaced the standalone troubleshooting page with two cross-linked operator docs for manual Cloudflare onboarding vs. project-side direct binding, and refreshed the related domains/docs visual evidence.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
 - 2026-04-09: Patched the shared focus-ring token fallbacks so workspace message rows, toolbar actions, search inputs, and identity tabs keep themed focus halos instead of white fallback outlines, and refreshed visual evidence for those repaired states.
@@ -242,6 +246,14 @@ PR: include
 PR: include
 ![Domains bind form submit error with aligned action button](./assets/domains-bind-submit-error.png)
 
+![Domains bind form permission guidance with docs deep link](./assets/domains-bind-permission-help.png)
+
+![Domains bind success dialog with per-NS copy actions and auto-refresh guidance](./assets/domains-bind-next-steps-dialog-auto-refresh.png)
+
+![Domains page row that routes Zone and nameserver inspection into a details dialog](./assets/domains-ns-delegation-guide-main.png)
+
+![Domains zone details dialog with copyable zone and nameserver values](./assets/domains-zone-details-dialog.png)
+
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
 ![Domains page with Cloudflare-missing domain](./assets/domains-page-missing-cloudflare.png)
@@ -294,5 +306,7 @@ PR: include
 ![Cloudflare token permissions docs page](./assets/docs-site-token-permissions.png)
 
 ![Public docs FAQ page](./assets/docs-site-faq.png)
+
+![Public docs project direct domain binding guide](./assets/docs-site-project-domain-binding.png)
 
 ![Public Storybook domains page](./assets/storybook-public-home.png)
