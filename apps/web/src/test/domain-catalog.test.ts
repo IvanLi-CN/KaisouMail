@@ -133,7 +133,22 @@ describe("domain catalog polling helpers", () => {
         lastProvisionedAt: null,
         disabledAt: null,
       }),
-    ).toBeNull();
+    ).toMatchObject({
+      rootDomain: "fallback.example.dev",
+      cloudflareStatus: null,
+      projectStatus: "provisioning_error",
+      nameServers: [],
+    });
+  });
+
+  it("does not treat unrelated activation failures as nameserver delegation", () => {
+    expect(
+      hasDelegationRecoveryStatus({
+        cloudflareStatus: "pending",
+        lastProvisionError:
+          "Email Routing activation failed because the account token cannot manage routes",
+      }),
+    ).toBe(false);
   });
 
   it("returns a polling interval only while the page is visible and online", () => {

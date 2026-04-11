@@ -358,6 +358,64 @@ describe("domains page view", () => {
     );
   });
 
+  it("keeps a retryable project-bind row visible when the catalog misses a non-delegation failure", async () => {
+    domainsHookState.bindMutateAsync = vi.fn(async () => ({
+      id: "dom_runtime_config",
+      rootDomain: "retry.example.dev",
+      zoneId: "zone_retry",
+      bindingSource: "project_bind" as const,
+      status: "provisioning_error" as const,
+      lastProvisionError:
+        "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+    domainsHookState.refetch = vi.fn(async () => ({
+      data: demoDomainCatalog,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "retry.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("绑定已提交，稍后再试");
+    expect(dialog).toHaveTextContent("这次不需要修改 NS");
+    expect(queryClientState.setQueryData).toHaveBeenCalledWith(
+      ["domains", "catalog"],
+      expect.any(Function),
+    );
+
+    const setQueryDataUpdater =
+      queryClientState.setQueryData.mock.calls[0]?.[1];
+    if (typeof setQueryDataUpdater !== "function") {
+      throw new Error("expected setQueryData updater");
+    }
+
+    expect(setQueryDataUpdater(demoDomainCatalog)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rootDomain: "retry.example.dev",
+          cloudflareStatus: null,
+          projectStatus: "provisioning_error",
+          lastProvisionError:
+            "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+        }),
+      ]),
+    );
+  });
+
   it("opens a next-steps dialog immediately after a successful direct bind", async () => {
     const onBind = vi.fn(async () => ({
       id: "dom_bound",
@@ -722,6 +780,87 @@ describe("domains page view", () => {
     expect(
       screen.getByTestId("domain-bind-success-guide-dialog"),
     ).not.toHaveTextContent("完成域名委派");
+  });
+
+  it("refreshes the next-steps dialog when a project-bind row becomes active even if its timestamp lags behind the bind response", async () => {
+    const onBind = vi.fn(async () => ({
+      id: "dom_bound",
+      rootDomain: "fkoai.site",
+      zoneId: "zone_fkoaisite",
+      bindingSource: "project_bind" as const,
+      cloudflareAvailability: "available" as const,
+      cloudflareStatus: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      projectStatus: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:05:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+
+    const view = render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fkoai.site" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    await screen.findByTestId("domain-bind-success-guide-dialog");
+
+    view.rerender(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            ...demoDomainCatalog,
+            {
+              id: "dom_bound",
+              rootDomain: "fkoai.site",
+              zoneId: "zone_fkoaisite",
+              bindingSource: "project_bind",
+              cloudflareAvailability: "available",
+              cloudflareStatus: "active",
+              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+              projectStatus: "active",
+              lastProvisionError: null,
+              createdAt: "2026-04-10T08:00:00.000Z",
+              updatedAt: "2026-04-10T08:04:00.000Z",
+              lastProvisionedAt: "2026-04-10T08:04:00.000Z",
+              disabledAt: null,
+            },
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("domain-bind-success-guide-dialog"),
+      ).toHaveTextContent("域名已接入，可继续使用"),
+    );
   });
 
   it("does not show nameserver delegation steps for non-delegation provisioning errors", async () => {

@@ -11,14 +11,21 @@ export const hasDelegationPendingProvisionError = (
 ) => {
   const normalized = lastProvisionError?.toLowerCase() ?? "";
   return (
-    normalized.includes("pending") ||
-    normalized.includes("activation") ||
-    normalized.includes("activate") ||
+    normalized.includes("pending activation") ||
+    (normalized.includes("pending") && normalized.includes("zone")) ||
     normalized.includes("delegat") ||
     normalized.includes("nameserver") ||
     normalized.includes("name server")
   );
 };
+
+const getDomainResultProjectStatus = (
+  result: DomainRecord | DomainCatalogItem,
+) => ("projectStatus" in result ? result.projectStatus : result.status);
+
+const getDomainResultCloudflareStatus = (
+  result: DomainRecord | DomainCatalogItem,
+) => ("cloudflareStatus" in result ? result.cloudflareStatus : null);
 
 export const hasDelegationRecoveryStatus = ({
   cloudflareStatus,
@@ -60,21 +67,28 @@ export const isFreshDomainCatalogEntry = ({
 }) => {
   if (domain.rootDomain !== result.rootDomain) return false;
 
+  if (domain.bindingSource !== result.bindingSource) return false;
+  if (domain.zoneId !== result.zoneId) return false;
+
   const domainUpdatedAt = toTimestamp(domain.updatedAt);
   const resultUpdatedAt = toTimestamp(result.updatedAt);
+  const resultProjectStatus = getDomainResultProjectStatus(result);
+  const resultCloudflareStatus = getDomainResultCloudflareStatus(result);
+
+  if (
+    (domain.projectStatus === "active" && resultProjectStatus !== "active") ||
+    (domain.cloudflareStatus === "active" &&
+      resultCloudflareStatus !== "active") ||
+    (!domain.lastProvisionError && !!result.lastProvisionError)
+  ) {
+    return true;
+  }
 
   if (domainUpdatedAt !== null && resultUpdatedAt !== null) {
     return domainUpdatedAt >= resultUpdatedAt;
   }
 
-  const resultProjectStatus =
-    "projectStatus" in result ? result.projectStatus : result.status;
-
-  return (
-    domain.bindingSource === result.bindingSource &&
-    domain.zoneId === result.zoneId &&
-    domain.projectStatus === resultProjectStatus
-  );
+  return domain.projectStatus === resultProjectStatus;
 };
 
 export const shouldAutoRefreshDomainCatalogEntry = (
@@ -87,16 +101,21 @@ export const shouldPollDomainCatalog = (domains?: DomainCatalogItem[]) =>
 export const buildFallbackBoundDomainCatalogEntry = (
   domain: DomainRecord,
 ): DomainCatalogItem | null => {
-  if (
-    domain.bindingSource !== "project_bind" ||
-    domain.status !== "provisioning_error"
-  ) {
+  if (domain.bindingSource !== "project_bind") {
     return null;
   }
 
-  if (!hasDelegationPendingProvisionError(domain.lastProvisionError)) {
+  const projectStatus = domain.status;
+  if (projectStatus !== "active" && projectStatus !== "provisioning_error") {
     return null;
   }
+
+  const cloudflareStatus =
+    projectStatus === "active"
+      ? "active"
+      : hasDelegationPendingProvisionError(domain.lastProvisionError)
+        ? "pending"
+        : null;
 
   return {
     id: domain.id,
@@ -104,9 +123,9 @@ export const buildFallbackBoundDomainCatalogEntry = (
     zoneId: domain.zoneId,
     bindingSource: domain.bindingSource,
     cloudflareAvailability: "available",
-    cloudflareStatus: "pending",
+    cloudflareStatus,
     nameServers: [],
-    projectStatus: domain.status,
+    projectStatus,
     lastProvisionError: domain.lastProvisionError,
     createdAt: domain.createdAt,
     updatedAt: domain.updatedAt,
