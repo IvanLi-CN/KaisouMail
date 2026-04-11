@@ -6,9 +6,10 @@ export const needsDomainBindingFollowUp = (domain: DomainCatalogItem) =>
   (domain.cloudflareStatus === "pending" ||
     domain.projectStatus === "provisioning_error");
 
-const hasDelegationPendingError = (domain: DomainCatalogItem) => {
-  const normalized = domain.lastProvisionError?.toLowerCase() ?? "";
-
+export const hasDelegationPendingProvisionError = (
+  lastProvisionError?: string | null,
+) => {
+  const normalized = lastProvisionError?.toLowerCase() ?? "";
   return (
     normalized.includes("pending") ||
     normalized.includes("activation") ||
@@ -22,7 +23,7 @@ const hasDelegationPendingError = (domain: DomainCatalogItem) => {
 const hasDelegationRecoveryState = (domain: DomainCatalogItem) =>
   domain.bindingSource === "project_bind" &&
   ((domain.cloudflareStatus === "pending" && !domain.lastProvisionError) ||
-    hasDelegationPendingError(domain));
+    hasDelegationPendingProvisionError(domain.lastProvisionError));
 
 export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
   domain.nameServers.length > 0 && hasDelegationRecoveryState(domain);

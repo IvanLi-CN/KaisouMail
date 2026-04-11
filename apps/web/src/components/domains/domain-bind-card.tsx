@@ -21,6 +21,7 @@ import {
   classifyDomainBindError,
   type DomainBindErrorHint,
 } from "@/lib/domain-bind-errors";
+import { hasDelegationPendingProvisionError } from "@/lib/domain-catalog";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -64,6 +65,10 @@ const buildBindSuccessGuide = ({
   const cloudflareStatus =
     "cloudflareStatus" in result ? result.cloudflareStatus : null;
   const nameServers = "nameServers" in result ? result.nameServers : [];
+  const lastProvisionError = result.lastProvisionError ?? null;
+  const needsDelegationRecovery =
+    (cloudflareStatus === "pending" && !lastProvisionError) ||
+    hasDelegationPendingProvisionError(lastProvisionError);
 
   if (projectStatus === "active") {
     return {
@@ -81,28 +86,44 @@ const buildBindSuccessGuide = ({
     };
   }
 
+  if (needsDelegationRecovery) {
+    return {
+      rootDomain,
+      title: "还差一步：完成域名委派",
+      summary:
+        nameServers.length > 0
+          ? "Cloudflare 已分配 nameserver。请把域名 NS 改成下面这组值，完成后再回来重试。"
+          : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
+      nameServers,
+      cloudflareStatus,
+      projectStatus,
+      steps:
+        nameServers.length > 0
+          ? [
+              "将当前域名的 NS 改成下面显示的 Cloudflare nameserver。",
+              "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+              "状态变成 active 后，对该域名点击“重试接入”。",
+            ]
+          : [
+              "先保留当前页面。",
+              "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+              "拿到 nameserver 后，把域名 NS 改成对应值，再等待状态继续刷新。",
+            ],
+    };
+  }
+
   return {
     rootDomain,
-    title: "还差一步：完成域名委派",
-    summary:
-      nameServers.length > 0
-        ? "Cloudflare 已分配 nameserver。请把域名 NS 改成下面这组值，完成后再回来重试。"
-        : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
-    nameServers,
+    title: "绑定已提交，稍后再试",
+    summary: "Cloudflare 暂时没有完成接入；这次不需要修改 NS。",
+    nameServers: [],
     cloudflareStatus,
     projectStatus,
-    steps:
-      nameServers.length > 0
-        ? [
-            "将当前域名的 NS 改成下面显示的 Cloudflare nameserver。",
-            "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
-            "状态变成 active 后，对该域名点击“重试接入”。",
-          ]
-        : [
-            "先保留当前页面。",
-            "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-            "拿到 nameserver 后，把域名 NS 改成对应值，再等待状态继续刷新。",
-          ],
+    steps: [
+      "先保留当前页面，系统会继续刷新状态。",
+      "如果状态恢复正常，再按页面提示继续使用。",
+      "如果之后仍是 provisioning_error，再回到列表点击“重试接入”。",
+    ],
   };
 };
 

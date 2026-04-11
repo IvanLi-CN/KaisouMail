@@ -458,6 +458,57 @@ describe("domains page view", () => {
     ).toHaveTextContent("Cloudflare：active");
   });
 
+  it("does not show nameserver delegation steps for non-delegation provisioning errors", async () => {
+    const onBind = vi.fn(async () => ({
+      id: "dom_rate_limit",
+      rootDomain: "retry.example.dev",
+      zoneId: "zone_retry",
+      bindingSource: "project_bind" as const,
+      cloudflareAvailability: "available" as const,
+      cloudflareStatus: "active",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      projectStatus: "provisioning_error" as const,
+      lastProvisionError: "Cloudflare API rate limit reached; retry later",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "retry.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("绑定已提交，稍后再试");
+    expect(dialog).toHaveTextContent("这次不需要修改 NS");
+    expect(dialog).not.toHaveTextContent("完成域名委派");
+    expect(
+      within(dialog).queryByRole("textbox", {
+        name: "Nameserver amy.ns.cloudflare.com",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides Cloudflare lifecycle actions when runtime management is off", () => {
     render(
       <MemoryRouter>
