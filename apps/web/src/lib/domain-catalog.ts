@@ -42,7 +42,40 @@ const hasDelegationRecoveryState = (domain: DomainCatalogItem) =>
   });
 
 export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
-  domain.nameServers.length > 0 && hasDelegationRecoveryState(domain);
+  hasDelegationRecoveryState(domain);
+
+const toTimestamp = (value?: string | null) => {
+  if (!value) return null;
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : timestamp;
+};
+
+export const isFreshDomainCatalogEntry = ({
+  domain,
+  result,
+}: {
+  domain: DomainCatalogItem;
+  result: DomainRecord | DomainCatalogItem;
+}) => {
+  if (domain.rootDomain !== result.rootDomain) return false;
+
+  const domainUpdatedAt = toTimestamp(domain.updatedAt);
+  const resultUpdatedAt = toTimestamp(result.updatedAt);
+
+  if (domainUpdatedAt !== null && resultUpdatedAt !== null) {
+    return domainUpdatedAt >= resultUpdatedAt;
+  }
+
+  const resultProjectStatus =
+    "projectStatus" in result ? result.projectStatus : result.status;
+
+  return (
+    domain.bindingSource === result.bindingSource &&
+    domain.zoneId === result.zoneId &&
+    domain.projectStatus === resultProjectStatus
+  );
+};
 
 export const shouldAutoRefreshDomainCatalogEntry = (
   domain: DomainCatalogItem,

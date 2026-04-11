@@ -21,7 +21,10 @@ import {
   classifyDomainBindError,
   type DomainBindErrorHint,
 } from "@/lib/domain-bind-errors";
-import { hasDelegationRecoveryStatus } from "@/lib/domain-catalog";
+import {
+  hasDelegationRecoveryStatus,
+  isFreshDomainCatalogEntry,
+} from "@/lib/domain-catalog";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -173,8 +176,11 @@ export const DomainBindCard = ({
   const successGuide = useMemo<BindSuccessGuide | null>(() => {
     if (!successGuideState) return null;
 
-    const latestDomain = domains.find(
-      (domain) => domain.rootDomain === successGuideState.rootDomain,
+    const latestDomain = domains.find((domain) =>
+      isFreshDomainCatalogEntry({
+        domain,
+        result: successGuideState.fallbackResult,
+      }),
     );
 
     return buildBindSuccessGuide({

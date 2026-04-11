@@ -493,6 +493,59 @@ describe("domains page view", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps row-level delegation guidance visible before nameservers are available", async () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            {
+              id: "dom_waiting_ns",
+              rootDomain: "waiting-ns.example.dev",
+              zoneId: "zone_waiting_ns",
+              bindingSource: "project_bind",
+              cloudflareAvailability: "available",
+              cloudflareStatus: "pending",
+              nameServers: [],
+              projectStatus: "provisioning_error",
+              lastProvisionError:
+                "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+              createdAt: "2026-04-10T08:00:00.000Z",
+              updatedAt: "2026-04-10T08:00:00.000Z",
+              lastProvisionedAt: null,
+              disabledAt: null,
+            },
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByTestId("domain-catalog-delegation-guide"),
+    ).toHaveTextContent("有 1 个项目直绑域名待完成 NS 委派");
+    const rowGuide = screen.getByTestId(
+      "domain-row-delegation-guide-dom_waiting_ns",
+    );
+    expect(rowGuide).toHaveTextContent("待委派");
+    expect(rowGuide).toHaveTextContent("改 NS 后重试。");
+
+    fireEvent.click(
+      screen.getByTestId("domain-details-trigger-dom_waiting_ns"),
+    );
+    const detailsDialog = await screen.findByTestId("domain-details-dialog");
+    expect(detailsDialog).toHaveTextContent("先改 NS，再重试接入");
+    expect(detailsDialog).toHaveTextContent(
+      "nameserver 暂不可见；如果这是刚创建的直绑域名，请保持页面打开，稍后再回来查看。",
+    );
+  });
+
   it("refreshes the next-steps dialog when the domain catalog status changes", async () => {
     const onBind = vi.fn(async () => ({
       id: "dom_bound",
@@ -1015,6 +1068,81 @@ describe("domains page view", () => {
         name: `复制 zone ${longZoneId}`,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("ignores stale catalog matches after bind and keeps the fresh delegation dialog", async () => {
+    domainsHookState.catalog = [
+      {
+        id: "dom_stale",
+        rootDomain: "reuse.example.dev",
+        zoneId: "zone_reuse",
+        bindingSource: "catalog",
+        cloudflareAvailability: "available",
+        cloudflareStatus: "active",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+        projectStatus: "disabled",
+        lastProvisionError: null,
+        createdAt: "2026-04-10T08:00:00.000Z",
+        updatedAt: "2026-04-10T08:00:00.000Z",
+        lastProvisionedAt: "2026-04-10T08:00:00.000Z",
+        disabledAt: "2026-04-10T08:00:00.000Z",
+      },
+    ];
+    domainsHookState.bindMutateAsync = vi.fn(async () => ({
+      id: "dom_stale",
+      rootDomain: "reuse.example.dev",
+      zoneId: "zone_reuse",
+      bindingSource: "project_bind" as const,
+      status: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:05:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+    domainsHookState.refetch = vi.fn(async () => ({
+      data: [
+        {
+          id: "dom_stale",
+          rootDomain: "reuse.example.dev",
+          zoneId: "zone_reuse",
+          bindingSource: "catalog",
+          cloudflareAvailability: "available",
+          cloudflareStatus: "active",
+          nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+          projectStatus: "disabled",
+          lastProvisionError: null,
+          createdAt: "2026-04-10T08:00:00.000Z",
+          updatedAt: "2026-04-10T08:00:00.000Z",
+          lastProvisionedAt: "2026-04-10T08:00:00.000Z",
+          disabledAt: "2026-04-10T08:00:00.000Z",
+        },
+      ],
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "reuse.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent(
+      "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
+    );
+    expect(queryClientState.setQueryData).toHaveBeenCalledWith(
+      ["domains", "catalog"],
+      expect.any(Function),
+    );
   });
 
   it("keeps the cached catalog visible when a background refetch fails", () => {

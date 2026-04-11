@@ -21,7 +21,10 @@ import {
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
-import { buildFallbackBoundDomainCatalogEntry } from "@/lib/domain-catalog";
+import {
+  buildFallbackBoundDomainCatalogEntry,
+  isFreshDomainCatalogEntry,
+} from "@/lib/domain-catalog";
 import { getErrorDetails } from "@/lib/error-utils";
 import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
@@ -177,8 +180,8 @@ export const DomainsPage = () => {
       onBind={async (values) => {
         const boundDomain = await bindDomainMutation.mutateAsync(values);
         const refreshedCatalog = await domainCatalogQuery.refetch();
-        const refreshedMatch = refreshedCatalog.data?.find(
-          (domain) => domain.rootDomain === boundDomain.rootDomain,
+        const refreshedMatch = refreshedCatalog.data?.find((domain) =>
+          isFreshDomainCatalogEntry({ domain, result: boundDomain }),
         );
         if (refreshedMatch) return refreshedMatch;
 
