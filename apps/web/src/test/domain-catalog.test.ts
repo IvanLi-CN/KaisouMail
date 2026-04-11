@@ -50,13 +50,13 @@ describe("domain catalog polling helpers", () => {
     const permissionFailureDomain = {
       ...demoDomainCatalog[0],
       bindingSource: "project_bind" as const,
-      cloudflareStatus: "active" as const,
+      cloudflareStatus: "pending" as const,
       projectStatus: "provisioning_error" as const,
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
       lastProvisionError: "Zone access denied",
     };
 
-    expect(needsNameserverDelegation(permissionFailureDomain)).toBe(true);
+    expect(needsNameserverDelegation(permissionFailureDomain)).toBe(false);
     expect(shouldAutoRefreshDomainCatalogEntry(permissionFailureDomain)).toBe(
       false,
     );

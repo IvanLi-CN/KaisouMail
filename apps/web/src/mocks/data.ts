@@ -410,7 +410,8 @@ export const demoDomains: DomainRecord[] = [
     zoneId: "zone_failed",
     bindingSource: "project_bind",
     status: "provisioning_error",
-    lastProvisionError: "Zone access denied",
+    lastProvisionError:
+      "Zone activation is pending until nameserver delegation is complete",
     createdAt: "2026-04-01T08:20:00.000Z",
     updatedAt: "2026-04-01T08:25:00.000Z",
     lastProvisionedAt: null,
@@ -503,7 +504,8 @@ export const demoDomainCatalog: DomainCatalogItem[] = [
     cloudflareStatus: "pending",
     nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     projectStatus: "provisioning_error",
-    lastProvisionError: "Zone access denied",
+    lastProvisionError:
+      "Zone activation is pending until nameserver delegation is complete",
     createdAt: "2026-04-01T08:20:00.000Z",
     updatedAt: "2026-04-01T08:25:00.000Z",
     lastProvisionedAt: null,

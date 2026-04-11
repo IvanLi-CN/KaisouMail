@@ -6,9 +6,6 @@ export const needsDomainBindingFollowUp = (domain: DomainCatalogItem) =>
   (domain.cloudflareStatus === "pending" ||
     domain.projectStatus === "provisioning_error");
 
-export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
-  needsDomainBindingFollowUp(domain) && domain.nameServers.length > 0;
-
 const hasDelegationPendingError = (domain: DomainCatalogItem) => {
   const normalized = domain.lastProvisionError?.toLowerCase() ?? "";
 
@@ -22,13 +19,17 @@ const hasDelegationPendingError = (domain: DomainCatalogItem) => {
   );
 };
 
+const hasDelegationRecoveryState = (domain: DomainCatalogItem) =>
+  domain.bindingSource === "project_bind" &&
+  ((domain.cloudflareStatus === "pending" && !domain.lastProvisionError) ||
+    hasDelegationPendingError(domain));
+
+export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
+  domain.nameServers.length > 0 && hasDelegationRecoveryState(domain);
+
 export const shouldAutoRefreshDomainCatalogEntry = (
   domain: DomainCatalogItem,
-) =>
-  domain.bindingSource === "project_bind" &&
-  (domain.cloudflareStatus === "pending" ||
-    (domain.projectStatus === "provisioning_error" &&
-      hasDelegationPendingError(domain)));
+) => hasDelegationRecoveryState(domain);
 
 export const shouldPollDomainCatalog = (domains?: DomainCatalogItem[]) =>
   (domains ?? []).some(shouldAutoRefreshDomainCatalogEntry);

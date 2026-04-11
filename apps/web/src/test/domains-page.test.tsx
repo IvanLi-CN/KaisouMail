@@ -125,7 +125,11 @@ describe("domains page view", () => {
     expect(screen.getByText("relay.example.test")).toBeInTheDocument();
     expect(screen.getAllByText("project_bind")).toHaveLength(2);
     expect(screen.getAllByText("provisioning_error").length).toBeGreaterThan(0);
-    expect(screen.getByText("Zone access denied")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Zone activation is pending until nameserver delegation is complete",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("zone_failed")).not.toBeInTheDocument();
     expect(screen.queryByText("amy.ns.cloudflare.com")).not.toBeInTheDocument();
     const catalogGuide = screen.getByTestId("domain-catalog-delegation-guide");
