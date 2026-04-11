@@ -70,7 +70,11 @@ When the domain is retained in `provisioning_error`, the row stays visible in th
 
 ![Control-plane row for a direct-bound domain waiting for retry](./assets/project-domain-binding-ui-retry-row.png)
 
-At that point, read the **`ZONE / NS`** column in the same row and copy the Cloudflare-assigned nameservers into your registrar exactly as shown.
+At that point, click the **details icon** in the action column for the same row and read the zone plus the Cloudflare-assigned nameservers from the dialog:
+
+![Open the details dialog from the action-column details icon to inspect the zone and nameservers](./assets/project-domain-binding-ui-detail-dialog.png)
+
+Then copy the nameservers from that dialog into your registrar exactly as shown.
 
 > In other words: **the project creates the zone, but it does not update registrar NS records for you. That step is always manual.**
 
@@ -167,7 +171,7 @@ Typical messages:
 
 This means Cloudflare accepted the zone creation request, but nameserver delegation is not complete yet, so Email Routing cannot be enabled.
 
-In the UI, this usually appears as a retained row with `provisioning_error`, Cloudflare nameservers in the `ZONE / NS` column, and a **Retry** action:
+In the UI, this usually appears as a retained row with `provisioning_error`, plus a **details icon** and **Retry** in the action column:
 
 ![Control-plane status when a direct-bound domain is waiting for retry](./assets/project-domain-binding-ui-retry-row.png)
 
@@ -180,7 +184,7 @@ This is the most common recoverable failure in the project-direct flow:
 Fix steps:
 
 1. check whether the zone is still `pending` in Cloudflare
-2. update registrar nameservers to the exact Cloudflare values shown in the row `ZONE / NS` column
+2. click the **details icon** for that row and update registrar nameservers to the exact Cloudflare values shown in the dialog
 3. wait until the zone becomes `active`
 4. return to `/domains` and click **Retry**
 

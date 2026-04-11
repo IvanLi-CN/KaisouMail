@@ -123,6 +123,8 @@ describe("domains page view", () => {
     expect(screen.getAllByText("project_bind")).toHaveLength(2);
     expect(screen.getAllByText("provisioning_error").length).toBeGreaterThan(0);
     expect(screen.getByText("Zone access denied")).toBeInTheDocument();
+    expect(screen.queryByText("zone_failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("amy.ns.cloudflare.com")).not.toBeInTheDocument();
     const catalogGuide = screen.getByTestId("domain-catalog-delegation-guide");
     expect(catalogGuide).toHaveTextContent(
       "有 1 个项目直绑域名待完成 NS 委派；先改 NS，再点“重试接入”。",
@@ -136,12 +138,42 @@ describe("domains page view", () => {
     const rowGuide = screen.getByTestId(
       "domain-row-delegation-guide-dom_failed",
     );
-    expect(rowGuide).toHaveTextContent("先改 NS，再重试。");
+    expect(rowGuide).toHaveTextContent("待委派");
+    expect(rowGuide).toHaveTextContent("改 NS 后重试。");
+    expect(rowGuide).toHaveClass("flex");
+    expect(rowGuide).not.toHaveClass("rounded-full");
+    const detailsTrigger = screen.getByTestId(
+      "domain-details-trigger-dom_failed",
+    );
+    expect(detailsTrigger).toHaveAttribute("aria-label", "查看详情");
+    expect(detailsTrigger).toHaveAttribute("data-icon-only", "true");
     expect(
-      within(rowGuide).getByRole("link", { name: "查看步骤" }),
+      within(rowGuide).getByRole("link", { name: "步骤" }),
     ).toHaveAttribute(
       "href",
       "https://docs.example.test/zh/project-domain-binding#zone-pending-or-nameserver-not-delegated",
+    );
+    fireEvent.click(detailsTrigger);
+    const detailsDialog = await screen.findByTestId("domain-details-dialog");
+    expect(detailsDialog).toHaveTextContent("staging.example.dev");
+    expect(
+      within(detailsDialog).getByRole("textbox", {
+        name: "Zone staging.example.dev",
+      }),
+    ).toHaveValue("zone_failed");
+    expect(
+      within(detailsDialog).getByRole("textbox", {
+        name: "Nameserver amy.ns.cloudflare.com",
+      }),
+    ).toHaveValue("amy.ns.cloudflare.com");
+    expect(detailsDialog).toHaveTextContent("先改 NS，再重试接入");
+    fireEvent.click(
+      within(detailsDialog).getByRole("button", { name: "我知道了" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId("domain-details-dialog"),
+      ).not.toBeInTheDocument(),
     );
     expect(screen.getByText("not_enabled")).toBeInTheDocument();
     expect(
@@ -550,6 +582,56 @@ describe("domains page view", () => {
     expect(
       screen.queryByRole("link", { name: "查看处理步骤" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps long zone ids inside the details dialog without dropping the copy action", async () => {
+    const longZoneId =
+      "4a2d7f0e9c1b8a6d5e4f3c2b1a09ffeeddccbbaa99887766554433221100aa55";
+    const failedDomain = demoDomainCatalog.find(
+      (domain) => domain.id === "dom_failed",
+    );
+
+    if (!failedDomain) {
+      throw new Error("missing demo domain dom_failed");
+    }
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            {
+              ...failedDomain,
+              id: "dom_long_zone",
+              rootDomain: "long-zone.example.dev",
+              zoneId: longZoneId,
+            },
+            ...demoDomainCatalog.filter((domain) => domain.id !== "dom_failed"),
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("domain-details-trigger-dom_long_zone"));
+    const detailsDialog = await screen.findByTestId("domain-details-dialog");
+    expect(
+      within(detailsDialog).getByRole("textbox", {
+        name: "Zone long-zone.example.dev",
+      }),
+    ).toHaveValue(longZoneId);
+    expect(detailsDialog).toHaveTextContent("点击输入框可全选");
+    expect(
+      within(detailsDialog).getByRole("button", {
+        name: `复制 zone ${longZoneId}`,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the cached catalog visible when a background refetch fails", () => {

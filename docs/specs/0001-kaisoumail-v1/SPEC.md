@@ -249,7 +249,9 @@ PR: include
 
 ![Domains bind success dialog with per-NS copy actions and auto-refresh guidance](./assets/domains-bind-next-steps-dialog-auto-refresh.png)
 
-![Domains page with in-place NS delegation guidance for project-bound pending zones](./assets/domains-ns-delegation-guide-main.png)
+![Domains page row that routes Zone and nameserver inspection into a details dialog](./assets/domains-ns-delegation-guide-main.png)
+
+![Domains zone details dialog with copyable zone and nameserver values](./assets/domains-zone-details-dialog.png)
 
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
