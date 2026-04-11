@@ -275,9 +275,30 @@ describe("message verification service", () => {
     });
   });
 
-  it("keeps ambiguous messages retryable when the AI binding is unavailable", async () => {
+  it("settles ambiguous messages without retries when the AI binding is unavailable", async () => {
     const detection = await resolveVerificationDetectionForMessage(
       {} as never,
+      {
+        subject: "Verification request",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
+        html: null,
+      },
+    );
+
+    expect(detection.verification).toBeNull();
+    expect(detection.shouldRetry).toBe(false);
+    expect(detection.retryAfter).toBeNull();
+  });
+
+  it("retries ambiguous messages when the AI response JSON does not match the schema", async () => {
+    const detection = await resolveVerificationDetectionForMessage(
+      {
+        AI: {
+          run: vi.fn().mockResolvedValue({
+            response: '{"verdict":"match","code":"662288"}',
+          }),
+        },
+      } as never,
       {
         subject: "Verification request",
         text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",

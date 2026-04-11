@@ -388,7 +388,11 @@ const maybeVerifyWithAi = async (
   candidates: string[],
 ): Promise<VerificationDetectionResult> => {
   if (!env.AI) {
-    return createRetryableVerificationFallback();
+    return {
+      verification: null,
+      shouldRetry: false,
+      retryAfter: null,
+    };
   }
   const pausedUntil = await getWorkersAiPausedUntil(env);
   if (pausedUntil) {
@@ -446,7 +450,11 @@ const maybeVerifyWithAi = async (
     }
 
     const parsed = aiDecisionSchema.safeParse(JSON.parse(aiText));
-    if (!parsed.success || parsed.data.verdict !== "match") {
+    if (!parsed.success) {
+      return createRetryableVerificationFallback();
+    }
+
+    if (parsed.data.verdict !== "match") {
       return {
         verification: null,
         shouldRetry: false,
