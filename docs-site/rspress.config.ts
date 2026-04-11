@@ -51,11 +51,27 @@ export default defineConfig({
         description:
           "Deployment, domain onboarding, Cloudflare token, API, and operator docs for KaisouMail.",
         nav: [
-          { text: "Home", link: "/" },
-          { text: "Quick Start", link: "/quick-start" },
-          { text: "Deployment", link: "/deployment-environment" },
-          { text: "Cloudflare Token", link: "/cloudflare-token-permissions" },
-          { text: "Storybook", link: "/storybook.html" },
+          { text: "Home", link: "/", activeMatch: "^/(?:$|index\\.html$)" },
+          {
+            text: "Quick Start",
+            link: "/quick-start",
+            activeMatch: "^/quick-start(?:$|/|\\.html$)",
+          },
+          {
+            text: "Deployment",
+            link: "/deployment-environment",
+            activeMatch: "^/deployment-environment(?:$|/|\\.html$)",
+          },
+          {
+            text: "Cloudflare Token",
+            link: "/cloudflare-token-permissions",
+            activeMatch: "^/cloudflare-token-permissions(?:$|/|\\.html$)",
+          },
+          {
+            text: "Storybook",
+            link: "/storybook.html",
+            activeMatch: "^/storybook(?:\\.html)?$",
+          },
           {
             text: "GitHub",
             link: "https://github.com/IvanLi-CN/KaisouMail",
@@ -118,14 +134,31 @@ export default defineConfig({
         description:
           "KaisouMail 的部署、域名接入、Cloudflare Token 权限、API 与运维文档。",
         nav: [
-          { text: "首页", link: "/zh/" },
-          { text: "快速开始", link: "/zh/quick-start" },
-          { text: "部署", link: "/zh/deployment-environment" },
+          {
+            text: "首页",
+            link: "/zh/",
+            activeMatch: "^/zh/(?:$|index\\.html$)",
+          },
+          {
+            text: "快速开始",
+            link: "/zh/quick-start",
+            activeMatch: "^/zh/quick-start(?:$|/|\\.html$)",
+          },
+          {
+            text: "部署",
+            link: "/zh/deployment-environment",
+            activeMatch: "^/zh/deployment-environment(?:$|/|\\.html$)",
+          },
           {
             text: "Cloudflare Token",
             link: "/zh/cloudflare-token-permissions",
+            activeMatch: "^/zh/cloudflare-token-permissions(?:$|/|\\.html$)",
           },
-          { text: "Storybook", link: "/zh/storybook.html" },
+          {
+            text: "Storybook",
+            link: "/zh/storybook.html",
+            activeMatch: "^/zh/storybook(?:\\.html)?$",
+          },
           {
             text: "GitHub",
             link: "https://github.com/IvanLi-CN/KaisouMail",
