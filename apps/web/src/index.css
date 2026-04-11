@@ -56,8 +56,122 @@ body {
   --tw-ring-color: hsl(var(--ring) / 0.34);
 }
 
+@keyframes copy-feedback-tooltip-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes copy-feedback-icon-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-14deg);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.16) rotate(4deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes copy-feedback-glyph-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .ring-offset-background {
   --tw-ring-offset-color: hsl(var(--background));
+}
+
+.copy-feedback-tooltip__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.copy-feedback-tooltip__icon {
+  display: inline-flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  animation: copy-feedback-icon-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.copy-feedback-tooltip__icon--success {
+  color: hsl(var(--tooltip-foreground));
+  background: linear-gradient(
+    180deg,
+    hsl(var(--tooltip-foreground) / 0.08),
+    hsl(var(--tooltip-foreground) / 0.04)
+  );
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--tooltip-foreground) / 0.1),
+    0 1px 2px hsl(var(--tooltip-foreground) / 0.05);
+}
+
+.copy-feedback-tooltip__icon--error {
+  color: hsl(var(--destructive));
+  background: linear-gradient(
+    180deg,
+    hsl(var(--destructive) / 0.18),
+    hsl(var(--destructive) / 0.12)
+  );
+  box-shadow: inset 0 0 0 1px hsl(var(--destructive) / 0.16);
+}
+
+.copy-feedback-tooltip__glyph {
+  height: 0.8rem;
+  width: 0.8rem;
+  animation: copy-feedback-glyph-pop 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-side="top"] > .copy-feedback-tooltip__content,
+[data-side="right"] > .copy-feedback-tooltip__content,
+[data-side="bottom"] > .copy-feedback-tooltip__content,
+[data-side="left"] > .copy-feedback-tooltip__content {
+  animation: copy-feedback-tooltip-enter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copy-feedback-tooltip__icon,
+  .copy-feedback-tooltip__glyph,
+  [data-side="top"] > .copy-feedback-tooltip__content,
+  [data-side="right"] > .copy-feedback-tooltip__content,
+  [data-side="bottom"] > .copy-feedback-tooltip__content,
+  [data-side="left"] > .copy-feedback-tooltip__content {
+    animation: none;
+  }
 }
 
 .workspace-mailbox-item {

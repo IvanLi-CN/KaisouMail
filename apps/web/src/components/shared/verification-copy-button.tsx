@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import {
   type KeyboardEvent,
   type MouseEvent,
@@ -7,43 +7,17 @@ import {
   useState,
 } from "react";
 
+import {
+  type CopyFeedbackState,
+  CopyFeedbackTooltipContent,
+  getCopyFeedbackLabel,
+} from "@/components/shared/copy-feedback-tooltip-content";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
+import { writeClipboardText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 const COPY_FEEDBACK_DURATION_MS = 1_500;
-
-const fallbackCopyText = async (value: string) => {
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "absolute";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.append(textarea);
-  textarea.select();
-
-  const copied =
-    typeof document.execCommand === "function" && document.execCommand("copy");
-  textarea.remove();
-
-  if (!copied) {
-    throw new Error("Clipboard unavailable");
-  }
-};
-
-const writeClipboardText = async (value: string) => {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-      // Fall through to the legacy execCommand path for insecure origins,
-      // denied clipboard permissions, or embedded browser environments.
-    }
-  }
-
-  await fallbackCopyText(value);
-};
 
 type VerificationCopyButtonProps = {
   code: string;
@@ -56,8 +30,23 @@ export const VerificationCopyButton = ({
   variant,
   className,
 }: VerificationCopyButtonProps) => {
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<CopyFeedbackState>("idle");
   const resetTimerRef = useRef<number | null>(null);
+  const tooltipLabel = getCopyFeedbackLabel({
+    state: copyState,
+    idleText: `复制验证码 ${code}`,
+    successText: `已复制验证码 ${code}`,
+    errorText: "复制失败，请重试",
+  });
+  const tooltipContent = (
+    <CopyFeedbackTooltipContent
+      errorText="复制失败，请重试"
+      idleText={`复制验证码 ${code}`}
+      state={copyState}
+      successText={`已复制验证码 ${code}`}
+      successDisplayText="已复制"
+    />
+  );
 
   useEffect(
     () => () => {
@@ -74,68 +63,78 @@ export const VerificationCopyButton = ({
     event.preventDefault();
     event.stopPropagation();
 
-    await writeClipboardText(code);
-    setCopied(true);
+    try {
+      await writeClipboardText(code);
+      setCopyState("success");
+    } catch {
+      setCopyState("error");
+    }
 
     if (resetTimerRef.current !== null) {
       window.clearTimeout(resetTimerRef.current);
     }
 
     resetTimerRef.current = window.setTimeout(() => {
-      setCopied(false);
+      setCopyState("idle");
     }, COPY_FEEDBACK_DURATION_MS);
   };
 
   if (variant === "compact") {
     return (
-      <Button
-        aria-label={`复制验证码 ${code}`}
-        className={cn(
-          "h-7 shrink-0 rounded-md border-primary/30 bg-primary/10 px-2 text-[11px] text-primary hover:bg-primary/18",
-          className,
-        )}
-        size="sm"
-        variant="outline"
-        onClick={(event) => {
-          void handleCopy(event);
-        }}
+      <Tooltip
+        delayDuration={120}
+        forceOpen={copyState !== "idle"}
+        tooltipContent={tooltipContent}
       >
-        {copied ? (
-          <>
-            <Check className="h-3.5 w-3.5" />
-            已复制
-          </>
-        ) : (
-          <>
-            <Copy className="h-3.5 w-3.5" />
-            验证码
-          </>
-        )}
-      </Button>
+        <Button
+          aria-label={tooltipLabel}
+          className={cn(
+            "h-7 min-w-[4.5rem] shrink-0 gap-1 rounded-full border-primary/35 bg-primary/12 px-1.5 font-mono text-[10px] font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(96,165,250,0.08)] hover:bg-primary/18",
+            className,
+          )}
+          data-copied={copyState === "success" ? "true" : undefined}
+          size="sm"
+          variant="outline"
+          onClick={(event) => {
+            void handleCopy(event);
+          }}
+        >
+          <span
+            aria-hidden
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/18 text-primary"
+          >
+            <KeyRound className="h-2.5 w-2.5 shrink-0" />
+          </span>
+          <span className="leading-none tabular-nums tracking-[0.08em]">
+            {code}
+          </span>
+        </Button>
+      </Tooltip>
     );
   }
 
   return (
-    <button
-      aria-label={`复制验证码 ${code}`}
-      className={cn(
-        "flex min-h-[4.5rem] w-24 shrink-0 flex-col items-center justify-center rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-center transition-colors duration-150 hover:bg-primary/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-28",
-        className,
-      )}
-      type="button"
-      onClick={(event) => {
-        void handleCopy(event);
-      }}
+    <Tooltip
+      delayDuration={120}
+      forceOpen={copyState !== "idle"}
+      tooltipContent={tooltipContent}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80">
-        验证码
-      </span>
-      <span className="mt-1 font-mono text-lg font-semibold text-primary">
-        {code}
-      </span>
-      <span className="mt-1 text-[11px] text-primary/80">
-        {copied ? "已复制" : "点击复制"}
-      </span>
-    </button>
+      <button
+        aria-label={tooltipLabel}
+        className={cn(
+          "flex min-h-[4.5rem] w-24 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-center transition-colors duration-150 hover:bg-primary/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-28",
+          className,
+        )}
+        data-copied={copyState === "success" ? "true" : undefined}
+        type="button"
+        onClick={(event) => {
+          void handleCopy(event);
+        }}
+      >
+        <span className="font-mono text-lg font-semibold text-primary sm:text-[1.75rem]">
+          {code}
+        </span>
+      </button>
+    </Tooltip>
   );
 };

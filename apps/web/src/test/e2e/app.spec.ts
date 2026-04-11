@@ -17,6 +17,7 @@ const expectMailboxHighlightBadge = async (
 };
 
 test("demo console login and workspace mail flow", async ({ page }) => {
+  const mailboxList = page.getByRole("region", { name: "邮箱列表" });
   const mailboxLocalPart = `e2e${Date.now().toString().slice(-6)}`;
   const manualMailboxLocalPart = `pick${Date.now().toString().slice(-6)}`;
   const fullAddressMailboxLocalPart = `full${Date.now().toString().slice(-6)}`;
@@ -59,7 +60,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const randomMailboxRow = page.getByRole("button", {
+  const randomMailboxRow = mailboxList.getByRole("button", {
     name: randomMailboxAddress,
   });
   await expect(randomMailboxRow).toBeVisible();
@@ -77,7 +78,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const mailboxRow = page.getByRole("button", {
+  const mailboxRow = mailboxList.getByRole("button", {
     name: new RegExp(manualMailboxAddress),
   });
   await expect(mailboxRow).toBeVisible();
@@ -98,7 +99,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
-  const fullAddressMailboxRow = page.getByRole("button", {
+  const fullAddressMailboxRow = mailboxList.getByRole("button", {
     name: new RegExp(fullAddressPreview),
   });
   await expect(fullAddressMailboxRow).toBeVisible();

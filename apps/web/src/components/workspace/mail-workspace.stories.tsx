@@ -21,6 +21,14 @@ import {
 import { projectViewportGlobals } from "@/storybook/viewports";
 
 const demoDetailMap = demoMessageDetails as Record<string, MessageDetail>;
+const demoSelectedMailbox = demoMailboxes[0] ?? null;
+const demoSelectedMailboxMessages = demoMessages.filter(
+  (message) => message.mailboxId === demoSelectedMailbox?.id,
+);
+const demoSelectedMailboxDetail =
+  (demoSelectedMailboxMessages[0]
+    ? demoDetailMap[demoSelectedMailboxMessages[0].id]
+    : null) ?? demoMessageDetails.msg_alpha;
 
 const buildMailboxMessageCounts = (
   mailboxes: Mailbox[],
@@ -208,7 +216,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Workspace now surfaces the latest recognized verification code directly in the mailbox rail and message stream. Mailbox rows expose a compact copy action, while message rows expose a larger code panel that copies without changing the current selection.",
+          "Workspace now surfaces the latest recognized verification code directly in the mailbox rail and message stream. Mailbox rows expose a verification-code chip, while message rows expose a larger code panel that copies without changing the current selection.",
       },
     },
   },
@@ -766,35 +774,69 @@ export const DesktopThreePane: Story = {
   },
 };
 
+const verificationSignalArgs = {
+  selectedMailboxId: demoSelectedMailbox?.id ?? "all",
+  selectedMailbox: demoSelectedMailbox,
+  messages: demoSelectedMailboxMessages,
+  selectedMessageId: demoSelectedMailboxDetail.id,
+  selectedMessage: demoSelectedMailboxDetail,
+  totalMessageCount: demoSelectedMailboxMessages.length,
+} satisfies Partial<ComponentProps<typeof MailWorkspace>>;
+
+export const VerificationSignalsDefault: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: verificationSignalArgs,
+};
+
 export const VerificationSignals: Story = {
   globals: projectViewportGlobals.desktop,
+  args: verificationSignalArgs,
   parameters: {
     docs: {
       description: {
         story:
-          "Shows both verification affordances together: the mailbox rail gets a compact `验证码` button for the latest recognized code in that mailbox, while the message list renders a larger code panel that copies inline without stealing selection.",
+          "Shows both mailbox-address and verification copy affordances together: the mailbox rail keeps a dedicated address-copy icon alongside the verification-code chip, while the message header and message row expose their own copy targets without stealing selection.",
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const writeText = installClipboardMock();
+    const rowAddressCopyButton = canvas.getAllByRole("button", {
+      name: "复制邮箱地址",
+    })[0];
     const copyButtons = canvas.getAllByRole("button", {
       name: "复制验证码 842911",
     });
 
+    await userEvent.click(rowAddressCopyButton ?? document.body);
     await userEvent.click(copyButtons[0] ?? document.body);
     await userEvent.click(copyButtons[1] ?? document.body);
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledTimes(2);
+      expect(writeText).toHaveBeenCalledTimes(3);
     });
-    expect(writeText).toHaveBeenNthCalledWith(1, "842911");
-    expect(writeText).toHaveBeenNthCalledWith(2, "842911");
+    const copiedValues = (writeText.mock.calls as unknown as string[][]).map(
+      (call) => call[0],
+    );
+    expect(copiedValues.filter((value) => value === "842911")).toHaveLength(2);
+    expect(
+      copiedValues.filter(
+        (value) => value === "build@alpha.relay.example.test",
+      ),
+    ).toHaveLength(1);
+    await expect(
+      canvas.getByRole("button", { name: "已复制邮箱地址" }),
+    ).toBeInTheDocument();
+    await expect(canvas.queryByText("邮箱地址已复制")).not.toBeInTheDocument();
+    await expect(
+      canvas.getAllByRole("button", { name: "已复制验证码 842911" }).length,
+    ).toBeGreaterThan(0);
     await expect(
       canvas.getByRole("button", { name: /Build artifacts ready/i }),
     ).toBeInTheDocument();
-    await expect(canvas.getAllByText("已复制").length).toBeGreaterThan(0);
+    await expect(canvas.queryByText("点击复制")).not.toBeInTheDocument();
+    await expect(canvas.queryByText("验证码")).not.toBeInTheDocument();
   },
 };
 

@@ -127,6 +127,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.

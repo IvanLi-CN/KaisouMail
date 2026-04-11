@@ -26,12 +26,20 @@ describe("VerificationCopyButton", () => {
 
     render(<VerificationCopyButton code="842911" variant="compact" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "复制验证码 842911" }));
+    const copyButton = screen.getByRole("button", {
+      name: "复制验证码 842911",
+    });
+
+    expect(copyButton).toHaveTextContent("842911");
+    expect(copyButton).not.toHaveTextContent("验证码");
+
+    fireEvent.click(copyButton);
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith("842911");
       expect(execCommand).toHaveBeenCalledWith("copy");
     });
-    expect(screen.getByText("已复制")).toBeInTheDocument();
+    expect(copyButton).toHaveAttribute("aria-label", "已复制验证码 842911");
+    expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
   });
 });

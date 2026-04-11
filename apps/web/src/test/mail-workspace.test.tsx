@@ -277,7 +277,102 @@ describe("MailWorkspace", () => {
     expect(clipboardWriteText).toHaveBeenNthCalledWith(2, "842911");
     expect(onSelectMailbox).not.toHaveBeenCalled();
     expect(onSelectMessage).not.toHaveBeenCalled();
+    expect(verificationCopyButtons[0]).toHaveTextContent("842911");
+    expect(
+      screen.getAllByRole("button", { name: "已复制验证码 842911" }),
+    ).toHaveLength(2);
     expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
+    expect(screen.queryByText("点击复制")).not.toBeInTheDocument();
+    expect(screen.queryByText("验证码")).not.toBeInTheDocument();
+  });
+
+  it("copies a mailbox address from the left rail without selecting the row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const onSelectMailbox = vi.fn();
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSelectMailbox={onSelectMailbox}
+        />
+      </MemoryRouter>,
+    );
+
+    const mailboxList = screen.getByRole("region", { name: "邮箱列表" });
+    fireEvent.click(
+      within(
+        screen
+          .getByTitle("build@alpha.relay.example.test")
+          .closest(".relative") as HTMLElement,
+      ).getByRole("button", { name: "复制邮箱地址" }),
+    );
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("build@alpha.relay.example.test");
+    });
+    expect(onSelectMailbox).not.toHaveBeenCalled();
+    expect(
+      within(mailboxList).getByRole("button", { name: "已复制邮箱地址" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
+  });
+
+  it("copies the selected mailbox address and shows success feedback", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText,
+      },
+    });
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_alpha"
+          selectedMailbox={demoMailboxes[0] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_alpha",
+          )}
+          selectedMessageId="msg_alpha"
+          selectedMessage={demoMessageDetails.msg_alpha}
+        />
+      </MemoryRouter>,
+    );
+
+    const addressText = screen.getByTestId(
+      "workspace-selected-mailbox-address",
+    );
+    expect(addressText).toHaveTextContent("build@alpha.relay.example.test");
+
+    fireEvent.click(screen.getByRole("button", { name: "复制当前邮箱地址" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("build@alpha.relay.example.test");
+    });
+    expect(
+      screen.getByRole("button", { name: "已复制当前邮箱地址" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("已复制").length).toBeGreaterThan(0);
+    expect(screen.queryByText("邮箱地址已复制")).not.toBeInTheDocument();
   });
 
   it("keeps mailbox and message rows clickable across the full card shell", () => {
