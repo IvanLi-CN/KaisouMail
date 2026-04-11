@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "",
+  "base_stable_version": "",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-11T17:09:35Z",
+  "next_stable_version": "",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "4370eb4f63413395f2b460436caa90edfe63d98a",
+  "pr_number": 45,
+  "pr_title": "ci: add release failure telegram alert",
+  "release_bump": "docs",
+  "release_channel": "stable",
+  "release_enabled": false,
+  "release_prerelease": false,
+  "release_tag": "",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "",
+  "target_sha": "9130e1acf8eed8c3cd9e60ec6548d1b9f8b2146f",
+  "type_label": "type:docs"
+}
