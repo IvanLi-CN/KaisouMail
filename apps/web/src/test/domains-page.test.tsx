@@ -371,6 +371,57 @@ describe("domains page view", () => {
     );
   });
 
+  it("keeps delegation recovery guidance when the bind result falls back to the raw bind response", async () => {
+    const onBind = vi.fn(async () => ({
+      id: "dom_bound",
+      rootDomain: "fallback.example.dev",
+      zoneId: "zone_fallback",
+      bindingSource: "project_bind" as const,
+      status: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fallback.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent(
+      "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
+    );
+    expect(dialog).not.toHaveTextContent("这次不需要修改 NS");
+    expect(
+      within(dialog).queryByRole("textbox", {
+        name: /Nameserver /,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("refreshes the next-steps dialog when the domain catalog status changes", async () => {
     const onBind = vi.fn(async () => ({
       id: "dom_bound",
@@ -695,6 +746,42 @@ describe("domains page view", () => {
     );
     expect(docsLink).toHaveAttribute("target", "_blank");
     expect(screen.queryByText(/Requires permission/)).not.toBeInTheDocument();
+  });
+
+  it("routes existing Cloudflare zones to the manual bind guide instead of the local duplicate guide", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error("A zone with that name already exists");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "existing-zone.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    expect(
+      await screen.findByText("Cloudflare 里已存在这个域名"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("这个域名已经在项目里")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看处理步骤" })).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/domain-catalog-enablement#bind-domain-in-cloudflare",
+    );
   });
 
   it("classifies missing Email Routing runtime config separately from permission failures", async () => {

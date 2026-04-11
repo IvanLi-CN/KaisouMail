@@ -68,6 +68,7 @@ const buildBindSuccessGuide = ({
   const needsDelegationRecovery = hasDelegationRecoveryStatus({
     cloudflareStatus,
     lastProvisionError: result.lastProvisionError,
+    allowMissingCloudflareStatus: !("cloudflareStatus" in result),
   });
 
   if (projectStatus === "active") {

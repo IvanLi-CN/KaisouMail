@@ -52,15 +52,23 @@ export const classifyDomainBindError = (
     };
   }
 
-  if (
-    normalized.includes("mailbox domain already exists") ||
-    (normalized.includes("already exists") && normalized.includes("domain"))
-  ) {
+  if (normalized.includes("mailbox domain already exists")) {
     return {
       title: "这个域名已经在项目里",
       docsHref: withAnchor(
         docsLinks?.domainCatalogEnablement,
         "zone-already-exists-in-project",
+      ),
+      rawMessage,
+    };
+  }
+
+  if (normalized.includes("already exists") && normalized.includes("zone")) {
+    return {
+      title: "Cloudflare 里已存在这个域名",
+      docsHref: withAnchor(
+        docsLinks?.domainCatalogEnablement,
+        "bind-domain-in-cloudflare",
       ),
       rawMessage,
     };

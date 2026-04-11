@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  hasDelegationRecoveryStatus,
   needsNameserverDelegation,
   resolveDomainCatalogPollingInterval,
   shouldAutoRefreshDomainCatalogEntry,
@@ -77,6 +78,24 @@ describe("domain catalog polling helpers", () => {
     expect(needsNameserverDelegation(delegatedDomain)).toBe(false);
     expect(shouldAutoRefreshDomainCatalogEntry(delegatedDomain)).toBe(false);
     expect(shouldPollDomainCatalog([delegatedDomain])).toBe(false);
+  });
+
+  it("can keep delegation recovery guidance when the bind result has not been refreshed into the catalog yet", () => {
+    expect(
+      hasDelegationRecoveryStatus({
+        cloudflareStatus: null,
+        lastProvisionError:
+          "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+        allowMissingCloudflareStatus: true,
+      }),
+    ).toBe(true);
+    expect(
+      hasDelegationRecoveryStatus({
+        cloudflareStatus: null,
+        lastProvisionError:
+          "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      }),
+    ).toBe(false);
   });
 
   it("returns a polling interval only while the page is visible and online", () => {

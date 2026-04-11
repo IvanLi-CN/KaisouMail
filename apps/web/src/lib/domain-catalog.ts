@@ -23,11 +23,14 @@ export const hasDelegationPendingProvisionError = (
 export const hasDelegationRecoveryStatus = ({
   cloudflareStatus,
   lastProvisionError,
+  allowMissingCloudflareStatus = false,
 }: {
   cloudflareStatus?: string | null;
   lastProvisionError?: string | null;
+  allowMissingCloudflareStatus?: boolean;
 }) =>
-  cloudflareStatus === "pending" &&
+  (cloudflareStatus === "pending" ||
+    (allowMissingCloudflareStatus && !cloudflareStatus)) &&
   (!lastProvisionError ||
     hasDelegationPendingProvisionError(lastProvisionError));
 
