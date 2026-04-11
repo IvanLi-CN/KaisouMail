@@ -1,4 +1,5 @@
 import { ApiClientError } from "@/lib/api";
+import { hasDelegationPendingProvisionError } from "@/lib/domain-catalog";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 export type DomainBindErrorHint = {
@@ -85,14 +86,7 @@ export const classifyDomainBindError = (
     };
   }
 
-  if (
-    normalized.includes("pending") ||
-    normalized.includes("nameserver") ||
-    normalized.includes("name server") ||
-    normalized.includes("delegat") ||
-    normalized.includes("activation") ||
-    normalized.includes("activate")
-  ) {
+  if (hasDelegationPendingProvisionError(normalized)) {
     return {
       title: "zone 尚未激活",
       docsHref: withAnchor(

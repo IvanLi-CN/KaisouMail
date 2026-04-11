@@ -1123,6 +1123,44 @@ describe("domains page view", () => {
     );
   });
 
+  it("does not route generic email-routing activation failures to the nameserver delegation guide", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error(
+        "Email Routing activation failed because the account token cannot manage routes",
+      );
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fkoai.site" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    expect(
+      await screen.findByText("缺少 Email Routing 写权限"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("zone 尚未激活")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看处理步骤" })).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/project-domain-binding#email-routing-auth-or-permission-failure",
+    );
+  });
+
   it("keeps structured guidance but hides the docs CTA when docs origin is unavailable", async () => {
     const onBind = vi.fn(async () => {
       throw new Error(
