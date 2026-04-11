@@ -65,22 +65,45 @@ export default defineConfig({
         sidebar: {
           "/": [
             {
-              text: "Documentation",
+              text: "Start Here",
               items: [
                 { text: "Home", link: "/" },
                 { text: "Quick Start", link: "/quick-start" },
+              ],
+            },
+            {
+              text: "Environment & Access",
+              items: [
                 {
                   text: "Deployment & Environment",
                   link: "/deployment-environment",
                 },
                 {
-                  text: "Cloudflare Token Permissions",
+                  text: "Token Permissions",
                   link: "/cloudflare-token-permissions",
                 },
+              ],
+            },
+            {
+              text: "Domain Onboarding",
+              items: [
                 {
-                  text: "Domain Catalog & Enablement",
+                  text: "Overview",
+                  link: "/domain-onboarding",
+                },
+                {
+                  text: "Manual Bind",
                   link: "/domain-catalog-enablement",
                 },
+                {
+                  text: "Direct Bind",
+                  link: "/project-domain-binding",
+                },
+              ],
+            },
+            {
+              text: "Reference",
+              items: [
                 { text: "API Reference", link: "/api-reference" },
                 { text: "FAQ & Troubleshooting", link: "/faq" },
               ],
@@ -112,19 +135,42 @@ export default defineConfig({
         sidebar: {
           "/zh/": [
             {
-              text: "文档",
+              text: "开始使用",
               items: [
                 { text: "首页", link: "/zh/" },
                 { text: "快速开始", link: "/zh/quick-start" },
-                { text: "部署与环境变量", link: "/zh/deployment-environment" },
+              ],
+            },
+            {
+              text: "环境与权限",
+              items: [
+                { text: "部署与环境", link: "/zh/deployment-environment" },
                 {
-                  text: "Cloudflare Token 权限",
+                  text: "Token 权限",
                   link: "/zh/cloudflare-token-permissions",
                 },
+              ],
+            },
+            {
+              text: "域名接入",
+              items: [
                 {
-                  text: "域名目录与启用流程",
+                  text: "接入总览",
+                  link: "/zh/domain-onboarding",
+                },
+                {
+                  text: "手动绑定",
                   link: "/zh/domain-catalog-enablement",
                 },
+                {
+                  text: "直接绑定",
+                  link: "/zh/project-domain-binding",
+                },
+              ],
+            },
+            {
+              text: "参考与排障",
+              items: [
                 { text: "API 参考", link: "/zh/api-reference" },
                 { text: "FAQ / 故障排查", link: "/zh/faq" },
               ],

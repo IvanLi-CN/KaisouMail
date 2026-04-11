@@ -2,8 +2,50 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
+import type { DomainCatalogItem } from "@/lib/contracts";
+import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { demoDomainCatalog, demoSessionUser, demoVersion } from "@/mocks/data";
 import { DomainsPageView } from "@/pages/domains-page";
+
+const docsLinks = buildPublicDocsLinks("https://docs.example.test");
+
+if (!docsLinks) {
+  throw new Error("docs links are required for domains stories");
+}
+
+const pendingBindResult: DomainCatalogItem = {
+  id: "dom_bound",
+  rootDomain: "fkoai.site",
+  zoneId: "zone_fkoaisite",
+  bindingSource: "project_bind",
+  cloudflareAvailability: "available",
+  cloudflareStatus: "pending",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "provisioning_error",
+  lastProvisionError:
+    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+  createdAt: "2026-04-10T08:00:00.000Z",
+  updatedAt: "2026-04-10T08:00:00.000Z",
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
+
+const longZoneDialogDomain: DomainCatalogItem = {
+  id: "dom_long_zone",
+  rootDomain: "long-zone.example.dev",
+  zoneId: "4a2d7f0e9c1b8a6d5e4f3c2b1a09ffeeddccbbaa99887766554433221100aa55",
+  bindingSource: "project_bind",
+  cloudflareAvailability: "available",
+  cloudflareStatus: "pending",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "provisioning_error",
+  lastProvisionError:
+    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+  createdAt: "2026-04-10T08:00:00.000Z",
+  updatedAt: "2026-04-10T08:00:00.000Z",
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
 
 const meta = {
   title: "Pages/Domains",
@@ -13,6 +55,7 @@ const meta = {
     domains: demoDomainCatalog,
     isDomainBindingEnabled: true,
     isDomainLifecycleEnabled: true,
+    docsLinks,
     isBindPending: false,
     isEnablePending: false,
     onBind: fn(),
@@ -46,7 +89,71 @@ export const BindSubmitError: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
-    await canvas.findByText("Mailbox domain already exists");
+    await canvas.findByText("这个域名已经在项目里");
+  },
+};
+
+export const BindPermissionHelp: Story = {
+  args: {
+    onBind: fn(async () => {
+      throw new Error(
+        'Requires permission "com.cloudflare.api.account.zone.create" to create zones for the selected account',
+      );
+    }),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    await canvas.findByText("缺少 zone.create 权限");
+    await expect(
+      canvas.getByRole("link", { name: "查看处理步骤" }),
+    ).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/project-domain-binding#missing-zone-create-permission",
+    );
+  },
+};
+
+export const BindNextStepsDialog: Story = {
+  args: {
+    onBind: fn(async () => pendingBindResult),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    await expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    await expect(dialog).toHaveTextContent("amy.ns.cloudflare.com");
+    await expect(dialog).toHaveTextContent("kai.ns.cloudflare.com");
+    const amyInput = within(dialog).getByRole("textbox", {
+      name: "Nameserver amy.ns.cloudflare.com",
+    });
+    const kaiInput = within(dialog).getByRole("textbox", {
+      name: "Nameserver kai.ns.cloudflare.com",
+    });
+    await expect(amyInput).toHaveAttribute("readonly");
+    await expect(kaiInput).toHaveAttribute("readonly");
+    await expect(
+      within(dialog).getByRole("button", {
+        name: "复制 amy.ns.cloudflare.com",
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      within(dialog).getByRole("button", {
+        name: "复制 kai.ns.cloudflare.com",
+      }),
+    ).toBeInTheDocument();
+    await expect(dialog).toHaveTextContent(
+      "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+    );
   },
 };
 
@@ -97,6 +204,105 @@ export const ProvisioningError: Story = {
         domain.projectStatus !== "active" ||
         domain.rootDomain !== "mail.example.net",
     ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByTestId("domain-bind-delegation-guide"),
+    ).toHaveTextContent(
+      "直绑后若停在 pending / provisioning_error：先改 NS，再重试。",
+    );
+    await expect(
+      canvas.getByTestId("domain-catalog-delegation-guide"),
+    ).toHaveTextContent(
+      "有 1 个项目直绑域名待完成 NS 委派；先改 NS，再点“重试接入”。",
+    );
+    await expect(
+      canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
+    ).toHaveTextContent("待委派");
+    await expect(
+      canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
+    ).toHaveTextContent("改 NS 后重试。");
+    await expect(
+      within(
+        canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
+      ).getByRole("link", { name: "步骤" }),
+    ).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/project-domain-binding#zone-pending-or-nameserver-not-delegated",
+    );
+    await expect(
+      canvas.getByRole("button", { name: "查看详情" }),
+    ).toHaveAttribute("data-icon-only", "true");
+  },
+};
+
+export const ZoneDetailsDialog: Story = {
+  args: {
+    domains: demoDomainCatalog.filter(
+      (domain) =>
+        domain.projectStatus !== "active" ||
+        domain.rootDomain !== "mail.example.net",
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByTestId("domain-details-trigger-dom_failed"),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-details-dialog",
+    );
+    await expect(dialog).toHaveTextContent("staging.example.dev");
+    await expect(
+      within(dialog).getByRole("textbox", {
+        name: "Zone staging.example.dev",
+      }),
+    ).toHaveValue("zone_failed");
+    await expect(
+      within(dialog).getByRole("textbox", {
+        name: "Nameserver amy.ns.cloudflare.com",
+      }),
+    ).toHaveValue("amy.ns.cloudflare.com");
+    await expect(
+      within(dialog).getByRole("textbox", {
+        name: "Nameserver kai.ns.cloudflare.com",
+      }),
+    ).toHaveValue("kai.ns.cloudflare.com");
+    await expect(dialog).toHaveTextContent("先改 NS，再重试接入");
+  },
+};
+
+export const ZoneDetailsDialogLongZoneId: Story = {
+  args: {
+    domains: [
+      longZoneDialogDomain,
+      ...demoDomainCatalog.filter(
+        (domain) =>
+          domain.id !== "dom_failed" &&
+          domain.rootDomain !== "mail.example.net",
+      ),
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByTestId("domain-details-trigger-dom_long_zone"),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-details-dialog",
+    );
+    await expect(
+      within(dialog).getByRole("textbox", {
+        name: "Zone long-zone.example.dev",
+      }),
+    ).toHaveValue(longZoneDialogDomain.zoneId ?? "");
+    await expect(dialog).toHaveTextContent("点击输入框可全选");
+    await expect(
+      within(dialog).getByRole("button", {
+        name: `复制 zone ${longZoneDialogDomain.zoneId}`,
+      }),
+    ).toBeInTheDocument();
   },
 };
 
