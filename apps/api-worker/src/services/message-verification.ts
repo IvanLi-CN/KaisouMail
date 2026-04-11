@@ -38,11 +38,11 @@ const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
 );
 const DIRECT_CODE_PATTERNS = [
   new RegExp(
-    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}([A-Za-z0-9]{4,8})`,
+    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}\\b([A-Za-z0-9]{4,8})\\b`,
     "gi",
   ),
   new RegExp(
-    `([A-Za-z0-9]{4,8})[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
+    `\\b([A-Za-z0-9]{4,8})\\b[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
     "gi",
   ),
 ] as const;
@@ -664,7 +664,8 @@ export const backfillMessageVerification = async (
       retryAfter: null,
     };
     try {
-      const parsedPayload = JSON.parse(await parsedObject.text()) as {
+      const parsedText = await parsedObject.text();
+      const parsedPayload = JSON.parse(parsedText) as {
         html: string | null;
         text: string | null;
       };
@@ -674,11 +675,7 @@ export const backfillMessageVerification = async (
         html: parsedPayload.html,
       });
     } catch {
-      detection = {
-        verification: null,
-        shouldRetry: false,
-        retryAfter: null,
-      };
+      detection = createRetryableVerificationFallback();
     }
 
     await db

@@ -87,6 +87,16 @@ describe("message verification service", () => {
     });
   });
 
+  it("does not truncate longer identifiers into direct verification matches", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your verification code is AB1234567",
+      text: null,
+      html: null,
+    });
+
+    expect(verification).toBeNull();
+  });
+
   it("ignores generic code-review subjects that only contain build numbers", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Code review for build 123456",
@@ -508,8 +518,8 @@ describe("message verification service", () => {
         verificationCode: null,
         verificationSource: null,
         verificationMethod: null,
-        verificationCheckedAt: expect.any(String),
-        verificationRetryAfter: null,
+        verificationCheckedAt: null,
+        verificationRetryAfter: expect.any(String),
       }),
     );
     expect(updates).toContainEqual(
@@ -519,6 +529,75 @@ describe("message verification service", () => {
         verificationMethod: "rules",
         verificationCheckedAt: expect.any(String),
         verificationRetryAfter: null,
+      }),
+    );
+  });
+
+  it("keeps backfill messages retryable after transient read failures", async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const select = vi.fn((fields?: Record<string, unknown>) => {
+      if (fields && Object.keys(fields).length === 1 && "id" in fields) {
+        return {
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({
+                limit: vi.fn(async () => [{ id: "msg_retry_read" }]),
+              })),
+            })),
+          })),
+        };
+      }
+
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(async () => [
+              {
+                id: "msg_retry_read",
+                subject: "Verification request",
+                parsedR2Key: "parsed/msg_retry_read.json",
+              },
+            ]),
+          })),
+        })),
+      };
+    });
+    const update = vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => ({
+        where: vi.fn(async () => {
+          updates.push(values);
+        }),
+      })),
+    }));
+
+    getDb.mockReturnValue({
+      select,
+      update,
+    });
+
+    const processed = await backfillMessageVerification(
+      {
+        MAIL_BUCKET: {
+          get: vi.fn(async () => ({
+            text: async () => {
+              throw new Error("temporary read failure");
+            },
+          })),
+        },
+      } as never,
+      {
+        CLEANUP_BATCH_SIZE: 1,
+      },
+    );
+
+    expect(processed).toBe(1);
+    expect(updates).toContainEqual(
+      expect.objectContaining({
+        verificationCode: null,
+        verificationSource: null,
+        verificationMethod: null,
+        verificationCheckedAt: null,
+        verificationRetryAfter: expect.any(String),
       }),
     );
   });
