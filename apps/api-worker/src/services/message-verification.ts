@@ -47,9 +47,9 @@ const DIRECT_CODE_PATTERNS = [
   ),
 ] as const;
 const GENERIC_CODE_CONTEXT_PATTERN =
-  /\b(your|use|enter|copy|paste|this|the|one[- ]time|login|verification|security|confirm|access)\s+code\b/i;
+  /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm|authentication|authenticate|access)\s+code\b/i;
 const VERIFICATION_CONTEXT_PATTERN =
-  /\b(verification|verify|otp|passcode|login|confirm|security|one[- ]time)\b|验证码|校验码|动态码|认证码|登入码|登录码/i;
+  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码/i;
 
 const aiDecisionSchema = z.object({
   verdict: z.enum(["match", "none"]),

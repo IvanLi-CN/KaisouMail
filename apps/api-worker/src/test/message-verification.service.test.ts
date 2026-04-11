@@ -227,6 +227,23 @@ describe("message verification service", () => {
     });
   });
 
+  it("does not treat promotional use-code emails as verification messages", async () => {
+    const detection = await resolveVerificationDetectionForMessage(
+      {} as never,
+      {
+        subject: "Weekend sale",
+        text: "Use code 123456 to save 20% on your next order.",
+        html: null,
+      },
+    );
+
+    expect(detection).toEqual({
+      verification: null,
+      shouldRetry: false,
+      retryAfter: null,
+    });
+  });
+
   it("keeps ambiguous messages retryable while Workers AI is paused", async () => {
     getRuntimeStateValue.mockResolvedValue("2099-01-01T00:00:00.000Z");
 
