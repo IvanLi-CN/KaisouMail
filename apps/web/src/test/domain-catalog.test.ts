@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildFallbackBoundDomainCatalogEntry,
   hasDelegationRecoveryStatus,
   needsNameserverDelegation,
   resolveDomainCatalogPollingInterval,
@@ -96,6 +97,43 @@ describe("domain catalog polling helpers", () => {
           "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
       }),
     ).toBe(false);
+  });
+
+  it("builds a synthetic pending catalog entry for raw bind responses that still need delegation", () => {
+    expect(
+      buildFallbackBoundDomainCatalogEntry({
+        id: "dom_bound",
+        rootDomain: "fallback.example.dev",
+        zoneId: "zone_fallback",
+        bindingSource: "project_bind",
+        status: "provisioning_error",
+        lastProvisionError:
+          "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+        createdAt: "2026-04-10T08:00:00.000Z",
+        updatedAt: "2026-04-10T08:00:00.000Z",
+        lastProvisionedAt: null,
+        disabledAt: null,
+      }),
+    ).toMatchObject({
+      rootDomain: "fallback.example.dev",
+      cloudflareStatus: "pending",
+      projectStatus: "provisioning_error",
+      nameServers: [],
+    });
+    expect(
+      buildFallbackBoundDomainCatalogEntry({
+        id: "dom_bound",
+        rootDomain: "fallback.example.dev",
+        zoneId: "zone_fallback",
+        bindingSource: "project_bind",
+        status: "provisioning_error",
+        lastProvisionError: "Cloudflare API rate limit reached; retry later",
+        createdAt: "2026-04-10T08:00:00.000Z",
+        updatedAt: "2026-04-10T08:00:00.000Z",
+        lastProvisionedAt: null,
+        disabledAt: null,
+      }),
+    ).toBeNull();
   });
 
   it("returns a polling interval only while the page is visible and online", () => {

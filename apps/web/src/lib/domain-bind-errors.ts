@@ -157,7 +157,7 @@ export const classifyDomainBindError = (
 
   return {
     title: "Cloudflare 绑定失败",
-    docsHref: withAnchor(docsLinks?.projectDomainBinding, "troubleshooting"),
+    docsHref: null,
     rawMessage,
   };
 };

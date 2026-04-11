@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api";
 import { resolveDomainCatalogPollingInterval } from "@/lib/domain-catalog";
 
 const domainsKey = ["domains"] as const;
-const domainCatalogKey = ["domains", "catalog"] as const;
+export const domainCatalogQueryKey = ["domains", "catalog"] as const;
 const metaKey = ["meta"] as const;
 const DOMAIN_CATALOG_POLLING_INTERVAL_MS = 15_000;
 
@@ -19,7 +19,7 @@ export const useDomainCatalogQuery = () => {
   const { isDocumentVisible, isOnline } = usePageActivity();
 
   return useQuery({
-    queryKey: domainCatalogKey,
+    queryKey: domainCatalogQueryKey,
     queryFn: () => apiClient.listDomainCatalog(),
     refetchInterval: (query) =>
       resolveDomainCatalogPollingInterval({
@@ -41,7 +41,7 @@ export const useCreateDomainMutation = () => {
     mutationFn: apiClient.createDomain,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -53,7 +53,7 @@ export const useBindDomainMutation = () => {
     mutationFn: apiClient.bindDomain,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -65,7 +65,7 @@ export const useDisableDomainMutation = () => {
     mutationFn: (domainId: string) => apiClient.disableDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -77,7 +77,7 @@ export const useDeleteDomainMutation = () => {
     mutationFn: (domainId: string) => apiClient.deleteDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
@@ -89,7 +89,7 @@ export const useRetryDomainMutation = () => {
     mutationFn: (domainId: string) => apiClient.retryDomain(domainId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });

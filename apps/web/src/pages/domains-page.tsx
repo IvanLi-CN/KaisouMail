@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DomainBindCard } from "@/components/domains/domain-bind-card";
@@ -9,6 +10,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import {
+  domainCatalogQueryKey,
   useBindDomainMutation,
   useCreateDomainMutation,
   useDeleteDomainMutation,
@@ -19,6 +21,7 @@ import {
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
 import type { DomainCatalogItem } from "@/lib/contracts";
+import { buildFallbackBoundDomainCatalogEntry } from "@/lib/domain-catalog";
 import { getErrorDetails } from "@/lib/error-utils";
 import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
@@ -111,6 +114,7 @@ export const DomainsPageView = ({
 );
 
 export const DomainsPage = () => {
+  const queryClient = useQueryClient();
   const sessionQuery = useSessionQuery();
   const metaQuery = useMetaQuery();
   const domainCatalogQuery = useDomainCatalogQuery();
@@ -173,11 +177,36 @@ export const DomainsPage = () => {
       onBind={async (values) => {
         const boundDomain = await bindDomainMutation.mutateAsync(values);
         const refreshedCatalog = await domainCatalogQuery.refetch();
-        return (
-          refreshedCatalog.data?.find(
-            (domain) => domain.rootDomain === boundDomain.rootDomain,
-          ) ?? boundDomain
+        const refreshedMatch = refreshedCatalog.data?.find(
+          (domain) => domain.rootDomain === boundDomain.rootDomain,
         );
+        if (refreshedMatch) return refreshedMatch;
+
+        const fallbackCatalogEntry =
+          buildFallbackBoundDomainCatalogEntry(boundDomain);
+        if (fallbackCatalogEntry) {
+          queryClient.setQueryData<DomainCatalogItem[]>(
+            domainCatalogQueryKey,
+            (current) => {
+              const currentDomains = current ?? [];
+              const currentIndex = currentDomains.findIndex(
+                (domain) =>
+                  domain.rootDomain === fallbackCatalogEntry.rootDomain,
+              );
+
+              if (currentIndex >= 0) {
+                return currentDomains.map((domain, index) =>
+                  index === currentIndex ? fallbackCatalogEntry : domain,
+                );
+              }
+
+              return [fallbackCatalogEntry, ...currentDomains];
+            },
+          );
+          return fallbackCatalogEntry;
+        }
+
+        return boundDomain;
       }}
       onEnable={async (values) => {
         await createDomainMutation.mutateAsync(values);

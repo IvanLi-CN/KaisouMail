@@ -296,6 +296,12 @@ export const DomainBindCard = ({
                   <p className="font-medium text-destructive">
                     {submitError.title}
                   </p>
+                  {submitError.rawMessage !== submitError.title &&
+                  !submitError.docsHref ? (
+                    <p className="basis-full text-muted-foreground">
+                      {submitError.rawMessage}
+                    </p>
+                  ) : null}
                   {submitError.docsHref ? (
                     <a
                       href={submitError.docsHref}

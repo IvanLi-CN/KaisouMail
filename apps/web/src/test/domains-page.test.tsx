@@ -12,14 +12,29 @@ import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { demoDomainCatalog, demoSessionUser } from "@/mocks/data";
 import { DomainsPage, DomainsPageView } from "@/pages/domains-page";
 
+const queryClientState = {
+  setQueryData: vi.fn(),
+};
+
 const domainsHookState = {
   catalog: demoDomainCatalog,
   error: null as Error | null,
   refetch: vi.fn(),
+  bindMutateAsync: vi.fn(),
   role: "admin" as "admin" | "member",
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
 };
+
+vi.mock("@tanstack/react-query", async () => {
+  const actual = await vi.importActual<typeof import("@tanstack/react-query")>(
+    "@tanstack/react-query",
+  );
+  return {
+    ...actual,
+    useQueryClient: () => queryClientState,
+  };
+});
 
 vi.mock("@/hooks/use-session", () => ({
   useSessionQuery: () => ({
@@ -44,6 +59,7 @@ vi.mock("@/hooks/use-meta", () => ({
 }));
 
 vi.mock("@/hooks/use-domains", () => ({
+  domainCatalogQueryKey: ["domains", "catalog"],
   useDomainCatalogQuery: () => ({
     data: domainsHookState.catalog,
     error: domainsHookState.error,
@@ -51,7 +67,7 @@ vi.mock("@/hooks/use-domains", () => ({
   }),
   useBindDomainMutation: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.bindMutateAsync,
   }),
   useCreateDomainMutation: () => ({
     isPending: false,
@@ -72,9 +88,11 @@ afterEach(() => {
   domainsHookState.catalog = demoDomainCatalog;
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
+  domainsHookState.bindMutateAsync = vi.fn();
   domainsHookState.role = "admin";
   domainsHookState.cloudflareDomainBindingEnabled = true;
   domainsHookState.cloudflareDomainLifecycleEnabled = true;
+  queryClientState.setQueryData.mockReset();
 });
 
 const docsLinks = buildPublicDocsLinks("https://docs.example.test");
@@ -284,6 +302,61 @@ describe("domains page view", () => {
       expect(onBind).toHaveBeenCalledWith({
         rootDomain: "bound.example.org",
       }),
+    );
+  });
+
+  it("seeds fallback catalog polling when bind succeeds before the catalog catches up", async () => {
+    domainsHookState.bindMutateAsync = vi.fn(async () => ({
+      id: "dom_bound",
+      rootDomain: "fallback.example.dev",
+      zoneId: "zone_fallback",
+      bindingSource: "project_bind" as const,
+      status: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+    domainsHookState.refetch = vi.fn(async () => ({
+      data: demoDomainCatalog,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fallback.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(queryClientState.setQueryData).toHaveBeenCalledWith(
+      ["domains", "catalog"],
+      expect.any(Function),
+    );
+
+    const setQueryDataUpdater =
+      queryClientState.setQueryData.mock.calls[0]?.[1];
+    if (typeof setQueryDataUpdater !== "function") {
+      throw new Error("expected setQueryData updater");
+    }
+
+    expect(setQueryDataUpdater(demoDomainCatalog)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          rootDomain: "fallback.example.dev",
+          cloudflareStatus: "pending",
+          projectStatus: "provisioning_error",
+        }),
+      ]),
     );
   });
 
@@ -782,6 +855,42 @@ describe("domains page view", () => {
       "href",
       "https://docs.example.test/zh/domain-catalog-enablement#bind-domain-in-cloudflare",
     );
+  });
+
+  it("preserves the backend error text for unclassified bind failures", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error("Cloudflare API request failed: plan limit exceeded");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "mystery.example.dev" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const errorBubble = await screen.findByTestId("domain-bind-error");
+    expect(errorBubble).toHaveTextContent("Cloudflare 绑定失败");
+    expect(errorBubble).toHaveTextContent(
+      "Cloudflare API request failed: plan limit exceeded",
+    );
+    expect(
+      within(errorBubble).queryByRole("link", { name: "查看处理步骤" }),
+    ).not.toBeInTheDocument();
   });
 
   it("classifies missing Email Routing runtime config separately from permission failures", async () => {

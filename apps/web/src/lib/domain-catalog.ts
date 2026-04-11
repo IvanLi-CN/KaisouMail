@@ -1,4 +1,4 @@
-import type { DomainCatalogItem } from "@/lib/contracts";
+import type { DomainCatalogItem, DomainRecord } from "@/lib/contracts";
 import { resolveAutoRefreshInterval } from "@/lib/message-refresh";
 
 export const needsDomainBindingFollowUp = (domain: DomainCatalogItem) =>
@@ -50,6 +50,37 @@ export const shouldAutoRefreshDomainCatalogEntry = (
 
 export const shouldPollDomainCatalog = (domains?: DomainCatalogItem[]) =>
   (domains ?? []).some(shouldAutoRefreshDomainCatalogEntry);
+
+export const buildFallbackBoundDomainCatalogEntry = (
+  domain: DomainRecord,
+): DomainCatalogItem | null => {
+  if (
+    domain.bindingSource !== "project_bind" ||
+    domain.status !== "provisioning_error"
+  ) {
+    return null;
+  }
+
+  if (!hasDelegationPendingProvisionError(domain.lastProvisionError)) {
+    return null;
+  }
+
+  return {
+    id: domain.id,
+    rootDomain: domain.rootDomain,
+    zoneId: domain.zoneId,
+    bindingSource: domain.bindingSource,
+    cloudflareAvailability: "available",
+    cloudflareStatus: "pending",
+    nameServers: [],
+    projectStatus: domain.status,
+    lastProvisionError: domain.lastProvisionError,
+    createdAt: domain.createdAt,
+    updatedAt: domain.updatedAt,
+    lastProvisionedAt: domain.lastProvisionedAt,
+    disabledAt: domain.disabledAt,
+  };
+};
 
 export const resolveDomainCatalogPollingInterval = ({
   domains,
