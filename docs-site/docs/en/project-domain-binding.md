@@ -188,6 +188,24 @@ Fix steps:
 3. wait until the zone becomes `active`
 4. return to `/domains` and click **Retry**
 
+### Missing Email Routing runtime config {#email-routing-runtime-config-missing}
+
+Typical messages:
+
+- `Email Routing management is enabled but EMAIL_WORKER_NAME is not configured`
+- `Email Routing management is enabled but CLOUDFLARE_RUNTIME_API_TOKEN or CLOUDFLARE_API_TOKEN is not configured`
+
+This is not a Cloudflare ACL problem. Worker runtime is missing configuration required by the bind flow.
+
+Fix steps:
+
+1. verify runtime injects:
+   - `CLOUDFLARE_RUNTIME_API_TOKEN` or `CLOUDFLARE_API_TOKEN`
+   - `EMAIL_WORKER_NAME`
+2. confirm the deploy workflow passes those values into the API Worker
+3. redeploy the Worker
+4. retry from `/domains`
+
 ### Email Routing enablement authentication or permission failure {#email-routing-auth-or-permission-failure}
 
 Typical messages:

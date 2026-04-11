@@ -39,17 +39,19 @@ export const resolveDomainCatalogPollingInterval = ({
   requestedIntervalMs,
   isDocumentVisible,
   isOnline,
+  allowHidden = false,
 }: {
   domains?: DomainCatalogItem[];
   requestedIntervalMs?: number;
   isDocumentVisible: boolean;
   isOnline: boolean;
+  allowHidden?: boolean;
 }) => {
   if (!shouldPollDomainCatalog(domains)) return false;
 
   return resolveAutoRefreshInterval({
     requestedIntervalMs,
-    isDocumentVisible,
+    isDocumentVisible: allowHidden ? true : isDocumentVisible,
     isOnline,
   });
 };

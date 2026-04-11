@@ -27,8 +27,9 @@ export const useDomainCatalogQuery = () => {
         requestedIntervalMs: DOMAIN_CATALOG_POLLING_INTERVAL_MS,
         isDocumentVisible,
         isOnline,
+        allowHidden: true,
       }),
-    refetchIntervalInBackground: false,
+    refetchIntervalInBackground: true,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
   });

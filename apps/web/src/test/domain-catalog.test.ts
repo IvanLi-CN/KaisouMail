@@ -86,6 +86,16 @@ describe("domain catalog polling helpers", () => {
       resolveDomainCatalogPollingInterval({
         domains: demoDomainCatalog,
         requestedIntervalMs: 15_000,
+        isDocumentVisible: false,
+        isOnline: true,
+        allowHidden: true,
+      }),
+    ).toBe(15_000);
+
+    expect(
+      resolveDomainCatalogPollingInterval({
+        domains: demoDomainCatalog,
+        requestedIntervalMs: 15_000,
         isDocumentVisible: true,
         isOnline: false,
       }),

@@ -555,6 +555,46 @@ describe("domains page view", () => {
     expect(screen.queryByText(/Requires permission/)).not.toBeInTheDocument();
   });
 
+  it("classifies missing Email Routing runtime config separately from permission failures", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error(
+        "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+      );
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fkoai.site" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    expect(
+      await screen.findByText("缺少 Email Routing 运行时配置"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("缺少 Email Routing 写权限"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看处理步骤" })).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/project-domain-binding#email-routing-runtime-config-missing",
+    );
+  });
+
   it("keeps structured guidance but hides the docs CTA when docs origin is unavailable", async () => {
     const onBind = vi.fn(async () => {
       throw new Error(

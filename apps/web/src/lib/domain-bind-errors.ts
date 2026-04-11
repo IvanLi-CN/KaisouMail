@@ -96,6 +96,24 @@ export const classifyDomainBindError = (
   }
 
   if (
+    (normalized.includes("email routing management is enabled but") &&
+      normalized.includes("not configured")) ||
+    normalized.includes("email_worker_name") ||
+    normalized.includes("cloudflare_runtime_api_token") ||
+    (normalized.includes("cloudflare_api_token") &&
+      normalized.includes("not configured"))
+  ) {
+    return {
+      title: "缺少 Email Routing 运行时配置",
+      docsHref: withAnchor(
+        docsLinks?.projectDomainBinding,
+        "email-routing-runtime-config-missing",
+      ),
+      rawMessage,
+    };
+  }
+
+  if (
     normalized.includes("email routing") ||
     ((normalized.includes("authentication error") ||
       normalized.includes("forbidden") ||
