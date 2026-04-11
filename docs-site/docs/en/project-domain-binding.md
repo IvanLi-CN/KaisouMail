@@ -222,7 +222,6 @@ This usually means the token:
 Fix steps:
 
 1. confirm the token includes:
-   - `Zone: Zone: Read`
    - `Zone: Zone: Edit`
    - `Zone: Email Routing Rules: Edit`
    - `Zone: Zone Settings: Edit`

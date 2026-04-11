@@ -154,12 +154,12 @@ Recommended production setup:
 
 ### Runtime token minimum permissions
 
-- `Zone: Zone: Read`
 - `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
 The runtime token scope must cover every mailbox domain you want the control plane to discover, bind, enable, or delete.
+In Cloudflare's custom token UI, `Zone: Zone: Edit` already covers list/read for the `/zones` path, so you do not need a separate `Zone: Zone: Read` row.
 
 `Zone: Zone Settings: Edit` is the permission most often missed. If a zone appears in the catalog but enabling it fails with `provisioning_error` / `Authentication error`, check that permission first and confirm the token scope covers the target zone.
 
@@ -177,7 +177,6 @@ The release and deploy workflows need:
 
 If you intentionally keep one shared `CLOUDFLARE_API_TOKEN`, put it in both the Worker secret and the GitHub repository secret. It must satisfy the union:
 
-- `Zone: Zone: Read`
 - `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`

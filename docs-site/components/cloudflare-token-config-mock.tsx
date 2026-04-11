@@ -25,7 +25,6 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
     helper:
       "给 kaisoumail-api Worker 用，只负责域名目录和 Email Routing 管理。",
     permissions: [
-      ["区域", "Zone", "读取"],
       ["区域", "Zone", "编辑"],
       ["区域", "Email Routing Rules", "编辑"],
       ["区域", "Zone Settings", "编辑"],
@@ -58,7 +57,6 @@ const variantConfigs: Record<MockVariant, VariantConfig> = {
     tokenName: "cfm",
     helper: "单人试用时可共用；同一把 token 同时给 Worker 和 GitHub Actions。",
     permissions: [
-      ["区域", "Zone", "读取"],
       ["区域", "Zone", "编辑"],
       ["区域", "Email Routing Rules", "编辑"],
       ["区域", "Zone Settings", "编辑"],
