@@ -53,7 +53,6 @@ export const useBindDomainMutation = () => {
     mutationFn: apiClient.bindDomain,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: domainsKey });
-      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
       void queryClient.invalidateQueries({ queryKey: metaKey });
     },
   });
