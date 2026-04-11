@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   needsNameserverDelegation,
   resolveDomainCatalogPollingInterval,
+  shouldAutoRefreshDomainCatalogEntry,
   shouldPollDomainCatalog,
 } from "@/lib/domain-catalog";
 import { demoDomainCatalog } from "@/mocks/data";
@@ -43,6 +44,23 @@ describe("domain catalog polling helpers", () => {
         },
       ]),
     ).toBe(true);
+  });
+
+  it("does not auto-refresh permanent project-bind provisioning errors", () => {
+    const permissionFailureDomain = {
+      ...demoDomainCatalog[0],
+      bindingSource: "project_bind" as const,
+      cloudflareStatus: "active" as const,
+      projectStatus: "provisioning_error" as const,
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      lastProvisionError: "Zone access denied",
+    };
+
+    expect(needsNameserverDelegation(permissionFailureDomain)).toBe(true);
+    expect(shouldAutoRefreshDomainCatalogEntry(permissionFailureDomain)).toBe(
+      false,
+    );
+    expect(shouldPollDomainCatalog([permissionFailureDomain])).toBe(false);
   });
 
   it("returns a polling interval only while the page is visible and online", () => {

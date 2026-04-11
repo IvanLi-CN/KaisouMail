@@ -119,6 +119,9 @@ describe("domains page view", () => {
       "href",
       "https://docs.example.test/zh/project-domain-binding#zone-pending-or-nameserver-not-delegated",
     );
+    expect(
+      screen.queryByRole("columnheader", { name: "详情" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("relay.example.test")).toBeInTheDocument();
     expect(screen.getAllByText("project_bind")).toHaveLength(2);
     expect(screen.getAllByText("provisioning_error").length).toBeGreaterThan(0);

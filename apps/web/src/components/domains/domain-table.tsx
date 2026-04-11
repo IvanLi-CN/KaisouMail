@@ -240,7 +240,6 @@ export const DomainTable = ({
                 <TableHeaderCell>来源</TableHeaderCell>
                 <TableHeaderCell>Cloudflare</TableHeaderCell>
                 <TableHeaderCell>项目状态</TableHeaderCell>
-                <TableHeaderCell>详情</TableHeaderCell>
                 <TableHeaderCell>最近接入</TableHeaderCell>
                 <TableHeaderCell>错误</TableHeaderCell>
                 <TableHeaderCell className="text-right">操作</TableHeaderCell>

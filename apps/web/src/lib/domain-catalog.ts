@@ -9,8 +9,29 @@ export const needsDomainBindingFollowUp = (domain: DomainCatalogItem) =>
 export const needsNameserverDelegation = (domain: DomainCatalogItem) =>
   needsDomainBindingFollowUp(domain) && domain.nameServers.length > 0;
 
+const hasDelegationPendingError = (domain: DomainCatalogItem) => {
+  const normalized = domain.lastProvisionError?.toLowerCase() ?? "";
+
+  return (
+    normalized.includes("pending") ||
+    normalized.includes("activation") ||
+    normalized.includes("activate") ||
+    normalized.includes("delegat") ||
+    normalized.includes("nameserver") ||
+    normalized.includes("name server")
+  );
+};
+
+export const shouldAutoRefreshDomainCatalogEntry = (
+  domain: DomainCatalogItem,
+) =>
+  domain.bindingSource === "project_bind" &&
+  (domain.cloudflareStatus === "pending" ||
+    (domain.projectStatus === "provisioning_error" &&
+      hasDelegationPendingError(domain)));
+
 export const shouldPollDomainCatalog = (domains?: DomainCatalogItem[]) =>
-  (domains ?? []).some(needsDomainBindingFollowUp);
+  (domains ?? []).some(shouldAutoRefreshDomainCatalogEntry);
 
 export const resolveDomainCatalogPollingInterval = ({
   domains,
