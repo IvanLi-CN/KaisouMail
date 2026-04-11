@@ -116,12 +116,15 @@ export const classifyDomainBindError = (
   }
 
   if (
-    normalized.includes("email routing") ||
-    ((normalized.includes("authentication error") ||
+    (normalized.includes("authentication error") ||
       normalized.includes("forbidden") ||
       normalized.includes("unauthorized") ||
-      normalized.includes("permission denied")) &&
-      (normalized.includes("routing") || normalized.includes("zone settings")))
+      normalized.includes("permission denied") ||
+      normalized.includes("cannot manage routes") ||
+      normalized.includes("cannot manage zone settings")) &&
+    (normalized.includes("email routing") ||
+      normalized.includes("routing") ||
+      normalized.includes("zone settings"))
   ) {
     return {
       title: "缺少 Email Routing 写权限",

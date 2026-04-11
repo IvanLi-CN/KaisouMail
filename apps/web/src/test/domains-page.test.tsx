@@ -1161,6 +1161,43 @@ describe("domains page view", () => {
     );
   });
 
+  it("keeps transient email-routing failures as raw bind errors instead of permission hints", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error("Email Routing API request failed: upstream 502");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("根域名"), {
+      target: { value: "fkoai.site" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const errorBubble = await screen.findByTestId("domain-bind-error");
+    expect(errorBubble).toHaveTextContent("Cloudflare 绑定失败");
+    expect(errorBubble).toHaveTextContent(
+      "Email Routing API request failed: upstream 502",
+    );
+    expect(errorBubble).not.toHaveTextContent("缺少 Email Routing 写权限");
+    expect(
+      within(errorBubble).queryByRole("link", { name: "查看处理步骤" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps structured guidance but hides the docs CTA when docs origin is unavailable", async () => {
     const onBind = vi.fn(async () => {
       throw new Error(
