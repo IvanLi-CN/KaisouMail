@@ -151,6 +151,29 @@ export const TabletInlineNav: Story = {
   },
 };
 
+export const MobileHeaderCollapsed: Story = {
+  globals: projectViewportGlobals.mobile,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const brandRow = canvasElement.querySelector(
+      '[data-slot="shell-brand-row"]',
+    );
+    const drawerTrigger = canvas.getByRole("button", {
+      name: "打开导航抽屉",
+    });
+
+    await expect(drawerTrigger).toBeInTheDocument();
+    await expect(brandRow).toContainElement(drawerTrigger);
+    await expect(
+      canvasElement.querySelector('[data-slot="shell-mobile-trigger"]'),
+    ).toBe(drawerTrigger);
+    await expect(
+      body.queryByRole("dialog", { name: "菜单" }),
+    ).not.toBeInTheDocument();
+  },
+};
+
 export const MobileDrawerOpen: Story = {
   args: {
     defaultMobileNavOpen: true,
@@ -196,7 +219,15 @@ export const MobileDrawerToggle: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
+    const brandRow = canvasElement.querySelector(
+      '[data-slot="shell-brand-row"]',
+    );
     const drawerTrigger = canvas.getByRole("button", { name: "打开导航抽屉" });
+
+    await expect(brandRow).toContainElement(drawerTrigger);
+    await expect(
+      canvasElement.querySelector('[data-slot="shell-mobile-trigger"]'),
+    ).toBe(drawerTrigger);
 
     await userEvent.click(drawerTrigger);
 

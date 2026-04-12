@@ -381,82 +381,111 @@ export const AppShell = ({
               </span>
             </Link>
 
-            <div
-              className="hidden shrink-0 items-center gap-2 lg:flex"
-              data-slot="shell-utility-group"
-            >
-              <Popover
-                open={isAccountPopoverOpen}
-                onOpenChange={(nextOpen) => {
-                  if (!nextOpen) {
-                    closeAccountPopover();
-                  }
-                }}
+            <div className="flex shrink-0 items-center gap-2">
+              <div
+                className="hidden shrink-0 items-center gap-2 lg:flex"
+                data-slot="shell-utility-group"
               >
-                <PopoverAnchor asChild>
-                  <button
-                    ref={triggerRef}
-                    aria-label={`${user.name} 账号详情`}
-                    aria-controls={accountPopoverId}
-                    aria-expanded={isAccountPopoverOpen}
-                    aria-haspopup="dialog"
-                    className={cn(
-                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      isAccountPopoverOpen
-                        ? "bg-card/95 text-foreground"
-                        : "text-muted-foreground hover:border-border/80 hover:text-foreground",
-                    )}
-                    onBlur={handlePopoverBlur}
-                    onClick={handleAccountTriggerClick}
-                    onFocus={handlePopoverFocus}
-                    onKeyDown={handleAccountEscape}
-                    onMouseEnter={openAccountPreview}
-                    onMouseLeave={scheduleAccountPreviewClose}
-                    type="button"
-                  >
-                    <ShieldCheck
-                      aria-hidden
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-colors duration-200",
-                        isAccountPopoverOpen
-                          ? "text-foreground"
-                          : "text-primary",
-                      )}
-                    />
-                  </button>
-                </PopoverAnchor>
-                <PopoverContent
-                  id={accountPopoverId}
-                  ref={contentRef}
-                  align="center"
-                  className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
-                  onBlur={handlePopoverBlur}
-                  onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                  }}
-                  onEscapeKeyDown={() => {
-                    closeAccountPopover();
-                  }}
-                  onFocus={handlePopoverFocus}
-                  onMouseEnter={openAccountPreview}
-                  onMouseLeave={scheduleAccountPreviewClose}
-                  onOpenAutoFocus={(event) => {
-                    event.preventDefault();
+                <Popover
+                  open={isAccountPopoverOpen}
+                  onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                      closeAccountPopover();
+                    }
                   }}
                 >
-                  {renderAccountDetails(user)}
-                </PopoverContent>
-              </Popover>
+                  <PopoverAnchor asChild>
+                    <button
+                      ref={triggerRef}
+                      aria-label={`${user.name} 账号详情`}
+                      aria-controls={accountPopoverId}
+                      aria-expanded={isAccountPopoverOpen}
+                      aria-haspopup="dialog"
+                      className={cn(
+                        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        isAccountPopoverOpen
+                          ? "bg-card/95 text-foreground"
+                          : "text-muted-foreground hover:border-border/80 hover:text-foreground",
+                      )}
+                      onBlur={handlePopoverBlur}
+                      onClick={handleAccountTriggerClick}
+                      onFocus={handlePopoverFocus}
+                      onKeyDown={handleAccountEscape}
+                      onMouseEnter={openAccountPreview}
+                      onMouseLeave={scheduleAccountPreviewClose}
+                      type="button"
+                    >
+                      <ShieldCheck
+                        aria-hidden
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-colors duration-200",
+                          isAccountPopoverOpen
+                            ? "text-foreground"
+                            : "text-primary",
+                        )}
+                      />
+                    </button>
+                  </PopoverAnchor>
+                  <PopoverContent
+                    id={accountPopoverId}
+                    ref={contentRef}
+                    align="center"
+                    className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
+                    onBlur={handlePopoverBlur}
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                    onEscapeKeyDown={() => {
+                      closeAccountPopover();
+                    }}
+                    onFocus={handlePopoverFocus}
+                    onMouseEnter={openAccountPreview}
+                    onMouseLeave={scheduleAccountPreviewClose}
+                    onOpenAutoFocus={(event) => {
+                      event.preventDefault();
+                    }}
+                  >
+                    {renderAccountDetails(user)}
+                  </PopoverContent>
+                </Popover>
 
-              <ActionButton
-                density="dense"
-                forceIconOnly
-                icon={LogOut}
-                label="退出登录"
-                onClick={onLogout}
-                priority="secondary"
-                variant="outline"
-              />
+                <ActionButton
+                  density="dense"
+                  forceIconOnly
+                  icon={LogOut}
+                  label="退出登录"
+                  onClick={onLogout}
+                  priority="secondary"
+                  variant="outline"
+                />
+              </div>
+
+              <button
+                aria-controls={mobileNavDrawerId}
+                aria-expanded={isMobileNavOpen}
+                aria-haspopup="dialog"
+                aria-label={isMobileNavOpen ? "收起导航抽屉" : "打开导航抽屉"}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+                data-slot="shell-mobile-trigger"
+                onClick={() => {
+                  setIsMobileNavOpen((current) => {
+                    const next = !current;
+
+                    if (next) {
+                      closeAccountPopover();
+                    }
+
+                    return next;
+                  });
+                }}
+                type="button"
+              >
+                {isMobileNavOpen ? (
+                  <X aria-hidden className="h-4 w-4" />
+                ) : (
+                  <Menu aria-hidden className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
 
@@ -473,34 +502,6 @@ export const AppShell = ({
                 }),
               )}
             </nav>
-          </div>
-
-          <div className="ml-auto flex w-full justify-end lg:hidden">
-            <button
-              aria-controls={mobileNavDrawerId}
-              aria-expanded={isMobileNavOpen}
-              aria-haspopup="dialog"
-              aria-label={isMobileNavOpen ? "收起导航抽屉" : "打开导航抽屉"}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => {
-                setIsMobileNavOpen((current) => {
-                  const next = !current;
-
-                  if (next) {
-                    closeAccountPopover();
-                  }
-
-                  return next;
-                });
-              }}
-              type="button"
-            >
-              {isMobileNavOpen ? (
-                <X aria-hidden className="h-4 w-4" />
-              ) : (
-                <Menu aria-hidden className="h-4 w-4" />
-              )}
-            </button>
           </div>
         </div>
       </header>
