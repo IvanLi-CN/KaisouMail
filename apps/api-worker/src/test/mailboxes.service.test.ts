@@ -967,6 +967,7 @@ describe("mailbox service helpers", () => {
       source: "registered",
       routingRuleId: "rule_promoted",
     });
+    expect(mailbox.expiresAt).toEqual(expect.any(String));
   });
 
   it("promotes an active catch-all mailbox during ensure without creating a second row", async () => {
@@ -1039,5 +1040,6 @@ describe("mailbox service helpers", () => {
         routingRuleId: "rule_promoted",
       }),
     });
+    expect(ensured.mailbox.expiresAt).toEqual(expect.any(String));
   });
 });

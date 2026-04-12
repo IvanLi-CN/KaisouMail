@@ -648,7 +648,7 @@ export const createMailboxForUser = async (
           env,
           config,
           classification.row,
-          input.expiresInMinutes,
+          expiresInMinutes,
         );
       }
       throw new ApiError(409, "Mailbox already exists");
@@ -694,7 +694,7 @@ export const createMailboxForUser = async (
           env,
           config,
           classification.row,
-          input.expiresInMinutes,
+          expiresInMinutes,
         );
       }
       throw new ApiError(409, "Mailbox already exists");
@@ -827,6 +827,10 @@ export const ensureMailboxForUser = async (
       },
 ) => {
   const activeRootDomains = await listActiveRootDomains(env);
+  const expiresInMinutes =
+    input.expiresInMinutes === undefined
+      ? config.DEFAULT_MAILBOX_TTL_MINUTES
+      : input.expiresInMinutes;
   const mailboxAddress =
     "address" in input
       ? resolveRequestedMailboxAddress(input, activeRootDomains)
@@ -844,7 +848,7 @@ export const ensureMailboxForUser = async (
           env,
           config,
           classification.row,
-          input.expiresInMinutes,
+          expiresInMinutes,
         ),
         created: false,
       };
@@ -864,7 +868,7 @@ export const ensureMailboxForUser = async (
     localPart: mailboxAddress.localPart,
     subdomain: mailboxAddress.subdomain,
     rootDomain: mailboxAddress.rootDomain,
-    expiresInMinutes: input.expiresInMinutes,
+    expiresInMinutes,
   });
 
   return {
