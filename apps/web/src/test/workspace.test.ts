@@ -15,6 +15,7 @@ describe("workspace helpers", () => {
     const sorted = sortMailboxes(demoMailboxes, "recent");
 
     expect(sorted.map((mailbox) => mailbox.id)).toEqual([
+      "mbx_catch_all",
       "mbx_beta",
       "mbx_alpha",
       "mbx_gamma",

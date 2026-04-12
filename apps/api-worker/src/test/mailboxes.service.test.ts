@@ -54,6 +54,7 @@ import { domains, mailboxes, subdomains } from "../db/schema";
 import {
   classifyMailboxAddressState,
   createMailboxForUser,
+  ensureMailboxForUser,
   resolveRequestedMailboxAddress,
 } from "../services/mailboxes";
 
@@ -64,6 +65,7 @@ const baseMailbox = {
   localPart: "build",
   subdomain: "alpha",
   address: "build@alpha.707979.xyz",
+  source: "registered",
   routingRuleId: "rule_alpha",
   status: "active",
   createdAt: "2026-04-03T12:00:00.000Z",
@@ -108,13 +110,16 @@ const createMailboxDb = (options?: {
     return [];
   };
 
+  const buildWhereResult = (table: unknown) =>
+    Object.assign(Promise.resolve(rowsForTable(table)), {
+      limit: vi.fn(async () => rowsForTable(table)),
+      orderBy: vi.fn(async () => rowsForTable(table)),
+    });
+
   return {
     select: vi.fn(() => ({
       from: vi.fn((table: unknown) => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(async () => rowsForTable(table)),
-          orderBy: vi.fn(async () => rowsForTable(table)),
-        })),
+        where: vi.fn(() => buildWhereResult(table)),
         orderBy: vi.fn(async () => rowsForTable(table)),
       })),
     })),
@@ -292,6 +297,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -429,6 +435,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -565,6 +572,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -699,6 +707,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -746,11 +755,8 @@ describe("mailbox service helpers", () => {
       }),
     ).rejects.toThrow("subdomain write failed");
 
-    expect(deleteRoutingRule).toHaveBeenCalledWith(
-      runtimeConfig,
-      domain,
-      "rule_new",
-    );
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(deleteRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalledWith(mailboxes);
   });
 
@@ -761,6 +767,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -811,6 +818,7 @@ describe("mailbox service helpers", () => {
       zoneId: "zone_primary",
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       createdAt: "2026-04-03T12:00:00.000Z",
       updatedAt: "2026-04-03T12:00:00.000Z",
@@ -867,6 +875,7 @@ describe("mailbox service helpers", () => {
       "build",
       "ops",
       "build@ops.707979.xyz",
+      "registered",
       null,
       "destroying",
       expect.any(String),
@@ -879,5 +888,158 @@ describe("mailbox service helpers", () => {
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(deleteRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalledWith(mailboxes);
+  });
+
+  it("promotes an active catch-all mailbox into a registered mailbox on explicit create", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_1",
+      catchAllRestoreStateJson:
+        '{"enabled":false,"name":"Catch all","matchers":[{"type":"all"}],"actions":[]}',
+      catchAllUpdatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const catchAllMailbox = {
+      ...baseMailbox,
+      localPart: "build",
+      subdomain: "ops",
+      address: "build@ops.707979.xyz",
+      source: "catch_all",
+      routingRuleId: null,
+      expiresAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+        },
+      ],
+      mailboxRows: [catchAllMailbox],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    resolveMailboxDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_promoted");
+
+    const mailbox = await createMailboxForUser(
+      {
+        DB: {
+          prepare: vi.fn(),
+        },
+      } as never,
+      runtimeConfig,
+      memberUser,
+      {
+        localPart: "build",
+        subdomain: "ops",
+        rootDomain: domain.rootDomain,
+      },
+    );
+
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      runtimeConfig,
+      domain,
+      "ops",
+    );
+    expect(createRoutingRule).toHaveBeenCalledWith(
+      runtimeConfig,
+      domain,
+      "build@ops.707979.xyz",
+    );
+    expect(db.update).toHaveBeenCalledWith(mailboxes);
+    expect(mailbox).toMatchObject({
+      id: catchAllMailbox.id,
+      source: "registered",
+      routingRuleId: "rule_promoted",
+    });
+    expect(mailbox.expiresAt).toEqual(expect.any(String));
+  });
+
+  it("promotes an active catch-all mailbox during ensure without creating a second row", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_1",
+      catchAllRestoreStateJson:
+        '{"enabled":false,"name":"Catch all","matchers":[{"type":"all"}],"actions":[]}',
+      catchAllUpdatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const catchAllMailbox = {
+      ...baseMailbox,
+      localPart: "build",
+      subdomain: "ops",
+      address: "build@ops.707979.xyz",
+      source: "catch_all",
+      routingRuleId: null,
+      expiresAt: null,
+    } as const;
+    const db = createMailboxDb({
+      mailboxRows: [catchAllMailbox],
+      domainRows: [
+        {
+          id: domain.id,
+          rootDomain: domain.rootDomain,
+        },
+      ],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    listActiveRootDomains.mockResolvedValue([domain.rootDomain]);
+    resolveMailboxDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_promoted");
+
+    const ensured = await ensureMailboxForUser(
+      {
+        DB: {
+          prepare: vi.fn(),
+        },
+      } as never,
+      runtimeConfig,
+      memberUser,
+      {
+        address: "build@ops.707979.xyz",
+      },
+    );
+
+    expect(createRoutingRule).toHaveBeenCalledWith(
+      runtimeConfig,
+      domain,
+      "build@ops.707979.xyz",
+    );
+    expect(ensured).toMatchObject({
+      created: false,
+      mailbox: expect.objectContaining({
+        id: catchAllMailbox.id,
+        source: "registered",
+        routingRuleId: "rule_promoted",
+      }),
+    });
+    expect(ensured.mailbox.expiresAt).toEqual(expect.any(String));
   });
 });

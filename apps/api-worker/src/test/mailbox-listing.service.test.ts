@@ -29,6 +29,7 @@ const buildMailbox = (
   localPart: `box${index.toString().padStart(3, "0")}`,
   subdomain: "ops",
   address: `box${index.toString().padStart(3, "0")}@ops.707979.xyz`,
+  source: "registered",
   routingRuleId: null,
   status: "active",
   createdAt: `2026-04-08T10:${(index % 60).toString().padStart(2, "0")}:00.000Z`,

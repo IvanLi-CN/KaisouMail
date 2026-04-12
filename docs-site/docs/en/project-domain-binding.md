@@ -18,6 +18,7 @@ Where:
 
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED=true` allows the project to read and mutate Cloudflare domain and Email Routing state
 - `EMAIL_WORKER_NAME` determines which Worker future mailbox routing rules target
+- The same runtime configuration is reused by the domain-level Catch All toggle; **no extra secret names are introduced**
 
 ### 2. Configure the Cloudflare token and scope
 
@@ -97,6 +98,12 @@ Once the domain becomes `active`:
 - `POST /api/mailboxes` and `POST /api/mailboxes/ensure` can target it with `rootDomain`
 - if mailbox creation omits `rootDomain`, the server randomly selects from all `active` domains
 - `GET /api/meta` includes it in the current active root-domain list
+
+If you also enable Catch All for that domain from `/domains`:
+
+- mail sent to unregistered addresses is still delivered to the mail Worker
+- KaisouMail auto-materializes those addresses as long-lived `Catch All` mailboxes
+- disabling Catch All restores the previous Cloudflare catch-all rule that was present before the project took control
 
 If you temporarily do not want new mailboxes to land on that domain, disable it in `/domains`. Disable stops new allocations, but it does not automatically delete historical routing rules.
 

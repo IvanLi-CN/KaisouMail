@@ -5,6 +5,8 @@ const {
   createDomain,
   deleteDomain,
   disableDomain,
+  disableDomainCatchAll,
+  enableDomainCatchAll,
   listDomainCatalog,
   listDomains,
   retryDomainProvision,
@@ -13,6 +15,8 @@ const {
   createDomain: vi.fn(),
   deleteDomain: vi.fn(),
   disableDomain: vi.fn(),
+  disableDomainCatchAll: vi.fn(),
+  enableDomainCatchAll: vi.fn(),
   listDomainCatalog: vi.fn(),
   listDomains: vi.fn(),
   retryDomainProvision: vi.fn(),
@@ -43,6 +47,8 @@ vi.mock("../services/domains", async () => {
     createDomain,
     deleteDomain,
     disableDomain,
+    disableDomainCatchAll,
+    enableDomainCatchAll,
     listDomainCatalog,
     listDomains,
     retryDomainProvision,
@@ -77,6 +83,7 @@ describe("domain routes", () => {
         cloudflareStatus: "pending",
         nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
         projectStatus: "not_enabled",
+        catchAllEnabled: false,
         lastProvisionError: null,
         createdAt: null,
         updatedAt: null,
@@ -103,6 +110,7 @@ describe("domain routes", () => {
           cloudflareStatus: "pending",
           nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
           projectStatus: "not_enabled",
+          catchAllEnabled: false,
           lastProvisionError: null,
           createdAt: null,
           updatedAt: null,
@@ -122,6 +130,7 @@ describe("domain routes", () => {
         zoneId: "zone_bound",
         bindingSource: "project_bind",
         status: "provisioning_error",
+        catchAllEnabled: false,
         lastProvisionError: "Zone is pending activation",
         createdAt: "2026-04-06T07:00:00.000Z",
         updatedAt: "2026-04-06T07:00:00.000Z",
@@ -163,5 +172,76 @@ describe("domain routes", () => {
       "dom_bound",
     );
     expect(response.status).toBe(204);
+  });
+
+  it("enables catch-all from /api/domains/:id/catch-all/enable", async () => {
+    enableDomainCatchAll.mockResolvedValue({
+      id: "dom_bound",
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      bindingSource: "project_bind",
+      status: "active",
+      catchAllEnabled: true,
+      lastProvisionError: null,
+      createdAt: "2026-04-06T07:00:00.000Z",
+      updatedAt: "2026-04-06T07:05:00.000Z",
+      lastProvisionedAt: "2026-04-06T07:00:00.000Z",
+      disabledAt: null,
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains/dom_bound/catch-all/enable", {
+        method: "POST",
+      }),
+      env,
+    );
+
+    expect(enableDomainCatchAll).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      "dom_bound",
+      undefined,
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "dom_bound",
+      catchAllEnabled: true,
+    });
+  });
+
+  it("disables catch-all from /api/domains/:id/catch-all/disable", async () => {
+    disableDomainCatchAll.mockResolvedValue({
+      id: "dom_bound",
+      rootDomain: "bound.example.org",
+      zoneId: "zone_bound",
+      bindingSource: "project_bind",
+      status: "active",
+      catchAllEnabled: false,
+      lastProvisionError: null,
+      createdAt: "2026-04-06T07:00:00.000Z",
+      updatedAt: "2026-04-06T07:06:00.000Z",
+      lastProvisionedAt: "2026-04-06T07:00:00.000Z",
+      disabledAt: null,
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains/dom_bound/catch-all/disable", {
+        method: "POST",
+      }),
+      env,
+    );
+
+    expect(disableDomainCatchAll).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      "dom_bound",
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "dom_bound",
+      catchAllEnabled: false,
+    });
   });
 });

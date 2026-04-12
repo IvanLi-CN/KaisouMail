@@ -14,8 +14,10 @@ import {
   useBindDomainMutation,
   useCreateDomainMutation,
   useDeleteDomainMutation,
+  useDisableDomainCatchAllMutation,
   useDisableDomainMutation,
   useDomainCatalogQuery,
+  useEnableDomainCatchAllMutation,
   useRetryDomainMutation,
 } from "@/hooks/use-domains";
 import { useMetaQuery } from "@/hooks/use-meta";
@@ -36,6 +38,9 @@ type DomainsPageViewProps = {
   docsLinks?: PublicDocsLinks | null;
   isBindPending?: boolean;
   isEnablePending?: boolean;
+  isCatchAllPending?: boolean;
+  isCatchAllManagementEnabled?: boolean;
+  isCatchAllEnablementEnabled?: boolean;
   error?: {
     variant: ErrorStateVariant;
     title: string;
@@ -43,11 +48,16 @@ type DomainsPageViewProps = {
     details?: string | null;
   } | null;
   onReload?: () => void;
-  onBind: Parameters<typeof DomainBindCard>[0]["onSubmit"];
-  onEnable: Parameters<typeof DomainTable>[0]["onEnable"];
-  onDisable: Parameters<typeof DomainTable>[0]["onDisable"];
-  onDelete: Parameters<typeof DomainTable>[0]["onDelete"];
-  onRetry: Parameters<typeof DomainTable>[0]["onRetry"];
+  onBind: (values: { rootDomain: string }) => Promise<unknown> | unknown;
+  onEnable: (values: {
+    rootDomain: string;
+    zoneId: string;
+  }) => Promise<unknown> | unknown;
+  onDisable: (domainId: string) => Promise<unknown> | unknown;
+  onDelete: (domainId: string) => Promise<unknown> | unknown;
+  onRetry: (domainId: string) => Promise<unknown> | unknown;
+  onEnableCatchAll?: (domainId: string) => Promise<unknown> | unknown;
+  onDisableCatchAll?: (domainId: string) => Promise<unknown> | unknown;
 };
 
 export const DomainsPageView = ({
@@ -57,6 +67,9 @@ export const DomainsPageView = ({
   docsLinks = null,
   isBindPending = false,
   isEnablePending = false,
+  isCatchAllPending = false,
+  isCatchAllManagementEnabled = true,
+  isCatchAllEnablementEnabled = true,
   error = null,
   onReload,
   onBind,
@@ -64,6 +77,8 @@ export const DomainsPageView = ({
   onDisable,
   onDelete,
   onRetry,
+  onEnableCatchAll = async () => undefined,
+  onDisableCatchAll = async () => undefined,
 }: DomainsPageViewProps) => (
   <div className="space-y-6">
     <PageHeader
@@ -98,18 +113,37 @@ export const DomainsPageView = ({
             domains={domains}
             isPending={isBindPending}
             docsLinks={docsLinks}
-            onSubmit={onBind}
+            onSubmit={
+              onBind as Parameters<typeof DomainBindCard>[0]["onSubmit"]
+            }
           />
         ) : null}
         <DomainTable
           domains={domains}
           docsLinks={docsLinks}
+          isCatchAllPending={isCatchAllPending}
+          isCatchAllManagementEnabled={isCatchAllManagementEnabled}
+          isCatchAllEnablementEnabled={isCatchAllEnablementEnabled}
           isDomainLifecycleEnabled={isDomainLifecycleEnabled}
           isEnablePending={isEnablePending}
-          onEnable={onEnable}
-          onDisable={onDisable}
-          onDelete={onDelete}
-          onRetry={onRetry}
+          onEnable={async (values) => {
+            await onEnable(values);
+          }}
+          onDisable={async (domainId) => {
+            await onDisable(domainId);
+          }}
+          onDelete={async (domainId) => {
+            await onDelete(domainId);
+          }}
+          onRetry={async (domainId) => {
+            await onRetry(domainId);
+          }}
+          onEnableCatchAll={async (domainId) => {
+            await onEnableCatchAll(domainId);
+          }}
+          onDisableCatchAll={async (domainId) => {
+            await onDisableCatchAll(domainId);
+          }}
         />
       </>
     )}
@@ -125,6 +159,8 @@ export const DomainsPage = () => {
   const createDomainMutation = useCreateDomainMutation();
   const deleteDomainMutation = useDeleteDomainMutation();
   const disableDomainMutation = useDisableDomainMutation();
+  const enableDomainCatchAllMutation = useEnableDomainCatchAllMutation();
+  const disableDomainCatchAllMutation = useDisableDomainCatchAllMutation();
   const retryDomainMutation = useRetryDomainMutation();
   const hasDomainCatalog = domainCatalogQuery.data !== undefined;
 
@@ -161,6 +197,8 @@ export const DomainsPage = () => {
         onDisable={async () => undefined}
         onDelete={async () => undefined}
         onRetry={async () => undefined}
+        onEnableCatchAll={async () => undefined}
+        onDisableCatchAll={async () => undefined}
       />
     );
   }
@@ -177,6 +215,16 @@ export const DomainsPage = () => {
       docsLinks={publicDocsLinks}
       isBindPending={bindDomainMutation.isPending}
       isEnablePending={createDomainMutation.isPending}
+      isCatchAllPending={
+        enableDomainCatchAllMutation.isPending ||
+        disableDomainCatchAllMutation.isPending
+      }
+      isCatchAllManagementEnabled={
+        metaQuery.data?.cloudflareCatchAllManagementEnabled ?? false
+      }
+      isCatchAllEnablementEnabled={
+        metaQuery.data?.cloudflareCatchAllEnablementEnabled ?? false
+      }
       onBind={async (values) => {
         const boundDomain = await bindDomainMutation.mutateAsync(values);
         const refreshedCatalog = await domainCatalogQuery.refetch();
@@ -222,6 +270,12 @@ export const DomainsPage = () => {
       }}
       onRetry={async (domainId) => {
         await retryDomainMutation.mutateAsync(domainId);
+      }}
+      onEnableCatchAll={async (domainId) => {
+        await enableDomainCatchAllMutation.mutateAsync(domainId);
+      }}
+      onDisableCatchAll={async (domainId) => {
+        await disableDomainCatchAllMutation.mutateAsync(domainId);
       }}
     />
   );

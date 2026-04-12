@@ -27,6 +27,10 @@ const getDomainResultCloudflareStatus = (
   result: DomainRecord | DomainCatalogItem,
 ) => ("cloudflareStatus" in result ? result.cloudflareStatus : null);
 
+const getDomainResultCatchAllEnabled = (
+  result: DomainRecord | DomainCatalogItem,
+) => result.catchAllEnabled ?? false;
+
 export const hasDelegationRecoveryStatus = ({
   cloudflareStatus,
   lastProvisionError,
@@ -69,6 +73,9 @@ export const isFreshDomainCatalogEntry = ({
 
   if (domain.bindingSource !== result.bindingSource) return false;
   if (domain.zoneId !== result.zoneId) return false;
+  if (domain.catchAllEnabled !== getDomainResultCatchAllEnabled(result)) {
+    return false;
+  }
 
   const domainUpdatedAt = toTimestamp(domain.updatedAt);
   const resultUpdatedAt = toTimestamp(result.updatedAt);
@@ -126,6 +133,7 @@ export const buildFallbackBoundDomainCatalogEntry = (
     cloudflareStatus,
     nameServers: [],
     projectStatus,
+    catchAllEnabled: domain.catchAllEnabled ?? false,
     lastProvisionError: domain.lastProvisionError,
     createdAt: domain.createdAt,
     updatedAt: domain.updatedAt,

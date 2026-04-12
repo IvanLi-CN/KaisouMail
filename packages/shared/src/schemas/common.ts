@@ -6,6 +6,7 @@ import {
   domainCatalogAvailabilities,
   domainProjectStatuses,
   domainStatuses,
+  mailboxSources,
   mailboxStatuses,
   recipientKinds,
   userRoles,
@@ -14,6 +15,7 @@ import {
 export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
+export const mailboxSourceSchema = z.enum(mailboxSources);
 export const domainStatusSchema = z.enum(domainStatuses);
 export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
 export const domainBindingSourceSchema = z.enum(domainBindingSources);
@@ -94,6 +96,7 @@ export const mailboxSchema = z.object({
   subdomain: z.string(),
   rootDomain: z.string(),
   address: z.string().email(),
+  source: mailboxSourceSchema,
   status: mailboxStatusSchema,
   createdAt: isoDateSchema,
   lastReceivedAt: isoDateSchema.nullable(),
@@ -108,6 +111,7 @@ export const domainSchema = z.object({
   zoneId: z.string().nullable(),
   bindingSource: domainBindingSourceSchema,
   status: domainStatusSchema,
+  catchAllEnabled: z.boolean(),
   lastProvisionError: z.string().nullable(),
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema,
@@ -124,6 +128,7 @@ export const domainCatalogItemSchema = z.object({
   cloudflareStatus: z.string().nullable(),
   nameServers: z.array(z.string()),
   projectStatus: domainProjectStatusSchema,
+  catchAllEnabled: z.boolean(),
   lastProvisionError: z.string().nullable(),
   createdAt: isoDateSchema.nullable(),
   updatedAt: isoDateSchema.nullable(),

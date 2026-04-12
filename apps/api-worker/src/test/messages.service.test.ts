@@ -3,8 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
-const { listScopedMailboxRowsForUser } = vi.hoisted(() => ({
-  listScopedMailboxRowsForUser: vi.fn(),
+const { ensureCatchAllMailboxForAddress, listScopedMailboxRowsForUser } =
+  vi.hoisted(() => ({
+    ensureCatchAllMailboxForAddress: vi.fn(),
+    listScopedMailboxRowsForUser: vi.fn(),
+  }));
+const { resolveCatchAllDomainForAddress } = vi.hoisted(() => ({
+  resolveCatchAllDomainForAddress: vi.fn(),
 }));
 const {
   resolveVerificationDetectionForMessage,
@@ -19,7 +24,12 @@ vi.mock("../db/client", () => ({
 }));
 
 vi.mock("../services/mailboxes", () => ({
+  ensureCatchAllMailboxForAddress,
   listScopedMailboxRowsForUser,
+}));
+
+vi.mock("../services/domains", () => ({
+  resolveCatchAllDomainForAddress,
 }));
 
 vi.mock("../services/message-verification", async () => {
@@ -93,6 +103,8 @@ describe("message service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listScopedMailboxRowsForUser.mockResolvedValue([]);
+    resolveCatchAllDomainForAddress.mockResolvedValue(null);
+    ensureCatchAllMailboxForAddress.mockResolvedValue(null);
     createRetryableVerificationFallback.mockReturnValue({
       verification: null,
       shouldRetry: true,
@@ -209,6 +221,7 @@ describe("message service", () => {
         localPart: "visible",
         subdomain: "ops",
         address: visibleAddress,
+        source: "registered",
         routingRuleId: null,
         status: "active",
         createdAt: "2026-04-08T10:00:00.000Z",
@@ -259,6 +272,7 @@ describe("message service", () => {
         localPart: "reused",
         subdomain: "ops",
         address: reusedAddress,
+        source: "registered",
         routingRuleId: null,
         status: "active",
         createdAt: "2026-04-08T10:00:00.000Z",
@@ -326,6 +340,7 @@ describe("message service", () => {
         localPart: "reused",
         subdomain: "ops",
         address: reusedAddress,
+        source: "registered",
         routingRuleId: null,
         status: "active",
         createdAt: "2026-04-08T10:00:00.000Z",
@@ -339,6 +354,7 @@ describe("message service", () => {
         localPart: "reused",
         subdomain: "ops",
         address: reusedAddress,
+        source: "registered",
         routingRuleId: null,
         status: "destroyed",
         createdAt: "2026-04-08T09:00:00.000Z",
@@ -516,6 +532,7 @@ describe("message service", () => {
       localPart: "verify",
       subdomain: "ops",
       address: "verify@ops.707979.xyz",
+      source: "registered",
       routingRuleId: null,
       status: "active",
       createdAt: "2026-04-08T10:00:00.000Z",
@@ -591,6 +608,121 @@ describe("message service", () => {
     );
   });
 
+  it("materializes a catch-all mailbox before storing the message", async () => {
+    const insertedMessages: Array<Record<string, unknown>> = [];
+    const catchAllMailbox = {
+      id: "mbx_catch_all",
+      userId: adminUser.id,
+      domainId: "dom_secondary",
+      localPart: "noreply",
+      subdomain: "wild",
+      address: "noreply@wild.mail.example.net",
+      source: "catch_all",
+      routingRuleId: null,
+      status: "active",
+      createdAt: "2026-04-08T10:00:00.000Z",
+      expiresAt: null,
+      destroyedAt: null,
+    };
+    const insert = vi.fn((table: unknown) => ({
+      values: vi.fn(
+        async (
+          values: Record<string, unknown> | Array<Record<string, unknown>>,
+        ) => {
+          if (table === messages && !Array.isArray(values)) {
+            insertedMessages.push(values);
+          }
+        },
+      ),
+    }));
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table !== mailboxes) throw new Error("Unexpected table");
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+            })),
+          };
+        }),
+      })),
+      insert,
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
+    };
+    getDb.mockReturnValue(db);
+    resolveCatchAllDomainForAddress.mockResolvedValue({
+      id: "dom_secondary",
+      rootDomain: "mail.example.net",
+      zoneId: "zone_secondary",
+      bindingSource: "project_bind",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: adminUser.id,
+      catchAllRestoreStateJson:
+        '{"enabled":false,"name":"Catch all","matchers":[{"type":"all"}],"actions":[]}',
+      catchAllUpdatedAt: "2026-04-08T09:58:00.000Z",
+      lastProvisionError: null,
+      createdAt: "2026-04-08T09:00:00.000Z",
+      updatedAt: "2026-04-08T09:58:00.000Z",
+      lastProvisionedAt: "2026-04-08T09:10:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    });
+    ensureCatchAllMailboxForAddress.mockResolvedValue(catchAllMailbox);
+    resolveVerificationDetectionForMessage.mockResolvedValue({
+      verification: null,
+      shouldRetry: false,
+      retryAfter: null,
+    });
+
+    await storeIncomingMessage(
+      {
+        MAIL_BUCKET: {
+          put: vi.fn(async () => undefined),
+        },
+      } as never,
+      {
+        from: "sender@example.com",
+        to: "noreply@wild.mail.example.net",
+        raw: new TextEncoder().encode(
+          [
+            "From: Sender <sender@example.com>",
+            "To: noreply@wild.mail.example.net",
+            "Subject: Catch all mail",
+            "",
+            "hello",
+          ].join("\r\n"),
+        ),
+        setReject: vi.fn(),
+      } as never,
+    );
+
+    expect(resolveCatchAllDomainForAddress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        MAIL_BUCKET: expect.any(Object),
+      }),
+      "noreply@wild.mail.example.net",
+    );
+    expect(ensureCatchAllMailboxForAddress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        MAIL_BUCKET: expect.any(Object),
+      }),
+      expect.objectContaining({ id: "dom_secondary" }),
+      "noreply@wild.mail.example.net",
+    );
+    expect(insertedMessages).toHaveLength(1);
+    expect(insertedMessages[0]).toEqual(
+      expect.objectContaining({
+        mailboxId: "mbx_catch_all",
+        mailboxAddress: "noreply@wild.mail.example.net",
+      }),
+    );
+  });
+
   it("persists incoming mail before verification detection resolves", async () => {
     const insertedMessages: Array<Record<string, unknown>> = [];
     const messageUpdates: Array<Record<string, unknown>> = [];
@@ -601,6 +733,7 @@ describe("message service", () => {
       localPart: "verify",
       subdomain: "ops",
       address: "verify@ops.707979.xyz",
+      source: "registered",
       routingRuleId: null,
       status: "active",
       createdAt: "2026-04-08T10:00:00.000Z",

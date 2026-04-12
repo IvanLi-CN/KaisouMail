@@ -15,6 +15,8 @@ import {
   createDomain,
   deleteDomain,
   disableDomain,
+  disableDomainCatchAll,
+  enableDomainCatchAll,
   listDomainCatalog,
   listDomains,
   retryDomainProvision,
@@ -57,8 +59,39 @@ export const domainRoutes = new Hono<AppBindings>()
       result.created ? 201 : 200,
     );
   })
+  .post("/:id/catch-all/enable", async (c) =>
+    c.json(
+      domainSchema.parse(
+        await enableDomainCatchAll(
+          c.env,
+          parseRuntimeConfig(c.env),
+          c.req.param("id"),
+          c.get("authUser"),
+        ),
+      ),
+    ),
+  )
+  .post("/:id/catch-all/disable", async (c) =>
+    c.json(
+      domainSchema.parse(
+        await disableDomainCatchAll(
+          c.env,
+          parseRuntimeConfig(c.env),
+          c.req.param("id"),
+        ),
+      ),
+    ),
+  )
   .post("/:id/disable", async (c) =>
-    c.json(domainSchema.parse(await disableDomain(c.env, c.req.param("id")))),
+    c.json(
+      domainSchema.parse(
+        await disableDomain(
+          c.env,
+          parseRuntimeConfig(c.env),
+          c.req.param("id"),
+        ),
+      ),
+    ),
   )
   .post("/:id/retry", async (c) =>
     c.json(

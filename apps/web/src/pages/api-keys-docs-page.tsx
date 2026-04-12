@@ -443,6 +443,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "subdomain": "${subdomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
+      "source": "registered",
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
       "lastReceivedAt": null,
@@ -454,7 +455,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "列表响应包装在 `{ mailboxes: [...] }` 下。",
-            "字段集合由 `mailboxSchema` 定义，包含 `lastReceivedAt`、`expiresAt` 与 `routingRuleId`；长期邮箱的 `expiresAt` 会是 null。",
+            "字段集合由 `mailboxSchema` 定义，包含 `source`、`lastReceivedAt`、`expiresAt` 与 `routingRuleId`；Catch All 自动物化邮箱的 `source=catch_all`，长期邮箱的 `expiresAt` 会是 null。",
             "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条。",
             "服务端会把大批量 D1 `IN (...)` 查询拆成每批最多 50 条，避免 admin 工作区因为历史邮箱过多而触发参数上限。",
           ],
@@ -477,6 +478,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "subdomain": "${subdomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
+      "source": "registered",
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
   "lastReceivedAt": null,
@@ -507,6 +509,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "subdomain": "${subdomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
+      "source": "registered",
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
   "lastReceivedAt": null,
@@ -533,6 +536,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "subdomain": "${subdomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
+      "source": "registered",
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
   "lastReceivedAt": null,
@@ -581,6 +585,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "rootDomain": "${rootDomainExample}",
       "zoneId": "cf-zone-primary",
       "status": "active",
+      "catchAllEnabled": false,
       "lastProvisionError": null,
       "createdAt": "2026-04-03T12:00:00.000Z",
       "updatedAt": "2026-04-03T12:00:00.000Z",
@@ -607,6 +612,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "zoneId": "cf-zone-ops",
       "cloudflareAvailability": "available",
       "projectStatus": "not_enabled",
+      "catchAllEnabled": false,
       "lastProvisionError": null,
       "createdAt": null,
       "updatedAt": null,
@@ -619,6 +625,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "zoneId": "cf-zone-primary",
       "cloudflareAvailability": "available",
       "projectStatus": "active",
+      "catchAllEnabled": false,
       "lastProvisionError": null,
       "createdAt": "2026-04-03T12:00:00.000Z",
       "updatedAt": "2026-04-03T12:00:00.000Z",
@@ -628,7 +635,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   ]
 }`,
           notes: [
-            "`cloudflareAvailability` 表示当前 token 是否还能列出该 zone，`projectStatus` 表示项目内是否启用。",
+            "`cloudflareAvailability` 表示当前 token 是否还能列出该 zone，`projectStatus` 表示项目内是否启用，`catchAllEnabled` 表示项目是否接管该域的 Cloudflare catch-all。",
             "本地已有记录但 Cloudflare 当前不可见时，仍会回显为 `missing`，方便管理员继续停用或排查权限。",
           ],
         },
@@ -647,6 +654,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "rootDomain": "${rootDomainExample}",
   "zoneId": "cf-zone-primary",
   "status": "active",
+  "catchAllEnabled": false,
   "lastProvisionError": null,
   "createdAt": "2026-04-03T12:00:00.000Z",
   "updatedAt": "2026-04-03T12:00:00.000Z",
@@ -657,6 +665,29 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
             "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/domains/:id/catch-all/enable",
+          summary:
+            "开启域名级 Catch All，并把 Cloudflare catch-all 切到邮件 Worker。",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
+          notes: [
+            "成功后返回 `domainSchema`，并把 `catchAllEnabled` 设为 `true`。",
+            "项目会先快照 Cloudflare 原始 catch-all 规则，关闭时再恢复旧值。",
+            "这一步不需要新增 secret 名；沿用现有 runtime token 与 `EMAIL_WORKER_NAME`。",
+          ],
+        },
+        {
+          method: "POST",
+          path: "/api/domains/:id/catch-all/disable",
+          summary:
+            "关闭域名级 Catch All，并恢复开启前的 Cloudflare catch-all 配置。",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
+          notes: [
+            "成功后返回 `domainSchema`，并把 `catchAllEnabled` 设为 `false`。",
+            "若该域当前已启用 Catch All，停用域名时也会先走这一步，避免 disabled 域继续接收未注册地址邮件。",
           ],
         },
         {
@@ -898,6 +929,11 @@ const ApiKeysDocsPageView = ({
                 <code className="ml-1">Zone: Zone Settings: Edit</code>；deploy
                 token 负责 D1、Workers Scripts、Cloudflare Pages 和 Workers
                 Routes。
+              </p>
+              <p className="mt-2">
+                Catch All 的读取 / 更新也复用同一组 Email Routing Rules 权限；
+                这次能力扩展**不需要新增 Cloudflare token 权限，也不需要新增
+                secret 名**。
               </p>
               <p className="mt-2">
                 如果你只是单人快速试用，也可以只配置一把共享的{" "}

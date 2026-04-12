@@ -1,5 +1,6 @@
 export const userRoles = ["admin", "member"] as const;
 export const mailboxStatuses = ["active", "destroying", "destroyed"] as const;
+export const mailboxSources = ["registered", "catch_all"] as const;
 export const mailboxListScopes = ["default", "workspace"] as const;
 export const domainStatuses = [
   "active",

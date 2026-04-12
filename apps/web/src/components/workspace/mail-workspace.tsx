@@ -53,7 +53,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatMailboxExpiry } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { MailboxSortMode } from "@/lib/workspace";
 
@@ -69,6 +69,8 @@ const buildMailboxRowLabel = (input: {
   address: string;
   isDestroyed: boolean;
   isHighlighted: boolean;
+  source: Mailbox["source"];
+  expiresAt: string | null;
   messageCount: number;
   verificationCode: string | null;
 }) => {
@@ -80,6 +82,12 @@ const buildMailboxRowLabel = (input: {
 
   if (input.isHighlighted) {
     parts.push("新建");
+  }
+
+  if (input.source === "catch_all") {
+    parts.push("Catch All");
+  } else {
+    parts.push(formatMailboxExpiry(input.expiresAt));
   }
 
   parts.push(`${input.messageCount} 封邮件`);
@@ -653,7 +661,7 @@ export const MailWorkspace = ({
                       selectedMailboxIndex >= 0 ? selectedMailboxIndex : null
                     }
                     enabled={isDesktopThreePane}
-                    estimateSize={() => 88}
+                    estimateSize={() => 108}
                     getItemKey={(mailbox) => mailbox.id}
                     items={visibleMailboxes}
                     overscan={8}
@@ -672,9 +680,15 @@ export const MailWorkspace = ({
                         address: mailbox.address,
                         isDestroyed,
                         isHighlighted,
+                        source: mailbox.source,
+                        expiresAt: mailbox.expiresAt,
                         messageCount,
                         verificationCode,
                       });
+                      const expiryLabel =
+                        mailbox.source === "registered"
+                          ? formatMailboxExpiry(mailbox.expiresAt)
+                          : null;
 
                       const mailboxAddressCopyStateForRow =
                         getMailboxAddressCopyState(mailbox.address);
@@ -684,8 +698,8 @@ export const MailWorkspace = ({
                           className={cn(
                             "workspace-mailbox-item relative flex w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200",
                             isDestroyed
-                              ? "cursor-not-allowed items-center gap-3 border-border/80 bg-muted/5 text-muted-foreground opacity-55"
-                              : "items-center gap-2",
+                              ? "cursor-not-allowed border-border/80 bg-muted/5 text-muted-foreground opacity-55"
+                              : null,
                             !isDestroyed && isHighlighted
                               ? "text-foreground"
                               : null,
@@ -694,65 +708,30 @@ export const MailWorkspace = ({
                           data-disabled={isDestroyed ? "true" : undefined}
                           data-highlighted={isHighlighted ? "true" : undefined}
                         >
-                          {isDestroyed ? (
+                          {!isDestroyed ? (
                             <button
-                              className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                              disabled
+                              aria-label={mailboxRowLabel}
+                              className="absolute inset-0 rounded-xl focus-visible:outline-none"
                               type="button"
+                              onClick={() => onSelectMailbox(mailbox.id)}
                             >
-                              <span className="min-w-0 flex-1 truncate text-sm font-medium leading-6 text-muted-foreground">
-                                {mailbox.address}
-                              </span>
-                              <Badge className="min-w-7 shrink-0 justify-center border-border bg-muted/20 px-2 text-muted-foreground">
-                                {messageCount}
-                              </Badge>
+                              <span className="sr-only">{mailbox.address}</span>
                             </button>
-                          ) : (
-                            <>
-                              <button
-                                aria-label={mailboxRowLabel}
-                                className="absolute inset-0 rounded-xl focus-visible:outline-none"
-                                type="button"
-                                onClick={() => onSelectMailbox(mailbox.id)}
-                              >
-                                <span className="sr-only">
-                                  {mailbox.address}
-                                </span>
-                              </button>
-                              <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 items-center gap-2">
-                                <div className="min-w-0 flex flex-1 items-center gap-2">
-                                  <p
-                                    className="min-w-0 truncate text-sm font-medium text-foreground"
-                                    title={mailbox.address}
-                                  >
-                                    {mailbox.address}
-                                  </p>
-                                  {isHighlighted ? (
-                                    <Badge className="shrink-0 border-primary/40 bg-primary/20 text-primary">
-                                      新建
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                                {verificationCode ? (
-                                  <div className="pointer-events-auto">
-                                    <VerificationCopyButton
-                                      code={verificationCode}
-                                      variant="compact"
-                                    />
-                                  </div>
-                                ) : null}
-                                <Badge
+                          ) : null}
+                          <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 flex-col gap-2">
+                            <div className="flex min-w-0 items-start justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-start gap-2">
+                                <p
                                   className={cn(
-                                    "min-w-7 shrink-0 justify-center px-2",
-                                    messageCount === 0
-                                      ? "border-border bg-muted/20 text-muted-foreground"
-                                      : "border-primary/30 bg-primary/15 text-primary",
+                                    "min-w-0 truncate text-sm font-medium",
+                                    isDestroyed
+                                      ? "text-muted-foreground"
+                                      : "text-foreground",
                                   )}
+                                  title={mailbox.address}
                                 >
-                                  {messageCount}
-                                </Badge>
-                              </div>
-                              <div className="pointer-events-none relative z-10 shrink-0 pl-2">
+                                  {mailbox.address}
+                                </p>
                                 <Tooltip
                                   delayDuration={120}
                                   forceOpen={
@@ -769,7 +748,7 @@ export const MailWorkspace = ({
                                       "row",
                                     )}
                                     className={cn(
-                                      "pointer-events-auto",
+                                      "pointer-events-auto mt-0.5 shrink-0",
                                       getMailboxAddressCopyButtonClassName(
                                         mailboxAddressCopyStateForRow,
                                       ),
@@ -798,8 +777,50 @@ export const MailWorkspace = ({
                                   </button>
                                 </Tooltip>
                               </div>
-                            </>
-                          )}
+                              <div className="flex shrink-0 items-center gap-2">
+                                {isHighlighted && !isDestroyed ? (
+                                  <Badge className="border-primary/40 bg-primary/20 text-primary">
+                                    新建
+                                  </Badge>
+                                ) : null}
+                                <Badge
+                                  className={cn(
+                                    "min-w-7 shrink-0 justify-center px-2",
+                                    messageCount === 0
+                                      ? "border-border bg-muted/20 text-muted-foreground"
+                                      : "border-primary/30 bg-primary/15 text-primary",
+                                  )}
+                                >
+                                  {messageCount}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-muted-foreground">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                {mailbox.source === "catch_all" ? (
+                                  <Badge className="border-amber-500/35 bg-amber-500/12 text-amber-100">
+                                    Catch All
+                                  </Badge>
+                                ) : null}
+                                {expiryLabel && !isDestroyed ? (
+                                  <span className="truncate">
+                                    {expiryLabel}
+                                  </span>
+                                ) : null}
+                                {isDestroyed ? (
+                                  <span className="truncate">已销毁</span>
+                                ) : null}
+                              </div>
+                              {verificationCode && !isDestroyed ? (
+                                <div className="pointer-events-auto shrink-0">
+                                  <VerificationCopyButton
+                                    code={verificationCode}
+                                    variant="compact"
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                       );
                     }}

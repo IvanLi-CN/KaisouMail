@@ -75,6 +75,17 @@ export const domains = sqliteTable(
     zoneId: text("zone_id"),
     bindingSource: text("binding_source").notNull().default("catalog"),
     status: text("status").notNull(),
+    catchAllEnabled: integer("catch_all_enabled", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    catchAllOwnerUserId: text("catch_all_owner_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    catchAllRestoreStateJson: text("catch_all_restore_state_json"),
+    catchAllUpdatedAt: text("catch_all_updated_at"),
     lastProvisionError: text("last_provision_error"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
@@ -129,6 +140,7 @@ export const mailboxes = sqliteTable(
     localPart: text("local_part").notNull(),
     subdomain: text("subdomain").notNull(),
     address: text("address").notNull(),
+    source: text("source").notNull().default("registered"),
     routingRuleId: text("routing_rule_id"),
     status: text("status").notNull(),
     createdAt: text("created_at").notNull(),

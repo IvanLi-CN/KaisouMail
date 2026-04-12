@@ -52,6 +52,8 @@ Runtime code calls:
 - `POST /zones/:zone_id/email/routing/dns`
 - `POST /zones/:zone_id/email/routing/rules`
 - `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+- `GET /zones/:zone_id/email/routing/rules/catch_all`
+- `PUT /zones/:zone_id/email/routing/rules/catch_all`
 
 Required permissions:
 
@@ -63,6 +65,20 @@ Required permissions:
 
 The runtime token scope must cover every zone that KaisouMail should manage.
 In Cloudflare's custom token builder, `Zone: Zone: Edit` already covers the read/list capability needed on the `/zones` path, so you do not need to add a separate `Zone: Zone: Read` row.
+
+### Catch-all addendum
+
+- Catch-all support does **not require any new secret names**. Runtime still
+  uses `CLOUDFLARE_RUNTIME_API_TOKEN`, with `CLOUDFLARE_API_TOKEN` as the
+  shared-token fallback.
+- Cloudflare's official API docs state:
+  - `GET /zones/:zone_id/email/routing/rules/catch_all` accepts
+    `Email Routing Rules Read` or `Email Routing Rules Write`
+  - `PUT /zones/:zone_id/email/routing/rules/catch_all` requires
+    `Email Routing Rules Write`
+- KaisouMail already requires `Zone: Email Routing Rules: Edit`, so the
+  minimum runtime permission set does not grow when catch-all management is
+  enabled.
 
 ## Deploy token minimum permissions
 
@@ -118,3 +134,6 @@ This usually means the token can read the zone but cannot write the required Ema
 - [Create API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
 - [Account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)
 - [Enable Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/methods/enable/)
+- [Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/)
+- [Get catch-all rule](https://developers.cloudflare.com/api/resources/email_routing/subresources/rules/subresources/catch_alls/methods/get/)
+- [Update catch-all rule](https://developers.cloudflare.com/api/resources/email_routing/subresources/rules/subresources/catch_alls/methods/update/)

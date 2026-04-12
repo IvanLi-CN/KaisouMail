@@ -116,6 +116,7 @@ const buildDomainCatalog = (): DomainCatalogItem[] => {
         cloudflareStatus: zone?.status ?? null,
         nameServers: zone?.nameServers ?? [],
         projectStatus: local?.status ?? "not_enabled",
+        catchAllEnabled: local?.catchAllEnabled ?? false,
         lastProvisionError: local?.lastProvisionError ?? null,
         createdAt: local?.createdAt ?? null,
         updatedAt: local?.updatedAt ?? null,
@@ -255,6 +256,7 @@ export const demoApi = {
           ? null
           : new Date(Date.now() + expiresInMinutes * 60_000).toISOString(),
       destroyedAt: null,
+      source: "registered",
       routingRuleId: randomId("rule"),
     };
     state.mailboxes.unshift(mailbox);
@@ -501,6 +503,7 @@ export const demoApi = {
       zoneId,
       bindingSource: existing?.bindingSource ?? "catalog",
       status: rootDomain.includes("fail") ? "provisioning_error" : "active",
+      catchAllEnabled: existing?.catchAllEnabled ?? false,
       lastProvisionError: rootDomain.includes("fail")
         ? "Zone access denied"
         : null,
@@ -547,6 +550,7 @@ export const demoApi = {
       zoneId: existingZone?.id ?? zoneId,
       bindingSource: "project_bind",
       status: "provisioning_error",
+      catchAllEnabled: false,
       lastProvisionError:
         "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
       createdAt: existing?.createdAt ?? createdAt,
@@ -566,9 +570,27 @@ export const demoApi = {
     const domain = state.domains.find((entry) => entry.id === id);
     if (!domain) throw new Error("Mailbox domain not found");
     domain.status = "disabled";
+    domain.catchAllEnabled = false;
     domain.disabledAt = new Date().toISOString();
     domain.updatedAt = domain.disabledAt;
     syncMetaDomains();
+    return clone(domain);
+  },
+  async enableDomainCatchAll(id: string) {
+    const domain = state.domains.find((entry) => entry.id === id);
+    if (!domain) throw new Error("Mailbox domain not found");
+    if (domain.status !== "active") {
+      throw new Error("Only active mailbox domains can enable catch-all");
+    }
+    domain.catchAllEnabled = true;
+    domain.updatedAt = new Date().toISOString();
+    return clone(domain);
+  },
+  async disableDomainCatchAll(id: string) {
+    const domain = state.domains.find((entry) => entry.id === id);
+    if (!domain) throw new Error("Mailbox domain not found");
+    domain.catchAllEnabled = false;
+    domain.updatedAt = new Date().toISOString();
     return clone(domain);
   },
   async deleteDomain(id: string) {

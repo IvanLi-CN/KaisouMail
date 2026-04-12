@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-11
+Last: 2026-04-12
 
 ## Objective
 
@@ -64,15 +64,18 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against the configured control-plane origin set (`WEB_APP_ORIGIN` + `WEB_APP_ORIGINS`), derives one shared non-public RP ID from that trusted origin set, rejects raw IP-literal origins in favor of `localhost`/domain hosts, then issues the same `kaisoumail_session` cookie used by the API key exchange flow
 - `GET /api/passkeys` plus `POST /api/passkeys/registration/options|verify` and `DELETE /api/passkeys/:id` manage per-user passkeys with revocation-aware audit history
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, unlimited-TTL capability, address validation hints, and whether browser passkey auth is currently enabled
-- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, and `nameServers`
-- `GET|POST /api/domains` plus `POST /api/domains/bind` and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
+- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, `nameServers`, and `catchAllEnabled`
+- `GET|POST /api/domains` plus `POST /api/domains/bind`, `POST /api/domains/:id/catch-all/enable|disable`, and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
 - `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
+- Mailbox records now expose `source: registered | catch_all`; auto-materialized Catch All mailboxes keep `routingRuleId = null` and `expiresAt = null`
 - `GET /api/mailboxes` accepts optional `scope=workspace`; the default scope returns the caller's full mailbox history, while workspace scope keeps all `active` / `destroying` rows and only the newest 50 `destroyed` rows whose `destroyedAt` is within the last 7 days, preserving that destroyed-history slice in descending `destroyedAt` order
+- If a domain is `active` and `catchAllEnabled=true`, inbound mail for an unknown address auto-materializes a long-lived `source=catch_all` mailbox owned by the admin who enabled Catch All before the message is persisted through the normal mailbox/message pipeline
 - Destroyed mailboxes no longer reserve their address; the same address can be created again after destroy completes
 - Disabled mailbox domains are excluded from new mailbox creation but do not revoke previously created mailbox routing rules
+- Disabling a domain automatically turns off the project-managed Catch All first and restores the previous Cloudflare catch-all rule before the domain enters `disabled`
 - `POST /api/domains/:id/delete` is restricted to `bindingSource=project_bind`, deletes the Cloudflare zone first, then soft-deletes the local domain record and clears cached `subdomains` rows for that domain
 - `GET /api/messages` accepts repeated `mailbox` params, optional repeated `mailboxId` params, plus `after` / `since` ISO datetime filters and optional `scope=workspace`; when both cursor aliases are present, the later timestamp is used as the strict lower bound, and workspace scope can pin reused-address mailbox selection by `mailboxId` so the middle pane does not mix message history across visible mailbox generations
 - All D1-backed dynamic `IN (...)` lookups used by workspace mailbox hydration, message mailbox filtering, and mailbox cleanup are chunked in batches of 50 to stay below Cloudflare D1 parameter limits
@@ -122,9 +125,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox creation guidance stays mode-aware: segmented mode can still promise random active-domain allocation, while full-address mode instead explains supported-domain validation and keeps the current normalized address preview visible
 - Mailbox lifetime control now keeps the dense dialog compact: a log-scale slider covers short-lived to long-lived finite mailboxes up to one year, the current resolved TTL is shown inline at the right edge, double-click inline editing accepts common human units, and the terminal slider slot exposes explicit long-term lifetime
-- Mailbox presentation removes textual lifecycle badges; the workspace rail uses right-aligned numeric badges while mailbox tables show unread / total counts
-- Mailbox rail rows stay single-line and navigation-focused; verbose lifecycle metadata is removed from the dense workspace list
-- Destroyed mailboxes collapse to a muted single-line row in dense lists to avoid wasting vertical space
+- Mailbox presentation removes legacy status badges, but Catch All is still surfaced as an explicit operator-facing badge; the workspace rail keeps right-aligned numeric badges while mailbox tables show unread / total counts
+- Workspace mailbox rail rows use a two-line dense layout: the first line holds address + copy affordance + count, while the second line carries Catch All / expiry / destroyed metadata plus the inline verification-code action
+- Destroyed mailboxes stay in the same two-line dense rhythm as active rows instead of collapsing back to a single-line variant
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
 
@@ -132,6 +135,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 - 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.
 - 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
+- 2026-04-12: Added domain-level Catch All controls with Cloudflare catch-all snapshot/restore, auto-materialized `source=catch_all` mailboxes for unregistered addresses, refreshed the mailbox/domain/API docs surfaces, and updated the workspace/mailboxes rails to a two-line dense layout with Catch All badges.
 - 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
@@ -219,6 +223,8 @@ PR: include
 
 ![Workspace toolbar create button with the repaired focus halo](./assets/workspace-new-mailbox-button-focus-ring.png)
 
+![Workspace mailbox rail two-line rows with Catch All badges and inline verification actions](./assets/workspace-catch-all-rows.png)
+
 ### UI Primitives
 
 ![Action button intent showcase](./assets/action-button-intent-showcase.png)
@@ -241,6 +247,8 @@ PR: include
 
 ![Mailboxes page refreshing state](./assets/mailboxes-refreshing.png)
 
+![Mailboxes inventory with Catch All / pre-registered badges and friendly expiry labels](./assets/mailboxes-catch-all-badge.png)
+
 ### Domains
 
 PR: include
@@ -258,6 +266,8 @@ PR: include
 ![Domains page row that routes Zone and nameserver inspection into a details dialog](./assets/domains-ns-delegation-guide-main.png)
 
 ![Domains zone details dialog with copyable zone and nameserver values](./assets/domains-zone-details-dialog.png)
+
+![Domains catalog rows with Catch All status badges and enable/disable controls](./assets/domains-page-catch-all-toggle.png)
 
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
@@ -304,11 +314,15 @@ PR: include
 
 ![API integration mailbox and polling reference](./assets/api-keys-docs-mailboxes.png)
 
+![Control-plane API reference showing mailbox source, catch-all endpoints, and domain catalog fields](./assets/api-keys-docs-page-catch-all.png)
+
 ### Public Docs
 
 ![Public docs site homepage](./assets/docs-site-home.png)
 
 ![Cloudflare token permissions docs page](./assets/docs-site-token-permissions.png)
+
+![Public Cloudflare token guide showing catch-all endpoints and unchanged runtime token requirements](./assets/docs-site-token-permissions-catch-all.png)
 
 ![Public docs FAQ page](./assets/docs-site-faq.png)
 

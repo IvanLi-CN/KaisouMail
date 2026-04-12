@@ -16,6 +16,24 @@ interface CloudflareEnvelope<T> {
   result: T;
 }
 
+export interface CloudflareEmailRoutingMatcher {
+  field?: string;
+  type: string;
+  value?: string;
+}
+
+export interface CloudflareEmailRoutingAction {
+  type: string;
+  value: string[];
+}
+
+export interface CloudflareCatchAllRule {
+  enabled: boolean;
+  name: string;
+  matchers: CloudflareEmailRoutingMatcher[];
+  actions: CloudflareEmailRoutingAction[];
+}
+
 export interface EmailRoutingDomain {
   rootDomain: string;
   zoneId: string | null;
@@ -35,11 +53,36 @@ interface CloudflareZoneResult {
   name_servers?: string[] | null;
 }
 
+interface CloudflareCatchAllRuleResult {
+  id?: string;
+  tag?: string;
+  enabled?: boolean | null;
+  name?: string | null;
+  matchers?: CloudflareEmailRoutingMatcher[] | null;
+  actions?: CloudflareEmailRoutingAction[] | null;
+}
+
 const toZoneSummary = (zone: CloudflareZoneResult): CloudflareZoneSummary => ({
   id: zone.id,
   name: zone.name,
   status: zone.status ?? null,
   nameServers: zone.name_servers ?? [],
+});
+
+const defaultCatchAllMatcher: CloudflareEmailRoutingMatcher = {
+  type: "all",
+};
+
+const toCatchAllRule = (
+  rule: CloudflareCatchAllRuleResult | null,
+): CloudflareCatchAllRule => ({
+  enabled: rule?.enabled ?? false,
+  name: rule?.name?.trim() || "Catch all",
+  matchers:
+    rule?.matchers && rule.matchers.length > 0
+      ? rule.matchers
+      : [defaultCatchAllMatcher],
+  actions: rule?.actions ?? [],
 });
 
 const ensureManagementEnabled = (config: RuntimeConfig) => {
@@ -221,6 +264,32 @@ export const createRoutingRule = async (
     },
   );
   return result?.id ?? null;
+};
+
+export const getCatchAllRule = async (
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+) => {
+  if (!ensureManagementEnabled(config)) return null;
+  const zoneId = requireZoneId(domain);
+  const result = await cfRequest<CloudflareCatchAllRuleResult>(
+    config,
+    `/zones/${zoneId}/email/routing/rules/catch_all`,
+  );
+  return toCatchAllRule(result);
+};
+
+export const updateCatchAllRule = async (
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  rule: CloudflareCatchAllRule,
+) => {
+  if (!ensureManagementEnabled(config)) return;
+  const zoneId = requireZoneId(domain);
+  await cfRequest(config, `/zones/${zoneId}/email/routing/rules/catch_all`, {
+    method: "PUT",
+    body: JSON.stringify(rule),
+  });
 };
 
 export const deleteRoutingRule = async (

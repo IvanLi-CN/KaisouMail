@@ -24,6 +24,8 @@ const domainsHookState = {
   role: "admin" as "admin" | "member",
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
+  cloudflareCatchAllManagementEnabled: true,
+  cloudflareCatchAllEnablementEnabled: true,
 };
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -52,6 +54,10 @@ vi.mock("@/hooks/use-meta", () => ({
         domainsHookState.cloudflareDomainBindingEnabled,
       cloudflareDomainLifecycleEnabled:
         domainsHookState.cloudflareDomainLifecycleEnabled,
+      cloudflareCatchAllManagementEnabled:
+        domainsHookState.cloudflareCatchAllManagementEnabled,
+      cloudflareCatchAllEnablementEnabled:
+        domainsHookState.cloudflareCatchAllEnablementEnabled,
     },
   }),
 }));
@@ -77,6 +83,14 @@ vi.mock("@/hooks/use-domains", () => ({
   useDeleteDomainMutation: () => ({
     mutateAsync: vi.fn(),
   }),
+  useEnableDomainCatchAllMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+  useDisableDomainCatchAllMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
   useRetryDomainMutation: () => ({
     mutateAsync: vi.fn(),
   }),
@@ -90,6 +104,8 @@ afterEach(() => {
   domainsHookState.role = "admin";
   domainsHookState.cloudflareDomainBindingEnabled = true;
   domainsHookState.cloudflareDomainLifecycleEnabled = true;
+  domainsHookState.cloudflareCatchAllManagementEnabled = true;
+  domainsHookState.cloudflareCatchAllEnablementEnabled = true;
   queryClientState.setQueryData.mockReset();
 });
 
@@ -112,6 +128,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={onDelete}
           onRetry={vi.fn()}
@@ -213,6 +231,147 @@ describe("domains page view", () => {
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
   });
 
+  it("hides Catch All actions when runtime management is unavailable", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled={false}
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "开启 Catch All" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "关闭 Catch All" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText("当前运行时未启用 Catch All 管理能力。").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("keeps Catch All disable visible when worker routing config is missing", () => {
+    const scopedDomains = [
+      {
+        ...demoDomainCatalog[0],
+        rootDomain: "enabled.example.dev",
+        zoneId: "zone_enabled",
+        projectStatus: "active" as const,
+        catchAllEnabled: true,
+      },
+      {
+        ...demoDomainCatalog[1],
+        rootDomain: "disabled.example.dev",
+        zoneId: "zone_disabled",
+        projectStatus: "active" as const,
+        catchAllEnabled: false,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={scopedDomains}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled
+          isCatchAllEnablementEnabled={false}
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const enabledRow = screen.getByText("enabled.example.dev").closest("tr");
+    const disabledRow = screen.getByText("disabled.example.dev").closest("tr");
+    expect(enabledRow).not.toBeNull();
+    expect(disabledRow).not.toBeNull();
+
+    expect(
+      within(enabledRow as HTMLTableRowElement).getByRole("button", {
+        name: "关闭 Catch All",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(enabledRow as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(disabledRow as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "当前运行时缺少 EMAIL_WORKER_NAME，暂不能开启 Catch All。",
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("hides Catch All actions for active domains outside the current Cloudflare token scope", () => {
+    const scopedDomains = [
+      {
+        ...demoDomainCatalog[0],
+        rootDomain: "out-of-scope.example.dev",
+        cloudflareAvailability: "missing" as const,
+        zoneId: "zone_out_of_scope",
+        projectStatus: "active" as const,
+        catchAllEnabled: true,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={scopedDomains}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByText("out-of-scope.example.dev").closest("tr");
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(row as HTMLTableRowElement).queryByRole("button", {
+        name: "关闭 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses a gapped inline layout for Cloudflare status badges", () => {
     render(
       <MemoryRouter>
@@ -222,6 +381,8 @@ describe("domains page view", () => {
           isDomainLifecycleEnabled
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -252,6 +413,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -353,6 +516,7 @@ describe("domains page view", () => {
           rootDomain: "fallback.example.dev",
           cloudflareStatus: "pending",
           projectStatus: "provisioning_error",
+          catchAllEnabled: false,
         }),
       ]),
     );
@@ -409,6 +573,7 @@ describe("domains page view", () => {
           rootDomain: "retry.example.dev",
           cloudflareStatus: null,
           projectStatus: "provisioning_error",
+          catchAllEnabled: false,
           lastProvisionError:
             "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
         }),
@@ -443,6 +608,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -524,6 +691,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -565,6 +734,7 @@ describe("domains page view", () => {
               cloudflareStatus: "pending",
               nameServers: [],
               projectStatus: "provisioning_error",
+              catchAllEnabled: false,
               lastProvisionError:
                 "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
               createdAt: "2026-04-10T08:00:00.000Z",
@@ -578,6 +748,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -631,6 +803,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -662,6 +836,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "active",
+              catchAllEnabled: false,
               lastProvisionError: null,
               createdAt: "2026-04-10T08:00:00.000Z",
               updatedAt: "2026-04-10T08:05:00.000Z",
@@ -674,6 +849,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -718,6 +895,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -746,6 +925,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "provisioning_error",
+              catchAllEnabled: false,
               lastProvisionError:
                 "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
               createdAt: "2026-04-10T08:00:00.000Z",
@@ -759,6 +939,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -809,6 +991,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -837,6 +1021,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "active",
+              catchAllEnabled: false,
               lastProvisionError: null,
               createdAt: "2026-04-10T08:00:00.000Z",
               updatedAt: "2026-04-10T08:04:00.000Z",
@@ -849,6 +1034,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -889,6 +1076,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -924,6 +1113,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -954,6 +1145,8 @@ describe("domains page view", () => {
           onReload={vi.fn()}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -986,6 +1179,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1025,6 +1220,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1061,6 +1258,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1099,6 +1298,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1139,6 +1340,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1175,6 +1378,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1214,6 +1419,8 @@ describe("domains page view", () => {
           docsLinks={null}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1262,6 +1469,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1295,6 +1504,7 @@ describe("domains page view", () => {
         cloudflareStatus: "active",
         nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
         projectStatus: "disabled",
+        catchAllEnabled: false,
         lastProvisionError: null,
         createdAt: "2026-04-10T08:00:00.000Z",
         updatedAt: "2026-04-10T08:00:00.000Z",
@@ -1326,6 +1536,7 @@ describe("domains page view", () => {
           cloudflareStatus: "active",
           nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
           projectStatus: "disabled",
+          catchAllEnabled: false,
           lastProvisionError: null,
           createdAt: "2026-04-10T08:00:00.000Z",
           updatedAt: "2026-04-10T08:00:00.000Z",

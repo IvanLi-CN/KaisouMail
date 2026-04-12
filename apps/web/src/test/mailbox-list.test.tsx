@@ -31,12 +31,19 @@ describe("MailboxList", () => {
   });
 
   it("still disables destroy for already destroyed mailboxes", () => {
+    const destroyedMailbox = demoMailboxes.find(
+      (mailbox) => mailbox.status === "destroyed",
+    );
+    if (!destroyedMailbox) {
+      throw new Error("expected a destroyed mailbox fixture");
+    }
+
     render(
       <MemoryRouter>
         <MailboxList
-          mailboxes={[demoMailboxes[2]]}
+          mailboxes={[destroyedMailbox]}
           messageStatsByMailbox={
-            new Map([["mbx_gamma", { unread: 0, total: 0 }]])
+            new Map([[destroyedMailbox.id, { unread: 0, total: 0 }]])
           }
           onDestroy={vi.fn()}
         />

@@ -9,6 +9,7 @@ const detailMailboxState = {
   mailbox: {
     ...demoMailboxes[0],
     status: "destroying" as const,
+    source: "registered",
     routingRuleId: null,
   },
   mutate: vi.fn(),

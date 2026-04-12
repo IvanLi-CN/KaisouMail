@@ -62,6 +62,7 @@ describe("bootstrap legacy domain state", () => {
       ),
     ).toEqual({
       status: "provisioning_error",
+      catchAllEnabled: false,
       lastProvisionError:
         "Legacy mailbox domain requires CLOUDFLARE_ZONE_ID before it can be activated",
       lastProvisionedAt: null,
@@ -86,6 +87,7 @@ describe("bootstrap legacy domain state", () => {
       ),
     ).toEqual({
       status: "active",
+      catchAllEnabled: false,
       lastProvisionError: null,
       lastProvisionedAt: timestamp,
     });
@@ -101,6 +103,7 @@ describe("bootstrap legacy domain state", () => {
         zoneId: "zone_existing",
         bindingSource: "project_bind",
         status: "disabled",
+        catchAllEnabled: false,
         lastProvisionError: null,
         createdAt: "2026-04-01T00:00:00.000Z",
         updatedAt: "2026-04-01T00:00:00.000Z",

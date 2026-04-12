@@ -86,6 +86,8 @@ describe("meta and auth routes", () => {
       domains: string[];
       cloudflareDomainBindingEnabled: boolean;
       cloudflareDomainLifecycleEnabled: boolean;
+      cloudflareCatchAllManagementEnabled: boolean;
+      cloudflareCatchAllEnablementEnabled: boolean;
       passkeyAuthEnabled: boolean;
       passkeyTrustedOrigins: string[];
       supportsUnlimitedMailboxTtl: boolean;
@@ -99,6 +101,8 @@ describe("meta and auth routes", () => {
     expect(payload.domains).toContain("707979.xyz");
     expect(payload.cloudflareDomainBindingEnabled).toBe(false);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
+    expect(payload.cloudflareCatchAllManagementEnabled).toBe(false);
+    expect(payload.cloudflareCatchAllEnablementEnabled).toBe(false);
     expect(payload.passkeyAuthEnabled).toBe(false);
     expect(payload.passkeyTrustedOrigins).toEqual([]);
     expect(payload.supportsUnlimitedMailboxTtl).toBe(true);
@@ -138,11 +142,15 @@ describe("meta and auth routes", () => {
     const payload = (await response.json()) as {
       cloudflareDomainBindingEnabled: boolean;
       cloudflareDomainLifecycleEnabled: boolean;
+      cloudflareCatchAllManagementEnabled: boolean;
+      cloudflareCatchAllEnablementEnabled: boolean;
     };
 
     expect(response.status).toBe(200);
     expect(payload.cloudflareDomainBindingEnabled).toBe(false);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(false);
+    expect(payload.cloudflareCatchAllManagementEnabled).toBe(false);
+    expect(payload.cloudflareCatchAllEnablementEnabled).toBe(false);
   });
 
   it("keeps direct domain binding disabled when the runtime account id is missing", async () => {
@@ -155,11 +163,15 @@ describe("meta and auth routes", () => {
     const payload = (await response.json()) as {
       cloudflareDomainBindingEnabled: boolean;
       cloudflareDomainLifecycleEnabled: boolean;
+      cloudflareCatchAllManagementEnabled: boolean;
+      cloudflareCatchAllEnablementEnabled: boolean;
     };
 
     expect(response.status).toBe(200);
     expect(payload.cloudflareDomainBindingEnabled).toBe(false);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(true);
+    expect(payload.cloudflareCatchAllManagementEnabled).toBe(true);
+    expect(payload.cloudflareCatchAllEnablementEnabled).toBe(false);
   });
 
   it("enables direct domain binding when both the runtime token and account id are configured", async () => {
@@ -173,11 +185,33 @@ describe("meta and auth routes", () => {
     const payload = (await response.json()) as {
       cloudflareDomainBindingEnabled: boolean;
       cloudflareDomainLifecycleEnabled: boolean;
+      cloudflareCatchAllManagementEnabled: boolean;
+      cloudflareCatchAllEnablementEnabled: boolean;
     };
 
     expect(response.status).toBe(200);
     expect(payload.cloudflareDomainBindingEnabled).toBe(true);
     expect(payload.cloudflareDomainLifecycleEnabled).toBe(true);
+    expect(payload.cloudflareCatchAllManagementEnabled).toBe(true);
+    expect(payload.cloudflareCatchAllEnablementEnabled).toBe(false);
+  });
+
+  it("enables catch-all creation only when EMAIL_WORKER_NAME is configured", async () => {
+    const app = createApp();
+    const response = await app.fetch(new Request("http://localhost/api/meta"), {
+      ...env,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: "true",
+      CLOUDFLARE_API_TOKEN: "runtime_token",
+      EMAIL_WORKER_NAME: "email-receiver-worker",
+    } as never);
+    const payload = (await response.json()) as {
+      cloudflareCatchAllManagementEnabled: boolean;
+      cloudflareCatchAllEnablementEnabled: boolean;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.cloudflareCatchAllManagementEnabled).toBe(true);
+    expect(payload.cloudflareCatchAllEnablementEnabled).toBe(true);
   });
 
   it("returns the unified auth failure envelope for invalid api keys", async () => {

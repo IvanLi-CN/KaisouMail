@@ -4,9 +4,11 @@ import {
   CloudOff,
   Copy,
   ExternalLink,
+  MailMinus,
+  MailPlus,
   PanelRightOpen,
+  PowerOff,
   RefreshCcw,
-  ShieldBan,
   Trash2,
 } from "lucide-react";
 import type { FocusEvent, MouseEvent } from "react";
@@ -102,10 +104,15 @@ const cloudflareStatusTone = (status: string | null) => {
 export const DomainTable = ({
   domains,
   onEnable,
+  onEnableCatchAll,
+  onDisableCatchAll,
   onDisable,
   onDelete,
   onRetry,
   docsLinks = null,
+  isCatchAllPending = false,
+  isCatchAllManagementEnabled = true,
+  isCatchAllEnablementEnabled = true,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
 }: {
@@ -114,10 +121,15 @@ export const DomainTable = ({
     rootDomain: string;
     zoneId: string;
   }) => Promise<void> | void;
+  onEnableCatchAll: (domainId: string) => Promise<void> | void;
+  onDisableCatchAll: (domainId: string) => Promise<void> | void;
   onDisable: (domainId: string) => Promise<void> | void;
   onDelete: (domainId: string) => Promise<void> | void;
   onRetry: (domainId: string) => Promise<void> | void;
   docsLinks?: PublicDocsLinks | null;
+  isCatchAllPending?: boolean;
+  isCatchAllManagementEnabled?: boolean;
+  isCatchAllEnablementEnabled?: boolean;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
 }) => {
@@ -240,6 +252,7 @@ export const DomainTable = ({
                 <TableHeaderCell>来源</TableHeaderCell>
                 <TableHeaderCell>Cloudflare</TableHeaderCell>
                 <TableHeaderCell>项目状态</TableHeaderCell>
+                <TableHeaderCell>Catch All</TableHeaderCell>
                 <TableHeaderCell>最近接入</TableHeaderCell>
                 <TableHeaderCell>错误</TableHeaderCell>
                 <TableHeaderCell className="text-right">操作</TableHeaderCell>
@@ -256,6 +269,21 @@ export const DomainTable = ({
                   domain.projectStatus === "provisioning_error" && domain.id;
                 const canDisable =
                   domain.projectStatus === "active" && domain.id;
+                const canDisableCatchAll =
+                  isCatchAllManagementEnabled &&
+                  domain.catchAllEnabled &&
+                  domain.cloudflareAvailability === "available" &&
+                  Boolean(domain.zoneId) &&
+                  domain.projectStatus === "active" &&
+                  domain.id;
+                const canEnableCatchAll =
+                  isCatchAllManagementEnabled &&
+                  isCatchAllEnablementEnabled &&
+                  !domain.catchAllEnabled &&
+                  domain.cloudflareAvailability === "available" &&
+                  Boolean(domain.zoneId) &&
+                  domain.projectStatus === "active" &&
+                  domain.id;
                 const canDelete =
                   isDomainLifecycleEnabled &&
                   domain.bindingSource === "project_bind" &&
@@ -332,6 +360,31 @@ export const DomainTable = ({
                       >
                         {domain.projectStatus}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-2">
+                        <Badge
+                          className={cn(
+                            "border",
+                            domain.catchAllEnabled
+                              ? "border-amber-500/35 bg-amber-500/12 text-amber-100"
+                              : "border-border bg-muted/20 text-muted-foreground",
+                          )}
+                        >
+                          {domain.catchAllEnabled ? "enabled" : "disabled"}
+                        </Badge>
+                        <p className="max-w-[14rem] text-xs leading-5 text-muted-foreground">
+                          {domain.projectStatus === "active"
+                            ? !isCatchAllManagementEnabled
+                              ? "当前运行时未启用 Catch All 管理能力。"
+                              : domain.catchAllEnabled
+                                ? "关闭时会恢复开启前的 Cloudflare catch-all 配置。"
+                                : !isCatchAllEnablementEnabled
+                                  ? "当前运行时缺少 EMAIL_WORKER_NAME，暂不能开启 Catch All。"
+                                  : "开启后，未预注册地址会自动进入项目 Worker。"
+                            : "仅 active 项目域可切换 Catch All。"}
+                        </p>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {formatDateTime(domain.lastProvisionedAt)}
@@ -421,10 +474,32 @@ export const DomainTable = ({
                             onClick={() => onRetry(domainId)}
                           />
                         ) : null}
+                        {canEnableCatchAll ? (
+                          <ActionButton
+                            density="dense"
+                            icon={MailPlus}
+                            label="开启 Catch All"
+                            size="sm"
+                            variant="outline"
+                            disabled={isCatchAllPending}
+                            onClick={() => onEnableCatchAll(domainId)}
+                          />
+                        ) : null}
+                        {canDisableCatchAll ? (
+                          <ActionButton
+                            density="dense"
+                            icon={MailMinus}
+                            label="关闭 Catch All"
+                            size="sm"
+                            variant="outline"
+                            disabled={isCatchAllPending}
+                            onClick={() => onDisableCatchAll(domainId)}
+                          />
+                        ) : null}
                         {canDisable ? (
                           <ActionButton
                             density="dense"
-                            icon={ShieldBan}
+                            icon={PowerOff}
                             label="停用域名"
                             size="sm"
                             variant="destructive"

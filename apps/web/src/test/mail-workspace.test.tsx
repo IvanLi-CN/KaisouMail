@@ -582,7 +582,7 @@ describe("MailWorkspace", () => {
     expect(messageVirtualizedList).toHaveClass("relative", "w-full");
     expect(mailboxVirtualizedList).toHaveAttribute(
       "style",
-      expect.stringContaining("height: 12320px;"),
+      expect.stringContaining("height: 15120px;"),
     );
     expect(messageVirtualizedList).toHaveAttribute(
       "style",

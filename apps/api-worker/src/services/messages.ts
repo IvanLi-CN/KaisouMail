@@ -24,7 +24,11 @@ import {
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
-import { listScopedMailboxRowsForUser } from "./mailboxes";
+import { resolveCatchAllDomainForAddress } from "./domains";
+import {
+  ensureCatchAllMailboxForAddress,
+  listScopedMailboxRowsForUser,
+} from "./mailboxes";
 import {
   createRetryableVerificationFallback,
   resolveNextVerificationRetryAtIso,
@@ -322,13 +326,32 @@ export const storeIncomingMessage = async (
   forwardable: ForwardableEmailMessage,
 ) => {
   const db = getDb(env);
+  const normalizedEnvelopeTo = normalizeMailboxAddress(forwardable.to);
   const mailboxRows = await db
     .select()
     .from(mailboxes)
-    .where(eq(mailboxes.address, forwardable.to))
+    .where(
+      and(
+        eq(mailboxes.address, normalizedEnvelopeTo),
+        eq(mailboxes.status, "active"),
+      ),
+    )
     .limit(1);
-  const mailbox = mailboxRows[0];
-  if (!mailbox || mailbox.status !== "active") {
+  let mailbox: typeof mailboxes.$inferSelect | null = mailboxRows[0] ?? null;
+  if (!mailbox) {
+    const catchAllDomain = await resolveCatchAllDomainForAddress(
+      env,
+      normalizedEnvelopeTo,
+    );
+    mailbox = catchAllDomain
+      ? await ensureCatchAllMailboxForAddress(
+          env,
+          catchAllDomain,
+          normalizedEnvelopeTo,
+        )
+      : null;
+  }
+  if (!mailbox) {
     forwardable.setReject("Mailbox unavailable");
     return;
   }
