@@ -960,7 +960,7 @@ describe("domain catalog", () => {
     expect(updateCatchAllRule).not.toHaveBeenCalled();
   });
 
-  it("still disables the local domain when catch-all was enabled earlier but management is now off", async () => {
+  it("blocks domain disable when catch-all is enabled but management is now off", async () => {
     const catchAllDomain = {
       ...baseDomain,
       catchAllEnabled: true,
@@ -977,19 +977,21 @@ describe("domain catalog", () => {
     });
     getDb.mockReturnValue(db);
 
-    const result = await disableDomain(
-      env,
-      {
-        ...runtimeConfig,
-        EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
-      },
-      catchAllDomain.id,
-    );
+    await expect(
+      disableDomain(
+        env,
+        {
+          ...runtimeConfig,
+          EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+        },
+        catchAllDomain.id,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message:
+        "Catch-all disable requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true",
+    });
 
     expect(updateCatchAllRule).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      id: catchAllDomain.id,
-      status: "disabled",
-    });
   });
 });

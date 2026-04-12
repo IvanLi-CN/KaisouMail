@@ -112,6 +112,7 @@ export const DomainTable = ({
   docsLinks = null,
   isCatchAllPending = false,
   isCatchAllManagementEnabled = true,
+  isCatchAllEnablementEnabled = true,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
 }: {
@@ -128,6 +129,7 @@ export const DomainTable = ({
   docsLinks?: PublicDocsLinks | null;
   isCatchAllPending?: boolean;
   isCatchAllManagementEnabled?: boolean;
+  isCatchAllEnablementEnabled?: boolean;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
 }) => {
@@ -267,8 +269,17 @@ export const DomainTable = ({
                   domain.projectStatus === "provisioning_error" && domain.id;
                 const canDisable =
                   domain.projectStatus === "active" && domain.id;
-                const canToggleCatchAll =
+                const canDisableCatchAll =
                   isCatchAllManagementEnabled &&
+                  domain.catchAllEnabled &&
+                  domain.cloudflareAvailability === "available" &&
+                  Boolean(domain.zoneId) &&
+                  domain.projectStatus === "active" &&
+                  domain.id;
+                const canEnableCatchAll =
+                  isCatchAllManagementEnabled &&
+                  isCatchAllEnablementEnabled &&
+                  !domain.catchAllEnabled &&
                   domain.cloudflareAvailability === "available" &&
                   Boolean(domain.zoneId) &&
                   domain.projectStatus === "active" &&
@@ -368,7 +379,9 @@ export const DomainTable = ({
                               ? "当前运行时未启用 Catch All 管理能力。"
                               : domain.catchAllEnabled
                                 ? "关闭时会恢复开启前的 Cloudflare catch-all 配置。"
-                                : "开启后，未预注册地址会自动进入项目 Worker。"
+                                : !isCatchAllEnablementEnabled
+                                  ? "当前运行时缺少 EMAIL_WORKER_NAME，暂不能开启 Catch All。"
+                                  : "开启后，未预注册地址会自动进入项目 Worker。"
                             : "仅 active 项目域可切换 Catch All。"}
                         </p>
                       </div>
@@ -461,28 +474,27 @@ export const DomainTable = ({
                             onClick={() => onRetry(domainId)}
                           />
                         ) : null}
-                        {canToggleCatchAll ? (
-                          domain.catchAllEnabled ? (
-                            <ActionButton
-                              density="dense"
-                              icon={MailMinus}
-                              label="关闭 Catch All"
-                              size="sm"
-                              variant="outline"
-                              disabled={isCatchAllPending}
-                              onClick={() => onDisableCatchAll(domainId)}
-                            />
-                          ) : (
-                            <ActionButton
-                              density="dense"
-                              icon={MailPlus}
-                              label="开启 Catch All"
-                              size="sm"
-                              variant="outline"
-                              disabled={isCatchAllPending}
-                              onClick={() => onEnableCatchAll(domainId)}
-                            />
-                          )
+                        {canEnableCatchAll ? (
+                          <ActionButton
+                            density="dense"
+                            icon={MailPlus}
+                            label="开启 Catch All"
+                            size="sm"
+                            variant="outline"
+                            disabled={isCatchAllPending}
+                            onClick={() => onEnableCatchAll(domainId)}
+                          />
+                        ) : null}
+                        {canDisableCatchAll ? (
+                          <ActionButton
+                            density="dense"
+                            icon={MailMinus}
+                            label="关闭 Catch All"
+                            size="sm"
+                            variant="outline"
+                            disabled={isCatchAllPending}
+                            onClick={() => onDisableCatchAll(domainId)}
+                          />
                         ) : null}
                         {canDisable ? (
                           <ActionButton

@@ -25,6 +25,7 @@ const domainsHookState = {
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
   cloudflareCatchAllManagementEnabled: true,
+  cloudflareCatchAllEnablementEnabled: true,
 };
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -55,6 +56,8 @@ vi.mock("@/hooks/use-meta", () => ({
         domainsHookState.cloudflareDomainLifecycleEnabled,
       cloudflareCatchAllManagementEnabled:
         domainsHookState.cloudflareCatchAllManagementEnabled,
+      cloudflareCatchAllEnablementEnabled:
+        domainsHookState.cloudflareCatchAllEnablementEnabled,
     },
   }),
 }));
@@ -102,6 +105,7 @@ afterEach(() => {
   domainsHookState.cloudflareDomainBindingEnabled = true;
   domainsHookState.cloudflareDomainLifecycleEnabled = true;
   domainsHookState.cloudflareCatchAllManagementEnabled = true;
+  domainsHookState.cloudflareCatchAllEnablementEnabled = true;
   queryClientState.setQueryData.mockReset();
 });
 
@@ -255,6 +259,71 @@ describe("domains page view", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getAllByText("当前运行时未启用 Catch All 管理能力。").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("keeps Catch All disable visible when worker routing config is missing", () => {
+    const scopedDomains = [
+      {
+        ...demoDomainCatalog[0],
+        rootDomain: "enabled.example.dev",
+        zoneId: "zone_enabled",
+        projectStatus: "active" as const,
+        catchAllEnabled: true,
+      },
+      {
+        ...demoDomainCatalog[1],
+        rootDomain: "disabled.example.dev",
+        zoneId: "zone_disabled",
+        projectStatus: "active" as const,
+        catchAllEnabled: false,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={scopedDomains}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled
+          isCatchAllEnablementEnabled={false}
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const enabledRow = screen.getByText("enabled.example.dev").closest("tr");
+    const disabledRow = screen.getByText("disabled.example.dev").closest("tr");
+    expect(enabledRow).not.toBeNull();
+    expect(disabledRow).not.toBeNull();
+
+    expect(
+      within(enabledRow as HTMLTableRowElement).getByRole("button", {
+        name: "关闭 Catch All",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(enabledRow as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(disabledRow as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "当前运行时缺少 EMAIL_WORKER_NAME，暂不能开启 Catch All。",
+      ).length,
     ).toBeGreaterThan(0);
   });
 

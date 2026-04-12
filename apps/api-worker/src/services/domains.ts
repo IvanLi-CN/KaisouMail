@@ -977,7 +977,8 @@ export const disableDomain = async (
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
   if (existing.status === "disabled") return toDomainDto(existing);
 
-  if (existing.catchAllEnabled && config.EMAIL_ROUTING_MANAGEMENT_ENABLED) {
+  if (existing.catchAllEnabled) {
+    requireCatchAllManagementEnabled(config, "disable");
     await disableDomainCatchAll(env, config, existing.id);
   }
 
