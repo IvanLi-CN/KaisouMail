@@ -154,6 +154,7 @@ const createWorkspaceScopeMailboxes = () => {
     lastReceivedAt: "2026-04-08T11:58:00.000Z",
     expiresAt: "2026-04-08T13:00:00.000Z",
     destroyedAt: null,
+    source: "registered",
     routingRuleId: "rule_scope_active",
   };
   const destroyingMailbox: Mailbox = {
@@ -168,22 +169,27 @@ const createWorkspaceScopeMailboxes = () => {
     lastReceivedAt: null,
     expiresAt: "2026-04-08T12:30:00.000Z",
     destroyedAt: null,
+    source: "registered",
     routingRuleId: "rule_scope_destroying",
   };
-  const recentDestroyedMailboxes = Array.from({ length: 55 }, (_, index) => ({
-    ...demoMailboxes[2],
-    id: `mbx_scope_destroyed_${index.toString().padStart(3, "0")}`,
-    address: `destroyed-${index.toString().padStart(3, "0")}@archive.mail.example.net`,
-    localPart: `destroyed-${index.toString().padStart(3, "0")}`,
-    subdomain: "archive",
-    rootDomain: "mail.example.net",
-    status: "destroyed" as const,
-    createdAt: `2026-04-08T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
-    lastReceivedAt: null,
-    expiresAt: "2026-04-08T11:00:00.000Z",
-    destroyedAt: `2026-04-08T11:${index.toString().padStart(2, "0")}:00.000Z`,
-    routingRuleId: null,
-  }));
+  const recentDestroyedMailboxes: Mailbox[] = Array.from(
+    { length: 55 },
+    (_, index) => ({
+      ...demoMailboxes[2],
+      id: `mbx_scope_destroyed_${index.toString().padStart(3, "0")}`,
+      address: `destroyed-${index.toString().padStart(3, "0")}@archive.mail.example.net`,
+      localPart: `destroyed-${index.toString().padStart(3, "0")}`,
+      subdomain: "archive",
+      rootDomain: "mail.example.net",
+      status: "destroyed" as const,
+      createdAt: `2026-04-08T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+      lastReceivedAt: null,
+      expiresAt: "2026-04-08T11:00:00.000Z",
+      destroyedAt: `2026-04-08T11:${index.toString().padStart(2, "0")}:00.000Z`,
+      source: "registered" as const,
+      routingRuleId: null,
+    }),
+  );
   const staleDestroyedMailbox: Mailbox = {
     ...demoMailboxes[2],
     id: "mbx_scope_destroyed_stale",
@@ -196,6 +202,7 @@ const createWorkspaceScopeMailboxes = () => {
     lastReceivedAt: null,
     expiresAt: "2026-03-25T11:00:00.000Z",
     destroyedAt: "2026-03-31T11:00:00.000Z",
+    source: "registered",
     routingRuleId: null,
   };
   const missingDestroyedAtMailbox: Mailbox = {
@@ -210,6 +217,7 @@ const createWorkspaceScopeMailboxes = () => {
     lastReceivedAt: null,
     expiresAt: "2026-04-08T11:10:00.000Z",
     destroyedAt: null,
+    source: "registered",
     routingRuleId: null,
   };
 
@@ -532,6 +540,7 @@ const WorkspaceStoryHarness = ({
             subdomain,
             rootDomain,
             address: `${localPart}@${subdomain}.${rootDomain}`,
+            source: "registered",
             status: "active",
             createdAt: "2026-04-05T08:16:00.000Z",
             lastReceivedAt: null,
@@ -902,6 +911,28 @@ export const DesktopMailboxListCopyButton: Story = {
     await expect(writeText).toHaveBeenCalledWith(
       "build@alpha.relay.example.test",
     );
+  },
+};
+
+export const CatchAllRows: Story = {
+  globals: projectViewportGlobals.desktop,
+  play: async ({ canvasElement }) => {
+    const catchAllRow = getMailboxRowByAddress(
+      canvasElement,
+      /noreply@wild\.mail\.example\.net/i,
+    );
+
+    await expect(
+      within(catchAllRow).getByText("Catch All"),
+    ).toBeInTheDocument();
+    await expect(
+      within(catchAllRow).getByRole("button", {
+        name: "复制验证码 551244",
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      within(catchAllRow).getByRole("button", { name: "复制邮箱地址" }),
+    ).toBeInTheDocument();
   },
 };
 

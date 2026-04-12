@@ -16,6 +16,9 @@ API Worker 运行时必须启用：
 
 如果这些运行时变量不完整，项目虽然可能还能启动，但 `/domains` 不会具备完整的 Cloudflare 域名管理能力。
 
+这套运行时变量同时覆盖域名级 Catch All 开关；开启 Catch All 不需要再新增
+额外 secret。
+
 ### 2. 配好 Cloudflare token
 
 建议直接按 [Cloudflare Token 权限](/zh/cloudflare-token-permissions) 的 runtime token 最小权限配置。
@@ -69,6 +72,8 @@ API Worker 运行时必须启用：
 - `GET /api/meta`：只会返回当前 `active` 域名，不会返回还没启用的 Cloudflare catalog 项
 
 你也可以在 Web 控制台的新建邮箱表单里直接选中这个域名；只要它仍是 `active`，后续新邮箱就可以继续落到这个根域名下。
+
+如果管理员又在 `/domains` 里打开了 Catch All，那么这个域上的未预注册地址也会开始收信，并在项目里显示为 `Catch All` 长期邮箱。
 
 ## 问题排查 {#troubleshooting}
 

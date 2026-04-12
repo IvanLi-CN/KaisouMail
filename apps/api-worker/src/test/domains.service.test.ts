@@ -9,13 +9,17 @@ const {
   createZone,
   deleteZone,
   enableDomainRouting,
+  getCatchAllRule,
   listZones,
+  updateCatchAllRule,
   validateZoneAccess,
 } = vi.hoisted(() => ({
   createZone: vi.fn(),
   deleteZone: vi.fn(),
   enableDomainRouting: vi.fn(),
+  getCatchAllRule: vi.fn(),
   listZones: vi.fn(),
+  updateCatchAllRule: vi.fn(),
   validateZoneAccess: vi.fn(),
 }));
 
@@ -32,7 +36,9 @@ vi.mock("../services/emailRouting", async () => {
     createZone,
     deleteZone,
     enableDomainRouting,
+    getCatchAllRule,
     listZones,
+    updateCatchAllRule,
     validateZoneAccess,
   };
 });
@@ -43,6 +49,8 @@ import {
   classifyDomainCreateState,
   createDomain,
   deleteDomain,
+  disableDomainCatchAll,
+  enableDomainCatchAll,
   listDomainCatalog,
 } from "../services/domains";
 
@@ -52,6 +60,10 @@ const baseDomain = {
   zoneId: "zone_primary",
   bindingSource: "catalog",
   status: "active",
+  catchAllEnabled: false,
+  catchAllOwnerUserId: null,
+  catchAllRestoreStateJson: null,
+  catchAllUpdatedAt: null,
   lastProvisionError: null,
   createdAt: "2026-04-03T12:00:00.000Z",
   updatedAt: "2026-04-03T12:00:00.000Z",
@@ -165,6 +177,7 @@ describe("domain create state", () => {
     const result = classifyDomainCreateState({
       ...baseDomain,
       status: "provisioning_error",
+      catchAllEnabled: false,
       lastProvisionError: "Zone access denied",
       lastProvisionedAt: null,
     });
@@ -550,6 +563,7 @@ describe("domain catalog", () => {
       rootDomain: "bound.example.org",
       zoneId: "zone_bound",
       status: "provisioning_error",
+      catchAllEnabled: false,
       lastProvisionError: "Zone is pending activation",
     });
     expect(deleteZone).not.toHaveBeenCalled();
@@ -782,6 +796,82 @@ describe("domain catalog", () => {
     ).rejects.toMatchObject({
       status: 409,
       message: "Mailbox domain still has non-destroyed mailboxes",
+    });
+  });
+
+  it("enables catch-all by snapshotting the current Cloudflare rule", async () => {
+    const db = createDb({
+      domainRows: [baseDomain],
+    });
+    getDb.mockReturnValue(db);
+    getCatchAllRule.mockResolvedValue({
+      enabled: false,
+      name: "Catch all",
+      matchers: [{ type: "all" }],
+      actions: [{ type: "forward", value: ["owner@example.com"] }],
+    });
+    updateCatchAllRule.mockResolvedValue(undefined);
+
+    const result = await enableDomainCatchAll(
+      env,
+      runtimeConfig,
+      baseDomain.id,
+      { id: "usr_admin" },
+    );
+
+    expect(getCatchAllRule).toHaveBeenCalledWith(runtimeConfig, baseDomain);
+    expect(updateCatchAllRule).toHaveBeenCalledWith(
+      runtimeConfig,
+      baseDomain,
+      expect.objectContaining({
+        enabled: true,
+        actions: [{ type: "worker", value: [runtimeConfig.EMAIL_WORKER_NAME] }],
+      }),
+    );
+    expect(result).toMatchObject({
+      id: baseDomain.id,
+      catchAllEnabled: true,
+    });
+  });
+
+  it("disables catch-all by restoring the saved Cloudflare rule snapshot", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+      catchAllUpdatedAt: "2026-04-03T12:30:00.000Z",
+    };
+    const db = createDb({
+      domainRows: [catchAllDomain],
+    });
+    getDb.mockReturnValue(db);
+    updateCatchAllRule.mockResolvedValue(undefined);
+
+    const result = await disableDomainCatchAll(
+      env,
+      runtimeConfig,
+      catchAllDomain.id,
+    );
+
+    expect(updateCatchAllRule).toHaveBeenCalledWith(
+      runtimeConfig,
+      catchAllDomain,
+      {
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      },
+    );
+    expect(result).toMatchObject({
+      id: catchAllDomain.id,
+      catchAllEnabled: false,
     });
   });
 });

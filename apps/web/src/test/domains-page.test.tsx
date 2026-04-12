@@ -77,6 +77,14 @@ vi.mock("@/hooks/use-domains", () => ({
   useDeleteDomainMutation: () => ({
     mutateAsync: vi.fn(),
   }),
+  useEnableDomainCatchAllMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
+  useDisableDomainCatchAllMutation: () => ({
+    isPending: false,
+    mutateAsync: vi.fn(),
+  }),
   useRetryDomainMutation: () => ({
     mutateAsync: vi.fn(),
   }),
@@ -112,6 +120,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={onDelete}
           onRetry={vi.fn()}
@@ -222,6 +232,8 @@ describe("domains page view", () => {
           isDomainLifecycleEnabled
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -252,6 +264,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -353,6 +367,7 @@ describe("domains page view", () => {
           rootDomain: "fallback.example.dev",
           cloudflareStatus: "pending",
           projectStatus: "provisioning_error",
+          catchAllEnabled: false,
         }),
       ]),
     );
@@ -409,6 +424,7 @@ describe("domains page view", () => {
           rootDomain: "retry.example.dev",
           cloudflareStatus: null,
           projectStatus: "provisioning_error",
+          catchAllEnabled: false,
           lastProvisionError:
             "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
         }),
@@ -443,6 +459,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -524,6 +542,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -565,6 +585,7 @@ describe("domains page view", () => {
               cloudflareStatus: "pending",
               nameServers: [],
               projectStatus: "provisioning_error",
+              catchAllEnabled: false,
               lastProvisionError:
                 "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
               createdAt: "2026-04-10T08:00:00.000Z",
@@ -578,6 +599,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -631,6 +654,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -662,6 +687,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "active",
+              catchAllEnabled: false,
               lastProvisionError: null,
               createdAt: "2026-04-10T08:00:00.000Z",
               updatedAt: "2026-04-10T08:05:00.000Z",
@@ -674,6 +700,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -718,6 +746,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -746,6 +776,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "provisioning_error",
+              catchAllEnabled: false,
               lastProvisionError:
                 "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
               createdAt: "2026-04-10T08:00:00.000Z",
@@ -759,6 +790,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -809,6 +842,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -837,6 +872,7 @@ describe("domains page view", () => {
               cloudflareStatus: "active",
               nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
               projectStatus: "active",
+              catchAllEnabled: false,
               lastProvisionError: null,
               createdAt: "2026-04-10T08:00:00.000Z",
               updatedAt: "2026-04-10T08:04:00.000Z",
@@ -849,6 +885,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -889,6 +927,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -924,6 +964,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -954,6 +996,8 @@ describe("domains page view", () => {
           onReload={vi.fn()}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -986,6 +1030,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1025,6 +1071,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1061,6 +1109,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1099,6 +1149,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1139,6 +1191,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1175,6 +1229,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1214,6 +1270,8 @@ describe("domains page view", () => {
           docsLinks={null}
           onBind={onBind}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1262,6 +1320,8 @@ describe("domains page view", () => {
           docsLinks={docsLinks}
           onBind={vi.fn()}
           onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
           onDisable={vi.fn()}
           onDelete={vi.fn()}
           onRetry={vi.fn()}
@@ -1295,6 +1355,7 @@ describe("domains page view", () => {
         cloudflareStatus: "active",
         nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
         projectStatus: "disabled",
+        catchAllEnabled: false,
         lastProvisionError: null,
         createdAt: "2026-04-10T08:00:00.000Z",
         updatedAt: "2026-04-10T08:00:00.000Z",
@@ -1326,6 +1387,7 @@ describe("domains page view", () => {
           cloudflareStatus: "active",
           nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
           projectStatus: "disabled",
+          catchAllEnabled: false,
           lastProvisionError: null,
           createdAt: "2026-04-10T08:00:00.000Z",
           updatedAt: "2026-04-10T08:00:00.000Z",

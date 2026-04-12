@@ -13,6 +13,7 @@ const meta = {
     messageStatsByMailbox: new Map([
       ["mbx_alpha", { unread: 1, total: 1 }],
       ["mbx_beta", { unread: 1, total: 1 }],
+      ["mbx_catch_all", { unread: 1, total: 1 }],
       ["mbx_gamma", { unread: 0, total: 0 }],
     ]),
     onDestroy: fn(),
@@ -39,5 +40,20 @@ export const IncludesDestroyed: Story = {
     await expect(
       canvas.queryByText(/active|destroyed/i),
     ).not.toBeInTheDocument();
+  },
+};
+
+export const CatchAllBadge: Story = {
+  args: {
+    mailboxes: demoMailboxes.filter(
+      (mailbox) => mailbox.id === "mbx_catch_all" || mailbox.id === "mbx_alpha",
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("Catch All")).toBeInTheDocument();
+    await expect(canvas.getByText("预注册")).toBeInTheDocument();
+    await expect(canvas.getByText("长期")).toBeInTheDocument();
   },
 };

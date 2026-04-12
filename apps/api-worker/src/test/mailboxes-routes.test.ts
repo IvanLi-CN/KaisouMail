@@ -64,6 +64,7 @@ const activeMailbox = mailboxSchema.parse({
   lastReceivedAt: null,
   expiresAt: "2026-04-03T13:00:00.000Z",
   destroyedAt: null,
+  source: "registered",
   routingRuleId: "rule_alpha",
 });
 

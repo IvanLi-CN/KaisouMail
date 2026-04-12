@@ -16,6 +16,9 @@ The API Worker runtime must have:
 
 If these runtime variables are incomplete, the app may still boot, but `/domains` will not have the full Cloudflare domain-management capability.
 
+The same runtime variables are reused by the domain-level Catch All toggle, so
+enabling Catch All does not require any extra secrets.
+
 ### 2. Configure the Cloudflare token
 
 Use the runtime token minimum described in [Cloudflare Token Permissions](/cloudflare-token-permissions).
@@ -69,6 +72,10 @@ Once the domain is `active`, KaisouMail uses it in these places:
 - `GET /api/meta`: only returns `active` domains, not the full Cloudflare catalog
 
 The Web control plane mailbox form can also target that domain directly. As long as it stays `active`, new mailboxes can continue using that root domain.
+
+If an admin later enables Catch All from `/domains`, unregistered addresses on
+that domain can also receive mail and will appear in the project as long-lived
+`Catch All` mailboxes.
 
 ## Troubleshooting {#troubleshooting}
 

@@ -22,6 +22,7 @@ const pendingBindResult: DomainCatalogItem = {
   cloudflareStatus: "pending",
   nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
   projectStatus: "provisioning_error",
+  catchAllEnabled: false,
   lastProvisionError:
     "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
   createdAt: "2026-04-10T08:00:00.000Z",
@@ -39,6 +40,7 @@ const longZoneDialogDomain: DomainCatalogItem = {
   cloudflareStatus: "pending",
   nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
   projectStatus: "provisioning_error",
+  catchAllEnabled: false,
   lastProvisionError:
     "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
   createdAt: "2026-04-10T08:00:00.000Z",
@@ -58,8 +60,11 @@ const meta = {
     docsLinks,
     isBindPending: false,
     isEnablePending: false,
+    isCatchAllPending: false,
     onBind: fn(),
     onEnable: fn(),
+    onEnableCatchAll: fn(),
+    onDisableCatchAll: fn(),
     onDisable: fn(),
     onDelete: fn(),
     onRetry: fn(),
@@ -178,6 +183,16 @@ export const EnableFlow: Story = {
       rootDomain: "ops.example.org",
       zoneId: "zone_available",
     });
+  },
+};
+
+export const CatchAllToggle: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "关闭 Catch All" }),
+    );
+    await expect(args.onDisableCatchAll).toHaveBeenCalledWith("dom_secondary");
   },
 };
 
@@ -319,6 +334,7 @@ export const MissingInCloudflare: Story = {
         cloudflareStatus: null,
         nameServers: [],
         projectStatus: "disabled",
+        catchAllEnabled: false,
         lastProvisionError: null,
         createdAt: "2026-04-01T08:45:00.000Z",
         updatedAt: "2026-04-01T08:50:00.000Z",

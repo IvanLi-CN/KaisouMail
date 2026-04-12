@@ -11,6 +11,8 @@
 | `GET /api/domains` | 读取项目内已有域记录 |
 | `POST /api/domains/bind` | 创建 Cloudflare full zone 并接入项目 |
 | `POST /api/domains` | 启用一个 catalog 域 |
+| `POST /api/domains/:id/catch-all/enable` | 开启项目侧 Catch All，并接管 Cloudflare catch-all 到邮件 Worker |
+| `POST /api/domains/:id/catch-all/disable` | 关闭项目侧 Catch All，并恢复开启前的 Cloudflare catch-all 配置 |
 | `POST /api/domains/:id/retry` | 重试接入失败的域 |
 | `POST /api/domains/:id/disable` | 停用一个项目域 |
 | `POST /api/domains/:id/delete` | 删除项目直绑的 Cloudflare zone，并软删除本地记录 |
@@ -34,6 +36,11 @@
 
 ## Mailboxes
 
+邮箱记录由 `mailboxSchema` 定义；当前特别关注两个字段：
+
+- `source`: `registered | catch_all`
+- `routingRuleId`: 预注册邮箱通常有值；Catch All 自动物化邮箱固定为 `null`
+
 | 接口 | 用途 |
 | --- | --- |
 | `GET /api/mailboxes` | 列出邮箱 |
@@ -44,6 +51,9 @@
 | `DELETE /api/mailboxes/:id` | 删除邮箱 |
 
 ## Messages
+
+当某个域名已开启 Catch All 时，未知地址的来信会先在运行时自动物化出
+`source=catch_all` 的长期邮箱，然后继续进入现有的消息持久化链路。
 
 | 接口 | 用途 |
 | --- | --- |

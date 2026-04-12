@@ -1,5 +1,6 @@
 import { domainCatalogItemSchema, domainSchema } from "@kaisoumail/shared";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
+import { z } from "zod";
 
 import { getDb } from "../db/client";
 import { domains, mailboxes, subdomains } from "../db/schema";
@@ -9,15 +10,19 @@ import { chunkD1InsertValues } from "../lib/d1-batches";
 import {
   extractRootDomainFromAddress,
   normalizeRootDomain,
+  parseMailboxAddressAgainstDomains,
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import {
+  type CloudflareCatchAllRule,
   type CloudflareZoneSummary,
   createZone,
   deleteZone,
   type EmailRoutingDomain,
   enableDomainRouting,
+  getCatchAllRule,
   listZones,
+  updateCatchAllRule,
   validateZoneAccess,
 } from "./emailRouting";
 
@@ -37,6 +42,27 @@ type ManagedDomainProvisionState = Pick<
   "status" | "lastProvisionError" | "lastProvisionedAt"
 >;
 
+const catchAllRestoreStateSchema = z.object({
+  enabled: z.boolean(),
+  name: z.string(),
+  matchers: z.array(
+    z.object({
+      field: z.string().optional(),
+      type: z.string(),
+      value: z.string().optional(),
+    }),
+  ),
+  actions: z.array(
+    z.object({
+      type: z.string(),
+      value: z.array(z.string()),
+    }),
+  ),
+});
+
+type CatchAllRestoreState = z.infer<typeof catchAllRestoreStateSchema>;
+const managedCatchAllNamePrefix = "KaisouMail Catch All";
+
 const toDomainDto = (row: DomainRow) =>
   domainSchema.parse({
     id: row.id,
@@ -44,6 +70,7 @@ const toDomainDto = (row: DomainRow) =>
     zoneId: row.zoneId,
     bindingSource: row.bindingSource,
     status: row.status,
+    catchAllEnabled: row.catchAllEnabled,
     lastProvisionError: row.lastProvisionError,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -65,12 +92,55 @@ const toDomainCatalogDto = (input: {
     cloudflareStatus: input.zone?.status ?? null,
     nameServers: input.zone?.nameServers ?? [],
     projectStatus: input.row?.status ?? "not_enabled",
+    catchAllEnabled: input.row?.catchAllEnabled ?? false,
     lastProvisionError: input.row?.lastProvisionError ?? null,
     createdAt: input.row?.createdAt ?? null,
     updatedAt: input.row?.updatedAt ?? null,
     lastProvisionedAt: input.row?.lastProvisionedAt ?? null,
     disabledAt: input.row?.disabledAt ?? null,
   });
+
+const parseCatchAllRestoreState = (value: string | null) => {
+  if (!value) return null;
+
+  let json: unknown;
+  try {
+    json = JSON.parse(value);
+  } catch {
+    throw new ApiError(500, "Domain catch-all restore state is invalid");
+  }
+
+  const parsed = catchAllRestoreStateSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new ApiError(500, "Domain catch-all restore state is invalid");
+  }
+
+  return parsed.data;
+};
+
+const serializeCatchAllRestoreState = (value: CatchAllRestoreState) =>
+  JSON.stringify(value);
+
+const toCatchAllRestoreState = (
+  rule: CloudflareCatchAllRule,
+): CatchAllRestoreState => ({
+  enabled: rule.enabled,
+  name: rule.name,
+  matchers: rule.matchers,
+  actions: rule.actions,
+});
+
+const buildManagedCatchAllRule = (
+  domain: DomainRow,
+  currentRule: CloudflareCatchAllRule,
+  workerName: string,
+): CloudflareCatchAllRule => ({
+  enabled: true,
+  name: `${managedCatchAllNamePrefix} (${domain.rootDomain})`,
+  matchers:
+    currentRule.matchers.length > 0 ? currentRule.matchers : [{ type: "all" }],
+  actions: [{ type: "worker", value: [workerName] }],
+});
 
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
@@ -108,6 +178,14 @@ const resolveCatalogBindingSource = (
   }
 
   return "catalog";
+};
+
+const requireCatchAllWorkerName = (config: RuntimeConfig) => {
+  if (config.EMAIL_WORKER_NAME) return config.EMAIL_WORKER_NAME;
+  throw new ApiError(
+    500,
+    "Catch-all management requires EMAIL_WORKER_NAME to be configured",
+  );
 };
 
 const provisionDomain = async (
@@ -342,6 +420,10 @@ const persistManagedDomain = async (
         zoneId: next.zoneId,
         bindingSource: next.bindingSource,
         status: next.status,
+        catchAllEnabled: next.catchAllEnabled,
+        catchAllOwnerUserId: next.catchAllOwnerUserId,
+        catchAllRestoreStateJson: next.catchAllRestoreStateJson,
+        catchAllUpdatedAt: next.catchAllUpdatedAt,
         lastProvisionError: next.lastProvisionError,
         updatedAt: next.updatedAt,
         lastProvisionedAt: next.lastProvisionedAt,
@@ -362,6 +444,10 @@ const persistManagedDomain = async (
     zoneId: input.zoneId,
     bindingSource: input.bindingSource,
     status: input.provisionState.status,
+    catchAllEnabled: existing?.catchAllEnabled ?? false,
+    catchAllOwnerUserId: existing?.catchAllOwnerUserId ?? null,
+    catchAllRestoreStateJson: existing?.catchAllRestoreStateJson ?? null,
+    catchAllUpdatedAt: existing?.catchAllUpdatedAt ?? null,
     lastProvisionError: input.provisionState.lastProvisionError,
     createdAt: existing?.createdAt ?? updatedAt,
     updatedAt,
@@ -541,6 +627,33 @@ export const listActiveRootDomains = async (env: WorkerEnv) => {
     .orderBy(...orderByRootDomain);
 
   return rows.map((row) => row.rootDomain);
+};
+
+export const resolveCatchAllDomainForAddress = async (
+  env: WorkerEnv,
+  address: string,
+) => {
+  const db = getDb(env);
+  const rows = await db
+    .select()
+    .from(domains)
+    .where(
+      and(
+        domainNotDeletedFilter,
+        eq(domains.status, "active"),
+        eq(domains.catchAllEnabled, true),
+      ),
+    )
+    .orderBy(...orderByRootDomain);
+  if (rows.length === 0) return null;
+
+  const parsed = parseMailboxAddressAgainstDomains(
+    address,
+    rows.map((row) => row.rootDomain),
+  );
+  if (!parsed) return null;
+
+  return rows.find((row) => row.rootDomain === parsed.rootDomain) ?? null;
 };
 
 export const getDomainById = async (
@@ -727,19 +840,131 @@ export const retryDomainProvision = async (
   return toDomainDto(next);
 };
 
-export const disableDomain = async (env: WorkerEnv, domainId: string) => {
+export const enableDomainCatchAll = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domainId: string,
+  actor: { id: string },
+) => {
+  const db = getDb(env);
+  const existing = await getDomainById(env, domainId);
+  if (!existing) throw new ApiError(404, "Mailbox domain not found");
+  if (existing.status !== "active") {
+    throw new ApiError(409, "Only active mailbox domains can enable catch-all");
+  }
+  if (existing.catchAllEnabled) {
+    return toDomainDto(existing);
+  }
+
+  const currentRule = await getCatchAllRule(config, existing);
+  if (!currentRule) {
+    throw new ApiError(500, "Catch-all rule is not available");
+  }
+
+  const workerName = requireCatchAllWorkerName(config);
+  const restoreState =
+    parseCatchAllRestoreState(existing.catchAllRestoreStateJson) ??
+    toCatchAllRestoreState(currentRule);
+  await updateCatchAllRule(
+    config,
+    existing,
+    buildManagedCatchAllRule(existing, currentRule, workerName),
+  );
+
+  const updatedAt = nowIso();
+  const next: DomainRow = {
+    ...existing,
+    catchAllEnabled: true,
+    catchAllOwnerUserId: actor.id,
+    catchAllRestoreStateJson: serializeCatchAllRestoreState(restoreState),
+    catchAllUpdatedAt: updatedAt,
+    updatedAt,
+  };
+
+  await db
+    .update(domains)
+    .set({
+      catchAllEnabled: true,
+      catchAllOwnerUserId: actor.id,
+      catchAllRestoreStateJson: next.catchAllRestoreStateJson,
+      catchAllUpdatedAt: updatedAt,
+      updatedAt,
+    })
+    .where(eq(domains.id, existing.id));
+
+  return toDomainDto(next);
+};
+
+export const disableDomainCatchAll = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domainId: string,
+) => {
+  const db = getDb(env);
+  const existing = await getDomainById(env, domainId);
+  if (!existing) throw new ApiError(404, "Mailbox domain not found");
+  if (!existing.catchAllEnabled) {
+    return toDomainDto(existing);
+  }
+
+  const restoreState = parseCatchAllRestoreState(
+    existing.catchAllRestoreStateJson,
+  );
+  if (!restoreState) {
+    throw new ApiError(500, "Domain catch-all restore state is missing");
+  }
+
+  await updateCatchAllRule(config, existing, restoreState);
+
+  const updatedAt = nowIso();
+  const next: DomainRow = {
+    ...existing,
+    catchAllEnabled: false,
+    catchAllOwnerUserId: null,
+    catchAllRestoreStateJson: null,
+    catchAllUpdatedAt: updatedAt,
+    updatedAt,
+  };
+
+  await db
+    .update(domains)
+    .set({
+      catchAllEnabled: false,
+      catchAllOwnerUserId: null,
+      catchAllRestoreStateJson: null,
+      catchAllUpdatedAt: updatedAt,
+      updatedAt,
+    })
+    .where(eq(domains.id, existing.id));
+
+  return toDomainDto(next);
+};
+
+export const disableDomain = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domainId: string,
+) => {
   const db = getDb(env);
   const existing = await getDomainById(env, domainId);
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
   if (existing.status === "disabled") return toDomainDto(existing);
 
+  if (existing.catchAllEnabled) {
+    await disableDomainCatchAll(env, config, existing.id);
+  }
+
+  const refreshed = await getDomainById(env, domainId);
+  if (!refreshed) throw new ApiError(404, "Mailbox domain not found");
+  if (refreshed.status === "disabled") return toDomainDto(refreshed);
+
   const disabledAt = nowIso();
   const next = {
-    ...existing,
+    ...refreshed,
     status: "disabled",
     disabledAt,
     updatedAt: disabledAt,
-    lastProvisionError: existing.lastProvisionError,
+    lastProvisionError: refreshed.lastProvisionError,
     deletedAt: null,
   } satisfies DomainRow;
 
@@ -857,6 +1082,10 @@ export const resolveMailboxDomain = async (
       zoneId: config.CLOUDFLARE_ZONE_ID ?? null,
       bindingSource: "catalog",
       status: "active",
+      catchAllEnabled: false,
+      catchAllOwnerUserId: null,
+      catchAllRestoreStateJson: null,
+      catchAllUpdatedAt: null,
       lastProvisionError: null,
       createdAt: timestamp,
       updatedAt: timestamp,

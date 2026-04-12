@@ -11,6 +11,8 @@ This page lists the implemented endpoints and their purpose. For request and res
 | `GET /api/domains` | read project-managed domain records |
 | `POST /api/domains/bind` | create a Cloudflare full zone and attach it to the project |
 | `POST /api/domains` | enable a catalog domain |
+| `POST /api/domains/:id/catch-all/enable` | enable the project-managed catch-all flow and point Cloudflare catch-all at the mail Worker |
+| `POST /api/domains/:id/catch-all/disable` | disable the project-managed catch-all flow and restore the previous Cloudflare catch-all configuration |
 | `POST /api/domains/:id/retry` | retry a failed enablement |
 | `POST /api/domains/:id/disable` | disable a managed domain |
 | `POST /api/domains/:id/delete` | delete a project-bound Cloudflare zone and soft-delete the local record |
@@ -34,6 +36,12 @@ This page lists the implemented endpoints and their purpose. For request and res
 
 ## Mailboxes
 
+Mailbox records follow `mailboxSchema`; the two catch-all-related fields are:
+
+- `source`: `registered | catch_all`
+- `routingRuleId`: typically present for registered mailboxes, always `null`
+  for auto-materialized catch-all mailboxes
+
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/mailboxes` | list mailboxes |
@@ -44,6 +52,10 @@ This page lists the implemented endpoints and their purpose. For request and res
 | `DELETE /api/mailboxes/:id` | delete a mailbox |
 
 ## Messages
+
+When a domain has Catch All enabled, inbound mail to an unknown address first
+materializes a long-lived `source=catch_all` mailbox and then continues through
+the normal message persistence path.
 
 | Endpoint | Purpose |
 | --- | --- |

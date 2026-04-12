@@ -31,6 +31,7 @@ import {
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
 import {
+  type DomainRow,
   listActiveRootDomains,
   pickRandomActiveDomain,
   requireActiveDomainByRootDomain,
@@ -72,6 +73,7 @@ const toMailboxDto = (
     subdomain: row.subdomain,
     rootDomain: row.rootDomain,
     address: row.address,
+    source: row.source,
     status: row.status,
     createdAt: row.createdAt,
     lastReceivedAt,
@@ -138,6 +140,23 @@ const listMailboxesByAddress = async (env: WorkerEnv, address: string) => {
     .from(mailboxes)
     .where(eq(mailboxes.address, normalizeMailboxAddress(address)))
     .orderBy(desc(mailboxes.createdAt));
+};
+
+const getActiveMailboxByAddress = async (
+  db: ReturnType<typeof getDb>,
+  address: string,
+) => {
+  const rows = await db
+    .select()
+    .from(mailboxes)
+    .where(
+      and(
+        eq(mailboxes.address, normalizeMailboxAddress(address)),
+        eq(mailboxes.status, "active"),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
 };
 
 const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
@@ -214,6 +233,7 @@ const insertMailboxIfDomainStillActive = async (
     localPart: string;
     subdomain: string;
     address: string;
+    source: string;
     routingRuleId: string | null;
     status: string;
     createdAt: string;
@@ -226,9 +246,9 @@ const insertMailboxIfDomainStillActive = async (
   const result = await env.DB.prepare(
     `INSERT INTO mailboxes (
       id, user_id, domain_id, local_part, subdomain, address,
-      routing_rule_id, status, created_at, expires_at, destroyed_at
+      source, routing_rule_id, status, created_at, expires_at, destroyed_at
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE EXISTS (
       SELECT 1
       FROM domains
@@ -245,6 +265,7 @@ const insertMailboxIfDomainStillActive = async (
       created.localPart,
       created.subdomain,
       created.address,
+      created.source,
       created.routingRuleId,
       created.status,
       created.createdAt,
@@ -530,6 +551,7 @@ export const createMailboxForUser = async (
       localPart,
       subdomain,
       address: mailboxAddress.address,
+      source: "registered",
       routingRuleId: null,
       status: "destroying",
       createdAt: now,
@@ -708,6 +730,93 @@ export const resolveMailboxForUser = async (
 
   const [resolved] = await attachLastReceivedAt(env, [classification.row]);
   return resolved;
+};
+
+export const ensureCatchAllMailboxForAddress = async (
+  env: WorkerEnv,
+  domain: DomainRow,
+  address: string,
+) => {
+  if (!domain.catchAllEnabled || !domain.catchAllOwnerUserId) {
+    return null;
+  }
+
+  const db = getDb(env);
+  const normalizedAddress = normalizeMailboxAddress(address);
+  const existing = await getActiveMailboxByAddress(db, normalizedAddress);
+  if (existing) {
+    return existing;
+  }
+
+  const parsed = parseMailboxAddressAgainstDomains(normalizedAddress, [
+    domain.rootDomain,
+  ]);
+  if (!parsed) {
+    return null;
+  }
+
+  const created = {
+    id: randomId("mbx"),
+    userId: domain.catchAllOwnerUserId,
+    domainId: domain.id,
+    localPart: parsed.localPart,
+    subdomain: parsed.subdomain,
+    address: parsed.address,
+    source: "catch_all",
+    routingRuleId: null,
+    status: "active",
+    createdAt: nowIso(),
+    expiresAt: null,
+    destroyedAt: null,
+  } as const;
+
+  try {
+    const result = await env.DB.prepare(
+      `INSERT INTO mailboxes (
+        id, user_id, domain_id, local_part, subdomain, address,
+        source, routing_rule_id, status, created_at, expires_at, destroyed_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1
+        FROM domains
+        WHERE id = ?
+          AND status = 'active'
+          AND deleted_at IS NULL
+          AND catch_all_enabled = 1
+          AND catch_all_owner_user_id = ?
+      )`,
+    )
+      .bind(
+        created.id,
+        created.userId,
+        created.domainId,
+        created.localPart,
+        created.subdomain,
+        created.address,
+        created.source,
+        created.routingRuleId,
+        created.status,
+        created.createdAt,
+        created.expiresAt,
+        created.destroyedAt,
+        domain.id,
+        domain.catchAllOwnerUserId,
+      )
+      .run();
+
+    if ((result.meta?.changes ?? 0) !== 1) {
+      return getActiveMailboxByAddress(db, normalizedAddress);
+    }
+
+    const inserted = await getActiveMailboxByAddress(db, normalizedAddress);
+    return inserted;
+  } catch (error) {
+    if (isMailboxAddressConflictError(error)) {
+      return getActiveMailboxByAddress(db, normalizedAddress);
+    }
+    throw error;
+  }
 };
 
 export const destroyMailbox = async (

@@ -411,6 +411,22 @@ export const apiClient = {
       (value) => domainSchema.parse(value),
     );
   },
+  async enableDomainCatchAll(id: string) {
+    if (DEMO_MODE) return demoApi.enableDomainCatchAll(id);
+    return requestJson(
+      `/api/domains/${id}/catch-all/enable`,
+      { method: "POST" },
+      (value) => domainSchema.parse(value),
+    );
+  },
+  async disableDomainCatchAll(id: string) {
+    if (DEMO_MODE) return demoApi.disableDomainCatchAll(id);
+    return requestJson(
+      `/api/domains/${id}/catch-all/disable`,
+      { method: "POST" },
+      (value) => domainSchema.parse(value),
+    );
+  },
   async retryDomain(id: string) {
     if (DEMO_MODE) return demoApi.retryDomain(id);
     return requestJson(

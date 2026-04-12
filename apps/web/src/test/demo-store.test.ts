@@ -98,8 +98,11 @@ describe("demoApi", () => {
       after: "2026-04-01T08:35:00.000Z",
       since: "2026-04-01T08:31:00.000Z",
     });
-    expect(messages).toHaveLength(1);
-    expect(messages[0]?.id).toBe("msg_beta");
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.id)).toEqual([
+      "msg_catch_all",
+      "msg_beta",
+    ]);
   });
 
   it("hides stale destroyed mailboxes from workspace-scoped lists", async () => {

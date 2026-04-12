@@ -52,6 +52,8 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 - `POST /zones/:zone_id/email/routing/dns`
 - `POST /zones/:zone_id/email/routing/rules`
 - `DELETE /zones/:zone_id/email/routing/rules/:rule_id`
+- `GET /zones/:zone_id/email/routing/rules/catch_all`
+- `PUT /zones/:zone_id/email/routing/rules/catch_all`
 
 所以 runtime token 只需要：
 
@@ -63,6 +65,19 @@ import { CloudflareTokenConfigMock } from "../../components/cloudflare-token-con
 
 Scope 要覆盖所有要接入 KaisouMail 的 zones。
 在 Cloudflare 的自定义 token 界面里，`Zone: Zone: Edit` 已经覆盖 `/zones` 这条链路需要的读/list 能力，不需要再额外添加一条 `Zone: Zone: Read`。
+
+### Catch All 补充说明
+
+- 引入 Catch All 后，项目**不需要新增 secret 名**；仍然使用现有的
+  `CLOUDFLARE_RUNTIME_API_TOKEN`，共享模式下仍可回退到
+  `CLOUDFLARE_API_TOKEN`。
+- Cloudflare 官方 API 文档说明：
+  - `GET /zones/:zone_id/email/routing/rules/catch_all` 接受
+    `Email Routing Rules Read` 或 `Email Routing Rules Write`
+  - `PUT /zones/:zone_id/email/routing/rules/catch_all` 需要
+    `Email Routing Rules Write`
+- KaisouMail 运行时本来就要求 `Zone: Email Routing Rules: Edit`，
+  所以 Catch All 开关不会增加 runtime token 的最小权限集合。
 
 ## Deploy token 最小权限
 
@@ -118,3 +133,6 @@ Scope 要覆盖所有要接入 KaisouMail 的 zones。
 - [Create API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
 - [Account-owned tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/)
 - [Enable Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/methods/enable/)
+- [Email Routing API](https://developers.cloudflare.com/api/resources/email_routing/)
+- [Get catch-all rule](https://developers.cloudflare.com/api/resources/email_routing/subresources/rules/subresources/catch_alls/methods/get/)
+- [Update catch-all rule](https://developers.cloudflare.com/api/resources/email_routing/subresources/rules/subresources/catch_alls/methods/update/)

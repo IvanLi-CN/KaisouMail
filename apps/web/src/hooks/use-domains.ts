@@ -70,6 +70,30 @@ export const useDisableDomainMutation = () => {
   });
 };
 
+export const useEnableDomainCatchAllMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (domainId: string) => apiClient.enableDomainCatchAll(domainId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
+      void queryClient.invalidateQueries({ queryKey: metaKey });
+    },
+  });
+};
+
+export const useDisableDomainCatchAllMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (domainId: string) => apiClient.disableDomainCatchAll(domainId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: domainsKey });
+      void queryClient.invalidateQueries({ queryKey: domainCatalogQueryKey });
+      void queryClient.invalidateQueries({ queryKey: metaKey });
+    },
+  });
+};
+
 export const useDeleteDomainMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({

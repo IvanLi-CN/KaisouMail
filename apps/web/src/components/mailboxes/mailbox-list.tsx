@@ -2,6 +2,7 @@ import { Eye, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { ActionButton } from "@/components/ui/action-button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Mailbox } from "@/lib/contracts";
-import { formatDateTime, formatRelativeMinutes } from "@/lib/format";
+import { formatDateTime, formatMailboxExpiry } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { buildWorkspaceSearch } from "@/lib/workspace";
 
@@ -67,9 +68,21 @@ export const MailboxList = ({
               >
                 {mailbox.address}
               </Link>
-              <p className="font-mono text-xs text-muted-foreground">
-                Rule: {mailbox.routingRuleId ?? "已清理"}
-              </p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge
+                  className={cn(
+                    "border",
+                    mailbox.source === "catch_all"
+                      ? "border-amber-500/35 bg-amber-500/12 text-amber-100"
+                      : "border-border bg-muted/20 text-muted-foreground",
+                  )}
+                >
+                  {mailbox.source === "catch_all" ? "Catch All" : "预注册"}
+                </Badge>
+                <span className="font-mono">
+                  Rule: {mailbox.routingRuleId ?? "已清理"}
+                </span>
+              </div>
             </div>
           </TableCell>
           <TableCell className="align-middle">
@@ -87,7 +100,11 @@ export const MailboxList = ({
             </span>
           </TableCell>
           <TableCell>{formatDateTime(mailbox.lastReceivedAt)}</TableCell>
-          <TableCell>{formatRelativeMinutes(mailbox.expiresAt)}</TableCell>
+          <TableCell>
+            {mailbox.source === "catch_all"
+              ? "长期"
+              : formatMailboxExpiry(mailbox.expiresAt)}
+          </TableCell>
           <TableCell>{formatDateTime(mailbox.createdAt)}</TableCell>
           <TableCell className="text-right">
             <div className="flex justify-end gap-2">

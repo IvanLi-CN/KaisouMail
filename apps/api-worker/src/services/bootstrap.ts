@@ -49,6 +49,7 @@ export const resolveBootstrapLegacyDomainState = (
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) {
     return {
       status: "active" as const,
+      catchAllEnabled: false,
       lastProvisionError: null,
       lastProvisionedAt: null,
     };
@@ -57,6 +58,7 @@ export const resolveBootstrapLegacyDomainState = (
   if (zoneId) {
     return {
       status: "active" as const,
+      catchAllEnabled: false,
       lastProvisionError: null,
       lastProvisionedAt: timestamp,
     };
@@ -64,6 +66,7 @@ export const resolveBootstrapLegacyDomainState = (
 
   return {
     status: "provisioning_error" as const,
+    catchAllEnabled: false,
     lastProvisionError:
       "Legacy mailbox domain requires CLOUDFLARE_ZONE_ID before it can be activated",
     lastProvisionedAt: null,
@@ -101,6 +104,7 @@ export const ensureBootstrapDomains = async (
       zoneId: nextZoneId,
       bindingSource: "catalog",
       status: provisionState.status,
+      catchAllEnabled: false,
       lastProvisionError: provisionState.lastProvisionError,
       createdAt: timestamp,
       updatedAt: timestamp,

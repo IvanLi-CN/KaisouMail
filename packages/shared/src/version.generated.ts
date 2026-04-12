@@ -1,6 +1,6 @@
 export const versionInfo = {
-  version: "0.1.0",
-  commitSha: "65ef640",
-  branch: "th/domain-bind-doc-hints",
-  builtAt: "2026-04-11T04:02:48.803Z",
+  version: "0.23.0",
+  commitSha: "e2fcff0",
+  branch: "th/catch-all-domain-controls",
+  builtAt: "2026-04-12T09:51:38.352Z",
 } as const;
