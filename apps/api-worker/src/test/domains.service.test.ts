@@ -874,4 +874,38 @@ describe("domain catalog", () => {
       catchAllEnabled: false,
     });
   });
+
+  it("refuses to disable catch-all when Cloudflare routing management is off", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+    };
+    const db = createDb({
+      domainRows: [catchAllDomain],
+    });
+    getDb.mockReturnValue(db);
+
+    await expect(
+      disableDomainCatchAll(
+        env,
+        {
+          ...runtimeConfig,
+          EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+        },
+        catchAllDomain.id,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message:
+        "Catch-all disable requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true",
+    });
+    expect(updateCatchAllRule).not.toHaveBeenCalled();
+  });
 });

@@ -111,6 +111,7 @@ export const DomainTable = ({
   onRetry,
   docsLinks = null,
   isCatchAllPending = false,
+  isCatchAllManagementEnabled = true,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
 }: {
@@ -126,6 +127,7 @@ export const DomainTable = ({
   onRetry: (domainId: string) => Promise<void> | void;
   docsLinks?: PublicDocsLinks | null;
   isCatchAllPending?: boolean;
+  isCatchAllManagementEnabled?: boolean;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
 }) => {
@@ -266,7 +268,9 @@ export const DomainTable = ({
                 const canDisable =
                   domain.projectStatus === "active" && domain.id;
                 const canToggleCatchAll =
-                  domain.projectStatus === "active" && domain.id;
+                  isCatchAllManagementEnabled &&
+                  domain.projectStatus === "active" &&
+                  domain.id;
                 const canDelete =
                   isDomainLifecycleEnabled &&
                   domain.bindingSource === "project_bind" &&
@@ -358,9 +362,11 @@ export const DomainTable = ({
                         </Badge>
                         <p className="max-w-[14rem] text-xs leading-5 text-muted-foreground">
                           {domain.projectStatus === "active"
-                            ? domain.catchAllEnabled
-                              ? "关闭时会恢复开启前的 Cloudflare catch-all 配置。"
-                              : "开启后，未预注册地址会自动进入项目 Worker。"
+                            ? !isCatchAllManagementEnabled
+                              ? "当前运行时未启用 Catch All 管理能力。"
+                              : domain.catchAllEnabled
+                                ? "关闭时会恢复开启前的 Cloudflare catch-all 配置。"
+                                : "开启后，未预注册地址会自动进入项目 Worker。"
                             : "仅 active 项目域可切换 Catch All。"}
                         </p>
                       </div>

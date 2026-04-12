@@ -39,6 +39,7 @@ type DomainsPageViewProps = {
   isBindPending?: boolean;
   isEnablePending?: boolean;
   isCatchAllPending?: boolean;
+  isCatchAllManagementEnabled?: boolean;
   error?: {
     variant: ErrorStateVariant;
     title: string;
@@ -66,6 +67,7 @@ export const DomainsPageView = ({
   isBindPending = false,
   isEnablePending = false,
   isCatchAllPending = false,
+  isCatchAllManagementEnabled = true,
   error = null,
   onReload,
   onBind,
@@ -118,6 +120,7 @@ export const DomainsPageView = ({
           domains={domains}
           docsLinks={docsLinks}
           isCatchAllPending={isCatchAllPending}
+          isCatchAllManagementEnabled={isCatchAllManagementEnabled}
           isDomainLifecycleEnabled={isDomainLifecycleEnabled}
           isEnablePending={isEnablePending}
           onEnable={async (values) => {
@@ -212,6 +215,9 @@ export const DomainsPage = () => {
       isCatchAllPending={
         enableDomainCatchAllMutation.isPending ||
         disableDomainCatchAllMutation.isPending
+      }
+      isCatchAllManagementEnabled={
+        metaQuery.data?.cloudflareCatchAllManagementEnabled ?? false
       }
       onBind={async (values) => {
         const boundDomain = await bindDomainMutation.mutateAsync(values);

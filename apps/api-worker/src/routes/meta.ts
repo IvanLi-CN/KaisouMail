@@ -17,6 +17,10 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
   const config = parseRuntimeConfig(c.env);
   const activeRootDomains = await listActiveRootDomains(c.env);
   const hasCloudflareApiToken = Boolean(config.CLOUDFLARE_API_TOKEN);
+  const hasCatchAllManagement =
+    config.EMAIL_ROUTING_MANAGEMENT_ENABLED &&
+    hasCloudflareApiToken &&
+    Boolean(config.EMAIL_WORKER_NAME);
 
   return c.json(
     apiMetaResponseSchema.parse({
@@ -27,6 +31,7 @@ export const metaRoutes = new Hono<AppBindings>().get("/", async (c) => {
         Boolean(config.CLOUDFLARE_ACCOUNT_ID),
       cloudflareDomainLifecycleEnabled:
         config.EMAIL_ROUTING_MANAGEMENT_ENABLED && hasCloudflareApiToken,
+      cloudflareCatchAllManagementEnabled: hasCatchAllManagement,
       passkeyAuthEnabled: isPasskeyAuthConfigured(config),
       passkeyTrustedOrigins: config.WEB_APP_ORIGINS ?? [],
       supportsUnlimitedMailboxTtl: true,

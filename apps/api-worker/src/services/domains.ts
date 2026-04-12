@@ -188,6 +188,17 @@ const requireCatchAllWorkerName = (config: RuntimeConfig) => {
   );
 };
 
+const requireCatchAllManagementEnabled = (
+  config: RuntimeConfig,
+  operation: "enable" | "disable",
+) => {
+  if (config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return;
+  throw new ApiError(
+    409,
+    `Catch-all ${operation} requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true`,
+  );
+};
+
 const provisionDomain = async (
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
@@ -846,6 +857,7 @@ export const enableDomainCatchAll = async (
   domainId: string,
   actor: { id: string },
 ) => {
+  requireCatchAllManagementEnabled(config, "enable");
   const db = getDb(env);
   const existing = await getDomainById(env, domainId);
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
@@ -900,6 +912,7 @@ export const disableDomainCatchAll = async (
   config: RuntimeConfig,
   domainId: string,
 ) => {
+  requireCatchAllManagementEnabled(config, "disable");
   const db = getDb(env);
   const existing = await getDomainById(env, domainId);
   if (!existing) throw new ApiError(404, "Mailbox domain not found");

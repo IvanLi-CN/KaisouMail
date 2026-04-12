@@ -24,6 +24,7 @@ const domainsHookState = {
   role: "admin" as "admin" | "member",
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
+  cloudflareCatchAllManagementEnabled: true,
 };
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -52,6 +53,8 @@ vi.mock("@/hooks/use-meta", () => ({
         domainsHookState.cloudflareDomainBindingEnabled,
       cloudflareDomainLifecycleEnabled:
         domainsHookState.cloudflareDomainLifecycleEnabled,
+      cloudflareCatchAllManagementEnabled:
+        domainsHookState.cloudflareCatchAllManagementEnabled,
     },
   }),
 }));
@@ -98,6 +101,7 @@ afterEach(() => {
   domainsHookState.role = "admin";
   domainsHookState.cloudflareDomainBindingEnabled = true;
   domainsHookState.cloudflareDomainLifecycleEnabled = true;
+  domainsHookState.cloudflareCatchAllManagementEnabled = true;
   queryClientState.setQueryData.mockReset();
 });
 
@@ -221,6 +225,37 @@ describe("domains page view", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText("确认删除", { selector: "button" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
+  });
+
+  it("hides Catch All actions when runtime management is unavailable", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled={false}
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "开启 Catch All" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "关闭 Catch All" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText("当前运行时未启用 Catch All 管理能力。").length,
+    ).toBeGreaterThan(0);
   });
 
   it("uses a gapped inline layout for Cloudflare status badges", () => {

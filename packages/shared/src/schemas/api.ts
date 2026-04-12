@@ -170,6 +170,7 @@ export const apiMetaResponseSchema = z.object({
   domains: z.array(z.string().regex(rootDomainRegex)),
   cloudflareDomainBindingEnabled: z.boolean(),
   cloudflareDomainLifecycleEnabled: z.boolean(),
+  cloudflareCatchAllManagementEnabled: z.boolean(),
   passkeyAuthEnabled: z.boolean(),
   passkeyTrustedOrigins: z.array(z.string().url()),
   supportsUnlimitedMailboxTtl: z.boolean().optional().default(false),

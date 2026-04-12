@@ -627,6 +627,7 @@ export const demoMeta: ApiMeta = {
     .map((domain) => domain.rootDomain),
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
+  cloudflareCatchAllManagementEnabled: true,
   passkeyAuthEnabled: true,
   passkeyTrustedOrigins: [
     "https://cfm.707979.xyz",
