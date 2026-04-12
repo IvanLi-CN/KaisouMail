@@ -57,12 +57,12 @@ Required permissions:
 
 | Permission | Purpose |
 | --- | --- |
-| `Zone: Zone: Read` | list and validate zones |
-| `Zone: Zone: Edit` | create and delete project-bound zones |
+| `Zone: Zone: Edit` | list, validate, create, and delete project-bound zones |
 | `Zone: Email Routing Rules: Edit` | create and delete mailbox routing rules |
 | `Zone: Zone Settings: Edit` | enable Email Routing |
 
 The runtime token scope must cover every zone that KaisouMail should manage.
+In Cloudflare's custom token builder, `Zone: Zone: Edit` already covers the read/list capability needed on the `/zones` path, so you do not need to add a separate `Zone: Zone: Read` row.
 
 ## Deploy token minimum permissions
 
@@ -86,7 +86,6 @@ Required permissions:
 
 If you use the shared quickstart token, it must include all of the following:
 
-- `Zone: Zone: Read`
 - `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`

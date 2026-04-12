@@ -73,12 +73,12 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ### Runtime token 最小权限
 
-- `Zone: Zone: Read`
 - `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`
 
 scope 必须覆盖所有要接入、绑定、启用或删除的 KaisouMail zones。
+在 Cloudflare 自定义 token UI 里，`Zone: Zone: Edit` 已经覆盖 list/read，不需要再单独加一条 `Zone: Zone: Read`。
 
 其中最容易漏的是 `Zone: Zone Settings: Edit`。如果域名目录里某个 zone 明明可见，却在启用时变成 `provisioning_error / Authentication error`，优先检查这项权限和 token 的 zone 覆盖范围。
 
@@ -96,7 +96,6 @@ scope 必须覆盖所有要接入、绑定、启用或删除的 KaisouMail zones
 
 如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以在 Worker secret 和 GitHub repository secret 里都放同一个 `CLOUDFLARE_API_TOKEN`，但它必须满足并集权限：
 
-- `Zone: Zone: Read`
 - `Zone: Zone: Edit`
 - `Zone: Email Routing Rules: Edit`
 - `Zone: Zone Settings: Edit`

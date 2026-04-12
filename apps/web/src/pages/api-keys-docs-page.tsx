@@ -893,7 +893,7 @@ const ApiKeysDocsPageView = ({
               </p>
               <p className="mt-2">
                 正式环境推荐拆成两把 token。runtime token 最小权限是{" "}
-                <code className="ml-1">Zone: Zone: Read</code>、
+                <code className="ml-1">Zone: Zone: Edit</code>、
                 <code className="ml-1">Zone: Email Routing Rules: Edit</code> 和
                 <code className="ml-1">Zone: Zone Settings: Edit</code>；deploy
                 token 负责 D1、Workers Scripts、Cloudflare Pages 和 Workers
