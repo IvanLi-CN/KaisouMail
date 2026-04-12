@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "",
+  "base_stable_version": "",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-12T01:40:01Z",
+  "next_stable_version": "",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "7ad51f77fb28d1a1cbd3efc95229588fbfed71c5",
+  "pr_number": 44,
+  "pr_title": "fix: correct Cloudflare token mock scopes",
+  "release_bump": "docs",
+  "release_channel": "stable",
+  "release_enabled": false,
+  "release_prerelease": false,
+  "release_tag": "",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "",
+  "target_sha": "812adb7d6358490114e825ec99532b61277b38d7",
+  "type_label": "type:docs"
+}
