@@ -258,6 +258,51 @@ describe("domains page view", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("hides Catch All actions for active domains outside the current Cloudflare token scope", () => {
+    const scopedDomains = [
+      {
+        ...demoDomainCatalog[0],
+        rootDomain: "out-of-scope.example.dev",
+        cloudflareAvailability: "missing" as const,
+        zoneId: "zone_out_of_scope",
+        projectStatus: "active" as const,
+        catchAllEnabled: true,
+      },
+    ];
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={scopedDomains}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isCatchAllManagementEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen.getByText("out-of-scope.example.dev").closest("tr");
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLTableRowElement).queryByRole("button", {
+        name: "开启 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(row as HTMLTableRowElement).queryByRole("button", {
+        name: "关闭 Catch All",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses a gapped inline layout for Cloudflare status badges", () => {
     render(
       <MemoryRouter>

@@ -269,6 +269,8 @@ export const DomainTable = ({
                   domain.projectStatus === "active" && domain.id;
                 const canToggleCatchAll =
                   isCatchAllManagementEnabled &&
+                  domain.cloudflareAvailability === "available" &&
+                  Boolean(domain.zoneId) &&
                   domain.projectStatus === "active" &&
                   domain.id;
                 const canDelete =

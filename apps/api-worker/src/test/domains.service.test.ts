@@ -49,6 +49,7 @@ import {
   classifyDomainCreateState,
   createDomain,
   deleteDomain,
+  disableDomain,
   disableDomainCatchAll,
   enableDomainCatchAll,
   listDomainCatalog,
@@ -396,6 +397,56 @@ describe("domain catalog", () => {
       zoneId: "zone_available",
       bindingSource: "project_bind",
       status: "active",
+    });
+  });
+
+  it("resets stale catch-all state when recreating a soft-deleted domain", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_replaced",
+          rootDomain: "ops.example.org",
+          zoneId: "zone_old",
+          bindingSource: "project_bind",
+          status: "disabled",
+          catchAllEnabled: true,
+          catchAllOwnerUserId: "usr_admin",
+          catchAllRestoreStateJson: JSON.stringify({
+            enabled: false,
+            name: "Catch all",
+            matchers: [{ type: "all" }],
+            actions: [{ type: "forward", value: ["owner@example.com"] }],
+          }),
+          catchAllUpdatedAt: "2026-04-04T00:02:00.000Z",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+          deletedAt: "2026-04-04T00:01:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_available",
+        name: "ops.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await createDomain(env, runtimeConfig, {
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+    });
+
+    expect(result.domain).toMatchObject({
+      rootDomain: "ops.example.org",
+      zoneId: "zone_available",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: false,
     });
   });
 
@@ -907,5 +958,38 @@ describe("domain catalog", () => {
         "Catch-all disable requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true",
     });
     expect(updateCatchAllRule).not.toHaveBeenCalled();
+  });
+
+  it("still disables the local domain when catch-all was enabled earlier but management is now off", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+    };
+    const db = createSequencedDb({
+      domainRows: [[catchAllDomain], [catchAllDomain]],
+    });
+    getDb.mockReturnValue(db);
+
+    const result = await disableDomain(
+      env,
+      {
+        ...runtimeConfig,
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+      },
+      catchAllDomain.id,
+    );
+
+    expect(updateCatchAllRule).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      id: catchAllDomain.id,
+      status: "disabled",
+    });
   });
 });

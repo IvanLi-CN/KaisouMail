@@ -142,6 +142,17 @@ const buildManagedCatchAllRule = (
   actions: [{ type: "worker", value: [workerName] }],
 });
 
+const resetCatchAllState = <TRow extends DomainRow>(
+  row: TRow,
+  updatedAt: string | null,
+): TRow => ({
+  ...row,
+  catchAllEnabled: false,
+  catchAllOwnerUserId: null,
+  catchAllRestoreStateJson: null,
+  catchAllUpdatedAt: updatedAt,
+});
+
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
 const domainNotDeletedFilter = isNull(domains.deletedAt);
@@ -413,8 +424,11 @@ const persistManagedDomain = async (
   const updatedAt = nowIso();
 
   if (createState.kind === "replace") {
+    const baseRow = createState.row.deletedAt
+      ? resetCatchAllState(createState.row, null)
+      : createState.row;
     const next: DomainRow = {
-      ...createState.row,
+      ...baseRow,
       zoneId: input.zoneId,
       bindingSource: input.bindingSource,
       status: input.provisionState.status,
@@ -963,7 +977,7 @@ export const disableDomain = async (
   if (!existing) throw new ApiError(404, "Mailbox domain not found");
   if (existing.status === "disabled") return toDomainDto(existing);
 
-  if (existing.catchAllEnabled) {
+  if (existing.catchAllEnabled && config.EMAIL_ROUTING_MANAGEMENT_ENABLED) {
     await disableDomainCatchAll(env, config, existing.id);
   }
 
