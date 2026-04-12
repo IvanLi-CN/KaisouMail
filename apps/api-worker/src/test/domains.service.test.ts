@@ -898,9 +898,16 @@ describe("domain catalog", () => {
       }),
       catchAllUpdatedAt: "2026-04-03T12:30:00.000Z",
     };
-    const db = createDb({
-      domainRows: [catchAllDomain],
-    });
+    const db = {
+      ...createDb({
+        domainRows: [catchAllDomain],
+      }),
+      update: vi.fn((_table: unknown) => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
+    };
     getDb.mockReturnValue(db);
     updateCatchAllRule.mockResolvedValue(undefined);
 
@@ -924,6 +931,7 @@ describe("domain catalog", () => {
       id: catchAllDomain.id,
       catchAllEnabled: false,
     });
+    expect(db.update).toHaveBeenCalledWith(mailboxes);
   });
 
   it("refuses to disable catch-all when Cloudflare routing management is off", async () => {

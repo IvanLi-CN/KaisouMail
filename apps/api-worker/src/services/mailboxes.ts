@@ -299,6 +299,27 @@ const updateMailboxRoutingRule = async (
     .where(eq(mailboxes.id, mailboxId));
 };
 
+const updateMailboxRegistration = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+  values: {
+    source: string;
+    routingRuleId: string | null;
+    expiresAt: string | null;
+  },
+) => {
+  await db
+    .update(mailboxes)
+    .set({
+      source: values.source,
+      routingRuleId: values.routingRuleId,
+      expiresAt: values.expiresAt,
+      status: "active",
+      destroyedAt: null,
+    })
+    .where(eq(mailboxes.id, mailboxId));
+};
+
 const activateMailbox = async (
   db: ReturnType<typeof getDb>,
   mailboxId: string,
@@ -346,6 +367,112 @@ export const resolveRequestedMailboxAddress = (
     normalizeLabel(input.subdomain),
     rootDomain,
   );
+};
+
+const resolveMailboxExpiresAt = (
+  expiresInMinutes: number | null | undefined,
+  fallbackExpiresAt: string | null,
+) => {
+  if (expiresInMinutes === undefined) {
+    return fallbackExpiresAt;
+  }
+  if (expiresInMinutes === null) {
+    return longTermMailboxExpirySentinel;
+  }
+  return new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
+};
+
+const upsertSubdomainUsage = async (
+  db: ReturnType<typeof getDb>,
+  config: RuntimeConfig,
+  domain: DomainRow,
+  subdomain: string,
+  now: string,
+) => {
+  const knownSubdomain = await db
+    .select()
+    .from(subdomains)
+    .where(
+      and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
+    )
+    .limit(1);
+
+  if (!knownSubdomain[0]) {
+    await ensureSubdomainEnabled(config, domain, subdomain);
+  }
+
+  if (knownSubdomain[0]) {
+    await db
+      .update(subdomains)
+      .set({ lastUsedAt: now })
+      .where(eq(subdomains.id, knownSubdomain[0].id));
+  } else {
+    await db.insert(subdomains).values({
+      id: randomId("sub"),
+      domainId: domain.id,
+      name: subdomain,
+      enabledAt: now,
+      lastUsedAt: now,
+      metadata: JSON.stringify({
+        mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
+      }),
+    });
+  }
+};
+
+const promoteCatchAllMailbox = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  mailbox: MailboxRow,
+  expiresInMinutes: number | null | undefined,
+) => {
+  const db = getDb(env);
+  const domain = await resolveMailboxDomain(env, config, mailbox);
+  if (!domain || domain.status !== "active" || domain.deletedAt) {
+    throw domainNoLongerAvailableError(
+      mailbox.domainId ?? "legacy-domain",
+      getFallbackRootDomain(mailbox),
+    );
+  }
+
+  const now = nowIso();
+  const expiresAt = resolveMailboxExpiresAt(
+    expiresInMinutes,
+    mailbox.expiresAt,
+  );
+
+  await upsertSubdomainUsage(db, config, domain, mailbox.subdomain, now);
+
+  const routingRuleId = await createRoutingRule(
+    config,
+    domain,
+    mailbox.address,
+  );
+  if (!routingRuleId) {
+    throw new ApiError(
+      409,
+      "Catch-all mailbox cannot be promoted without Email Routing management",
+    );
+  }
+
+  await updateMailboxRegistration(db, mailbox.id, {
+    source: "registered",
+    routingRuleId,
+    expiresAt,
+  });
+
+  const [promoted] = await attachLastReceivedAt(env, [
+    {
+      ...mailbox,
+      source: "registered",
+      routingRuleId,
+      expiresAt,
+      status: "active",
+      destroyedAt: null,
+    },
+  ]);
+
+  return promoted;
 };
 
 const attachRootDomains = async (
@@ -504,6 +631,34 @@ export const createMailboxForUser = async (
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
 
+  if (input.localPart && input.subdomain) {
+    const explicitAddress = buildMailboxAddress(
+      normalizeLabel(input.localPart),
+      normalizeLabel(input.subdomain),
+      domain.rootDomain,
+    );
+    const classification = classifyMailboxAddressState(
+      await listMailboxesByAddress(env, explicitAddress.address),
+      user,
+    );
+
+    if (classification.kind === "reuse") {
+      if (classification.row.source === "catch_all") {
+        return promoteCatchAllMailbox(
+          env,
+          config,
+          classification.row,
+          input.expiresInMinutes,
+        );
+      }
+      throw new ApiError(409, "Mailbox already exists");
+    }
+
+    if (classification.kind === "conflict") {
+      throw new ApiError(409, "Mailbox already exists");
+    }
+  }
+
   for (let attempt = 0; attempt < generatedMailboxMaxAttempts; attempt += 1) {
     let mailboxAddress: Awaited<ReturnType<typeof resolveCreateMailboxAddress>>;
     try {
@@ -529,14 +684,26 @@ export const createMailboxForUser = async (
       throw error;
     }
 
+    const classification = classifyMailboxAddressState(
+      await listMailboxesByAddress(env, mailboxAddress.address),
+      user,
+    );
+    if (classification.kind === "reuse") {
+      if (classification.row.source === "catch_all") {
+        return promoteCatchAllMailbox(
+          env,
+          config,
+          classification.row,
+          input.expiresInMinutes,
+        );
+      }
+      throw new ApiError(409, "Mailbox already exists");
+    }
+    if (classification.kind === "conflict") {
+      throw new ApiError(409, "Mailbox already exists");
+    }
+
     const { localPart, subdomain } = mailboxAddress;
-    const knownSubdomain = await db
-      .select()
-      .from(subdomains)
-      .where(
-        and(eq(subdomains.domainId, domain.id), eq(subdomains.name, subdomain)),
-      )
-      .limit(1);
 
     const now = nowIso();
     const expiresAt =
@@ -570,9 +737,7 @@ export const createMailboxForUser = async (
       );
       mailboxInserted = true;
 
-      if (!knownSubdomain[0]) {
-        await ensureSubdomainEnabled(config, domain, subdomain);
-      }
+      await upsertSubdomainUsage(db, config, domain, subdomain, now);
 
       routingRuleId = await createRoutingRule(
         config,
@@ -582,24 +747,6 @@ export const createMailboxForUser = async (
 
       if (routingRuleId) {
         await updateMailboxRoutingRule(db, created.id, routingRuleId);
-      }
-
-      if (knownSubdomain[0]) {
-        await db
-          .update(subdomains)
-          .set({ lastUsedAt: now })
-          .where(eq(subdomains.id, knownSubdomain[0].id));
-      } else {
-        await db.insert(subdomains).values({
-          id: randomId("sub"),
-          domainId: domain.id,
-          name: subdomain,
-          enabledAt: now,
-          lastUsedAt: now,
-          metadata: JSON.stringify({
-            mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
-          }),
-        });
       }
 
       await activateMailbox(db, created.id);
@@ -691,6 +838,17 @@ export const ensureMailboxForUser = async (
   );
 
   if (classification.kind === "reuse") {
+    if (classification.row.source === "catch_all") {
+      return {
+        mailbox: await promoteCatchAllMailbox(
+          env,
+          config,
+          classification.row,
+          input.expiresInMinutes,
+        ),
+        created: false,
+      };
+    }
     const [mailbox] = await attachLastReceivedAt(env, [classification.row]);
     return {
       mailbox,

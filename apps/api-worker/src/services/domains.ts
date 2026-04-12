@@ -153,6 +153,27 @@ const resetCatchAllState = <TRow extends DomainRow>(
   catchAllUpdatedAt: updatedAt,
 });
 
+const retireCatchAllMailboxes = async (
+  db: ReturnType<typeof getDb>,
+  domainId: string,
+  destroyedAt: string,
+) => {
+  await db
+    .update(mailboxes)
+    .set({
+      status: "destroyed",
+      destroyedAt,
+      routingRuleId: null,
+    })
+    .where(
+      and(
+        eq(mailboxes.domainId, domainId),
+        eq(mailboxes.source, "catch_all"),
+        eq(mailboxes.status, "active"),
+      ),
+    );
+};
+
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
 const domainNotDeletedFilter = isNull(domains.deletedAt);
@@ -963,6 +984,7 @@ export const disableDomainCatchAll = async (
       updatedAt,
     })
     .where(eq(domains.id, existing.id));
+  await retireCatchAllMailboxes(db, existing.id, updatedAt);
 
   return toDomainDto(next);
 };
