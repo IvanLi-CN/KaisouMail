@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/shared/page-header";
@@ -55,13 +55,17 @@ export const DesktopInlineNav: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
+    const navRow = canvasElement.querySelector('[data-slot="shell-nav-row"]');
+    const brandRow = canvasElement.querySelector(
+      '[data-slot="shell-brand-row"]',
+    );
     const accountTrigger = canvas.getByRole("button", {
       name: accountDetailsButtonName,
     });
+    const logoutButton = canvas.getByRole("button", { name: "退出登录" });
+    const desktopNav = canvas.getByRole("navigation", { name: "主导航" });
 
-    await expect(
-      canvas.getByRole("navigation", { name: "主导航" }),
-    ).toBeInTheDocument();
+    await expect(desktopNav).toBeInTheDocument();
     await expect(
       canvas.getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
@@ -74,6 +78,10 @@ export const DesktopInlineNav: Story = {
     await expect(
       canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
+    await expect(navRow).toContainElement(desktopNav);
+    await expect(brandRow).toContainElement(accountTrigger);
+    await expect(brandRow).toContainElement(logoutButton);
+    await expect(navRow).not.toContainElement(accountTrigger);
     await expect(accountTrigger).toHaveAttribute("aria-expanded", "false");
     await expect(
       canvas.queryByText(demoSessionUser.name),
@@ -112,19 +120,27 @@ export const TabletInlineNav: Story = {
   globals: projectViewportGlobals.tablet,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const navRow = canvasElement.querySelector('[data-slot="shell-nav-row"]');
+    const brandRow = canvasElement.querySelector(
+      '[data-slot="shell-brand-row"]',
+    );
     const accountTrigger = canvas.getByRole("button", {
       name: accountDetailsButtonName,
     });
+    const logoutButton = canvas.getByRole("button", { name: "退出登录" });
+    const desktopNav = canvas.getByRole("navigation", { name: "主导航" });
 
-    await expect(
-      canvas.getByRole("navigation", { name: "主导航" }),
-    ).toBeInTheDocument();
+    await expect(desktopNav).toBeInTheDocument();
     await expect(
       canvas.getByRole("link", { name: /API Keys/i }),
     ).toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", { name: "打开导航抽屉" }),
     ).not.toBeInTheDocument();
+    await expect(navRow).toContainElement(desktopNav);
+    await expect(brandRow).toContainElement(accountTrigger);
+    await expect(brandRow).toContainElement(logoutButton);
+    await expect(navRow).not.toContainElement(accountTrigger);
     await expect(accountTrigger).toBeInTheDocument();
     await expect(
       canvas.queryByText(demoSessionUser.name),
@@ -204,17 +220,23 @@ export const MobileDrawerToggle: Story = {
 export const DetailsOpen: Story = {
   args: {
     defaultAccountPopoverOpen: true,
+    onLogout: fn(),
   },
   globals: projectViewportGlobals.desktop,
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
+    const logoutButton = canvas.getByRole("button", { name: "退出登录" });
 
     await expect(
       canvas.getByRole("button", { name: accountDetailsButtonName }),
     ).toHaveAttribute("aria-expanded", "true");
     await expect(await body.findByText(demoSessionUser.email)).toBeVisible();
     await expect(body.getByText(/^admin$/i)).toBeVisible();
+
+    await userEvent.click(logoutButton);
+
+    await expect(args.onLogout).toHaveBeenCalledTimes(1);
   },
 };
 

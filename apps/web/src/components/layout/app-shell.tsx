@@ -362,139 +362,145 @@ export const AppShell = ({
 
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="mx-auto flex max-w-[1520px] flex-col gap-4 px-4 py-4 lg:px-6 xl:px-8">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-col gap-4">
-              <Link to="/workspace" className="flex items-center gap-3">
-                <BrandMark
-                  className="h-10 w-10"
-                  imageClassName="scale-[0.84]"
-                />
-                <span>
-                  <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
-                    {projectMeta.projectName}
-                  </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    Temporary inbox control plane
-                  </span>
+          <div
+            className="flex min-w-0 items-center justify-between gap-3"
+            data-slot="shell-brand-row"
+          >
+            <Link
+              to="/workspace"
+              className="flex min-w-0 flex-1 items-center gap-3"
+            >
+              <BrandMark className="h-10 w-10" imageClassName="scale-[0.84]" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold tracking-[0.18em] text-foreground uppercase">
+                  {projectMeta.projectName}
                 </span>
-              </Link>
+                <span className="block truncate text-xs text-muted-foreground">
+                  Temporary inbox control plane
+                </span>
+              </span>
+            </Link>
 
-              <nav
-                aria-label="主导航"
-                className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden lg:flex lg:flex-nowrap"
+            <div
+              className="hidden shrink-0 items-center gap-2 lg:flex"
+              data-slot="shell-utility-group"
+            >
+              <Popover
+                open={isAccountPopoverOpen}
+                onOpenChange={(nextOpen) => {
+                  if (!nextOpen) {
+                    closeAccountPopover();
+                  }
+                }}
               >
-                {visibleNavItems.map((item) =>
-                  renderNavLink({
-                    item,
-                    pathname,
-                    layout: "desktop",
-                  }),
-                )}
-              </nav>
-            </div>
-
-            <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto lg:ml-0 lg:w-auto lg:flex-nowrap">
-              <div className="hidden shrink-0 items-center gap-2 lg:flex">
-                <Popover
-                  open={isAccountPopoverOpen}
-                  onOpenChange={(nextOpen) => {
-                    if (!nextOpen) {
-                      closeAccountPopover();
-                    }
-                  }}
-                >
-                  <PopoverAnchor asChild>
-                    <button
-                      ref={triggerRef}
-                      aria-label={`${user.name} 账号详情`}
-                      aria-controls={accountPopoverId}
-                      aria-expanded={isAccountPopoverOpen}
-                      aria-haspopup="dialog"
-                      className={cn(
-                        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        isAccountPopoverOpen
-                          ? "bg-card/95 text-foreground"
-                          : "text-muted-foreground hover:border-border/80 hover:text-foreground",
-                      )}
-                      onBlur={handlePopoverBlur}
-                      onClick={handleAccountTriggerClick}
-                      onFocus={handlePopoverFocus}
-                      onKeyDown={handleAccountEscape}
-                      onMouseEnter={openAccountPreview}
-                      onMouseLeave={scheduleAccountPreviewClose}
-                      type="button"
-                    >
-                      <ShieldCheck
-                        aria-hidden
-                        className={cn(
-                          "h-4 w-4 shrink-0 transition-colors duration-200",
-                          isAccountPopoverOpen
-                            ? "text-foreground"
-                            : "text-primary",
-                        )}
-                      />
-                    </button>
-                  </PopoverAnchor>
-                  <PopoverContent
-                    id={accountPopoverId}
-                    ref={contentRef}
-                    align="end"
-                    className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
+                <PopoverAnchor asChild>
+                  <button
+                    ref={triggerRef}
+                    aria-label={`${user.name} 账号详情`}
+                    aria-controls={accountPopoverId}
+                    aria-expanded={isAccountPopoverOpen}
+                    aria-haspopup="dialog"
+                    className={cn(
+                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isAccountPopoverOpen
+                        ? "bg-card/95 text-foreground"
+                        : "text-muted-foreground hover:border-border/80 hover:text-foreground",
+                    )}
                     onBlur={handlePopoverBlur}
-                    onCloseAutoFocus={(event) => {
-                      event.preventDefault();
-                    }}
-                    onEscapeKeyDown={() => {
-                      closeAccountPopover();
-                    }}
+                    onClick={handleAccountTriggerClick}
                     onFocus={handlePopoverFocus}
+                    onKeyDown={handleAccountEscape}
                     onMouseEnter={openAccountPreview}
                     onMouseLeave={scheduleAccountPreviewClose}
-                    onOpenAutoFocus={(event) => {
-                      event.preventDefault();
-                    }}
+                    type="button"
                   >
-                    {renderAccountDetails(user)}
-                  </PopoverContent>
-                </Popover>
+                    <ShieldCheck
+                      aria-hidden
+                      className={cn(
+                        "h-4 w-4 shrink-0 transition-colors duration-200",
+                        isAccountPopoverOpen
+                          ? "text-foreground"
+                          : "text-primary",
+                      )}
+                    />
+                  </button>
+                </PopoverAnchor>
+                <PopoverContent
+                  id={accountPopoverId}
+                  ref={contentRef}
+                  align="center"
+                  className="w-[min(calc(100vw-2rem),20rem)] space-y-4 px-4 py-4"
+                  onBlur={handlePopoverBlur}
+                  onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                  }}
+                  onEscapeKeyDown={() => {
+                    closeAccountPopover();
+                  }}
+                  onFocus={handlePopoverFocus}
+                  onMouseEnter={openAccountPreview}
+                  onMouseLeave={scheduleAccountPreviewClose}
+                  onOpenAutoFocus={(event) => {
+                    event.preventDefault();
+                  }}
+                >
+                  {renderAccountDetails(user)}
+                </PopoverContent>
+              </Popover>
 
-                <ActionButton
-                  density="dense"
-                  forceIconOnly
-                  icon={LogOut}
-                  label="退出登录"
-                  onClick={onLogout}
-                  priority="secondary"
-                  variant="outline"
-                />
-              </div>
-
-              <button
-                aria-controls={mobileNavDrawerId}
-                aria-expanded={isMobileNavOpen}
-                aria-haspopup="dialog"
-                aria-label={isMobileNavOpen ? "收起导航抽屉" : "打开导航抽屉"}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-                onClick={() => {
-                  setIsMobileNavOpen((current) => {
-                    const next = !current;
-
-                    if (next) {
-                      closeAccountPopover();
-                    }
-
-                    return next;
-                  });
-                }}
-                type="button"
-              >
-                {isMobileNavOpen ? (
-                  <X aria-hidden className="h-4 w-4" />
-                ) : (
-                  <Menu aria-hidden className="h-4 w-4" />
-                )}
-              </button>
+              <ActionButton
+                density="dense"
+                forceIconOnly
+                icon={LogOut}
+                label="退出登录"
+                onClick={onLogout}
+                priority="secondary"
+                variant="outline"
+              />
             </div>
+          </div>
+
+          <div className="hidden min-w-0 lg:flex" data-slot="shell-nav-row">
+            <nav
+              aria-label="主导航"
+              className="min-w-0 flex flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {visibleNavItems.map((item) =>
+                renderNavLink({
+                  item,
+                  pathname,
+                  layout: "desktop",
+                }),
+              )}
+            </nav>
+          </div>
+
+          <div className="ml-auto flex w-full justify-end lg:hidden">
+            <button
+              aria-controls={mobileNavDrawerId}
+              aria-expanded={isMobileNavOpen}
+              aria-haspopup="dialog"
+              aria-label={isMobileNavOpen ? "收起导航抽屉" : "打开导航抽屉"}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors duration-200 hover:border-border/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => {
+                setIsMobileNavOpen((current) => {
+                  const next = !current;
+
+                  if (next) {
+                    closeAccountPopover();
+                  }
+
+                  return next;
+                });
+              }}
+              type="button"
+            >
+              {isMobileNavOpen ? (
+                <X aria-hidden className="h-4 w-4" />
+              ) : (
+                <Menu aria-hidden className="h-4 w-4" />
+              )}
+            </button>
           </div>
         </div>
       </header>

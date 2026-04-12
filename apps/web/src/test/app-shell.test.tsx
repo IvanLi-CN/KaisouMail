@@ -70,6 +70,28 @@ afterEach(() => {
 });
 
 describe("AppShell account trigger", () => {
+  it("keeps non-mobile utilities grouped with the brand row", () => {
+    const { container } = renderAppShell();
+    const header = container.querySelector("header");
+    const navRow = header?.querySelector('[data-slot="shell-nav-row"]');
+    const brandRow = header?.querySelector('[data-slot="shell-brand-row"]');
+    const utilityGroup = header?.querySelector(
+      '[data-slot="shell-utility-group"]',
+    );
+    const desktopNav = screen.getByRole("navigation", { name: "主导航" });
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
+    const logoutButton = screen.getByRole("button", { name: "退出登录" });
+
+    expect(navRow).toContainElement(desktopNav);
+    expect(brandRow).toContainElement(trigger);
+    expect(brandRow).toContainElement(logoutButton);
+    expect(utilityGroup).toContainElement(trigger);
+    expect(utilityGroup).toContainElement(logoutButton);
+    expect(navRow).not.toContainElement(trigger);
+  });
+
   it("keeps header utilities compact until account preview is opened", () => {
     renderAppShell();
 
@@ -114,6 +136,23 @@ describe("AppShell account trigger", () => {
       expect(trigger).toHaveAttribute("aria-expanded", "false");
     });
     expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+  });
+
+  it("keeps logout available while account details are open", () => {
+    const onLogout = vi.fn();
+    renderAppShell({ onLogout });
+
+    const trigger = screen.getByRole("button", {
+      name: accountDetailsButtonName,
+    });
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
+
+    expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
   it("opens details via click on coarse pointers", async () => {

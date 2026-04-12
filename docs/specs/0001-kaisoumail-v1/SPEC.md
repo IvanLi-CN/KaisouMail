@@ -104,6 +104,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Dense information layout optimized for repeated operational tasks
 - Login keeps a prominent passkey CTA with explicit API key fallback in the same card, and the identity-auth page uses explicit `API Keys` / `Passkey` tabs instead of stacking both inventories together
 - Sticky top navigation with clear active state, skip-to-content affordance, logout, and a compact nickname-only account trigger that previews full account details inside a collision-aware popover
+- Non-mobile AppShell headers keep the brand lockup on the top row with account/logout utilities aligned at the far right, while primary navigation sits on its own second row below
 - Authenticated AppShell keeps repository, developer, and runtime-version metadata in a true footer that stays at the bottom of short pages without a duplicate summary strip above the workspace
 - Responsive mailbox workbench uses one column below `lg`, a mailbox rail plus stacked message panes at `lg`, and the full three-pane reading layout at `xl+`
 - On desktop three-pane layouts, long mailbox/message datasets stay inside pane-local scroll containers; the page itself should not grow purely because a rail becomes very long
@@ -129,6 +130,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
 - 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
@@ -178,11 +180,11 @@ PR: include
 
 ![App shell on mobile with the navigation drawer expanded](./assets/app-shell-mobile-menu-responsive.png)
 
-![App shell on wide tablet with inline navigation beside the site title](./assets/app-shell-tablet-inline-nav-responsive.png)
+![App shell on wide tablet with utility actions aligned to the brand row above the separate navigation row](./assets/app-shell-tablet-inline-nav-responsive.png)
 
-![App shell on desktop with the inline navigation kept in the same header row](./assets/app-shell-desktop-inline-nav-responsive.png)
+![App shell on desktop with utility actions aligned to the top brand row and navigation below](./assets/app-shell-desktop-inline-nav-responsive.png)
 
-![App shell with the account details popover pinned open](./assets/app-shell-account-details-responsive.png)
+![App shell with the account details popover pinned open from the top-right utility row](./assets/app-shell-account-details-responsive.png)
 
 ![Authenticated AppShell footer metadata](./assets/app-shell-footer-responsive.png)
 
