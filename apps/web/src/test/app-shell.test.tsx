@@ -179,6 +179,22 @@ describe("AppShell account trigger", () => {
 });
 
 describe("AppShell mobile navigation", () => {
+  it("keeps the mobile drawer trigger inside the brand row when collapsed", () => {
+    const { container } = renderAppShell();
+    const header = container.querySelector("header");
+    const brandRow = header?.querySelector('[data-slot="shell-brand-row"]');
+    const mobileTriggerSlot = header?.querySelector(
+      '[data-slot="shell-mobile-trigger"]',
+    );
+    const menuTrigger = screen.getByRole("button", { name: "打开导航抽屉" });
+
+    expect(brandRow).toContainElement(menuTrigger);
+    expect(mobileTriggerSlot).toBe(menuTrigger);
+    expect(
+      screen.queryByRole("dialog", { name: "菜单" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("supports a controlled default-open mobile drawer state with user info inside", () => {
     renderAppShell({ defaultMobileNavOpen: true });
 

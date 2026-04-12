@@ -130,6 +130,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.
 - 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
 - 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
@@ -177,6 +178,8 @@ PR: include
 ![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
 
 ### App Shell
+
+![App shell on mobile with the drawer trigger aligned on the top brand row](./assets/app-shell-mobile-header-responsive.png)
 
 ![App shell on mobile with the navigation drawer expanded](./assets/app-shell-mobile-menu-responsive.png)
 
