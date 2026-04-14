@@ -490,6 +490,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "`localPart` 与 `subdomain` 都是可选字段，但会经过 shared 正则校验。",
             "`rootDomain` 可选；省略时服务端会从当前 active 域名里随机挑一个。",
             `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
+            "若目标域名已启用 Catch All，服务端仍会在首次使用该子域时补齐 Cloudflare Email Routing DNS，但不会再为单个邮箱创建额外的 per-address routing rule；此时响应中的 `routingRuleId` 可能为 null。",
           ],
         },
         {
@@ -522,6 +523,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "命中现有 active mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
             "若要创建长期邮箱，可显式传 `expiresInMinutes: null`。",
+            "若命中新建的 Catch-all 域名子域，服务端会先确保该子域具备 Email Routing DNS，再复用 Catch All 收信；不会额外创建单邮箱 routing rule。",
           ],
         },
         {

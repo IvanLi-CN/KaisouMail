@@ -419,7 +419,7 @@ const upsertSubdomainUsage = async (
     )
     .limit(1);
 
-  if (!knownSubdomain[0] && !shouldUseCatchAllDelivery(domain)) {
+  if (!knownSubdomain[0]) {
     await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
   }
 
