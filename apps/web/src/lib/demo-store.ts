@@ -477,7 +477,14 @@ export const demoApi = {
     return clone(state.domains);
   },
   async listDomainCatalog() {
-    return clone(buildDomainCatalog());
+    return {
+      domains: clone(buildDomainCatalog()),
+      cloudflareSync: {
+        status: "live" as const,
+        retryAfter: null,
+        retryAfterSeconds: null,
+      },
+    };
   },
   async createDomain(input: { rootDomain: string; zoneId: string }) {
     const rootDomain = input.rootDomain.trim().toLowerCase();

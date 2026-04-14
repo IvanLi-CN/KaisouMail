@@ -383,6 +383,7 @@ const resolveMailboxExpiresAt = (
 };
 
 const upsertSubdomainUsage = async (
+  env: WorkerEnv,
   db: ReturnType<typeof getDb>,
   config: RuntimeConfig,
   domain: DomainRow,
@@ -398,7 +399,7 @@ const upsertSubdomainUsage = async (
     .limit(1);
 
   if (!knownSubdomain[0]) {
-    await ensureSubdomainEnabled(config, domain, subdomain);
+    await ensureSubdomainEnabled(env, config, domain, subdomain);
   }
 
   if (knownSubdomain[0]) {
@@ -441,9 +442,10 @@ const promoteCatchAllMailbox = async (
     mailbox.expiresAt,
   );
 
-  await upsertSubdomainUsage(db, config, domain, mailbox.subdomain, now);
+  await upsertSubdomainUsage(env, db, config, domain, mailbox.subdomain, now);
 
   const routingRuleId = await createRoutingRule(
+    env,
     config,
     domain,
     mailbox.address,
@@ -737,9 +739,10 @@ export const createMailboxForUser = async (
       );
       mailboxInserted = true;
 
-      await upsertSubdomainUsage(db, config, domain, subdomain, now);
+      await upsertSubdomainUsage(env, db, config, domain, subdomain, now);
 
       routingRuleId = await createRoutingRule(
+        env,
         config,
         domain,
         mailboxAddress.address,
@@ -772,7 +775,7 @@ export const createMailboxForUser = async (
 
       if (routingRuleId) {
         try {
-          await deleteRoutingRule(config, domain, routingRuleId);
+          await deleteRoutingRule(env, config, domain, routingRuleId);
         } catch {
           // Ignore cleanup failures here; the primary error is the mailbox
           // creation race or write failure that caused the insert to abort.
@@ -1017,7 +1020,7 @@ export const destroyMailbox = async (
         address: mailbox.address,
       });
     }
-    await deleteRoutingRule(config, domain, mailbox.routingRuleId);
+    await deleteRoutingRule(env, config, domain, mailbox.routingRuleId);
   }
 
   const relatedMessages = await db

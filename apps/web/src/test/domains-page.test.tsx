@@ -18,6 +18,11 @@ const queryClientState = {
 
 const domainsHookState = {
   catalog: demoDomainCatalog,
+  cloudflareSync: {
+    status: "live" as const,
+    retryAfter: null,
+    retryAfterSeconds: null,
+  },
   error: null as Error | null,
   refetch: vi.fn(),
   bindMutateAsync: vi.fn(),
@@ -65,7 +70,10 @@ vi.mock("@/hooks/use-meta", () => ({
 vi.mock("@/hooks/use-domains", () => ({
   domainCatalogQueryKey: ["domains", "catalog"],
   useDomainCatalogQuery: () => ({
-    data: domainsHookState.catalog,
+    data: {
+      domains: domainsHookState.catalog,
+      cloudflareSync: domainsHookState.cloudflareSync,
+    },
     error: domainsHookState.error,
     refetch: domainsHookState.refetch,
   }),
@@ -98,6 +106,11 @@ vi.mock("@/hooks/use-domains", () => ({
 
 afterEach(() => {
   domainsHookState.catalog = demoDomainCatalog;
+  domainsHookState.cloudflareSync = {
+    status: "live",
+    retryAfter: null,
+    retryAfterSeconds: null,
+  };
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
   domainsHookState.bindMutateAsync = vi.fn();
@@ -116,6 +129,40 @@ if (!docsLinks) {
 }
 
 describe("domains page view", () => {
+  it("renders a non-blocking Cloudflare cooldown banner with manual retry", () => {
+    const onReload = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog.filter((domain) => domain.id !== null)}
+          cloudflareSync={{
+            status: "rate_limited",
+            retryAfter: "2026-04-14T10:00:00.000Z",
+            retryAfterSeconds: 120,
+          }}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+          onReload={onReload}
+        />
+      </MemoryRouter>,
+    );
+
+    const banner = screen.getByTestId("domain-catalog-rate-limit-banner");
+    expect(banner).toHaveTextContent("Cloudflare 域名目录正在冷却");
+    expect(banner).toHaveTextContent("当前先展示项目内已知域名");
+    fireEvent.click(screen.getByRole("button", { name: "立即重试" }));
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
   it("renders binding controls, statuses, and delete actions", async () => {
     const onDelete = vi.fn(async () => undefined);
 
@@ -481,7 +528,10 @@ describe("domains page view", () => {
       disabledAt: null,
     }));
     domainsHookState.refetch = vi.fn(async () => ({
-      data: demoDomainCatalog,
+      data: {
+        domains: demoDomainCatalog,
+        cloudflareSync: domainsHookState.cloudflareSync,
+      },
     }));
 
     render(
@@ -510,15 +560,22 @@ describe("domains page view", () => {
       throw new Error("expected setQueryData updater");
     }
 
-    expect(setQueryDataUpdater(demoDomainCatalog)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          rootDomain: "fallback.example.dev",
-          cloudflareStatus: "pending",
-          projectStatus: "provisioning_error",
-          catchAllEnabled: false,
-        }),
-      ]),
+    expect(
+      setQueryDataUpdater({
+        domains: demoDomainCatalog,
+        cloudflareSync: domainsHookState.cloudflareSync,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        domains: expect.arrayContaining([
+          expect.objectContaining({
+            rootDomain: "fallback.example.dev",
+            cloudflareStatus: "pending",
+            projectStatus: "provisioning_error",
+            catchAllEnabled: false,
+          }),
+        ]),
+      }),
     );
   });
 
@@ -537,7 +594,10 @@ describe("domains page view", () => {
       disabledAt: null,
     }));
     domainsHookState.refetch = vi.fn(async () => ({
-      data: demoDomainCatalog,
+      data: {
+        domains: demoDomainCatalog,
+        cloudflareSync: domainsHookState.cloudflareSync,
+      },
     }));
 
     render(
@@ -567,17 +627,24 @@ describe("domains page view", () => {
       throw new Error("expected setQueryData updater");
     }
 
-    expect(setQueryDataUpdater(demoDomainCatalog)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          rootDomain: "retry.example.dev",
-          cloudflareStatus: null,
-          projectStatus: "provisioning_error",
-          catchAllEnabled: false,
-          lastProvisionError:
-            "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
-        }),
-      ]),
+    expect(
+      setQueryDataUpdater({
+        domains: demoDomainCatalog,
+        cloudflareSync: domainsHookState.cloudflareSync,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        domains: expect.arrayContaining([
+          expect.objectContaining({
+            rootDomain: "retry.example.dev",
+            cloudflareStatus: null,
+            projectStatus: "provisioning_error",
+            catchAllEnabled: false,
+            lastProvisionError:
+              "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
+          }),
+        ]),
+      }),
     );
   });
 
@@ -1526,24 +1593,27 @@ describe("domains page view", () => {
       disabledAt: null,
     }));
     domainsHookState.refetch = vi.fn(async () => ({
-      data: [
-        {
-          id: "dom_stale",
-          rootDomain: "reuse.example.dev",
-          zoneId: "zone_reuse",
-          bindingSource: "catalog",
-          cloudflareAvailability: "available",
-          cloudflareStatus: "active",
-          nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
-          projectStatus: "disabled",
-          catchAllEnabled: false,
-          lastProvisionError: null,
-          createdAt: "2026-04-10T08:00:00.000Z",
-          updatedAt: "2026-04-10T08:00:00.000Z",
-          lastProvisionedAt: "2026-04-10T08:00:00.000Z",
-          disabledAt: "2026-04-10T08:00:00.000Z",
-        },
-      ],
+      data: {
+        domains: [
+          {
+            id: "dom_stale",
+            rootDomain: "reuse.example.dev",
+            zoneId: "zone_reuse",
+            bindingSource: "catalog",
+            cloudflareAvailability: "available",
+            cloudflareStatus: "active",
+            nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+            projectStatus: "disabled",
+            catchAllEnabled: false,
+            lastProvisionError: null,
+            createdAt: "2026-04-10T08:00:00.000Z",
+            updatedAt: "2026-04-10T08:00:00.000Z",
+            lastProvisionedAt: "2026-04-10T08:00:00.000Z",
+            disabledAt: "2026-04-10T08:00:00.000Z",
+          },
+        ],
+        cloudflareSync: domainsHookState.cloudflareSync,
+      },
     }));
 
     render(

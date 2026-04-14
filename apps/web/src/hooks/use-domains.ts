@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { usePageActivity } from "@/hooks/use-page-activity";
-import { apiClient } from "@/lib/api";
+import { ApiClientError, apiClient } from "@/lib/api";
 import { resolveDomainCatalogPollingInterval } from "@/lib/domain-catalog";
 
 const domainsKey = ["domains"] as const;
@@ -21,15 +21,25 @@ export const useDomainCatalogQuery = () => {
   return useQuery({
     queryKey: domainCatalogQueryKey,
     queryFn: () => apiClient.listDomainCatalog(),
+    retry: (failureCount, error) => {
+      if (
+        error instanceof ApiClientError &&
+        (error.status === 429 || error.retryAfterSeconds !== null)
+      ) {
+        return false;
+      }
+
+      return failureCount < 3;
+    },
     refetchInterval: (query) =>
       resolveDomainCatalogPollingInterval({
-        domains: query.state.data,
+        domains: query.state.data?.domains,
+        cloudflareSync: query.state.data?.cloudflareSync,
         requestedIntervalMs: DOMAIN_CATALOG_POLLING_INTERVAL_MS,
         isDocumentVisible,
         isOnline,
-        allowHidden: true,
       }),
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
   });

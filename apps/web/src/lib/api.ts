@@ -91,6 +91,7 @@ export class ApiClientError extends Error {
     message: string,
     public readonly details: unknown = null,
     public readonly status: number | null = null,
+    public readonly retryAfterSeconds: number | null = null,
   ) {
     super(message);
   }
@@ -125,13 +126,27 @@ const requestJson = async <T>(
   if (!response.ok) {
     const parsedError = apiErrorSchema.safeParse(payload);
     if (parsedError.success) {
+      const retryAfterHeader = response.headers.get("retry-after");
+      const retryAfterSeconds =
+        retryAfterHeader && /^\d+$/.test(retryAfterHeader)
+          ? Number(retryAfterHeader)
+          : null;
       throw new ApiClientError(
         parsedError.data.error,
         parsedError.data.details ?? null,
         response.status,
+        retryAfterSeconds,
       );
     }
-    throw new ApiClientError("Request failed", null, response.status);
+    throw new ApiClientError(
+      "Request failed",
+      null,
+      response.status,
+      response.headers.get("retry-after") &&
+        /^\d+$/.test(response.headers.get("retry-after") ?? "")
+        ? Number(response.headers.get("retry-after"))
+        : null,
+    );
   }
   return parser(payload);
 };
@@ -378,12 +393,9 @@ export const apiClient = {
   },
   async listDomainCatalog() {
     if (DEMO_MODE) return demoApi.listDomainCatalog();
-    const payload = await requestJson(
-      "/api/domains/catalog",
-      { method: "GET" },
-      (value) => listDomainCatalogResponseSchema.parse(value),
+    return requestJson("/api/domains/catalog", { method: "GET" }, (value) =>
+      listDomainCatalogResponseSchema.parse(value),
     );
-    return payload.domains;
   },
   async createDomain(input: { rootDomain: string; zoneId: string }) {
     const payload = createDomainRequestSchema.parse(input);

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
-import type { DomainCatalogItem } from "@/lib/contracts";
+import type { CloudflareSync, DomainCatalogItem } from "@/lib/contracts";
 import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { demoDomainCatalog, demoSessionUser, demoVersion } from "@/mocks/data";
 import { DomainsPageView } from "@/pages/domains-page";
@@ -47,6 +47,12 @@ const longZoneDialogDomain: DomainCatalogItem = {
   updatedAt: "2026-04-10T08:00:00.000Z",
   lastProvisionedAt: null,
   disabledAt: null,
+};
+
+const rateLimitedCloudflareSync: CloudflareSync = {
+  status: "rate_limited",
+  retryAfter: "2026-04-14T10:00:00.000Z",
+  retryAfterSeconds: 120,
 };
 
 const meta = {
@@ -249,6 +255,25 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByRole("button", { name: "查看详情" }),
     ).toHaveAttribute("data-icon-only", "true");
+  },
+};
+
+export const RateLimitedCatalog: Story = {
+  args: {
+    domains: demoDomainCatalog.filter((domain) => domain.id !== null),
+    cloudflareSync: rateLimitedCloudflareSync,
+    onReload: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByTestId("domain-catalog-rate-limit-banner"),
+    ).toHaveTextContent("Cloudflare 域名目录正在冷却");
+    await expect(
+      canvas.getByRole("button", { name: "立即重试" }),
+    ).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "立即重试" }));
+    await expect(args.onReload).toHaveBeenCalled();
   },
 };
 

@@ -10,9 +10,15 @@ import {
 } from "../env";
 import { nowIso } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
+import {
+  resolveRetryAfterIso,
+  resolveRetryAfterSeconds,
+} from "../lib/rate-limit";
 import { getRuntimeStateValue, setRuntimeStateValue } from "./runtime-state";
 
 const WORKERS_AI_PAUSED_UNTIL_KEY = "workers_ai_verification_paused_until";
+const WORKERS_AI_RATE_LIMITED_UNTIL_KEY =
+  "workers_ai_verification_rate_limited_until";
 const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
 const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
@@ -359,20 +365,59 @@ const shouldPauseWorkersAi = (error: unknown) => {
   );
 };
 
-const getWorkersAiPausedUntil = async (env: WorkerEnv) => {
-  const pausedUntil = await getRuntimeStateValue(
-    env,
-    WORKERS_AI_PAUSED_UNTIL_KEY,
-  );
-  if (!pausedUntil) return null;
+const extractRetryAfterValue = (error: unknown) => {
+  if (!error || typeof error !== "object") return null;
 
-  const pausedUntilTime = new Date(pausedUntil).getTime();
-  if (Number.isNaN(pausedUntilTime)) return null;
+  for (const key of ["retryAfter", "retry_after"] as const) {
+    const value = (error as Record<string, unknown>)[key];
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value);
+    }
+  }
 
-  return pausedUntilTime > Date.now()
-    ? new Date(pausedUntilTime).toISOString()
-    : null;
+  const headers = (error as Record<string, unknown>).headers;
+  if (headers && typeof headers === "object") {
+    if (
+      "get" in headers &&
+      typeof (headers as { get?: unknown }).get === "function"
+    ) {
+      const value = (
+        headers as { get: (name: string) => string | null | undefined }
+      ).get("retry-after");
+      if (value) return value;
+    }
+
+    for (const key of ["retry-after", "Retry-After"] as const) {
+      const value = (headers as Record<string, unknown>)[key];
+      if (typeof value === "string" || typeof value === "number") {
+        return String(value);
+      }
+    }
+  }
+
+  return null;
 };
+
+const resolveActiveIso = (...values: Array<string | null>) =>
+  values.reduce<string | null>((latest, value) => {
+    if (!value) return latest;
+
+    const timestamp = new Date(value).getTime();
+    if (Number.isNaN(timestamp) || timestamp <= Date.now()) {
+      return latest;
+    }
+
+    if (!latest) return new Date(timestamp).toISOString();
+    return timestamp > new Date(latest).getTime()
+      ? new Date(timestamp).toISOString()
+      : latest;
+  }, null);
+
+const getWorkersAiPausedUntil = async (env: WorkerEnv) =>
+  resolveActiveIso(
+    await getRuntimeStateValue(env, WORKERS_AI_PAUSED_UNTIL_KEY),
+    await getRuntimeStateValue(env, WORKERS_AI_RATE_LIMITED_UNTIL_KEY),
+  );
 
 const pauseWorkersAiUntilReset = async (env: WorkerEnv) =>
   setRuntimeStateValue(
@@ -380,6 +425,20 @@ const pauseWorkersAiUntilReset = async (env: WorkerEnv) =>
     WORKERS_AI_PAUSED_UNTIL_KEY,
     resolveNextUtcMidnightIso(),
   );
+
+const pauseWorkersAiTemporarily = async (env: WorkerEnv, error: unknown) => {
+  const retryAfterSeconds = resolveRetryAfterSeconds(
+    extractRetryAfterValue(error),
+    MESSAGE_VERIFICATION_RETRY_BACKOFF_MS / 1000,
+  );
+  const retryAfter = resolveRetryAfterIso(retryAfterSeconds);
+  await setRuntimeStateValue(
+    env,
+    WORKERS_AI_RATE_LIMITED_UNTIL_KEY,
+    retryAfter,
+  );
+  return retryAfter;
+};
 
 const maybeVerifyWithAi = async (
   env: WorkerEnv,
@@ -493,6 +552,15 @@ const maybeVerifyWithAi = async (
   } catch (error) {
     if (shouldPauseWorkersAi(error)) {
       const retryAfter = await pauseWorkersAiUntilReset(env);
+      return {
+        verification: null,
+        shouldRetry: true,
+        retryAfter,
+      };
+    }
+
+    if (extractErrorStatus(error) === 429) {
+      const retryAfter = await pauseWorkersAiTemporarily(env, error);
       return {
         verification: null,
         shouldRetry: true,

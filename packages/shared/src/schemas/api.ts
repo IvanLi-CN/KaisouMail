@@ -135,8 +135,15 @@ export const listDomainsResponseSchema = z.object({
   domains: z.array(domainSchema),
 });
 
+export const cloudflareSyncSchema = z.object({
+  status: z.enum(["live", "rate_limited"]),
+  retryAfter: z.string().datetime({ offset: true }).nullable(),
+  retryAfterSeconds: z.number().int().nonnegative().nullable(),
+});
+
 export const listDomainCatalogResponseSchema = z.object({
   domains: z.array(domainCatalogItemSchema),
+  cloudflareSync: cloudflareSyncSchema,
 });
 
 export const listMessagesResponseSchema = z.object({

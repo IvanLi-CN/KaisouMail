@@ -5,6 +5,7 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly details?: unknown,
+    public readonly headers?: HeadersInit,
   ) {
     super(message);
   }

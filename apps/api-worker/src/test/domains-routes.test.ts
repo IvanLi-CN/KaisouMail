@@ -73,24 +73,31 @@ describe("domain routes", () => {
   });
 
   it("returns the merged Cloudflare catalog from /api/domains/catalog", async () => {
-    listDomainCatalog.mockResolvedValue([
-      {
-        id: null,
-        rootDomain: "ops.example.org",
-        zoneId: "zone_available",
-        bindingSource: null,
-        cloudflareAvailability: "available",
-        cloudflareStatus: "pending",
-        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
-        projectStatus: "not_enabled",
-        catchAllEnabled: false,
-        lastProvisionError: null,
-        createdAt: null,
-        updatedAt: null,
-        lastProvisionedAt: null,
-        disabledAt: null,
+    listDomainCatalog.mockResolvedValue({
+      domains: [
+        {
+          id: null,
+          rootDomain: "ops.example.org",
+          zoneId: "zone_available",
+          bindingSource: null,
+          cloudflareAvailability: "available",
+          cloudflareStatus: "pending",
+          nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+          projectStatus: "not_enabled",
+          catchAllEnabled: false,
+          lastProvisionError: null,
+          createdAt: null,
+          updatedAt: null,
+          lastProvisionedAt: null,
+          disabledAt: null,
+        },
+      ],
+      cloudflareSync: {
+        status: "live",
+        retryAfter: null,
+        retryAfterSeconds: null,
       },
-    ]);
+    });
 
     const app = createApp();
     const response = await app.fetch(
@@ -118,6 +125,11 @@ describe("domain routes", () => {
           disabledAt: null,
         },
       ],
+      cloudflareSync: {
+        status: "live",
+        retryAfter: null,
+        retryAfterSeconds: null,
+      },
     });
   });
 

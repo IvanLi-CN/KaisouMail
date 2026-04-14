@@ -220,6 +220,36 @@ describe("message verification service", () => {
     );
   });
 
+  it("stores a temporary Workers AI cooldown for generic 429 responses", async () => {
+    const run = vi.fn().mockRejectedValue({
+      status: 429,
+      retryAfter: "120",
+      message: "Workers AI rate limited",
+    });
+
+    const detection = await resolveVerificationDetectionForMessage(
+      {
+        AI: { run },
+      } as never,
+      {
+        subject: "Verification request",
+        text: "Your verification codes are 551177 and 662288. Use the latest one to continue.",
+        html: null,
+      },
+    );
+
+    expect(detection).toEqual({
+      verification: null,
+      shouldRetry: true,
+      retryAfter: expect.any(String),
+    });
+    expect(setRuntimeStateValue).toHaveBeenCalledWith(
+      { AI: { run } },
+      "workers_ai_verification_rate_limited_until",
+      expect.any(String),
+    );
+  });
+
   it("marks plain non-verification messages as checked without retry", async () => {
     const detection = await resolveVerificationDetectionForMessage(
       {} as never,
