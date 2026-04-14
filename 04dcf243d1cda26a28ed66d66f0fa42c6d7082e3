@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.24.1",
+  "base_stable_version": "0.24.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-14T16:03:23Z",
+  "next_stable_version": "0.24.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "ad54a27edee7fa7d3d54be8cd75c3e90c6ad373b",
+  "pr_number": 49,
+  "pr_title": "fix: harden 429 cooldown handling",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.24.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.24.1",
+  "target_sha": "04dcf243d1cda26a28ed66d66f0fa42c6d7082e3",
+  "type_label": "type:patch"
+}
