@@ -719,6 +719,71 @@ describe("domain catalog", () => {
     );
   });
 
+  it("preserves bind 429 metadata when cleanup is also rate limited", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_bound",
+      name: "bound.example.org",
+      status: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockRejectedValue(
+      new ApiError(
+        429,
+        "Cloudflare API rate limit reached; retry later",
+        {
+          retryAfter: "2026-04-14T10:00:00.000Z",
+          retryAfterSeconds: 120,
+          source: "cloudflare",
+        },
+        { "retry-after": "120" },
+      ),
+    );
+    deleteZone.mockRejectedValue(
+      new ApiError(
+        429,
+        "Cloudflare cleanup rate limit reached; retry later",
+        {
+          retryAfter: "2026-04-14T10:03:00.000Z",
+          retryAfterSeconds: 300,
+          source: "cloudflare",
+        },
+        { "retry-after": "300" },
+      ),
+    );
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "bound.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 429,
+      message: "Cloudflare API rate limit reached; retry later",
+      details: expect.objectContaining({
+        retryAfterSeconds: 120,
+        cleanupRequired: true,
+        cleanupError: "Cloudflare cleanup rate limit reached; retry later",
+      }),
+      headers: {
+        "retry-after": "120",
+      },
+    });
+
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        bypassRateLimitCheck: true,
+      },
+    );
+  });
+
   it("rolls back bound zones when initial provisioning fails fatally", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);

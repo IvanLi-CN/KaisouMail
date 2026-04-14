@@ -428,6 +428,33 @@ const createAndPersistBoundZone = async (
         },
       );
     } catch (cleanupError) {
+      const cleanupMessage =
+        cleanupError instanceof Error
+          ? cleanupError.message
+          : String(cleanupError);
+
+      if (error instanceof ApiError && error.status === 429) {
+        const existingDetails =
+          error.details &&
+          typeof error.details === "object" &&
+          !Array.isArray(error.details)
+            ? (error.details as Record<string, unknown>)
+            : {};
+
+        throw new ApiError(
+          429,
+          error.message,
+          {
+            ...existingDetails,
+            rootDomain,
+            zoneId: zone.id,
+            cleanupRequired: true,
+            cleanupError: cleanupMessage,
+          },
+          error.headers,
+        );
+      }
+
       throw new ApiError(
         502,
         "Failed to persist bound domain and clean up Cloudflare zone",
@@ -435,10 +462,7 @@ const createAndPersistBoundZone = async (
           rootDomain,
           zoneId: zone.id,
           cause: error instanceof Error ? error.message : String(error),
-          cleanupError:
-            cleanupError instanceof Error
-              ? cleanupError.message
-              : String(cleanupError),
+          cleanupError: cleanupMessage,
         },
       );
     }
