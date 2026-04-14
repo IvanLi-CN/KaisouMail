@@ -605,6 +605,11 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           summary: "实时列出 Cloudflare 当前可见域名，并合并项目内启用状态。",
           auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           responseBody: `{
+  "cloudflareSync": {
+    "status": "live",
+    "retryAfter": null,
+    "retryAfterSeconds": null
+  },
   "domains": [
     {
       "id": null,
@@ -637,6 +642,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "`cloudflareAvailability` 表示当前 token 是否还能列出该 zone，`projectStatus` 表示项目内是否启用，`catchAllEnabled` 表示项目是否接管该域的 Cloudflare catch-all。",
             "本地已有记录但 Cloudflare 当前不可见时，仍会回显为 `missing`，方便管理员继续停用或排查权限。",
+            "若 Cloudflare API 正在 429 冷却，接口仍返回 `200 + cloudflareSync.status=rate_limited`，并保留项目内已知域名数据。",
           ],
         },
         {
@@ -664,6 +670,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
+            "若上游 Cloudflare API 429，接口会直接返回 `429` 并携带 `Retry-After`，不会把域名误写成 `provisioning_error`。",
             "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
           ],
         },
@@ -697,6 +704,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           notes: [
             "成功后状态会切回 `active`，并刷新 `lastProvisionedAt`。",
+            "若上游 Cloudflare API 429，接口会直接返回 `429` 并透传 `Retry-After`。",
             "已停用的域名不能 retry；需要新建一条新记录。",
           ],
         },

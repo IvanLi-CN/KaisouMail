@@ -21,15 +21,16 @@ export const useDomainCatalogQuery = () => {
   return useQuery({
     queryKey: domainCatalogQueryKey,
     queryFn: () => apiClient.listDomainCatalog(),
+    retry: false,
     refetchInterval: (query) =>
       resolveDomainCatalogPollingInterval({
-        domains: query.state.data,
+        domains: query.state.data?.domains,
+        cloudflareSync: query.state.data?.cloudflareSync,
         requestedIntervalMs: DOMAIN_CATALOG_POLLING_INTERVAL_MS,
         isDocumentVisible,
         isOnline,
-        allowHidden: true,
       }),
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
   });

@@ -22,17 +22,23 @@ import {
 } from "@/hooks/use-domains";
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
-import type { DomainCatalogItem } from "@/lib/contracts";
+import type {
+  CloudflareSync,
+  DomainCatalogItem,
+  DomainCatalogResponse,
+} from "@/lib/contracts";
 import {
   buildFallbackBoundDomainCatalogEntry,
   isFreshDomainCatalogEntry,
 } from "@/lib/domain-catalog";
 import { getErrorDetails } from "@/lib/error-utils";
+import { formatDateTime } from "@/lib/format";
 import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
+  cloudflareSync?: CloudflareSync | null;
   isDomainBindingEnabled?: boolean;
   isDomainLifecycleEnabled?: boolean;
   docsLinks?: PublicDocsLinks | null;
@@ -62,6 +68,7 @@ type DomainsPageViewProps = {
 
 export const DomainsPageView = ({
   domains,
+  cloudflareSync = null,
   isDomainBindingEnabled = true,
   isDomainLifecycleEnabled = true,
   docsLinks = null,
@@ -108,6 +115,30 @@ export const DomainsPageView = ({
       />
     ) : (
       <>
+        {cloudflareSync?.status === "rate_limited" ? (
+          <div
+            className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+            data-testid="domain-catalog-rate-limit-banner"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="font-medium">Cloudflare 域名目录正在冷却</p>
+                <p className="text-xs leading-5 text-amber-100/90">
+                  当前先展示项目内已知域名；Cloudflare 实时目录暂时不可用。
+                  {cloudflareSync.retryAfter
+                    ? `预计可在 ${formatDateTime(cloudflareSync.retryAfter)} 后重试。`
+                    : "请稍后再试。"}
+                </p>
+              </div>
+              {onReload ? (
+                <Button size="sm" variant="outline" onClick={onReload}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  立即重试
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
         {isDomainBindingEnabled ? (
           <DomainBindCard
             domains={domains}
@@ -205,7 +236,8 @@ export const DomainsPage = () => {
 
   return (
     <DomainsPageView
-      domains={domainCatalogQuery.data ?? []}
+      domains={domainCatalogQuery.data?.domains ?? []}
+      cloudflareSync={domainCatalogQuery.data?.cloudflareSync ?? null}
       isDomainBindingEnabled={
         metaQuery.data?.cloudflareDomainBindingEnabled ?? false
       }
@@ -228,7 +260,7 @@ export const DomainsPage = () => {
       onBind={async (values) => {
         const boundDomain = await bindDomainMutation.mutateAsync(values);
         const refreshedCatalog = await domainCatalogQuery.refetch();
-        const refreshedMatch = refreshedCatalog.data?.find((domain) =>
+        const refreshedMatch = refreshedCatalog.data?.domains.find((domain) =>
           isFreshDomainCatalogEntry({ domain, result: boundDomain }),
         );
         if (refreshedMatch) return refreshedMatch;
@@ -236,22 +268,36 @@ export const DomainsPage = () => {
         const fallbackCatalogEntry =
           buildFallbackBoundDomainCatalogEntry(boundDomain);
         if (fallbackCatalogEntry) {
-          queryClient.setQueryData<DomainCatalogItem[]>(
+          queryClient.setQueryData<DomainCatalogResponse>(
             domainCatalogQueryKey,
             (current) => {
-              const currentDomains = current ?? [];
+              const currentDomains = current?.domains ?? [];
               const currentIndex = currentDomains.findIndex(
                 (domain) =>
                   domain.rootDomain === fallbackCatalogEntry.rootDomain,
               );
 
               if (currentIndex >= 0) {
-                return currentDomains.map((domain, index) =>
-                  index === currentIndex ? fallbackCatalogEntry : domain,
-                );
+                return {
+                  domains: currentDomains.map((domain, index) =>
+                    index === currentIndex ? fallbackCatalogEntry : domain,
+                  ),
+                  cloudflareSync: current?.cloudflareSync ?? {
+                    status: "live",
+                    retryAfter: null,
+                    retryAfterSeconds: null,
+                  },
+                };
               }
 
-              return [fallbackCatalogEntry, ...currentDomains];
+              return {
+                domains: [fallbackCatalogEntry, ...currentDomains],
+                cloudflareSync: current?.cloudflareSync ?? {
+                  status: "live",
+                  retryAfter: null,
+                  retryAfterSeconds: null,
+                },
+              };
             },
           );
           return fallbackCatalogEntry;

@@ -151,9 +151,8 @@ export const createApp = () => {
       : resolveFallbackCorsOrigin(requestOrigin, c.env);
 
     if (error instanceof ApiError) {
-      const headers = new Headers({
-        "content-type": "application/json",
-      });
+      const headers = new Headers(error.headers ?? undefined);
+      headers.set("content-type", "application/json");
       applyCorsHeaders(headers, allowedOrigin, allowHeaders);
       return new Response(
         JSON.stringify(

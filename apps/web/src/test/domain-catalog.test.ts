@@ -178,9 +178,8 @@ describe("domain catalog polling helpers", () => {
         requestedIntervalMs: 15_000,
         isDocumentVisible: false,
         isOnline: true,
-        allowHidden: true,
       }),
-    ).toBe(15_000);
+    ).toBe(false);
 
     expect(
       resolveDomainCatalogPollingInterval({
@@ -188,6 +187,36 @@ describe("domain catalog polling helpers", () => {
         requestedIntervalMs: 15_000,
         isDocumentVisible: true,
         isOnline: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("uses the cooldown window instead of the normal poll interval when Cloudflare is rate limited", () => {
+    expect(
+      resolveDomainCatalogPollingInterval({
+        domains: demoDomainCatalog,
+        cloudflareSync: {
+          status: "rate_limited",
+          retryAfter: "2026-04-14T08:45:00.000Z",
+          retryAfterSeconds: 90,
+        },
+        requestedIntervalMs: 15_000,
+        isDocumentVisible: true,
+        isOnline: true,
+      }),
+    ).toBe(90_000);
+
+    expect(
+      resolveDomainCatalogPollingInterval({
+        domains: demoDomainCatalog,
+        cloudflareSync: {
+          status: "rate_limited",
+          retryAfter: "2026-04-14T08:45:00.000Z",
+          retryAfterSeconds: 90,
+        },
+        requestedIntervalMs: 15_000,
+        isDocumentVisible: false,
+        isOnline: true,
       }),
     ).toBe(false);
   });

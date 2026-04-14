@@ -2,10 +2,12 @@ import type {
   apiErrorSchema,
   apiKeySchema,
   apiMetaResponseSchema,
+  cloudflareSyncSchema,
   createApiKeyResponseSchema,
   createUserResponseSchema,
   domainCatalogItemSchema,
   domainSchema,
+  listDomainCatalogResponseSchema,
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
@@ -22,6 +24,10 @@ export type ApiErrorPayload = z.infer<typeof apiErrorSchema>;
 export type ApiMeta = z.infer<typeof apiMetaResponseSchema>;
 export type DomainRecord = z.infer<typeof domainSchema>;
 export type DomainCatalogItem = z.infer<typeof domainCatalogItemSchema>;
+export type CloudflareSync = z.infer<typeof cloudflareSyncSchema>;
+export type DomainCatalogResponse = z.infer<
+  typeof listDomainCatalogResponseSchema
+>;
 export type Mailbox = z.infer<typeof mailboxSchema>;
 export type MessageSummary = z.infer<typeof messageSummarySchema>;
 export type MessageDetail = z.infer<typeof messageDetailSchema>;

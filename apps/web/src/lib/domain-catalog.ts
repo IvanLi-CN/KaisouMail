@@ -1,4 +1,8 @@
-import type { DomainCatalogItem, DomainRecord } from "@/lib/contracts";
+import type {
+  CloudflareSync,
+  DomainCatalogItem,
+  DomainRecord,
+} from "@/lib/contracts";
 import { resolveAutoRefreshInterval } from "@/lib/message-refresh";
 
 export const needsDomainBindingFollowUp = (domain: DomainCatalogItem) =>
@@ -144,22 +148,29 @@ export const buildFallbackBoundDomainCatalogEntry = (
 
 export const resolveDomainCatalogPollingInterval = ({
   domains,
+  cloudflareSync,
   requestedIntervalMs,
   isDocumentVisible,
   isOnline,
-  allowHidden = false,
 }: {
   domains?: DomainCatalogItem[];
+  cloudflareSync?: CloudflareSync | null;
   requestedIntervalMs?: number;
   isDocumentVisible: boolean;
   isOnline: boolean;
-  allowHidden?: boolean;
 }) => {
+  if (cloudflareSync?.status === "rate_limited") {
+    if (!isDocumentVisible || !isOnline) return false;
+    return cloudflareSync.retryAfterSeconds
+      ? cloudflareSync.retryAfterSeconds * 1000
+      : false;
+  }
+
   if (!shouldPollDomainCatalog(domains)) return false;
 
   return resolveAutoRefreshInterval({
     requestedIntervalMs,
-    isDocumentVisible: allowHidden ? true : isDocumentVisible,
+    isDocumentVisible,
     isOnline,
   });
 };

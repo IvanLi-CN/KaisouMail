@@ -1,5 +1,11 @@
-import type { RuntimeConfig } from "../env";
+import type { RuntimeConfig, WorkerEnv } from "../env";
 import { ApiError } from "../lib/errors";
+import {
+  buildRateLimitErrorDetails,
+  resolveRetryAfterIso,
+  resolveRetryAfterSeconds,
+} from "../lib/rate-limit";
+import { getRuntimeStateValue, setRuntimeStateValue } from "./runtime-state";
 
 interface CloudflareError {
   code?: number;
@@ -139,7 +145,76 @@ const hasOnlyMissingRoutingRuleErrors = (
     ? errors.every((error) => /rule not found/i.test(error.message))
     : false;
 
+const CLOUDFLARE_RATE_LIMITED_UNTIL_KEY = "cloudflare_api_rate_limited_until";
+
+const createCloudflareRateLimitError = ({
+  retryAfter,
+  retryAfterSeconds,
+}: {
+  retryAfter: string;
+  retryAfterSeconds: number;
+}) =>
+  new ApiError(
+    429,
+    "Cloudflare API rate limit reached; retry later",
+    buildRateLimitErrorDetails({
+      retryAfter,
+      retryAfterSeconds,
+      source: "cloudflare",
+    }),
+    {
+      "retry-after": String(retryAfterSeconds),
+    },
+  );
+
+export const getCloudflareRateLimitState = async (env: WorkerEnv) => {
+  const value = await getRuntimeStateValue(
+    env,
+    CLOUDFLARE_RATE_LIMITED_UNTIL_KEY,
+  );
+  if (!value) return null;
+
+  const retryAfterTime = Date.parse(value);
+  if (Number.isNaN(retryAfterTime) || retryAfterTime <= Date.now()) {
+    return null;
+  }
+
+  return {
+    retryAfter: new Date(retryAfterTime).toISOString(),
+    retryAfterSeconds: Math.max(
+      0,
+      Math.ceil((retryAfterTime - Date.now()) / 1000),
+    ),
+  };
+};
+
+const ensureCloudflareRequestAllowed = async (env: WorkerEnv) => {
+  const state = await getCloudflareRateLimitState(env);
+  if (!state) return;
+  throw createCloudflareRateLimitError(state);
+};
+
+const rememberCloudflareRateLimit = async (
+  env: WorkerEnv,
+  response: Response,
+) => {
+  const retryAfterSeconds = resolveRetryAfterSeconds(
+    response.headers.get("retry-after"),
+  );
+  const retryAfter = resolveRetryAfterIso(retryAfterSeconds);
+  await setRuntimeStateValue(
+    env,
+    CLOUDFLARE_RATE_LIMITED_UNTIL_KEY,
+    retryAfter,
+  );
+  return {
+    retryAfter,
+    retryAfterSeconds,
+  };
+};
+
 const cfRequest = async <T>(
+  env: WorkerEnv,
   config: RuntimeConfig,
   path: string,
   init?: RequestInit,
@@ -151,6 +226,8 @@ const cfRequest = async <T>(
     }) => boolean;
   },
 ) => {
+  await ensureCloudflareRequestAllowed(env);
+
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
     headers: {
@@ -175,6 +252,12 @@ const cfRequest = async <T>(
     return null;
   }
 
+  if (response.status === 429) {
+    throw createCloudflareRateLimitError(
+      await rememberCloudflareRateLimit(env, response),
+    );
+  }
+
   if (!response.ok || !data?.success) {
     throw new ApiError(
       response.status || 502,
@@ -185,18 +268,23 @@ const cfRequest = async <T>(
   return data.result;
 };
 
-export const listZones = async (config: RuntimeConfig) => {
+export const listZones = async (env: WorkerEnv, config: RuntimeConfig) => {
   if (!ensureManagementEnabled(config)) return [];
   const result = await cfRequest<CloudflareZoneResult[]>(
+    env,
     config,
     "/zones?per_page=100",
   );
   return (result ?? []).map(toZoneSummary);
 };
 
-export const createZone = async (config: RuntimeConfig, rootDomain: string) => {
+export const createZone = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  rootDomain: string,
+) => {
   requireDomainLifecycleManagement(config, "binding");
-  const result = await cfRequest<CloudflareZoneResult>(config, "/zones", {
+  const result = await cfRequest<CloudflareZoneResult>(env, config, "/zones", {
     method: "POST",
     body: JSON.stringify({
       account: { id: requireAccountId(config) },
@@ -211,12 +299,14 @@ export const createZone = async (config: RuntimeConfig, rootDomain: string) => {
 };
 
 export const deleteZone = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
 ) => {
   requireDomainLifecycleManagement(config, "deletion");
   const zoneId = requireZoneId(domain);
   const result = await cfRequest<CloudflareZoneResult>(
+    env,
     config,
     `/zones/${zoneId}`,
     { method: "DELETE" },
@@ -229,6 +319,7 @@ export const deleteZone = async (
 };
 
 export const ensureSubdomainEnabled = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   subdomain: string,
@@ -236,13 +327,14 @@ export const ensureSubdomainEnabled = async (
   if (!ensureManagementEnabled(config)) return;
   const fqdn = `${subdomain}.${domain.rootDomain}`;
   const zoneId = requireZoneId(domain);
-  await cfRequest(config, `/zones/${zoneId}/email/routing/dns`, {
+  await cfRequest(env, config, `/zones/${zoneId}/email/routing/dns`, {
     method: "POST",
     body: JSON.stringify({ name: fqdn }),
   });
 };
 
 export const createRoutingRule = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   address: string,
@@ -251,6 +343,7 @@ export const createRoutingRule = async (
   const workerName = requireEmailWorkerName(config);
   const zoneId = requireZoneId(domain);
   const result = await cfRequest<{ id: string }>(
+    env,
     config,
     `/zones/${zoneId}/email/routing/rules`,
     {
@@ -267,12 +360,14 @@ export const createRoutingRule = async (
 };
 
 export const getCatchAllRule = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
 ) => {
   if (!ensureManagementEnabled(config)) return null;
   const zoneId = requireZoneId(domain);
   const result = await cfRequest<CloudflareCatchAllRuleResult>(
+    env,
     config,
     `/zones/${zoneId}/email/routing/rules/catch_all`,
   );
@@ -280,19 +375,26 @@ export const getCatchAllRule = async (
 };
 
 export const updateCatchAllRule = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   rule: CloudflareCatchAllRule,
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  await cfRequest(config, `/zones/${zoneId}/email/routing/rules/catch_all`, {
-    method: "PUT",
-    body: JSON.stringify(rule),
-  });
+  await cfRequest(
+    env,
+    config,
+    `/zones/${zoneId}/email/routing/rules/catch_all`,
+    {
+      method: "PUT",
+      body: JSON.stringify(rule),
+    },
+  );
 };
 
 export const deleteRoutingRule = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   ruleId: string,
@@ -300,6 +402,7 @@ export const deleteRoutingRule = async (
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
   await cfRequest(
+    env,
     config,
     `/zones/${zoneId}/email/routing/rules/${ruleId}`,
     {
@@ -314,21 +417,23 @@ export const deleteRoutingRule = async (
 };
 
 export const validateZoneAccess = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  await cfRequest<{ id: string }>(config, `/zones/${zoneId}`);
+  await cfRequest<{ id: string }>(env, config, `/zones/${zoneId}`);
 };
 
 export const enableDomainRouting = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  await cfRequest(config, `/zones/${zoneId}/email/routing/enable`, {
+  await cfRequest(env, config, `/zones/${zoneId}/email/routing/enable`, {
     method: "POST",
   });
 };

@@ -27,6 +27,11 @@ import {
 } from "./emailRouting";
 
 export type DomainRow = typeof domains.$inferSelect;
+export type CloudflareSyncState = {
+  status: "live" | "rate_limited";
+  retryAfter: string | null;
+  retryAfterSeconds: number | null;
+};
 type SubdomainRow = typeof subdomains.$inferSelect;
 type MailboxDomainRef = Pick<
   typeof mailboxes.$inferSelect,
@@ -232,6 +237,7 @@ const requireCatchAllManagementEnabled = (
 };
 
 const provisionDomain = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
 ) => {
@@ -243,8 +249,8 @@ const provisionDomain = async (
     };
   }
 
-  await validateZoneAccess(config, domain);
-  await enableDomainRouting(config, domain);
+  await validateZoneAccess(env, config, domain);
+  await enableDomainRouting(env, config, domain);
   return {
     status: "active" as const,
     lastProvisionError: null,
@@ -261,33 +267,38 @@ const listLocalDomainRows = async (env: WorkerEnv) => {
     .orderBy(...orderByRootDomain);
 };
 
-const listCloudflareZonesByRootDomain = async (config: RuntimeConfig) => {
-  const zones = await listZones(config);
+const listCloudflareZonesByRootDomain = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+) => {
+  const zones = await listZones(env, config);
   return new Map(
     zones.map((zone) => [normalizeRootDomain(zone.name), zone] as const),
   );
 };
 
 const findCatalogZone = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   rootDomain: string,
   zoneId: string,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
 
-  const zonesByRootDomain = await listCloudflareZonesByRootDomain(config);
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
   const zone = zonesByRootDomain.get(rootDomain);
   return zone && zone.id === zoneId ? zone : null;
 };
 
 const requireCatalogZone = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   rootDomain: string,
   zoneId: string,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return;
 
-  const zonesByRootDomain = await listCloudflareZonesByRootDomain(config);
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
   const zone = zonesByRootDomain.get(rootDomain);
   if (!zone || zone.id !== zoneId) {
     throw new ApiError(400, "Mailbox domain is not available in Cloudflare", {
@@ -317,6 +328,7 @@ const isRecoverableBindProvisionError = (error: unknown) => {
 };
 
 const resolveProvisionState = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   options?: {
@@ -324,8 +336,12 @@ const resolveProvisionState = async (
   },
 ): Promise<ManagedDomainProvisionState> => {
   try {
-    return await provisionDomain(config, domain);
+    return await provisionDomain(env, config, domain);
   } catch (error) {
+    if (error instanceof ApiError && error.status === 429) {
+      throw error;
+    }
+
     const allowProvisioningError =
       typeof options?.allowProvisioningError === "function"
         ? options.allowProvisioningError(error)
@@ -354,6 +370,7 @@ const persistBoundZone = async (
   },
 ) => {
   const provisionState = await resolveProvisionState(
+    env,
     config,
     {
       rootDomain: input.rootDomain,
@@ -377,7 +394,7 @@ const createAndPersistBoundZone = async (
   config: RuntimeConfig,
   rootDomain: string,
 ) => {
-  const zone = await createZone(config, rootDomain);
+  const zone = await createZone(env, config, rootDomain);
   try {
     return await persistBoundZone(env, config, {
       rootDomain,
@@ -397,8 +414,12 @@ const createAndPersistBoundZone = async (
       }
     }
 
+    if (error instanceof ApiError && error.status === 429) {
+      throw error;
+    }
+
     try {
-      await deleteZone(config, {
+      await deleteZone(env, config, {
         rootDomain,
         zoneId: zone.id,
       });
@@ -641,10 +662,32 @@ export const listDomainCatalog = async (
   env: WorkerEnv,
   config: RuntimeConfig,
 ) => {
-  const [rows, zonesByRootDomain] = await Promise.all([
-    listLocalDomainRows(env),
-    listCloudflareZonesByRootDomain(config),
-  ]);
+  const rows = await listLocalDomainRows(env);
+  let zonesByRootDomain = new Map<string, CloudflareZoneSummary>();
+  let cloudflareSync: CloudflareSyncState = {
+    status: "live",
+    retryAfter: null,
+    retryAfterSeconds: null,
+  };
+
+  try {
+    zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 429) {
+      throw error;
+    }
+
+    const details = error.details as
+      | { retryAfter?: string | null; retryAfterSeconds?: number | null }
+      | undefined;
+
+    cloudflareSync = {
+      status: "rate_limited",
+      retryAfter: details?.retryAfter ?? null,
+      retryAfterSeconds: details?.retryAfterSeconds ?? null,
+    };
+  }
+
   const rowsByRootDomain = new Map(
     rows.map((row) => [row.rootDomain, row] as const),
   );
@@ -653,15 +696,18 @@ export const listDomainCatalog = async (
     ...zonesByRootDomain.keys(),
   ]);
 
-  return [...rootDomains]
-    .sort((left, right) => left.localeCompare(right))
-    .map((rootDomain) =>
-      toDomainCatalogDto({
-        row: rowsByRootDomain.get(rootDomain) ?? null,
-        zone: zonesByRootDomain.get(rootDomain) ?? null,
-        rootDomain,
-      }),
-    );
+  return {
+    domains: [...rootDomains]
+      .sort((left, right) => left.localeCompare(right))
+      .map((rootDomain) =>
+        toDomainCatalogDto({
+          row: rowsByRootDomain.get(rootDomain) ?? null,
+          zone: zonesByRootDomain.get(rootDomain) ?? null,
+          rootDomain,
+        }),
+      ),
+    cloudflareSync,
+  };
 };
 
 export const listActiveRootDomains = async (env: WorkerEnv) => {
@@ -784,8 +830,9 @@ export const createDomain = async (
   const existing = await getDomainByRootDomain(env, rootDomain, {
     includeDeleted: true,
   });
-  await requireCatalogZone(config, rootDomain, zoneId);
+  await requireCatalogZone(env, config, rootDomain, zoneId);
   const provisionState = await resolveProvisionState(
+    env,
     config,
     {
       rootDomain,
@@ -822,6 +869,7 @@ export const bindDomain = async (
     const existingZoneId = createState.row.zoneId?.trim();
     if (existingZoneId) {
       const catalogZone = await findCatalogZone(
+        env,
         config,
         rootDomain,
         existingZoneId,
@@ -853,6 +901,7 @@ export const retryDomainProvision = async (
 
   const updatedAt = nowIso();
   const provisionState = await resolveProvisionState(
+    env,
     config,
     {
       rootDomain: existing.rootDomain,
@@ -903,7 +952,7 @@ export const enableDomainCatchAll = async (
     return toDomainDto(existing);
   }
 
-  const currentRule = await getCatchAllRule(config, existing);
+  const currentRule = await getCatchAllRule(env, config, existing);
   if (!currentRule) {
     throw new ApiError(500, "Catch-all rule is not available");
   }
@@ -913,6 +962,7 @@ export const enableDomainCatchAll = async (
     parseCatchAllRestoreState(existing.catchAllRestoreStateJson) ??
     toCatchAllRestoreState(currentRule);
   await updateCatchAllRule(
+    env,
     config,
     existing,
     buildManagedCatchAllRule(existing, currentRule, workerName),
@@ -962,7 +1012,7 @@ export const disableDomainCatchAll = async (
     throw new ApiError(500, "Domain catch-all restore state is missing");
   }
 
-  await updateCatchAllRule(config, existing, restoreState);
+  await updateCatchAllRule(env, config, existing, restoreState);
 
   const updatedAt = nowIso();
   const next: DomainRow = {
@@ -1045,7 +1095,7 @@ export const deleteDomain = async (
   requireProjectBoundDomain(existing);
   if (existing.deletedAt) {
     await requireDomainDeleteAllowed(env, existing);
-    await deleteZone(config, {
+    await deleteZone(env, config, {
       rootDomain: existing.rootDomain,
       zoneId: existing.zoneId,
     });
@@ -1067,7 +1117,7 @@ export const deleteDomain = async (
   }
 
   try {
-    await deleteZone(config, {
+    await deleteZone(env, config, {
       rootDomain: existing.rootDomain,
       zoneId: existing.zoneId,
     });

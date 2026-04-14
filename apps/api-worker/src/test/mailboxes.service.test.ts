@@ -411,11 +411,13 @@ describe("mailbox service helpers", () => {
 
       expect(created.address).toBe("ava-lin00@mail00.707979.xyz");
       expect(createRoutingRule).toHaveBeenCalledWith(
+        expect.any(Object),
         runtimeConfig,
         domain,
         "ava-lin00@mail00.707979.xyz",
       );
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        expect.any(Object),
         runtimeConfig,
         domain,
         "mail00",
@@ -544,6 +546,7 @@ describe("mailbox service helpers", () => {
       expect(created.address).toBe("ava-lin00@mail00.707979.xyz");
       expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        expect.any(Object),
         runtimeConfig,
         domain,
         "mail00",
@@ -552,6 +555,7 @@ describe("mailbox service helpers", () => {
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
+        expect.any(Object),
         runtimeConfig,
         domain,
         "ava-lin00@mail00.707979.xyz",
@@ -682,6 +686,7 @@ describe("mailbox service helpers", () => {
       expect(created.address).toBe("ava-lin00@ops.alpha.707979.xyz");
       expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+        expect.any(Object),
         runtimeConfig,
         domain,
         "ops.alpha",
@@ -690,6 +695,7 @@ describe("mailbox service helpers", () => {
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
       expect(createRoutingRule).toHaveBeenNthCalledWith(
         1,
+        expect.any(Object),
         runtimeConfig,
         domain,
         "ava-lin00@ops.alpha.707979.xyz",
@@ -952,11 +958,13 @@ describe("mailbox service helpers", () => {
     );
 
     expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      expect.any(Object),
       runtimeConfig,
       domain,
       "ops",
     );
     expect(createRoutingRule).toHaveBeenCalledWith(
+      expect.any(Object),
       runtimeConfig,
       domain,
       "build@ops.707979.xyz",
@@ -1028,6 +1036,7 @@ describe("mailbox service helpers", () => {
     );
 
     expect(createRoutingRule).toHaveBeenCalledWith(
+      expect.any(Object),
       runtimeConfig,
       domain,
       "build@ops.707979.xyz",

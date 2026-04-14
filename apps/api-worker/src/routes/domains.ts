@@ -32,9 +32,9 @@ export const domainRoutes = new Hono<AppBindings>()
   )
   .get("/catalog", async (c) =>
     c.json(
-      listDomainCatalogResponseSchema.parse({
-        domains: await listDomainCatalog(c.env, parseRuntimeConfig(c.env)),
-      }),
+      listDomainCatalogResponseSchema.parse(
+        await listDomainCatalog(c.env, parseRuntimeConfig(c.env)),
+      ),
     ),
   )
   .post("/bind", zValidator("json", bindDomainRequestSchema), async (c) => {

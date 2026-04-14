@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-12
+Last: 2026-04-14
 
 ## Objective
 
@@ -64,8 +64,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/auth/passkey/options|verify` provides discoverable passkey browser login against the configured control-plane origin set (`WEB_APP_ORIGIN` + `WEB_APP_ORIGINS`), derives one shared non-public RP ID from that trusted origin set, rejects raw IP-literal origins in favor of `localhost`/domain hosts, then issues the same `kaisoumail_session` cookie used by the API key exchange flow
 - `GET /api/passkeys` plus `POST /api/passkeys/registration/options|verify` and `DELETE /api/passkeys/:id` manage per-user passkeys with revocation-aware audit history
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, unlimited-TTL capability, address validation hints, and whether browser passkey auth is currently enabled
-- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, `nameServers`, and `catchAllEnabled`
+- `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, `nameServers`, `catchAllEnabled`, and a top-level `cloudflareSync` status object (`live | rate_limited`) with cooldown metadata
 - `GET|POST /api/domains` plus `POST /api/domains/bind`, `POST /api/domains/:id/catch-all/enable|disable`, and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI
+- Cloudflare-backed domain write operations (`POST /api/domains`, `/api/domains/bind`, `/api/domains/:id/retry`, catch-all enable/disable, and project-bound delete) fail fast on upstream `429` with a propagated `Retry-After` header; Cloudflare rate limiting never mutates a domain into `provisioning_error`
 - `POST /api/mailboxes` accepts optional `rootDomain`; when omitted, the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox
@@ -93,6 +94,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace all-mailbox view refreshes its message stream every 15 seconds only while the tab is visible and online
 - Workspace single-mailbox view refreshes the selected mailbox stream every 15 seconds while visible and online, while aggregate mailbox-count backing data refreshes every 60 seconds
 - Mailboxes page and mailbox detail stats refresh every 60 seconds while visible and online
+- Domains catalog follow-up polling runs every 15 seconds only while the tab is visible and online and only when project-bound domains still need delegation recovery; if Cloudflare catalog reads are cooling down after a `429`, the page pauses on the announced cooldown window, keeps local project rows visible, and does not poll in hidden/offline states
 - Message detail does not interval-poll because stored message bodies are treated as immutable after ingest; it refreshes on manual action plus normal focus/reconnect catch-up
 - Hidden-tab and offline polling are disabled; window focus regain and reconnect trigger a single catch-up refetch through the active query layer
 - All message-related pages expose a compact manual refresh control with loading feedback and a latest-refresh timestamp
@@ -133,6 +135,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-14: Hardened `/domains` against upstream `429` loops by degrading `GET /api/domains/catalog` to `200 + cloudflareSync`, propagating `Retry-After` on Cloudflare-backed writes, pausing Workers AI verification on both daily exhaustion and temporary rate limits, and restoring the spec-defined visible-only polling behavior.
 - 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.
 - 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
 - 2026-04-12: Added domain-level Catch All controls with Cloudflare catch-all snapshot/restore, auto-materialized `source=catch_all` mailboxes for unregistered addresses, refreshed the mailbox/domain/API docs surfaces, and updated the workspace/mailboxes rails to a two-line dense layout with Catch All badges.
@@ -272,6 +275,8 @@ PR: include
 ![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
 
 ![Domains page with Cloudflare-missing domain](./assets/domains-page-missing-cloudflare.png)
+
+![Domains page with Cloudflare catalog cooldown banner and degraded local rows](./assets/domains-rate-limited-catalog.png)
 
 ### Mailbox Creation
 
