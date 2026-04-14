@@ -220,4 +220,22 @@ describe("domain catalog polling helpers", () => {
       }),
     ).toBe(false);
   });
+
+  it("keeps cooldown polling disabled when no domains need follow-up", () => {
+    expect(
+      resolveDomainCatalogPollingInterval({
+        domains: demoDomainCatalog.filter(
+          (domain) => domain.bindingSource !== "project_bind",
+        ),
+        cloudflareSync: {
+          status: "rate_limited",
+          retryAfter: "2026-04-14T08:45:00.000Z",
+          retryAfterSeconds: 90,
+        },
+        requestedIntervalMs: 15_000,
+        isDocumentVisible: true,
+        isOnline: true,
+      }),
+    ).toBe(false);
+  });
 });

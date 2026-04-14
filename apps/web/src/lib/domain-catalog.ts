@@ -160,6 +160,7 @@ export const resolveDomainCatalogPollingInterval = ({
   isOnline: boolean;
 }) => {
   if (cloudflareSync?.status === "rate_limited") {
+    if (!shouldPollDomainCatalog(domains)) return false;
     if (!isDocumentVisible || !isOnline) return false;
     return cloudflareSync.retryAfterSeconds
       ? cloudflareSync.retryAfterSeconds * 1000
