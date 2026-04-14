@@ -135,10 +135,26 @@ export const listDomainsResponseSchema = z.object({
   domains: z.array(domainSchema),
 });
 
+export const cloudflareRateLimitContextSchema = z.object({
+  triggeredAt: z.string().datetime({ offset: true }),
+  projectOperation: z.string().min(1),
+  projectRoute: z.string().min(1),
+  cloudflareMethod: z.string().min(1),
+  cloudflarePath: z.string().min(1),
+  lastBlockedAt: z.string().datetime({ offset: true }).nullable(),
+  lastBlockedBy: z
+    .object({
+      projectOperation: z.string().min(1),
+      projectRoute: z.string().min(1),
+    })
+    .nullable(),
+});
+
 export const cloudflareSyncSchema = z.object({
   status: z.enum(["live", "rate_limited"]),
   retryAfter: z.string().datetime({ offset: true }).nullable(),
   retryAfterSeconds: z.number().int().nonnegative().nullable(),
+  rateLimitContext: cloudflareRateLimitContextSchema.nullable().default(null),
 });
 
 export const listDomainCatalogResponseSchema = z.object({

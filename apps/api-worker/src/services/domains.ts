@@ -15,11 +15,16 @@ import {
 import { ApiError } from "../lib/errors";
 import {
   type CloudflareCatchAllRule,
+  type CloudflareRateLimitContext,
+  type CloudflareRequestSource,
   type CloudflareZoneSummary,
+  createRoutingRule,
   createZone,
+  deleteRoutingRule,
   deleteZone,
   type EmailRoutingDomain,
   enableDomainRouting,
+  ensureSubdomainEnabled,
   getCatchAllRule,
   listZones,
   updateCatchAllRule,
@@ -31,6 +36,7 @@ export type CloudflareSyncState = {
   status: "live" | "rate_limited";
   retryAfter: string | null;
   retryAfterSeconds: number | null;
+  rateLimitContext: CloudflareRateLimitContext | null;
 };
 type SubdomainRow = typeof subdomains.$inferSelect;
 type MailboxDomainRef = Pick<
@@ -236,10 +242,42 @@ const requireCatchAllManagementEnabled = (
   );
 };
 
+const domainRouteContexts = {
+  catalog: {
+    projectOperation: "domains.catalog",
+    projectRoute: "GET /api/domains/catalog",
+  },
+  create: {
+    projectOperation: "domains.create",
+    projectRoute: "POST /api/domains",
+  },
+  bind: {
+    projectOperation: "domains.bind",
+    projectRoute: "POST /api/domains/bind",
+  },
+  retry: {
+    projectOperation: "domains.retry",
+    projectRoute: "POST /api/domains/:id/retry",
+  },
+  catchAllEnable: {
+    projectOperation: "domains.catch_all.enable",
+    projectRoute: "POST /api/domains/:id/catch-all/enable",
+  },
+  catchAllDisable: {
+    projectOperation: "domains.catch_all.disable",
+    projectRoute: "POST /api/domains/:id/catch-all/disable",
+  },
+  delete: {
+    projectOperation: "domains.delete",
+    projectRoute: "POST /api/domains/:id/delete",
+  },
+} satisfies Record<string, CloudflareRequestSource>;
+
 const provisionDomain = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) {
     return {
@@ -249,8 +287,8 @@ const provisionDomain = async (
     };
   }
 
-  await validateZoneAccess(env, config, domain);
-  await enableDomainRouting(env, config, domain);
+  await validateZoneAccess(env, config, domain, requestSource);
+  await enableDomainRouting(env, config, domain, requestSource);
   return {
     status: "active" as const,
     lastProvisionError: null,
@@ -270,8 +308,9 @@ const listLocalDomainRows = async (env: WorkerEnv) => {
 const listCloudflareZonesByRootDomain = async (
   env: WorkerEnv,
   config: RuntimeConfig,
+  requestSource: CloudflareRequestSource,
 ) => {
-  const zones = await listZones(env, config);
+  const zones = await listZones(env, config, requestSource);
   return new Map(
     zones.map((zone) => [normalizeRootDomain(zone.name), zone] as const),
   );
@@ -282,10 +321,15 @@ const findCatalogZone = async (
   config: RuntimeConfig,
   rootDomain: string,
   zoneId: string,
+  requestSource: CloudflareRequestSource,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
 
-  const zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(
+    env,
+    config,
+    requestSource,
+  );
   const zone = zonesByRootDomain.get(rootDomain);
   return zone && zone.id === zoneId ? zone : null;
 };
@@ -295,10 +339,15 @@ const requireCatalogZone = async (
   config: RuntimeConfig,
   rootDomain: string,
   zoneId: string,
+  requestSource: CloudflareRequestSource,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return;
 
-  const zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
+  const zonesByRootDomain = await listCloudflareZonesByRootDomain(
+    env,
+    config,
+    requestSource,
+  );
   const zone = zonesByRootDomain.get(rootDomain);
   if (!zone || zone.id !== zoneId) {
     throw new ApiError(400, "Mailbox domain is not available in Cloudflare", {
@@ -331,12 +380,13 @@ const resolveProvisionState = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource,
   options?: {
     allowProvisioningError?: boolean | ((error: unknown) => boolean);
   },
 ): Promise<ManagedDomainProvisionState> => {
   try {
-    return await provisionDomain(env, config, domain);
+    return await provisionDomain(env, config, domain, requestSource);
   } catch (error) {
     if (error instanceof ApiError && error.status === 429) {
       throw error;
@@ -368,6 +418,7 @@ const persistBoundZone = async (
     zoneId: string;
     bindingSource: DomainBindingSource;
   },
+  requestSource: CloudflareRequestSource,
 ) => {
   const provisionState = await resolveProvisionState(
     env,
@@ -376,6 +427,7 @@ const persistBoundZone = async (
       rootDomain: input.rootDomain,
       zoneId: input.zoneId,
     },
+    requestSource,
     {
       allowProvisioningError: isRecoverableBindProvisionError,
     },
@@ -394,13 +446,23 @@ const createAndPersistBoundZone = async (
   config: RuntimeConfig,
   rootDomain: string,
 ) => {
-  const zone = await createZone(env, config, rootDomain);
+  const zone = await createZone(
+    env,
+    config,
+    rootDomain,
+    domainRouteContexts.bind,
+  );
   try {
-    return await persistBoundZone(env, config, {
-      rootDomain,
-      zoneId: zone.id,
-      bindingSource: "project_bind",
-    });
+    return await persistBoundZone(
+      env,
+      config,
+      {
+        rootDomain,
+        zoneId: zone.id,
+        bindingSource: "project_bind",
+      },
+      domainRouteContexts.bind,
+    );
   } catch (error) {
     if (error instanceof ApiError && error.status === 409) {
       const current = await getDomainByRootDomain(env, rootDomain, {
@@ -422,6 +484,7 @@ const createAndPersistBoundZone = async (
           rootDomain,
           zoneId: zone.id,
         },
+        domainRouteContexts.bind,
         {
           bypassRateLimitCheck:
             error instanceof ApiError && error.status === 429,
@@ -681,6 +744,87 @@ const requireProjectBoundDomain = (domain: DomainRow) => {
   }
 };
 
+const backfillMailboxRoutesForCatchAllDisable = async (
+  env: WorkerEnv,
+  db: ReturnType<typeof getDb>,
+  config: RuntimeConfig,
+  domain: DomainRow,
+) => {
+  const dependentMailboxes = await db
+    .select({
+      id: mailboxes.id,
+      address: mailboxes.address,
+      subdomain: mailboxes.subdomain,
+    })
+    .from(mailboxes)
+    .where(
+      and(
+        eq(mailboxes.domainId, domain.id),
+        eq(mailboxes.status, "active"),
+        eq(mailboxes.source, "registered"),
+        isNull(mailboxes.routingRuleId),
+      ),
+    )
+    .orderBy(asc(mailboxes.createdAt));
+
+  if (dependentMailboxes.length === 0) {
+    return;
+  }
+
+  const createdRoutes: Array<{ mailboxId: string; ruleId: string }> = [];
+
+  try {
+    for (const mailbox of dependentMailboxes) {
+      await ensureSubdomainEnabled(
+        env,
+        config,
+        domain,
+        mailbox.subdomain,
+        domainRouteContexts.catchAllDisable,
+      );
+      const routingRuleId = await createRoutingRule(
+        env,
+        config,
+        domain,
+        mailbox.address,
+        domainRouteContexts.catchAllDisable,
+      );
+      if (!routingRuleId) {
+        throw new ApiError(
+          409,
+          "Catch-all cannot be disabled without Email Routing management",
+        );
+      }
+
+      createdRoutes.push({ mailboxId: mailbox.id, ruleId: routingRuleId });
+      await db
+        .update(mailboxes)
+        .set({ routingRuleId })
+        .where(eq(mailboxes.id, mailbox.id));
+    }
+  } catch (error) {
+    for (const createdRoute of [...createdRoutes].reverse()) {
+      try {
+        await deleteRoutingRule(
+          env,
+          config,
+          domain,
+          createdRoute.ruleId,
+          domainRouteContexts.catchAllDisable,
+        );
+      } catch {
+        // Keep the original Cloudflare failure; the next disable attempt will
+        // re-check local rows and retry cleanup if needed.
+      }
+      await db
+        .update(mailboxes)
+        .set({ routingRuleId: null })
+        .where(eq(mailboxes.id, createdRoute.mailboxId));
+    }
+    throw error;
+  }
+};
+
 export const listDomains = async (env: WorkerEnv) => {
   const rows = await listLocalDomainRows(env);
   return rows.map(toDomainDto);
@@ -696,23 +840,33 @@ export const listDomainCatalog = async (
     status: "live",
     retryAfter: null,
     retryAfterSeconds: null,
+    rateLimitContext: null,
   };
 
   try {
-    zonesByRootDomain = await listCloudflareZonesByRootDomain(env, config);
+    zonesByRootDomain = await listCloudflareZonesByRootDomain(
+      env,
+      config,
+      domainRouteContexts.catalog,
+    );
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 429) {
       throw error;
     }
 
     const details = error.details as
-      | { retryAfter?: string | null; retryAfterSeconds?: number | null }
+      | {
+          retryAfter?: string | null;
+          retryAfterSeconds?: number | null;
+          rateLimitContext?: CloudflareRateLimitContext | null;
+        }
       | undefined;
 
     cloudflareSync = {
       status: "rate_limited",
       retryAfter: details?.retryAfter ?? null,
       retryAfterSeconds: details?.retryAfterSeconds ?? null,
+      rateLimitContext: details?.rateLimitContext ?? null,
     };
   }
 
@@ -858,7 +1012,13 @@ export const createDomain = async (
   const existing = await getDomainByRootDomain(env, rootDomain, {
     includeDeleted: true,
   });
-  await requireCatalogZone(env, config, rootDomain, zoneId);
+  await requireCatalogZone(
+    env,
+    config,
+    rootDomain,
+    zoneId,
+    domainRouteContexts.create,
+  );
   const provisionState = await resolveProvisionState(
     env,
     config,
@@ -866,6 +1026,7 @@ export const createDomain = async (
       rootDomain,
       zoneId,
     },
+    domainRouteContexts.create,
     { allowProvisioningError: true },
   );
 
@@ -901,13 +1062,19 @@ export const bindDomain = async (
         config,
         rootDomain,
         existingZoneId,
+        domainRouteContexts.bind,
       );
       if (catalogZone) {
-        return await persistBoundZone(env, config, {
-          rootDomain,
-          zoneId: existingZoneId,
-          bindingSource: createState.row.bindingSource,
-        });
+        return await persistBoundZone(
+          env,
+          config,
+          {
+            rootDomain,
+            zoneId: existingZoneId,
+            bindingSource: createState.row.bindingSource,
+          },
+          domainRouteContexts.bind,
+        );
       }
     }
   }
@@ -935,6 +1102,7 @@ export const retryDomainProvision = async (
       rootDomain: existing.rootDomain,
       zoneId: existing.zoneId,
     },
+    domainRouteContexts.retry,
     { allowProvisioningError: true },
   );
 
@@ -980,7 +1148,12 @@ export const enableDomainCatchAll = async (
     return toDomainDto(existing);
   }
 
-  const currentRule = await getCatchAllRule(env, config, existing);
+  const currentRule = await getCatchAllRule(
+    env,
+    config,
+    existing,
+    domainRouteContexts.catchAllEnable,
+  );
   if (!currentRule) {
     throw new ApiError(500, "Catch-all rule is not available");
   }
@@ -994,6 +1167,7 @@ export const enableDomainCatchAll = async (
     config,
     existing,
     buildManagedCatchAllRule(existing, currentRule, workerName),
+    domainRouteContexts.catchAllEnable,
   );
 
   const updatedAt = nowIso();
@@ -1040,7 +1214,15 @@ export const disableDomainCatchAll = async (
     throw new ApiError(500, "Domain catch-all restore state is missing");
   }
 
-  await updateCatchAllRule(env, config, existing, restoreState);
+  await backfillMailboxRoutesForCatchAllDisable(env, db, config, existing);
+
+  await updateCatchAllRule(
+    env,
+    config,
+    existing,
+    restoreState,
+    domainRouteContexts.catchAllDisable,
+  );
 
   const updatedAt = nowIso();
   const next: DomainRow = {
@@ -1123,10 +1305,15 @@ export const deleteDomain = async (
   requireProjectBoundDomain(existing);
   if (existing.deletedAt) {
     await requireDomainDeleteAllowed(env, existing);
-    await deleteZone(env, config, {
-      rootDomain: existing.rootDomain,
-      zoneId: existing.zoneId,
-    });
+    await deleteZone(
+      env,
+      config,
+      {
+        rootDomain: existing.rootDomain,
+        zoneId: existing.zoneId,
+      },
+      domainRouteContexts.delete,
+    );
     return;
   }
 
@@ -1145,10 +1332,15 @@ export const deleteDomain = async (
   }
 
   try {
-    await deleteZone(env, config, {
-      rootDomain: existing.rootDomain,
-      zoneId: existing.zoneId,
-    });
+    await deleteZone(
+      env,
+      config,
+      {
+        rootDomain: existing.rootDomain,
+        zoneId: existing.zoneId,
+      },
+      domainRouteContexts.delete,
+    );
   } catch (error) {
     try {
       await restoreSoftDeletedDomainLocally(

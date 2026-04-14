@@ -38,6 +38,7 @@ import {
   resolveMailboxDomain,
 } from "./domains";
 import {
+  type CloudflareRequestSource,
   createRoutingRule,
   deleteRoutingRule,
   ensureSubdomainEnabled,
@@ -49,6 +50,25 @@ type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
 
 const longTermMailboxExpirySentinel = "9999-12-31T23:59:59.999Z";
+
+const mailboxRouteContexts = {
+  create: {
+    projectOperation: "mailboxes.create",
+    projectRoute: "POST /api/mailboxes",
+  },
+  ensure: {
+    projectOperation: "mailboxes.ensure",
+    projectRoute: "POST /api/mailboxes/ensure",
+  },
+  destroy: {
+    projectOperation: "mailboxes.destroy",
+    projectRoute: "DELETE /api/mailboxes/:id",
+  },
+} satisfies Record<string, CloudflareRequestSource>;
+
+const shouldUseCatchAllDelivery = (
+  domain: Pick<DomainRow, "catchAllEnabled" | "catchAllOwnerUserId">,
+) => Boolean(domain.catchAllEnabled && domain.catchAllOwnerUserId);
 
 const toMailboxApiExpiresAt = (expiresAt: string | null) =>
   expiresAt === longTermMailboxExpirySentinel ? null : expiresAt;
@@ -389,6 +409,7 @@ const upsertSubdomainUsage = async (
   domain: DomainRow,
   subdomain: string,
   now: string,
+  requestSource: CloudflareRequestSource,
 ) => {
   const knownSubdomain = await db
     .select()
@@ -398,8 +419,8 @@ const upsertSubdomainUsage = async (
     )
     .limit(1);
 
-  if (!knownSubdomain[0]) {
-    await ensureSubdomainEnabled(env, config, domain, subdomain);
+  if (!knownSubdomain[0] && !shouldUseCatchAllDelivery(domain)) {
+    await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
   }
 
   if (knownSubdomain[0]) {
@@ -415,17 +436,30 @@ const upsertSubdomainUsage = async (
       enabledAt: now,
       lastUsedAt: now,
       metadata: JSON.stringify({
-        mode: config.EMAIL_ROUTING_MANAGEMENT_ENABLED ? "live" : "disabled",
+        mode: shouldUseCatchAllDelivery(domain)
+          ? "catch_all"
+          : config.EMAIL_ROUTING_MANAGEMENT_ENABLED
+            ? "live"
+            : "disabled",
       }),
     });
   }
 };
+
+const ensureMailboxRoutingRule = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: DomainRow,
+  mailbox: Pick<MailboxRow, "address">,
+  requestSource: CloudflareRequestSource,
+) => createRoutingRule(env, config, domain, mailbox.address, requestSource);
 
 const promoteCatchAllMailbox = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   mailbox: MailboxRow,
   expiresInMinutes: number | null | undefined,
+  requestSource: CloudflareRequestSource,
 ) => {
   const db = getDb(env);
   const domain = await resolveMailboxDomain(env, config, mailbox);
@@ -442,19 +476,31 @@ const promoteCatchAllMailbox = async (
     mailbox.expiresAt,
   );
 
-  await upsertSubdomainUsage(env, db, config, domain, mailbox.subdomain, now);
-
-  const routingRuleId = await createRoutingRule(
+  await upsertSubdomainUsage(
     env,
+    db,
     config,
     domain,
-    mailbox.address,
+    mailbox.subdomain,
+    now,
+    requestSource,
   );
-  if (!routingRuleId) {
-    throw new ApiError(
-      409,
-      "Catch-all mailbox cannot be promoted without Email Routing management",
+
+  let routingRuleId: string | null = null;
+  if (!shouldUseCatchAllDelivery(domain)) {
+    routingRuleId = await ensureMailboxRoutingRule(
+      env,
+      config,
+      domain,
+      mailbox,
+      requestSource,
     );
+    if (!routingRuleId) {
+      throw new ApiError(
+        409,
+        "Catch-all mailbox cannot be promoted without Email Routing management",
+      );
+    }
   }
 
   await updateMailboxRegistration(db, mailbox.id, {
@@ -619,6 +665,8 @@ export const createMailboxForUser = async (
       status: domains.status,
       zoneId: domains.zoneId,
       deletedAt: domains.deletedAt,
+      catchAllEnabled: domains.catchAllEnabled,
+      catchAllOwnerUserId: domains.catchAllOwnerUserId,
     })
     .from(domains)
     .where(eq(domains.id, domain.id))
@@ -632,6 +680,12 @@ export const createMailboxForUser = async (
   ) {
     throw domainNoLongerAvailableError(domain.id, domain.rootDomain);
   }
+
+  const deliveryDomain = {
+    ...domain,
+    catchAllEnabled: currentDomain.catchAllEnabled,
+    catchAllOwnerUserId: currentDomain.catchAllOwnerUserId,
+  } satisfies DomainRow;
 
   if (input.localPart && input.subdomain) {
     const explicitAddress = buildMailboxAddress(
@@ -651,6 +705,7 @@ export const createMailboxForUser = async (
           config,
           classification.row,
           expiresInMinutes,
+          mailboxRouteContexts.create,
         );
       }
       throw new ApiError(409, "Mailbox already exists");
@@ -697,6 +752,7 @@ export const createMailboxForUser = async (
           config,
           classification.row,
           expiresInMinutes,
+          mailboxRouteContexts.create,
         );
       }
       throw new ApiError(409, "Mailbox already exists");
@@ -739,14 +795,28 @@ export const createMailboxForUser = async (
       );
       mailboxInserted = true;
 
-      await upsertSubdomainUsage(env, db, config, domain, subdomain, now);
-
-      routingRuleId = await createRoutingRule(
+      await upsertSubdomainUsage(
         env,
+        db,
         config,
-        domain,
-        mailboxAddress.address,
+        deliveryDomain,
+        subdomain,
+        now,
+        mailboxRouteContexts.create,
       );
+
+      if (!shouldUseCatchAllDelivery(deliveryDomain)) {
+        routingRuleId = await ensureMailboxRoutingRule(
+          env,
+          config,
+          deliveryDomain,
+          { subdomain, address: mailboxAddress.address } as Pick<
+            MailboxRow,
+            "subdomain" | "address"
+          >,
+          mailboxRouteContexts.create,
+        );
+      }
 
       if (routingRuleId) {
         await updateMailboxRoutingRule(db, created.id, routingRuleId);
@@ -775,7 +845,13 @@ export const createMailboxForUser = async (
 
       if (routingRuleId) {
         try {
-          await deleteRoutingRule(env, config, domain, routingRuleId);
+          await deleteRoutingRule(
+            env,
+            config,
+            deliveryDomain,
+            routingRuleId,
+            mailboxRouteContexts.create,
+          );
         } catch {
           // Ignore cleanup failures here; the primary error is the mailbox
           // creation race or write failure that caused the insert to abort.
@@ -852,6 +928,7 @@ export const ensureMailboxForUser = async (
           config,
           classification.row,
           expiresInMinutes,
+          mailboxRouteContexts.ensure,
         ),
         created: false,
       };
@@ -1020,7 +1097,13 @@ export const destroyMailbox = async (
         address: mailbox.address,
       });
     }
-    await deleteRoutingRule(env, config, domain, mailbox.routingRuleId);
+    await deleteRoutingRule(
+      env,
+      config,
+      domain,
+      mailbox.routingRuleId,
+      mailboxRouteContexts.destroy,
+    );
   }
 
   const relatedMessages = await db

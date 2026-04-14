@@ -564,6 +564,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "成功时直接返回更新后的邮箱记录。",
             "自动化销毁后可用 `destroyedAt` 与 `status` 判断后续状态。",
+            "对 Catch-all 驱动、`routingRuleId=null` 的邮箱，销毁时不会再额外写 Cloudflare 删除单地址规则。",
           ],
         },
       ],
@@ -608,7 +609,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "cloudflareSync": {
     "status": "live",
     "retryAfter": null,
-    "retryAfterSeconds": null
+    "retryAfterSeconds": null,
+    "rateLimitContext": null
   },
   "domains": [
     {
@@ -643,6 +645,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "`cloudflareAvailability` 表示当前 token 是否还能列出该 zone，`projectStatus` 表示项目内是否启用，`catchAllEnabled` 表示项目是否接管该域的 Cloudflare catch-all。",
             "本地已有记录但 Cloudflare 当前不可见时，仍会回显为 `missing`，方便管理员继续停用或排查权限。",
             "若 Cloudflare API 正在 429 冷却，接口仍返回 `200 + cloudflareSync.status=rate_limited`，并保留项目内已知域名数据。",
+            "`cloudflareSync.rateLimitContext` 会指出最先触发本轮冷却的项目接口与 Cloudflare 上游 path，方便定位到底是 catalog 读取还是 mailbox / domain 写操作撞限额。",
           ],
         },
         {
@@ -671,6 +674,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
             "若上游 Cloudflare API 429，接口会直接返回 `429` 并携带 `Retry-After`，不会把域名误写成 `provisioning_error`。",
+            "Cloudflare 429 错误详情里会带 `rateLimitContext`，标明触发的项目接口与 Cloudflare method/path。",
             "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
           ],
         },
@@ -694,6 +698,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           notes: [
             "成功后返回 `domainSchema`，并把 `catchAllEnabled` 设为 `false`。",
+            "关闭前会先为仍依赖 Catch-all 收信、但尚未写入单地址 route 的 `registered` 邮箱补建 Cloudflare routing rule；任一补建失败时会中止关闭并保留 Catch-all 开启。",
             "若该域当前已启用 Catch All，停用域名时也会先走这一步，避免 disabled 域继续接收未注册地址邮件。",
           ],
         },

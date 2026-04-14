@@ -253,6 +253,9 @@ describe("email routing service", () => {
       details: expect.objectContaining({
         retryAfterSeconds: 120,
         source: "cloudflare",
+        rateLimitContext: expect.objectContaining({
+          projectOperation: "cloudflare.internal",
+        }),
       }),
       headers: {
         "retry-after": "120",
@@ -263,6 +266,72 @@ describe("email routing service", () => {
       env,
       "cloudflare_api_rate_limited_until",
       expect.any(String),
+    );
+    expect(setRuntimeStateValue).toHaveBeenCalledWith(
+      env,
+      "cloudflare_api_rate_limit_context",
+      expect.stringContaining("cloudflare.internal"),
+    );
+  });
+
+  it("keeps the original Cloudflare 429 origin when later requests are blocked locally", async () => {
+    getRuntimeStateValue.mockImplementation(
+      async (_env: unknown, key: string) => {
+        if (key === "cloudflare_api_rate_limited_until") {
+          return new Date(Date.now() + 120_000).toISOString();
+        }
+        if (key === "cloudflare_api_rate_limit_context") {
+          return JSON.stringify({
+            triggeredAt: "2026-04-14T09:58:00.000Z",
+            retryAfter: "2026-04-14T10:00:00.000Z",
+            retryAfterSeconds: 120,
+            projectOperation: "mailboxes.ensure",
+            projectRoute: "POST /api/mailboxes/ensure",
+            cloudflareMethod: "POST",
+            cloudflarePath: "/zones/zone_123/email/routing/rules",
+            lastBlockedAt: null,
+            lastBlockedBy: null,
+          });
+        }
+        return null;
+      },
+    );
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    await expect(
+      createRoutingRule(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "smoke@ops.alpha.707979.xyz",
+        {
+          projectOperation: "mailboxes.destroy",
+          projectRoute: "DELETE /api/mailboxes/:id",
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+      details: expect.objectContaining({
+        rateLimitContext: expect.objectContaining({
+          projectOperation: "mailboxes.ensure",
+          projectRoute: "POST /api/mailboxes/ensure",
+          lastBlockedBy: {
+            projectOperation: "mailboxes.destroy",
+            projectRoute: "DELETE /api/mailboxes/:id",
+          },
+        }),
+      }),
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(setRuntimeStateValue).toHaveBeenCalledWith(
+      env,
+      "cloudflare_api_rate_limit_context",
+      expect.stringContaining("mailboxes.destroy"),
     );
   });
 });

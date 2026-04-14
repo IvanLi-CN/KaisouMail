@@ -2,6 +2,7 @@ import type {
   apiErrorSchema,
   apiKeySchema,
   apiMetaResponseSchema,
+  cloudflareRateLimitContextSchema,
   cloudflareSyncSchema,
   createApiKeyResponseSchema,
   createUserResponseSchema,
@@ -24,6 +25,9 @@ export type ApiErrorPayload = z.infer<typeof apiErrorSchema>;
 export type ApiMeta = z.infer<typeof apiMetaResponseSchema>;
 export type DomainRecord = z.infer<typeof domainSchema>;
 export type DomainCatalogItem = z.infer<typeof domainCatalogItemSchema>;
+export type CloudflareRateLimitContext = z.infer<
+  typeof cloudflareRateLimitContextSchema
+>;
 export type CloudflareSync = z.infer<typeof cloudflareSyncSchema>;
 export type DomainCatalogResponse = z.infer<
   typeof listDomainCatalogResponseSchema
