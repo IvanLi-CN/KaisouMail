@@ -414,15 +414,19 @@ const createAndPersistBoundZone = async (
       }
     }
 
-    if (error instanceof ApiError && error.status === 429) {
-      throw error;
-    }
-
     try {
-      await deleteZone(env, config, {
-        rootDomain,
-        zoneId: zone.id,
-      });
+      await deleteZone(
+        env,
+        config,
+        {
+          rootDomain,
+          zoneId: zone.id,
+        },
+        {
+          bypassRateLimitCheck:
+            error instanceof ApiError && error.status === 429,
+        },
+      );
     } catch (cleanupError) {
       throw new ApiError(
         502,

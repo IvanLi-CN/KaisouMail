@@ -224,9 +224,12 @@ const cfRequest = async <T>(
       response: Response;
       data: CloudflareEnvelope<T> | null;
     }) => boolean;
+    skipRateLimitCheck?: boolean;
   },
 ) => {
-  await ensureCloudflareRequestAllowed(env);
+  if (!options?.skipRateLimitCheck) {
+    await ensureCloudflareRequestAllowed(env);
+  }
 
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
@@ -302,6 +305,9 @@ export const deleteZone = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
+  options?: {
+    bypassRateLimitCheck?: boolean;
+  },
 ) => {
   requireDomainLifecycleManagement(config, "deletion");
   const zoneId = requireZoneId(domain);
@@ -310,7 +316,10 @@ export const deleteZone = async (
     config,
     `/zones/${zoneId}`,
     { method: "DELETE" },
-    { ignoreStatuses: [404] },
+    {
+      ignoreStatuses: [404],
+      skipRateLimitCheck: options?.bypassRateLimitCheck ?? false,
+    },
   );
 
   return {

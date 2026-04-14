@@ -26,12 +26,23 @@ vi.mock("@/lib/api", () => ({
     bindDomain: vi.fn(),
     listDomainCatalog: vi.fn(),
   },
+  ApiClientError: class ApiClientError extends Error {
+    constructor(
+      message: string,
+      public readonly details: unknown = null,
+      public readonly status: number | null = null,
+      public readonly retryAfterSeconds: number | null = null,
+    ) {
+      super(message);
+    }
+  },
 }));
 
 import {
   useBindDomainMutation,
   useDomainCatalogQuery,
 } from "@/hooks/use-domains";
+import { ApiClientError } from "@/lib/api";
 
 describe("useBindDomainMutation", () => {
   it("keeps the fallback catalog write from being overwritten by auto invalidation", async () => {
@@ -56,7 +67,7 @@ describe("useBindDomainMutation", () => {
 describe("useDomainCatalogQuery", () => {
   it("disables React Query retries and background polling for catalog 429s", () => {
     const queryOptions = useDomainCatalogQuery() as unknown as {
-      retry: boolean;
+      retry: (failureCount: number, error: Error) => boolean;
       refetchIntervalInBackground: boolean;
       refetchInterval: (query: {
         state: {
@@ -72,7 +83,11 @@ describe("useDomainCatalogQuery", () => {
       }) => number | false;
     };
 
-    expect(queryOptions.retry).toBe(false);
+    const rateLimitError = new ApiClientError("rate limited", null, 429, 120);
+
+    expect(queryOptions.retry(0, rateLimitError)).toBe(false);
+    expect(queryOptions.retry(0, new Error("boom"))).toBe(true);
+    expect(queryOptions.retry(3, new Error("boom"))).toBe(false);
     expect(queryOptions.refetchIntervalInBackground).toBe(false);
     expect(
       queryOptions.refetchInterval({

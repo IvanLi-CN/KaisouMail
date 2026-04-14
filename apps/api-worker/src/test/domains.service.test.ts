@@ -689,6 +689,7 @@ describe("domain catalog", () => {
         { "retry-after": "120" },
       ),
     );
+    deleteZone.mockResolvedValue({ alreadyMissing: false });
 
     await expect(
       bindDomain(env, runtimeConfig, {
@@ -705,7 +706,17 @@ describe("domain catalog", () => {
     });
 
     expect(db.insert).not.toHaveBeenCalled();
-    expect(deleteZone).not.toHaveBeenCalled();
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        bypassRateLimitCheck: true,
+      },
+    );
   });
 
   it("rolls back bound zones when initial provisioning fails fatally", async () => {
@@ -735,10 +746,17 @@ describe("domain catalog", () => {
         "Email Routing management is enabled but EMAIL_WORKER_NAME is not configured",
     });
 
-    expect(deleteZone).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
-      zoneId: "zone_bound",
-    });
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        bypassRateLimitCheck: false,
+      },
+    );
   });
 
   it("cleans up the Cloudflare zone when bind persistence fails", async () => {
@@ -767,10 +785,17 @@ describe("domain catalog", () => {
       }),
     ).rejects.toThrow("D1 write failed");
 
-    expect(deleteZone).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
-      zoneId: "zone_bound",
-    });
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        bypassRateLimitCheck: false,
+      },
+    );
   });
 
   it("soft deletes project-bound domains after removing the Cloudflare zone", async () => {
