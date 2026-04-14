@@ -72,7 +72,12 @@ describe("useDomainCatalogQuery", () => {
       refetchInterval: (query: {
         state: {
           data?: {
-            domains: [];
+            domains: Array<{
+              bindingSource: "project_bind";
+              cloudflareStatus: "pending";
+              projectStatus: "provisioning_error";
+              lastProvisionError: string | null;
+            }>;
             cloudflareSync: {
               status: "rate_limited";
               retryAfter: string;
@@ -93,7 +98,14 @@ describe("useDomainCatalogQuery", () => {
       queryOptions.refetchInterval({
         state: {
           data: {
-            domains: [],
+            domains: [
+              {
+                bindingSource: "project_bind",
+                cloudflareStatus: "pending",
+                projectStatus: "provisioning_error",
+                lastProvisionError: "Zone is pending activation",
+              },
+            ],
             cloudflareSync: {
               status: "rate_limited",
               retryAfter: "2026-04-14T10:00:00.000Z",
