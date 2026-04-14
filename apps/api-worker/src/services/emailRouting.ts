@@ -1,6 +1,7 @@
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
+import { logOperationalEvent, pickHeaders } from "../lib/observability";
 import {
   buildRateLimitErrorDetails,
   resolveRetryAfterIso,
@@ -323,6 +324,21 @@ const rememberCloudflareRateLimit = async (
     JSON.stringify(rateLimitContext),
   );
 
+  logOperationalEvent("warn", "cloudflare.rate_limit.upstream", {
+    projectOperation: requestContext.projectOperation,
+    projectRoute: requestContext.projectRoute,
+    cloudflareMethod: requestContext.cloudflareMethod,
+    cloudflarePath: requestContext.cloudflarePath,
+    retryAfter,
+    retryAfterSeconds,
+    responseHeaders: pickHeaders(response.headers, [
+      "retry-after",
+      "cf-ray",
+      "ratelimit",
+      "ratelimit-policy",
+    ]),
+  });
+
   return {
     retryAfter,
     retryAfterSeconds,
@@ -353,6 +369,18 @@ const rememberCloudflareLocalBlock = async (
     CLOUDFLARE_RATE_LIMIT_CONTEXT_KEY,
     JSON.stringify(nextContext),
   );
+
+  logOperationalEvent("warn", "cloudflare.rate_limit.local_block", {
+    triggeredBy: {
+      projectOperation: nextContext.projectOperation,
+      projectRoute: nextContext.projectRoute,
+      cloudflareMethod: nextContext.cloudflareMethod,
+      cloudflarePath: nextContext.cloudflarePath,
+    },
+    blockedRequest: requestSource,
+    retryAfter: state.retryAfter,
+    retryAfterSeconds: state.retryAfterSeconds,
+  });
 
   return {
     ...state,
@@ -421,10 +449,31 @@ const cfRequest = async <T>(
   }
 
   if (!response.ok || !data?.success) {
+    logOperationalEvent("error", "cloudflare.request.failed", {
+      projectOperation: requestContext.projectOperation,
+      projectRoute: requestContext.projectRoute,
+      cloudflareMethod: requestContext.cloudflareMethod,
+      cloudflarePath: requestContext.cloudflarePath,
+      responseStatus: response.status || 502,
+      responseHeaders: pickHeaders(response.headers, ["cf-ray"]),
+      errors: data?.errors ?? null,
+    });
     throw new ApiError(
       response.status || 502,
       data?.errors?.[0]?.message ?? "Cloudflare API request failed",
     );
+  }
+
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET") {
+    logOperationalEvent("info", "cloudflare.request.succeeded", {
+      projectOperation: requestContext.projectOperation,
+      projectRoute: requestContext.projectRoute,
+      cloudflareMethod: requestContext.cloudflareMethod,
+      cloudflarePath: requestContext.cloudflarePath,
+      responseStatus: response.status,
+      responseHeaders: pickHeaders(response.headers, ["cf-ray"]),
+    });
   }
 
   return data.result;

@@ -9,7 +9,9 @@ import {
   resolveAllowedCorsOrigin,
   resolveAllowedCorsOriginFromEnv,
 } from "./lib/cors";
+import { randomId } from "./lib/crypto";
 import { ApiError, buildApiErrorPayload } from "./lib/errors";
+import { logOperationalEvent } from "./lib/observability";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
 import { domainRoutes } from "./routes/domains";
@@ -48,18 +50,25 @@ const buildInternalErrorResponse = (
 };
 
 const logRuntimeConfigIssues = (issues: ZodIssue[]) => {
-  console.error(
-    "Runtime config validation failed",
-    issues.map((issue) => ({
+  logOperationalEvent("error", "runtime.config.invalid", {
+    issues: issues.map((issue) => ({
       code: issue.code,
       path: issue.path,
       message: issue.message,
     })),
-  );
+  });
 };
 
 export const createApp = () => {
   const app = new Hono<AppBindings>();
+
+  app.use("*", async (c, next) => {
+    const requestId =
+      c.req.header("x-request-id") ?? c.req.header("cf-ray") ?? randomId("req");
+    c.set("requestId", requestId);
+    await next();
+    c.res.headers.set("x-request-id", requestId);
+  });
 
   app.use("*", async (c, next) => {
     const runtimeConfigResult = safeParseRuntimeConfig(c.env);
@@ -141,6 +150,7 @@ export const createApp = () => {
   });
 
   app.onError((error, c) => {
+    const requestId = c.get("requestId");
     const runtimeConfig = c.get("runtimeConfig");
     const requestOrigin = c.req.header("origin") ?? undefined;
     const allowHeaders =
@@ -151,8 +161,21 @@ export const createApp = () => {
       : resolveFallbackCorsOrigin(requestOrigin, c.env);
 
     if (error instanceof ApiError) {
+      logOperationalEvent(
+        error.status >= 500 ? "error" : error.status >= 429 ? "warn" : "info",
+        "api.request.failed",
+        {
+          requestId,
+          method: c.req.method,
+          path: c.req.path,
+          status: error.status,
+          error: error.message,
+          details: error.details ?? null,
+        },
+      );
       const headers = new Headers(error.headers ?? undefined);
       headers.set("content-type", "application/json");
+      headers.set("x-request-id", requestId);
       applyCorsHeaders(headers, allowedOrigin, allowHeaders);
       return new Response(
         JSON.stringify(
@@ -164,8 +187,15 @@ export const createApp = () => {
         },
       );
     }
-    console.error(error);
-    return buildInternalErrorResponse(allowHeaders, allowedOrigin);
+    logOperationalEvent("error", "api.request.crash", {
+      requestId,
+      method: c.req.method,
+      path: c.req.path,
+      error,
+    });
+    const response = buildInternalErrorResponse(allowHeaders, allowedOrigin);
+    response.headers.set("x-request-id", requestId);
+    return response;
   });
 
   return app;

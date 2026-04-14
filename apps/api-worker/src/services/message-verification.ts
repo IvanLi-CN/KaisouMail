@@ -10,6 +10,7 @@ import {
 } from "../env";
 import { nowIso } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
+import { logOperationalEvent } from "../lib/observability";
 import {
   resolveRetryAfterIso,
   resolveRetryAfterSeconds,
@@ -419,12 +420,15 @@ const getWorkersAiPausedUntil = async (env: WorkerEnv) =>
     await getRuntimeStateValue(env, WORKERS_AI_RATE_LIMITED_UNTIL_KEY),
   );
 
-const pauseWorkersAiUntilReset = async (env: WorkerEnv) =>
-  setRuntimeStateValue(
-    env,
-    WORKERS_AI_PAUSED_UNTIL_KEY,
-    resolveNextUtcMidnightIso(),
-  );
+const pauseWorkersAiUntilReset = async (env: WorkerEnv, error: unknown) => {
+  const retryAfter = resolveNextUtcMidnightIso();
+  await setRuntimeStateValue(env, WORKERS_AI_PAUSED_UNTIL_KEY, retryAfter);
+  logOperationalEvent("warn", "workers_ai.rate_limit.daily_pause", {
+    retryAfter,
+    reason: error instanceof Error ? error.message : String(error ?? "unknown"),
+  });
+  return retryAfter;
+};
 
 const pauseWorkersAiTemporarily = async (env: WorkerEnv, error: unknown) => {
   const retryAfterSeconds = resolveRetryAfterSeconds(
@@ -437,6 +441,11 @@ const pauseWorkersAiTemporarily = async (env: WorkerEnv, error: unknown) => {
     WORKERS_AI_RATE_LIMITED_UNTIL_KEY,
     retryAfter,
   );
+  logOperationalEvent("warn", "workers_ai.rate_limit.temporary_pause", {
+    retryAfter,
+    retryAfterSeconds,
+    reason: error instanceof Error ? error.message : String(error ?? "unknown"),
+  });
   return retryAfter;
 };
 
@@ -551,7 +560,7 @@ const maybeVerifyWithAi = async (
     };
   } catch (error) {
     if (shouldPauseWorkersAi(error)) {
-      const retryAfter = await pauseWorkersAiUntilReset(env);
+      const retryAfter = await pauseWorkersAiUntilReset(env, error);
       return {
         verification: null,
         shouldRetry: true,

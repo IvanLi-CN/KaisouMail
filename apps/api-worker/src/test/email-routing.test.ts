@@ -155,6 +155,43 @@ describe("email routing service", () => {
     expect(init?.body).toContain('"value":["email-receiver-worker"]');
   });
 
+  it("emits an audit log for successful Cloudflare write requests", async () => {
+    const infoSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { id: "rule_123" },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json", "cf-ray": "ray-123" },
+        },
+      ),
+    );
+
+    await createRoutingRule(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      "smoke@ops.alpha.707979.xyz",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.request.succeeded"),
+    );
+  });
+
   it("fails fast when live email routing is enabled without EMAIL_WORKER_NAME", async () => {
     await expect(
       createRoutingRule(
@@ -230,6 +267,9 @@ describe("email routing service", () => {
   });
 
   it("stores Cloudflare cooldown from retry-after headers when the API returns 429", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -272,9 +312,15 @@ describe("email routing service", () => {
       "cloudflare_api_rate_limit_context",
       expect.stringContaining("cloudflare.internal"),
     );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.rate_limit.upstream"),
+    );
   });
 
   it("keeps the original Cloudflare 429 origin when later requests are blocked locally", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     getRuntimeStateValue.mockImplementation(
       async (_env: unknown, key: string) => {
         if (key === "cloudflare_api_rate_limited_until") {
@@ -332,6 +378,9 @@ describe("email routing service", () => {
       env,
       "cloudflare_api_rate_limit_context",
       expect.stringContaining("mailboxes.destroy"),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.rate_limit.local_block"),
     );
   });
 });
