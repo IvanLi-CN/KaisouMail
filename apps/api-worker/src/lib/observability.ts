@@ -31,11 +31,16 @@ export const logOperationalEvent = (
   event: string,
   payload: OperationalLogPayload = {},
 ) => {
+  const serializedPayload = toSerializable(payload);
   const entry = {
     timestamp: nowIso(),
     level,
     event,
-    ...toSerializable(payload),
+    ...(serializedPayload &&
+    typeof serializedPayload === "object" &&
+    !Array.isArray(serializedPayload)
+      ? (serializedPayload as Record<string, unknown>)
+      : { payload: serializedPayload }),
   };
 
   try {
@@ -49,8 +54,10 @@ export const pickHeaders = (
   headers: Headers,
   names: string[],
 ): Record<string, string> =>
-  Object.fromEntries(
-    names
-      .map((name) => [name, headers.get(name)] as const)
-      .filter(([, value]) => typeof value === "string" && value.length > 0),
-  );
+  names.reduce<Record<string, string>>((acc, name) => {
+    const value = headers.get(name);
+    if (typeof value === "string" && value.length > 0) {
+      acc[name] = value;
+    }
+    return acc;
+  }, {});
