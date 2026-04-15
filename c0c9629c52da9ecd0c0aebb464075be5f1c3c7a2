@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.24.2",
+  "base_stable_version": "0.24.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-15T02:26:00Z",
+  "next_stable_version": "0.24.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "095003d0ce2694fcbfa3b4eb02b2932af2f02027",
+  "pr_number": 50,
+  "pr_title": "Improve Cloudflare 429 attribution and catch-all mailbox routing",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.24.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.24.2",
+  "target_sha": "c0c9629c52da9ecd0c0aebb464075be5f1c3c7a2",
+  "type_label": "type:patch"
+}
