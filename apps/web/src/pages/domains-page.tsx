@@ -292,6 +292,7 @@ export const DomainsPage = () => {
                     status: "live",
                     retryAfter: null,
                     retryAfterSeconds: null,
+                    rateLimitContext: null,
                   },
                 };
               }
@@ -302,6 +303,7 @@ export const DomainsPage = () => {
                   status: "live",
                   retryAfter: null,
                   retryAfterSeconds: null,
+                  rateLimitContext: null,
                 },
               };
             },
