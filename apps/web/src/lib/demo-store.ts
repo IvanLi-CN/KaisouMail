@@ -483,6 +483,7 @@ export const demoApi = {
         status: "live" as const,
         retryAfter: null,
         retryAfterSeconds: null,
+        rateLimitContext: null,
       },
     };
   },

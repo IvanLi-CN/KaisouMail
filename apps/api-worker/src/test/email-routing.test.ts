@@ -155,6 +155,43 @@ describe("email routing service", () => {
     expect(init?.body).toContain('"value":["email-receiver-worker"]');
   });
 
+  it("emits an audit log for successful Cloudflare write requests", async () => {
+    const infoSpy = vi
+      .spyOn(console, "info")
+      .mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { id: "rule_123" },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json", "cf-ray": "ray-123" },
+        },
+      ),
+    );
+
+    await createRoutingRule(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      "smoke@ops.alpha.707979.xyz",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.request.succeeded"),
+    );
+  });
+
   it("fails fast when live email routing is enabled without EMAIL_WORKER_NAME", async () => {
     await expect(
       createRoutingRule(
@@ -230,6 +267,9 @@ describe("email routing service", () => {
   });
 
   it("stores Cloudflare cooldown from retry-after headers when the API returns 429", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -253,6 +293,9 @@ describe("email routing service", () => {
       details: expect.objectContaining({
         retryAfterSeconds: 120,
         source: "cloudflare",
+        rateLimitContext: expect.objectContaining({
+          projectOperation: "cloudflare.internal",
+        }),
       }),
       headers: {
         "retry-after": "120",
@@ -263,6 +306,81 @@ describe("email routing service", () => {
       env,
       "cloudflare_api_rate_limited_until",
       expect.any(String),
+    );
+    expect(setRuntimeStateValue).toHaveBeenCalledWith(
+      env,
+      "cloudflare_api_rate_limit_context",
+      expect.stringContaining("cloudflare.internal"),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.rate_limit.upstream"),
+    );
+  });
+
+  it("keeps the original Cloudflare 429 origin when later requests are blocked locally", async () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    getRuntimeStateValue.mockImplementation(
+      async (_env: unknown, key: string) => {
+        if (key === "cloudflare_api_rate_limited_until") {
+          return new Date(Date.now() + 120_000).toISOString();
+        }
+        if (key === "cloudflare_api_rate_limit_context") {
+          return JSON.stringify({
+            triggeredAt: "2026-04-14T09:58:00.000Z",
+            retryAfter: "2026-04-14T10:00:00.000Z",
+            retryAfterSeconds: 120,
+            projectOperation: "mailboxes.ensure",
+            projectRoute: "POST /api/mailboxes/ensure",
+            cloudflareMethod: "POST",
+            cloudflarePath: "/zones/zone_123/email/routing/rules",
+            lastBlockedAt: null,
+            lastBlockedBy: null,
+          });
+        }
+        return null;
+      },
+    );
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    await expect(
+      createRoutingRule(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "smoke@ops.alpha.707979.xyz",
+        {
+          projectOperation: "mailboxes.destroy",
+          projectRoute: "DELETE /api/mailboxes/:id",
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+      details: expect.objectContaining({
+        rateLimitContext: expect.objectContaining({
+          projectOperation: "mailboxes.ensure",
+          projectRoute: "POST /api/mailboxes/ensure",
+          lastBlockedBy: {
+            projectOperation: "mailboxes.destroy",
+            projectRoute: "DELETE /api/mailboxes/:id",
+          },
+        }),
+      }),
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(setRuntimeStateValue).toHaveBeenCalledWith(
+      env,
+      "cloudflare_api_rate_limit_context",
+      expect.stringContaining("mailboxes.destroy"),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("cloudflare.rate_limit.local_block"),
     );
   });
 });

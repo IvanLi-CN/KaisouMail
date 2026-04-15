@@ -96,6 +96,7 @@ describe("domain routes", () => {
         status: "live",
         retryAfter: null,
         retryAfterSeconds: null,
+        rateLimitContext: null,
       },
     });
 
@@ -129,6 +130,7 @@ describe("domain routes", () => {
         status: "live",
         retryAfter: null,
         retryAfterSeconds: null,
+        rateLimitContext: null,
       },
     });
   });

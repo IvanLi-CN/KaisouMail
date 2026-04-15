@@ -413,14 +413,28 @@ describe("mailbox service helpers", () => {
       expect(createRoutingRule).toHaveBeenCalledWith(
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "ava-lin00@mail00.707979.xyz",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "mail00",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
     } finally {
       Math.random = originalRandom;
@@ -548,8 +562,15 @@ describe("mailbox service helpers", () => {
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "mail00",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
       expect(db.update).toHaveBeenCalledWith(mailboxes);
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
@@ -557,8 +578,15 @@ describe("mailbox service helpers", () => {
         1,
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "ava-lin00@mail00.707979.xyz",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
       expect(deleteRoutingRule).not.toHaveBeenCalled();
     } finally {
@@ -688,8 +716,15 @@ describe("mailbox service helpers", () => {
       expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "ops.alpha",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
       expect(db.update).toHaveBeenCalledWith(mailboxes);
       expect(createRoutingRule).toHaveBeenCalledTimes(1);
@@ -697,8 +732,15 @@ describe("mailbox service helpers", () => {
         1,
         expect.any(Object),
         runtimeConfig,
-        domain,
+        expect.objectContaining({
+          rootDomain: domain.rootDomain,
+          zoneId: domain.zoneId,
+        }),
         "ava-lin00@ops.alpha.707979.xyz",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
       );
       expect(deleteRoutingRule).not.toHaveBeenCalled();
     } finally {
@@ -957,23 +999,26 @@ describe("mailbox service helpers", () => {
       },
     );
 
+    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
     expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
       expect.any(Object),
       runtimeConfig,
-      domain,
+      expect.objectContaining({
+        rootDomain: domain.rootDomain,
+        zoneId: domain.zoneId,
+      }),
       "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
     );
-    expect(createRoutingRule).toHaveBeenCalledWith(
-      expect.any(Object),
-      runtimeConfig,
-      domain,
-      "build@ops.707979.xyz",
-    );
+    expect(createRoutingRule).not.toHaveBeenCalled();
     expect(db.update).toHaveBeenCalledWith(mailboxes);
     expect(mailbox).toMatchObject({
       id: catchAllMailbox.id,
       source: "registered",
-      routingRuleId: "rule_promoted",
+      routingRuleId: null,
     });
     expect(mailbox.expiresAt).toEqual(expect.any(String));
   });
@@ -1035,20 +1080,111 @@ describe("mailbox service helpers", () => {
       },
     );
 
-    expect(createRoutingRule).toHaveBeenCalledWith(
+    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
       expect.any(Object),
       runtimeConfig,
-      domain,
-      "build@ops.707979.xyz",
+      expect.objectContaining({
+        rootDomain: domain.rootDomain,
+        zoneId: domain.zoneId,
+      }),
+      "ops",
+      {
+        projectOperation: "mailboxes.ensure",
+        projectRoute: "POST /api/mailboxes/ensure",
+      },
     );
+    expect(createRoutingRule).not.toHaveBeenCalled();
     expect(ensured).toMatchObject({
       created: false,
       mailbox: expect.objectContaining({
         id: catchAllMailbox.id,
         source: "registered",
-        routingRuleId: "rule_promoted",
+        routingRuleId: null,
       }),
     });
     expect(ensured.mailbox.expiresAt).toEqual(expect.any(String));
+  });
+
+  it("still enables email-routing DNS for a new subdomain on catch-all domains without creating a per-address rule", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_1",
+      catchAllRestoreStateJson:
+        '{"enabled":false,"name":"Catch all","matchers":[{"type":"all"}],"actions":[]}',
+      catchAllUpdatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+          catchAllEnabled: true,
+          catchAllOwnerUserId: "usr_1",
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+
+    const created = await createMailboxForUser(
+      {
+        DB: {
+          prepare: vi.fn(() => ({
+            bind: vi.fn(() => ({
+              run: vi.fn(async () => ({
+                meta: {
+                  changes: 1,
+                },
+              })),
+            })),
+          })),
+        },
+      } as never,
+      runtimeConfig,
+      memberUser,
+      {
+        localPart: "build",
+        subdomain: "ops",
+        rootDomain: domain.rootDomain,
+      },
+    );
+
+    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      expect.any(Object),
+      runtimeConfig,
+      expect.objectContaining({
+        rootDomain: domain.rootDomain,
+        zoneId: domain.zoneId,
+      }),
+      "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(created).toMatchObject({
+      address: "build@ops.707979.xyz",
+      routingRuleId: null,
+      source: "registered",
+    });
   });
 });

@@ -30,8 +30,10 @@ export const buildRateLimitErrorDetails = (input: {
   retryAfterSeconds: number;
   retryAfter: string;
   source: "cloudflare" | "workers_ai";
+  extras?: Record<string, unknown>;
 }) => ({
   source: input.source,
   retryAfter: input.retryAfter,
   retryAfterSeconds: input.retryAfterSeconds,
+  ...(input.extras ?? {}),
 });

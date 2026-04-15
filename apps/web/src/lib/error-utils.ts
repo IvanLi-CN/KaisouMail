@@ -1,4 +1,5 @@
 import { ApiClientError } from "@/lib/api";
+import { formatCloudflareRateLimitDetails } from "@/lib/cloudflare-rate-limit";
 
 const NOT_FOUND_PATTERN = /\bnot found\b|不存在|未找到|找不到/i;
 const PERMISSION_PATTERN =
@@ -25,7 +26,10 @@ export const getErrorMessage = (
 };
 
 export const getErrorDetails = (error: unknown) => {
-  if (error instanceof ApiClientError) return serializeDetails(error.details);
+  if (error instanceof ApiClientError) {
+    const cloudflareDetails = formatCloudflareRateLimitDetails(error.details);
+    return cloudflareDetails ?? serializeDetails(error.details);
+  }
   if (error instanceof Error) return error.stack ?? error.message;
   return serializeDetails(error);
 };

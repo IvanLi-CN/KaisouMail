@@ -53,6 +53,15 @@ const rateLimitedCloudflareSync: CloudflareSync = {
   status: "rate_limited",
   retryAfter: "2026-04-14T10:00:00.000Z",
   retryAfterSeconds: 120,
+  rateLimitContext: {
+    triggeredAt: "2026-04-14T09:58:00.000Z",
+    projectOperation: "mailboxes.ensure",
+    projectRoute: "POST /api/mailboxes/ensure",
+    cloudflareMethod: "POST",
+    cloudflarePath: "/zones/zone_primary/email/routing/rules",
+    lastBlockedAt: null,
+    lastBlockedBy: null,
+  },
 };
 
 const meta = {

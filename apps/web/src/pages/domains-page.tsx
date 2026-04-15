@@ -22,6 +22,7 @@ import {
 } from "@/hooks/use-domains";
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useSessionQuery } from "@/hooks/use-session";
+import { getCloudflareRateLimitBannerCopy } from "@/lib/cloudflare-rate-limit";
 import type {
   CloudflareSync,
   DomainCatalogItem,
@@ -129,6 +130,11 @@ export const DomainsPageView = ({
                     ? `预计可在 ${formatDateTime(cloudflareSync.retryAfter)} 后重试。`
                     : "请稍后再试。"}
                 </p>
+                {getCloudflareRateLimitBannerCopy(cloudflareSync) ? (
+                  <p className="text-xs leading-5 text-amber-100/80">
+                    {getCloudflareRateLimitBannerCopy(cloudflareSync)}
+                  </p>
+                ) : null}
               </div>
               {onReload ? (
                 <Button size="sm" variant="outline" onClick={onReload}>
@@ -286,6 +292,7 @@ export const DomainsPage = () => {
                     status: "live",
                     retryAfter: null,
                     retryAfterSeconds: null,
+                    rateLimitContext: null,
                   },
                 };
               }
@@ -296,6 +303,7 @@ export const DomainsPage = () => {
                   status: "live",
                   retryAfter: null,
                   retryAfterSeconds: null,
+                  rateLimitContext: null,
                 },
               };
             },

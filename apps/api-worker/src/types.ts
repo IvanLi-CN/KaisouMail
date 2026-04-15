@@ -9,6 +9,7 @@ export type AuthUser = z.infer<typeof sessionUserSchema>;
 export interface AppVariables {
   authUser: AuthUser;
   runtimeConfig: RuntimeConfig;
+  requestId: string;
 }
 
 export interface AppBindings {

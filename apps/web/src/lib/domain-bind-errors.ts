@@ -1,4 +1,5 @@
 import { ApiClientError } from "@/lib/api";
+import { formatCloudflareRateLimitDetails } from "@/lib/cloudflare-rate-limit";
 import { hasDelegationPendingProvisionError } from "@/lib/domain-catalog";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
@@ -21,7 +22,10 @@ const serializeDetails = (value: unknown) => {
 
 const toRawMessage = (error: unknown) => {
   if (error instanceof ApiClientError) {
-    const details = serializeDetails(error.details).trim();
+    const details = (
+      formatCloudflareRateLimitDetails(error.details) ??
+      serializeDetails(error.details)
+    ).trim();
     return details ? `${error.message}\n${details}` : error.message;
   }
 

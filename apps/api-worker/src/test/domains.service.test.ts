@@ -6,17 +6,23 @@ const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
 const {
+  createRoutingRule,
   createZone,
+  deleteRoutingRule,
   deleteZone,
   enableDomainRouting,
+  ensureSubdomainEnabled,
   getCatchAllRule,
   listZones,
   updateCatchAllRule,
   validateZoneAccess,
 } = vi.hoisted(() => ({
+  createRoutingRule: vi.fn(),
   createZone: vi.fn(),
+  deleteRoutingRule: vi.fn(),
   deleteZone: vi.fn(),
   enableDomainRouting: vi.fn(),
+  ensureSubdomainEnabled: vi.fn(),
   getCatchAllRule: vi.fn(),
   listZones: vi.fn(),
   updateCatchAllRule: vi.fn(),
@@ -33,9 +39,12 @@ vi.mock("../services/emailRouting", async () => {
   >("../services/emailRouting");
   return {
     ...actual,
+    createRoutingRule,
     createZone,
+    deleteRoutingRule,
     deleteZone,
     enableDomainRouting,
+    ensureSubdomainEnabled,
     getCatchAllRule,
     listZones,
     updateCatchAllRule,
@@ -238,6 +247,7 @@ describe("domain catalog", () => {
       status: "live",
       retryAfter: null,
       retryAfterSeconds: null,
+      rateLimitContext: null,
     });
     expect(catalog.domains).toEqual([
       expect.objectContaining({
@@ -282,6 +292,15 @@ describe("domain catalog", () => {
           retryAfter: "2026-04-14T10:00:00.000Z",
           retryAfterSeconds: 120,
           source: "cloudflare",
+          rateLimitContext: {
+            triggeredAt: "2026-04-14T09:58:00.000Z",
+            projectOperation: "mailboxes.ensure",
+            projectRoute: "POST /api/mailboxes/ensure",
+            cloudflareMethod: "POST",
+            cloudflarePath: "/zones/zone_primary/email/routing/rules",
+            lastBlockedAt: null,
+            lastBlockedBy: null,
+          },
         },
         { "retry-after": "120" },
       ),
@@ -293,6 +312,15 @@ describe("domain catalog", () => {
       status: "rate_limited",
       retryAfter: "2026-04-14T10:00:00.000Z",
       retryAfterSeconds: 120,
+      rateLimitContext: {
+        triggeredAt: "2026-04-14T09:58:00.000Z",
+        projectOperation: "mailboxes.ensure",
+        projectRoute: "POST /api/mailboxes/ensure",
+        cloudflareMethod: "POST",
+        cloudflarePath: "/zones/zone_primary/email/routing/rules",
+        lastBlockedAt: null,
+        lastBlockedBy: null,
+      },
     });
     expect(catalog.domains).toEqual([
       expect.objectContaining({
@@ -344,14 +372,30 @@ describe("domain catalog", () => {
       zoneId: "zone_available",
     });
 
-    expect(validateZoneAccess).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "ops.example.org",
-      zoneId: "zone_available",
-    });
-    expect(enableDomainRouting).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "ops.example.org",
-      zoneId: "zone_available",
-    });
+    expect(validateZoneAccess).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "ops.example.org",
+        zoneId: "zone_available",
+      },
+      {
+        projectOperation: "domains.create",
+        projectRoute: "POST /api/domains",
+      },
+    );
+    expect(enableDomainRouting).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "ops.example.org",
+        zoneId: "zone_available",
+      },
+      {
+        projectOperation: "domains.create",
+        projectRoute: "POST /api/domains",
+      },
+    );
     expect(db.insert).toHaveBeenCalled();
     expect(result.domain).toMatchObject({
       rootDomain: "ops.example.org",
@@ -510,6 +554,10 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       "bound.example.org",
+      {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
+      },
     );
     expect(result.domain).toMatchObject({
       rootDomain: "bound.example.org",
@@ -597,6 +645,10 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       "bound.example.org",
+      {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
+      },
     );
     expect(validateZoneAccess).toHaveBeenCalledTimes(1);
     expect(result.domain).toMatchObject({
@@ -714,6 +766,10 @@ describe("domain catalog", () => {
         zoneId: "zone_bound",
       },
       {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
+      },
+      {
         bypassRateLimitCheck: true,
       },
     );
@@ -779,6 +835,10 @@ describe("domain catalog", () => {
         zoneId: "zone_bound",
       },
       {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
+      },
+      {
         bypassRateLimitCheck: true,
       },
     );
@@ -817,6 +877,10 @@ describe("domain catalog", () => {
       {
         rootDomain: "bound.example.org",
         zoneId: "zone_bound",
+      },
+      {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
       },
       {
         bypassRateLimitCheck: false,
@@ -858,6 +922,10 @@ describe("domain catalog", () => {
         zoneId: "zone_bound",
       },
       {
+        projectOperation: "domains.bind",
+        projectRoute: "POST /api/domains/bind",
+      },
+      {
         bypassRateLimitCheck: false,
       },
     );
@@ -883,10 +951,18 @@ describe("domain catalog", () => {
       deleteDomain(env, runtimeConfig, "dom_bound"),
     ).resolves.toBeUndefined();
 
-    expect(deleteZone).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
-      zoneId: "zone_bound",
-    });
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        projectOperation: "domains.delete",
+        projectRoute: "POST /api/domains/:id/delete",
+      },
+    );
     expect(db.update).toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalled();
   });
@@ -914,10 +990,18 @@ describe("domain catalog", () => {
       deleteDomain(env, runtimeConfig, "dom_bound"),
     ).resolves.toBeUndefined();
 
-    expect(deleteZone).toHaveBeenCalledWith(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
-      zoneId: "zone_bound",
-    });
+    expect(deleteZone).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      {
+        rootDomain: "bound.example.org",
+        zoneId: "zone_bound",
+      },
+      {
+        projectOperation: "domains.delete",
+        projectRoute: "POST /api/domains/:id/delete",
+      },
+    );
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
   });
@@ -1052,6 +1136,10 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       baseDomain,
+      {
+        projectOperation: "domains.catch_all.enable",
+        projectRoute: "POST /api/domains/:id/catch-all/enable",
+      },
     );
     expect(updateCatchAllRule).toHaveBeenCalledWith(
       env,
@@ -1061,6 +1149,10 @@ describe("domain catalog", () => {
         enabled: true,
         actions: [{ type: "worker", value: [runtimeConfig.EMAIL_WORKER_NAME] }],
       }),
+      {
+        projectOperation: "domains.catch_all.enable",
+        projectRoute: "POST /api/domains/:id/catch-all/enable",
+      },
     );
     expect(result).toMatchObject({
       id: baseDomain.id,
@@ -1110,12 +1202,125 @@ describe("domain catalog", () => {
         matchers: [{ type: "all" }],
         actions: [{ type: "forward", value: ["owner@example.com"] }],
       },
+      {
+        projectOperation: "domains.catch_all.disable",
+        projectRoute: "POST /api/domains/:id/catch-all/disable",
+      },
     );
     expect(result).toMatchObject({
       id: catchAllDomain.id,
       catchAllEnabled: false,
     });
     expect(db.update).toHaveBeenCalledWith(mailboxes);
+  });
+
+  it("backfills registered mailbox routes before disabling catch-all", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+      catchAllUpdatedAt: "2026-04-03T12:30:00.000Z",
+    };
+    const db = createDb({
+      domainRows: [catchAllDomain],
+      mailboxRows: [
+        {
+          id: "mbx_registered",
+          address: "build@ops.707979.xyz",
+          subdomain: "ops",
+          domainId: catchAllDomain.id,
+          source: "registered",
+          routingRuleId: null,
+          status: "active",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_backfilled");
+    updateCatchAllRule.mockResolvedValue(undefined);
+
+    await disableDomainCatchAll(env, runtimeConfig, catchAllDomain.id);
+
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      catchAllDomain,
+      "ops",
+      {
+        projectOperation: "domains.catch_all.disable",
+        projectRoute: "POST /api/domains/:id/catch-all/disable",
+      },
+    );
+    expect(createRoutingRule).toHaveBeenCalledWith(
+      env,
+      runtimeConfig,
+      catchAllDomain,
+      "build@ops.707979.xyz",
+      {
+        projectOperation: "domains.catch_all.disable",
+        projectRoute: "POST /api/domains/:id/catch-all/disable",
+      },
+    );
+  });
+
+  it("keeps catch-all enabled when route backfill fails", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+      catchAllUpdatedAt: "2026-04-03T12:30:00.000Z",
+    };
+    const db = createDb({
+      domainRows: [catchAllDomain],
+      mailboxRows: [
+        {
+          id: "mbx_registered",
+          address: "build@ops.707979.xyz",
+          subdomain: "ops",
+          domainId: catchAllDomain.id,
+          source: "registered",
+          routingRuleId: null,
+          status: "active",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockRejectedValue(
+      new ApiError(
+        429,
+        "Cloudflare API rate limit reached; retry later",
+        {
+          retryAfter: "2026-04-14T10:00:00.000Z",
+          retryAfterSeconds: 120,
+          source: "cloudflare",
+        },
+        { "retry-after": "120" },
+      ),
+    );
+
+    await expect(
+      disableDomainCatchAll(env, runtimeConfig, catchAllDomain.id),
+    ).rejects.toMatchObject({
+      status: 429,
+      message: "Cloudflare API rate limit reached; retry later",
+    });
+
+    expect(updateCatchAllRule).not.toHaveBeenCalled();
+    expect(deleteRoutingRule).not.toHaveBeenCalled();
   });
 
   it("refuses to disable catch-all when Cloudflare routing management is off", async () => {

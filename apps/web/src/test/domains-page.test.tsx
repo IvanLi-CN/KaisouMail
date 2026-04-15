@@ -22,6 +22,7 @@ const domainsHookState = {
     status: "live" as const,
     retryAfter: null,
     retryAfterSeconds: null,
+    rateLimitContext: null,
   },
   error: null as Error | null,
   refetch: vi.fn(),
@@ -110,6 +111,7 @@ afterEach(() => {
     status: "live",
     retryAfter: null,
     retryAfterSeconds: null,
+    rateLimitContext: null,
   };
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
@@ -140,6 +142,15 @@ describe("domains page view", () => {
             status: "rate_limited",
             retryAfter: "2026-04-14T10:00:00.000Z",
             retryAfterSeconds: 120,
+            rateLimitContext: {
+              triggeredAt: "2026-04-14T09:58:00.000Z",
+              projectOperation: "mailboxes.ensure",
+              projectRoute: "POST /api/mailboxes/ensure",
+              cloudflareMethod: "POST",
+              cloudflarePath: "/zones/zone_primary/email/routing/rules",
+              lastBlockedAt: null,
+              lastBlockedBy: null,
+            },
           }}
           isDomainBindingEnabled
           isDomainLifecycleEnabled
@@ -159,6 +170,9 @@ describe("domains page view", () => {
     const banner = screen.getByTestId("domain-catalog-rate-limit-banner");
     expect(banner).toHaveTextContent("Cloudflare 域名目录正在冷却");
     expect(banner).toHaveTextContent("当前先展示项目内已知域名");
+    expect(banner).toHaveTextContent(
+      "最近一次冷却来自 确保邮箱存在（POST /api/mailboxes/ensure）先触发了 Cloudflare POST /zones/zone_primary/email/routing/rules",
+    );
     fireEvent.click(screen.getByRole("button", { name: "立即重试" }));
     expect(onReload).toHaveBeenCalledTimes(1);
   });
