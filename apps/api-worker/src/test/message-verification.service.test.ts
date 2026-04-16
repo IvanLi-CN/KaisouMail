@@ -59,6 +59,20 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects sign-in request emails that place the numeric code under the heading", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Authentication alert",
+      text: "Sign-in request\n123456",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "123456",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("falls back to stripped HTML when the text part has no usable code", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Build artifacts ready",
@@ -119,6 +133,89 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects reverse-order pure-alpha hyphenated OTP labels in supported subject formats", async () => {
+    const confirmationVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "WXN-DTJ confirmation code",
+        text: null,
+        html: null,
+      },
+    );
+    const localizedVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "WXN-DTJ 驗證碼",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(confirmationVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+    expect(localizedVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
+  it("detects hyphenated verification tokens for supported passcode, otp, and localized subject labels", async () => {
+    const passcodeVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Your passcode is WXN-DTJ",
+        text: null,
+        html: null,
+      },
+    );
+    const otpVerification = await detectVerificationForMessage({} as never, {
+      subject: "OTP: WXN-DTJ",
+      text: null,
+      html: null,
+    });
+    const localizedVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "驗證碼：WXN-DTJ",
+        text: null,
+        html: null,
+      },
+    );
+    const authenticationVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Your authentication code is WXN-DTJ",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(passcodeVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+    expect(otpVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+    expect(localizedVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+    expect(authenticationVerification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
   it("detects hyphenated verification codes from email-validation body content", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Welcome to xAI",
@@ -128,6 +225,34 @@ describe("message verification service", () => {
         "<p>Please use the code below to finish creating your account.</p>",
         "<div>WXN-DTJ</div>",
       ].join(""),
+    });
+
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
+      source: "body",
+      method: "rules",
+    });
+  });
+
+  it("detects standalone hyphenated verification codes from localized email-validation copy", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "歡迎使用 xAI",
+      text: "驗證電子郵件\n請輸入以下代碼\nWXN-DTJ",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
+      source: "body",
+      method: "rules",
+    });
+  });
+
+  it("detects standalone hyphenated body codes when the verification cue only appears in the subject", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your verification code",
+      text: "WXN-DTJ",
+      html: null,
     });
 
     expect(verification).toEqual({
@@ -150,6 +275,20 @@ describe("message verification service", () => {
 
     expect(verification).toEqual({
       code: "WXN-DTJ",
+      source: "body",
+      method: "rules",
+    });
+  });
+
+  it("keeps traditional Chinese security codes when a masked mailbox appears on the same line", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "個人 Microsoft 帳戶安全性代碼",
+      text: "安全代碼：007206，請在Ju**9@outlook.com上輸入此代碼。",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "007206",
       source: "body",
       method: "rules",
     });
@@ -276,6 +415,76 @@ describe("message verification service", () => {
     expect(verification).toBeNull();
   });
 
+  it("does not let generic confirmation subjects bless standalone hyphenated body ids", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your booking confirmation code",
+      text: "ABC-123",
+      html: null,
+    });
+
+    expect(verification).toBeNull();
+  });
+
+  it("does not treat booking or order confirmation assignments as verification codes", async () => {
+    const bookingVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Your booking confirmation code is AB1-2CD3",
+        text: null,
+        html: null,
+      },
+    );
+    const orderVerification = await detectVerificationForMessage({} as never, {
+      subject: "Your order confirmation code is 123456",
+      text: null,
+      html: null,
+    });
+
+    expect(bookingVerification).toBeNull();
+    expect(orderVerification).toBeNull();
+  });
+
+  it("does not promote standalone locale or template labels from subject-only verification cues", async () => {
+    const localeVerification = await detectVerificationForMessage({} as never, {
+      subject: "Your verification code",
+      text: "EN-US",
+      html: null,
+    });
+    const templateVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Your verification code",
+        text: "PDF-CSV",
+        html: null,
+      },
+    );
+
+    expect(localeVerification).toBeNull();
+    expect(templateVerification).toBeNull();
+  });
+
+  it("does not let generic security or authentication subjects bless standalone hyphenated body ids", async () => {
+    const securityVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Security alert",
+        text: "AB1-2CD3",
+        html: null,
+      },
+    );
+    const authenticationVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Authentication alert",
+        text: "ABC-DEF",
+        html: null,
+      },
+    );
+
+    expect(securityVerification).toBeNull();
+    expect(authenticationVerification).toBeNull();
+  });
+
   it("does not treat generic all-caps hyphenated subject phrases as verification codes", async () => {
     const localeVerification = await detectVerificationForMessage({} as never, {
       subject: "EN-US confirmation code",
@@ -290,9 +499,46 @@ describe("message verification service", () => {
         html: null,
       },
     );
+    const additionalLocaleVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "NL-BE confirmation code",
+        text: null,
+        html: null,
+      },
+    );
 
     expect(localeVerification).toBeNull();
     expect(templateVerification).toBeNull();
+    expect(additionalLocaleVerification).toBeNull();
+  });
+
+  it("does not treat forward subject hyphenated labels as explicit verification assignments", async () => {
+    const localeVerification = await detectVerificationForMessage({} as never, {
+      subject: "confirmation code EN-US",
+      text: null,
+      html: null,
+    });
+    const templateVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "verification code PDF-CSV",
+        text: null,
+        html: null,
+      },
+    );
+    const dashSeparatedVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "confirmation code-EN-US",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(localeVerification).toBeNull();
+    expect(templateVerification).toBeNull();
+    expect(dashSeparatedVerification).toBeNull();
   });
 
   it("does not treat inline hyphenated phrases in validation emails as verification codes", async () => {
@@ -303,6 +549,28 @@ describe("message verification service", () => {
     });
 
     expect(verification).toBeNull();
+  });
+
+  it("does not treat localized body labels as pure-alpha hyphenated verification codes", async () => {
+    const reverseVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Template notice",
+        text: "EN-US confirmation code",
+        html: null,
+      },
+    );
+    const forwardVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "Template notice",
+        text: "confirmation code PDF-CSV",
+        html: null,
+      },
+    );
+
+    expect(reverseVerification).toBeNull();
+    expect(forwardVerification).toBeNull();
   });
 
   it("uses Workers AI as a fallback for ambiguous candidates", async () => {
@@ -327,6 +595,26 @@ describe("message verification service", () => {
       source: "body",
       method: "ai",
     });
+  });
+
+  it("rejects Workers AI subject matches for pure-alpha hyphenated labels without an explicit assignment cue", async () => {
+    const run = vi.fn().mockResolvedValue({
+      response: '{"verdict":"match","code":"EN-US","source":"subject"}',
+    });
+
+    const verification = await detectVerificationForMessage(
+      {
+        AI: { run },
+      } as never,
+      {
+        subject: "EN-US confirmation code",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(run).not.toHaveBeenCalled();
+    expect(verification).toBeNull();
   });
 
   it("maps AI matches back to the original source casing", async () => {
@@ -382,6 +670,42 @@ describe("message verification service", () => {
     ).toContain("Your verification codes are 551177 and 662288.");
     expect(verification).toEqual({
       code: "662288",
+      source: "body",
+      method: "ai",
+    });
+  });
+
+  it("keeps subject-cued standalone body tokens in the AI body snippet for long emails", async () => {
+    const run = vi.fn().mockResolvedValue({
+      response: '{"verdict":"match","code":"WXN-DTJ","source":"body"}',
+    });
+    const longBody = [
+      ...Array.from({ length: 40 }, () => "This is boilerplate legal text."),
+      "WXN-DTJ",
+      "ABC-DEF",
+    ].join("\n");
+
+    const verification = await detectVerificationForMessage(
+      {
+        AI: { run },
+      } as never,
+      {
+        subject: "Your verification code",
+        text: longBody,
+        html: null,
+      },
+    );
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        run.mock.calls[0]?.[1] as {
+          messages: Array<{ content: string }>;
+        }
+      ).messages[1]?.content,
+    ).toContain("WXN-DTJ\nABC-DEF");
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
       source: "body",
       method: "ai",
     });

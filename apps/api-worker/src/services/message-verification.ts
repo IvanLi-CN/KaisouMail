@@ -32,8 +32,6 @@ const CODE_TOKEN_PATTERN =
 const VERIFICATION_KEYWORDS = [
   "verification code",
   "security code",
-  "confirmation code",
-  "validation code",
   "passcode",
   "one-time code",
   "one time code",
@@ -50,15 +48,29 @@ const VERIFICATION_KEYWORDS = [
   "安全代碼",
   "安全性代碼",
 ] as const;
+const HYPHENATED_CONFIRMATION_KEYWORDS = [
+  "confirmation code",
+  "validation code",
+] as const;
 const VERIFICATION_EMAIL_SIGNAL_PHRASES = [
   "validate your email",
   "validate email",
   "email validation",
   "驗證電子郵件",
 ] as const;
+const VALIDATION_CODE_CUE_PATTERN =
+  /\bcode\b|代碼|代码|驗證碼|验证码|安全代碼|安全代码|安全性代碼|安全性代码/i;
+const EMAIL_OR_URL_PATTERNS = [
+  /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+  /https?:\/\/[^\s<>()]+/gi,
+] as const;
 const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
   keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
 );
+const escapedHyphenatedConfirmationKeywords =
+  HYPHENATED_CONFIRMATION_KEYWORDS.map((keyword) =>
+    keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
 const FORWARD_DIRECT_CODE_CAPTURE =
   "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const REVERSE_DIRECT_CODE_CAPTURE =
@@ -78,11 +90,42 @@ const DIRECT_CODE_PATTERNS = [
       "gi",
     ),
   },
+  {
+    direction: "forward" as const,
+    pureAlphaHyphenatedOnly: true,
+    pattern: new RegExp(
+      `(?:${escapedHyphenatedConfirmationKeywords.join("|")})[^A-Za-z0-9]{0,24}${FORWARD_DIRECT_CODE_CAPTURE}`,
+      "gi",
+    ),
+  },
+  {
+    direction: "reverse" as const,
+    pureAlphaHyphenatedOnly: true,
+    pattern: new RegExp(
+      `${REVERSE_DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedHyphenatedConfirmationKeywords.join("|")})`,
+      "gi",
+    ),
+  },
 ] as const;
 const GENERIC_CODE_CONTEXT_PATTERN =
-  /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm(?:ation)?|validation|authentication|authenticate|access)\s+code\b/i;
+  /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm|authentication|authenticate|access)\s+code\b/i;
 const VERIFICATION_CONTEXT_PATTERN =
-  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm(?:ation)?|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼/i;
+  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼/i;
+const FILE_LABEL_SEGMENTS = new Set([
+  "CSV",
+  "DOC",
+  "DOCX",
+  "HTML",
+  "JPG",
+  "JSON",
+  "PDF",
+  "PNG",
+  "TXT",
+  "WEBP",
+  "XLS",
+  "XLSX",
+  "XML",
+]);
 
 const aiDecisionSchema = z.object({
   verdict: z.enum(["match", "none"]),
@@ -179,7 +222,8 @@ const findEmailValidationSignalHit = (value: string) => {
 };
 
 const hasStandaloneValidationCodeSignal = (value: string) =>
-  findEmailValidationSignalHit(value) && /\bcode\b/i.test(value);
+  findEmailValidationSignalHit(value) &&
+  VALIDATION_CODE_CUE_PATTERN.test(value);
 
 const hasVerificationContextSignal = (value: string) =>
   findKeywordHit(value) ||
@@ -187,9 +231,13 @@ const hasVerificationContextSignal = (value: string) =>
   VERIFICATION_CONTEXT_PATTERN.test(value);
 
 const REFERENCE_LABEL_PATTERN =
-  /\b(reference|ref|order|invoice|ticket|case|build|tracking|request|number|no\.?)\s*[:#-]?\s*$/i;
-const SUBJECT_CODE_ASSIGNMENT_PATTERN =
-  /\b(?:verification|security|confirmation|validation|login|confirm|passcode|otp)\s+code(?:\s+is)?\s*[:：-]?\s*$/i;
+  /\b(reference|ref|order|invoice|ticket|case|build|tracking|number|no\.?)\s*[:#-]?\s*$/i;
+const EXPLICIT_AUTH_CODE_ASSIGNMENT_PATTERN =
+  /(?:^|[^A-Za-z0-9])(?:your\s+)?(?:(?:verification|security|authentication|login|confirm)\s+code|passcode|otp|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼)(?:(?:\s+is)?\s*[:：]|\s+is)\s*$/i;
+const EXPLICIT_CONFIRMATION_CODE_ASSIGNMENT_PATTERN =
+  /(?:^|[^A-Za-z0-9])(?:your\s+)?(?:confirmation|validation)\s+code(?:(?:\s+is)?\s*[:：]|\s+is)\s*$/i;
+const NON_VERIFICATION_CONFIRMATION_CONTEXT_PATTERN =
+  /\b(booking|order|reservation|ticket|invoice|tracking|reference|case)\b/i;
 
 const isSafeBoundary = (value: string | undefined) =>
   !value || !/[A-Za-z0-9]/.test(value);
@@ -202,28 +250,31 @@ const getTokenContextRadius = (token: string) =>
     ? HYPHENATED_TOKEN_CONTEXT_RADIUS
     : DEFAULT_TOKEN_CONTEXT_RADIUS;
 
-const hasSubjectCodeAssignmentCue = (value: string, index: number) =>
-  SUBJECT_CODE_ASSIGNMENT_PATTERN.test(
-    value.slice(Math.max(0, index - 48), index),
+const hasExplicitCodeAssignmentCue = (value: string, index: number) => {
+  const cueWindow = value.slice(Math.max(0, index - 64), index);
+  if (EXPLICIT_AUTH_CODE_ASSIGNMENT_PATTERN.test(cueWindow)) {
+    return true;
+  }
+
+  return (
+    EXPLICIT_CONFIRMATION_CODE_ASSIGNMENT_PATTERN.test(cueWindow) &&
+    !NON_VERIFICATION_CONFIRMATION_CONTEXT_PATTERN.test(cueWindow)
   );
+};
 
-const getNonWhitespaceSegment = (
-  value: string,
-  index: number,
-  tokenLength: number,
-) => {
-  let start = index;
-  let end = index + tokenLength;
+const hasStandaloneBodySubjectCue = (value: string) =>
+  findKeywordHit(value) || hasStandaloneValidationCodeSignal(value);
 
-  while (start > 0 && !/\s/.test(value[start - 1] ?? "")) {
-    start -= 1;
+const isLikelyHyphenatedLabelToken = (value: string) => {
+  if (!isPureAlphaHyphenatedCode(value)) return false;
+
+  if (/^[A-Z]{2}-[A-Z]{2}$/.test(value)) {
+    return true;
   }
 
-  while (end < value.length && !/\s/.test(value[end] ?? "")) {
-    end += 1;
-  }
-
-  return value.slice(start, end);
+  return value
+    .split("-")
+    .every((segment) => FILE_LABEL_SEGMENTS.has(segment.toUpperCase()));
 };
 
 const isStandaloneTokenLine = (value: string, token: string, index: number) => {
@@ -237,9 +288,22 @@ const isEmailOrUrlSegment = (
   value: string,
   index: number,
   tokenLength: number,
-) => /@|https?:\/\//i.test(getNonWhitespaceSegment(value, index, tokenLength));
+) =>
+  EMAIL_OR_URL_PATTERNS.some((pattern) =>
+    [...value.matchAll(pattern)].some((match) => {
+      const matchIndex = match.index ?? -1;
+      if (matchIndex < 0) return false;
 
-const extractCodeTokens = (value: string) => {
+      const matchEnd = matchIndex + match[0].length;
+      return index >= matchIndex && index + tokenLength <= matchEnd;
+    }),
+  );
+
+const extractCodeTokens = (
+  value: string,
+  source: "subject" | "body" = "body",
+  relatedSubject = "",
+) => {
   const matches = new Map<string, number>();
 
   for (const match of value.matchAll(CODE_TOKEN_PATTERN)) {
@@ -251,6 +315,7 @@ const extractCodeTokens = (value: string) => {
 
     const normalized = normalizeVerificationCode(token);
     if (!normalized) continue;
+    if (isLikelyHyphenatedLabelToken(normalized)) continue;
     const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
     const contextRadius = getTokenContextRadius(normalized);
 
@@ -258,6 +323,26 @@ const extractCodeTokens = (value: string) => {
       Math.max(0, index - contextRadius),
       index + token.length + contextRadius,
     );
+    const hasExplicitAssignmentCue = hasExplicitCodeAssignmentCue(value, index);
+    const hasStandaloneSubjectCue =
+      source === "body" &&
+      isStandaloneLineToken &&
+      hasStandaloneBodySubjectCue(relatedSubject);
+    if (isPureAlphaHyphenatedCode(normalized)) {
+      if (source === "subject" && !hasExplicitAssignmentCue) {
+        continue;
+      }
+      if (
+        source === "body" &&
+        !hasExplicitAssignmentCue &&
+        !(
+          hasStandaloneValidationCodeSignal(context) && isStandaloneLineToken
+        ) &&
+        !hasStandaloneSubjectCue
+      ) {
+        continue;
+      }
+    }
     if (isEmailOrUrlSegment(value, index, token.length)) continue;
     if (normalized.includes("-") && (previous === "-" || next === "-")) {
       continue;
@@ -265,7 +350,9 @@ const extractCodeTokens = (value: string) => {
     if (
       normalized.includes("-") &&
       !hasVerificationContextSignal(context) &&
-      !(hasStandaloneValidationCodeSignal(context) && isStandaloneLineToken)
+      !(hasStandaloneValidationCodeSignal(context) && isStandaloneLineToken) &&
+      !hasStandaloneSubjectCue &&
+      !hasExplicitAssignmentCue
     ) {
       continue;
     }
@@ -275,8 +362,13 @@ const extractCodeTokens = (value: string) => {
   return [...matches.entries()].map(([token, index]) => ({ token, index }));
 };
 
-const findVerificationCodeInSource = (value: string, code: string) =>
-  extractCodeTokens(value).find(({ token }) =>
+const findVerificationCodeInSource = (
+  value: string,
+  code: string,
+  source: "subject" | "body",
+  relatedSubject = "",
+) =>
+  extractCodeTokens(value, source, relatedSubject).find(({ token }) =>
     compareVerificationCodes(token, code),
   )?.token ?? null;
 
@@ -285,10 +377,12 @@ const scoreToken = (
   token: string,
   index: number,
   source: "subject" | "body",
+  relatedSubject = "",
 ) => {
   const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
   const contextRadius = getTokenContextRadius(token);
   const leadingContext = value.slice(Math.max(0, index - 24), index);
+  const hasExplicitAssignmentCue = hasExplicitCodeAssignmentCue(value, index);
   const window = value
     .slice(
       Math.max(0, index - contextRadius),
@@ -301,12 +395,21 @@ const scoreToken = (
   if (source === "subject") score += 40;
   if (findKeywordHit(window)) score += 120;
   if (hasContextSignal) score += 40;
+  if (hasExplicitAssignmentCue) score += 80;
   if (
     token.includes("-") &&
     hasStandaloneValidationCodeSignal(window) &&
     isStandaloneLineToken
   ) {
     score += 70;
+  }
+  if (
+    source === "body" &&
+    token.includes("-") &&
+    isStandaloneLineToken &&
+    hasStandaloneBodySubjectCue(relatedSubject)
+  ) {
+    score += 80;
   }
   if (/^(?:code|otp|passcode)\d+[a-z0-9]*$/.test(token)) score -= 220;
   if (REFERENCE_LABEL_PATTERN.test(leadingContext)) score -= 160;
@@ -317,6 +420,7 @@ const scoreToken = (
   return {
     score,
     hasContextSignal,
+    hasExplicitAssignmentCue,
   };
 };
 
@@ -325,6 +429,7 @@ const uniqueStrings = (values: string[]) => [...new Set(values)];
 const detectWithRules = (
   rawValue: string | null | undefined,
   source: "subject" | "body",
+  relatedSubject = "",
 ): RuleDetection => {
   const value =
     source === "body"
@@ -335,16 +440,19 @@ const detectWithRules = (
   }
 
   const directMatches = uniqueStrings(
-    DIRECT_CODE_PATTERNS.flatMap(({ direction, pattern }) =>
-      [...value.matchAll(pattern)]
+    DIRECT_CODE_PATTERNS.flatMap((patternConfig) => {
+      const pureAlphaHyphenatedOnly =
+        "pureAlphaHyphenatedOnly" in patternConfig &&
+        patternConfig.pureAlphaHyphenatedOnly;
+
+      return [...value.matchAll(patternConfig.pattern)]
         .flatMap((match) => {
           const token = match[1];
           const normalized = normalizeVerificationCode(token);
           if (!normalized) return [];
           if (
-            source === "subject" &&
-            direction === "reverse" &&
-            isPureAlphaHyphenatedCode(normalized)
+            pureAlphaHyphenatedOnly &&
+            !isPureAlphaHyphenatedCode(normalized)
           ) {
             return [];
           }
@@ -354,14 +462,23 @@ const detectWithRules = (
           const tokenOffset = wholeMatch.lastIndexOf(token);
           const tokenIndex =
             tokenOffset >= 0 ? matchIndex + tokenOffset : matchIndex;
+          if (isPureAlphaHyphenatedCode(normalized)) {
+            if (
+              isLikelyHyphenatedLabelToken(normalized) ||
+              (patternConfig.direction === "forward" &&
+                !hasExplicitCodeAssignmentCue(value, tokenIndex))
+            ) {
+              return [];
+            }
+          }
           if (isEmailOrUrlSegment(value, tokenIndex, token.length)) {
             return [];
           }
 
           return [normalized];
         })
-        .filter((token): token is string => Boolean(token)),
-    ),
+        .filter((token): token is string => Boolean(token));
+    }),
   );
 
   if (directMatches.length === 1) {
@@ -386,17 +503,17 @@ const detectWithRules = (
     };
   }
 
-  const scored = extractCodeTokens(value)
+  const scored = extractCodeTokens(value, source, relatedSubject)
     .filter(({ token, index }) => {
       if (!(source === "subject" && isPureAlphaHyphenatedCode(token))) {
         return true;
       }
 
-      return hasSubjectCodeAssignmentCue(value, index);
+      return hasExplicitCodeAssignmentCue(value, index);
     })
     .map(({ token, index }) => ({
       token,
-      ...scoreToken(value, token, index, source),
+      ...scoreToken(value, token, index, source, relatedSubject),
     }))
     .sort((left, right) => right.score - left.score);
 
@@ -417,7 +534,11 @@ const detectWithRules = (
     };
   }
 
-  if (source === "subject" && !best.hasContextSignal) {
+  if (
+    source === "subject" &&
+    !best.hasContextSignal &&
+    !best.hasExplicitAssignmentCue
+  ) {
     return {
       match: null,
       candidates,
@@ -447,7 +568,7 @@ const detectWithRules = (
   };
 };
 
-const buildRelevantBodySnippet = (value: string) => {
+const buildRelevantBodySnippet = (value: string, relatedSubject = "") => {
   if (!value) return "";
 
   const lines = value
@@ -455,7 +576,9 @@ const buildRelevantBodySnippet = (value: string) => {
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
   const relevant = lines.filter(
-    (line) => findKeywordHit(line) || extractCodeTokens(line).length > 0,
+    (line) =>
+      findKeywordHit(line) ||
+      extractCodeTokens(line, "body", relatedSubject).length > 0,
   );
   const snippet = (relevant.length > 0 ? relevant : lines)
     .slice(0, 8)
@@ -702,7 +825,12 @@ const maybeVerifyWithAi = async (
     }
 
     const sourceText = parsed.data.source === "subject" ? subject : body;
-    const sourceCode = findVerificationCodeInSource(sourceText, normalizedCode);
+    const sourceCode = findVerificationCodeInSource(
+      sourceText,
+      normalizedCode,
+      parsed.data.source,
+      subject,
+    );
     if (!sourceCode) {
       return {
         verification: null,
@@ -792,7 +920,7 @@ export const resolveVerificationDetectionForMessage = async (
   }
 
   const bodyDetections = bodyVariants.map((value) =>
-    detectWithRules(value, "body"),
+    detectWithRules(value, "body", subject),
   );
   const bodyMatch = bodyDetections.find((detection) => detection.match)?.match;
   if (bodyMatch) {
@@ -824,7 +952,7 @@ export const resolveVerificationDetectionForMessage = async (
   return maybeVerifyWithAi(
     env,
     subject,
-    buildRelevantBodySnippet(bodyVariants.filter(Boolean).join("\n")),
+    buildRelevantBodySnippet(bodyVariants.filter(Boolean).join("\n"), subject),
     candidateList,
   );
 };
