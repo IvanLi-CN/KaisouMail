@@ -101,6 +101,24 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects hyphenated verification codes from email-validation body content", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Welcome to xAI",
+      text: "Validate your email address with the code below.\nWXN-DTJ",
+      html: [
+        "<h1>Validate your email</h1>",
+        "<p>Please use the code below to finish creating your account.</p>",
+        "<div>WXN-DTJ</div>",
+      ].join(""),
+    });
+
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("detects traditional Chinese Microsoft security codes from text and html bodies", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "個人 Microsoft 帳戶安全性代碼",
@@ -192,6 +210,16 @@ describe("message verification service", () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Code review for build 123456",
       text: null,
+      html: null,
+    });
+
+    expect(verification).toBeNull();
+  });
+
+  it("does not promote email-validation references into verification codes", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Welcome to xAI",
+      text: "Please validate your email. Reference 123456.",
       html: null,
     });
 
@@ -373,6 +401,22 @@ describe("message verification service", () => {
       shouldRetry: false,
       retryAfter: null,
     });
+  });
+
+  it("does not extract direct verification codes from adjacent glued text", async () => {
+    const suffixVerification = await detectVerificationForMessage({} as never, {
+      subject: "verification code1234y",
+      text: null,
+      html: null,
+    });
+    const prefixVerification = await detectVerificationForMessage({} as never, {
+      subject: "abcverification code1234",
+      text: null,
+      html: null,
+    });
+
+    expect(suffixVerification).toBeNull();
+    expect(prefixVerification).toBeNull();
   });
 
   it("does not treat mailbox host fragments as hyphenated verification codes", async () => {

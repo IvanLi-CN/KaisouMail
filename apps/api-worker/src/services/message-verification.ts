@@ -22,10 +22,12 @@ const WORKERS_AI_RATE_LIMITED_UNTIL_KEY =
   "workers_ai_verification_rate_limited_until";
 const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
 const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
+const TOKEN_CONTEXT_RADIUS = 120;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
 const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]+-[A-Z]+$/;
-const CODE_TOKEN_PATTERN = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?/g;
+const CODE_TOKEN_PATTERN =
+  /(?<![A-Za-z0-9])(?:[A-Za-z0-9]{4,8}|[A-Za-z0-9]{1,8}-[A-Za-z0-9]{1,8})(?=$|[^A-Za-z0-9])/g;
 const VERIFICATION_KEYWORDS = [
   "verification code",
   "security code",
@@ -47,8 +49,7 @@ const VERIFICATION_KEYWORDS = [
   "安全代碼",
   "安全性代碼",
 ] as const;
-const VERIFICATION_SIGNAL_PHRASES = [
-  ...VERIFICATION_KEYWORDS,
+const VERIFICATION_EMAIL_SIGNAL_PHRASES = [
   "validate your email",
   "validate email",
   "email validation",
@@ -58,7 +59,7 @@ const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
   keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
 );
 const FORWARD_DIRECT_CODE_CAPTURE =
-  "([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
+  "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const REVERSE_DIRECT_CODE_CAPTURE =
   "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const DIRECT_CODE_PATTERNS = [
@@ -74,7 +75,7 @@ const DIRECT_CODE_PATTERNS = [
 const GENERIC_CODE_CONTEXT_PATTERN =
   /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm(?:ation)?|validation|authentication|authenticate|access)\s+code\b/i;
 const VERIFICATION_CONTEXT_PATTERN =
-  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm(?:ation)?|validat(?:e|ion)|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼|驗證電子郵件/i;
+  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm(?:ation)?|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼/i;
 
 const aiDecisionSchema = z.object({
   verdict: z.enum(["match", "none"]),
@@ -160,7 +161,12 @@ const stripHtmlToText = (html: string | null | undefined) => {
 
 const findKeywordHit = (value: string) => {
   const lowered = value.toLowerCase();
-  return VERIFICATION_SIGNAL_PHRASES.some((keyword) =>
+  return VERIFICATION_KEYWORDS.some((keyword) => lowered.includes(keyword));
+};
+
+const findEmailValidationSignalHit = (value: string) => {
+  const lowered = value.toLowerCase();
+  return VERIFICATION_EMAIL_SIGNAL_PHRASES.some((keyword) =>
     lowered.includes(keyword),
   );
 };
@@ -187,14 +193,18 @@ const extractCodeTokens = (value: string) => {
     if (!normalized) continue;
 
     const context = value.slice(
-      Math.max(0, index - 40),
-      index + token.length + 40,
+      Math.max(0, index - TOKEN_CONTEXT_RADIUS),
+      index + token.length + TOKEN_CONTEXT_RADIUS,
     );
     if (/@|https?:\/\//i.test(context)) continue;
     if (normalized.includes("-") && (previous === "-" || next === "-")) {
       continue;
     }
-    if (normalized.includes("-") && !hasVerificationContextSignal(context)) {
+    if (
+      normalized.includes("-") &&
+      !hasVerificationContextSignal(context) &&
+      !findEmailValidationSignalHit(context)
+    ) {
       continue;
     }
     matches.set(normalized, index);
@@ -216,16 +226,19 @@ const scoreToken = (
 ) => {
   const window = value
     .slice(
-      Math.max(0, index - 40),
-      Math.min(value.length, index + token.length + 40),
+      Math.max(0, index - TOKEN_CONTEXT_RADIUS),
+      Math.min(value.length, index + token.length + TOKEN_CONTEXT_RADIUS),
     )
     .toLowerCase();
   const hasContextSignal = hasVerificationContextSignal(window);
+  const hasEmailValidationSignal = findEmailValidationSignalHit(window);
   let score = /^\d+$/.test(token) ? 120 : 95;
 
   if (source === "subject") score += 40;
   if (findKeywordHit(window)) score += 120;
   if (hasContextSignal) score += 40;
+  if (token.includes("-") && hasEmailValidationSignal) score += 70;
+  if (/^(?:code|otp|passcode)\d+[a-z0-9]*$/.test(token)) score -= 220;
   if (/^\d{6}$/.test(token)) score += 15;
   if (/^(19|20)\d{2}$/.test(token) && !findKeywordHit(window)) score -= 160;
   if (/kb|mb|gb|am|pm/.test(window)) score -= 60;
