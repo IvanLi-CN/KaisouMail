@@ -56,13 +56,15 @@ const VERIFICATION_SIGNAL_PHRASES = [
 const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
   keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
 );
+const DIRECT_CODE_CAPTURE =
+  "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const DIRECT_CODE_PATTERNS = [
   new RegExp(
-    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}\\b([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\\b`,
+    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}${DIRECT_CODE_CAPTURE}`,
     "gi",
   ),
   new RegExp(
-    `\\b([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\\b[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
+    `${DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
     "gi",
   ),
 ] as const;

@@ -128,6 +128,22 @@ describe("message verification service", () => {
     expect(verification).toBeNull();
   });
 
+  it("does not truncate multi-hyphen identifiers into hyphenated verification matches", async () => {
+    const suffixVerification = await detectVerificationForMessage({} as never, {
+      subject: "ABC-123-XYZ confirmation code",
+      text: null,
+      html: null,
+    });
+    const prefixVerification = await detectVerificationForMessage({} as never, {
+      subject: "xAI confirmation code ABC-123-XYZ",
+      text: null,
+      html: null,
+    });
+
+    expect(suffixVerification).toBeNull();
+    expect(prefixVerification).toBeNull();
+  });
+
   it("ignores generic code-review subjects that only contain build numbers", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Code review for build 123456",
