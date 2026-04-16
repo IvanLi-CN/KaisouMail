@@ -140,6 +140,48 @@ describe("message routes", () => {
     });
   });
 
+  it("returns hyphenated verification metadata without reshaping the API contract", async () => {
+    listMessagesForUser.mockResolvedValue([
+      {
+        id: "msg_xai_verify",
+        mailboxId: "mbx_xai",
+        mailboxAddress: "grok@alpha.707979.xyz",
+        subject: "WXN-DTJ xAI confirmation code",
+        previewText: "Please use WXN-DTJ to validate your email address.",
+        fromName: "xAI",
+        fromAddress: "noreply@x.ai",
+        receivedAt: "2026-04-16T14:45:00.000Z",
+        sizeBytes: 17600,
+        attachmentCount: 0,
+        hasHtml: true,
+        verification: {
+          code: "WXN-DTJ",
+          source: "subject",
+          method: "rules",
+        },
+      },
+    ]);
+
+    const response = await messageRoutes.fetch(
+      new Request("http://localhost/"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      messages: [
+        {
+          id: "msg_xai_verify",
+          verification: {
+            code: "WXN-DTJ",
+            source: "subject",
+            method: "rules",
+          },
+        },
+      ],
+    });
+  });
+
   it("passes mailboxId filters through to the service", async () => {
     await messageRoutes.fetch(
       new Request("http://localhost/?mailboxId=mbx_alpha&scope=workspace"),

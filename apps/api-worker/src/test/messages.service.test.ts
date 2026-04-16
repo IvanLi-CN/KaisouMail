@@ -471,6 +471,82 @@ describe("message service", () => {
     });
   });
 
+  it("preserves hyphenated verification metadata in message details", async () => {
+    const joinedRow = {
+      message: buildMessageRow(
+        "msg_detail_hyphenated_verify",
+        "grok@ops.707979.xyz",
+        "2026-04-08T12:05:00.000Z",
+        {
+          code: "WXN-DTJ",
+          source: "subject",
+          method: "rules",
+        },
+      ),
+      mailboxStatus: "active",
+    };
+    const db = {
+      select: vi.fn((fields?: unknown) => {
+        if (!fields) {
+          return {
+            from: vi.fn(() => ({
+              where: vi.fn(async () => []),
+            })),
+          };
+        }
+
+        return {
+          from: vi.fn((table: unknown) => {
+            if (
+              table !== messages ||
+              !("message" in (fields as Record<string, unknown>))
+            ) {
+              throw new Error("Unexpected table");
+            }
+
+            return {
+              innerJoin: vi.fn((joinedTable: unknown) => {
+                if (joinedTable !== mailboxes) {
+                  throw new Error("Unexpected join table");
+                }
+
+                return {
+                  where: vi.fn(() => ({
+                    limit: vi.fn(async () => [joinedRow]),
+                  })),
+                };
+              }),
+            };
+          }),
+        };
+      }),
+    };
+    getDb.mockReturnValue(db);
+
+    const detail = await getMessageDetailForUser(
+      {
+        MAIL_BUCKET: {
+          get: vi.fn(async () => ({
+            text: async () =>
+              JSON.stringify({
+                html: null,
+                text: "Please use WXN-DTJ to validate your email address.",
+                headers: [],
+              }),
+          })),
+        },
+      } as never,
+      adminUser,
+      "msg_detail_hyphenated_verify",
+    );
+
+    expect(detail.verification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
   it("blocks detail and raw reads while the mailbox is destroying", async () => {
     const joinedRow = {
       message: buildMessageRow(
