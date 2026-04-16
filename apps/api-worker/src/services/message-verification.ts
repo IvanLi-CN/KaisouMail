@@ -22,7 +22,8 @@ const WORKERS_AI_RATE_LIMITED_UNTIL_KEY =
   "workers_ai_verification_rate_limited_until";
 const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
 const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
-const TOKEN_CONTEXT_RADIUS = 120;
+const DEFAULT_TOKEN_CONTEXT_RADIUS = 40;
+const HYPHENATED_TOKEN_CONTEXT_RADIUS = 120;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
 const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]{2,3}-[A-Z]{2,3}$/;
@@ -179,8 +180,19 @@ const hasVerificationContextSignal = (value: string) =>
   GENERIC_CODE_CONTEXT_PATTERN.test(value) ||
   VERIFICATION_CONTEXT_PATTERN.test(value);
 
+const REFERENCE_LABEL_PATTERN =
+  /\b(reference|ref|order|invoice|ticket|case|build|tracking|request|number|no\.?)\s*[:#-]?\s*$/i;
+
 const isSafeBoundary = (value: string | undefined) =>
   !value || !/[A-Za-z0-9]/.test(value);
+
+const isPureAlphaHyphenatedCode = (value: string) =>
+  UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN.test(value);
+
+const getTokenContextRadius = (token: string) =>
+  token.includes("-")
+    ? HYPHENATED_TOKEN_CONTEXT_RADIUS
+    : DEFAULT_TOKEN_CONTEXT_RADIUS;
 
 const getNonWhitespaceSegment = (
   value: string,
@@ -227,10 +239,11 @@ const extractCodeTokens = (value: string) => {
     const normalized = normalizeVerificationCode(token);
     if (!normalized) continue;
     const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
+    const contextRadius = getTokenContextRadius(normalized);
 
     const context = value.slice(
-      Math.max(0, index - TOKEN_CONTEXT_RADIUS),
-      index + token.length + TOKEN_CONTEXT_RADIUS,
+      Math.max(0, index - contextRadius),
+      index + token.length + contextRadius,
     );
     if (isEmailOrUrlSegment(value, index, token.length)) continue;
     if (normalized.includes("-") && (previous === "-" || next === "-")) {
@@ -261,10 +274,12 @@ const scoreToken = (
   source: "subject" | "body",
 ) => {
   const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
+  const contextRadius = getTokenContextRadius(token);
+  const leadingContext = value.slice(Math.max(0, index - 24), index);
   const window = value
     .slice(
-      Math.max(0, index - TOKEN_CONTEXT_RADIUS),
-      Math.min(value.length, index + token.length + TOKEN_CONTEXT_RADIUS),
+      Math.max(0, index - contextRadius),
+      Math.min(value.length, index + token.length + contextRadius),
     )
     .toLowerCase();
   const hasContextSignal = hasVerificationContextSignal(window);
@@ -281,6 +296,7 @@ const scoreToken = (
     score += 70;
   }
   if (/^(?:code|otp|passcode)\d+[a-z0-9]*$/.test(token)) score -= 220;
+  if (REFERENCE_LABEL_PATTERN.test(leadingContext)) score -= 160;
   if (/^\d{6}$/.test(token)) score += 15;
   if (/^(19|20)\d{2}$/.test(token) && !findKeywordHit(window)) score -= 160;
   if (/kb|mb|gb|am|pm/.test(window)) score -= 60;
@@ -312,6 +328,7 @@ const detectWithRules = (
           const token = match[1];
           const normalized = normalizeVerificationCode(token);
           if (!normalized) return [];
+          if (isPureAlphaHyphenatedCode(normalized)) return [];
 
           const wholeMatch = match[0] ?? "";
           const matchIndex = match.index ?? 0;
@@ -351,6 +368,10 @@ const detectWithRules = (
   }
 
   const scored = extractCodeTokens(value)
+    .filter(
+      ({ token }) =>
+        !(source === "subject" && isPureAlphaHyphenatedCode(token)),
+    )
     .map(({ token, index }) => ({
       token,
       ...scoreToken(value, token, index, source),

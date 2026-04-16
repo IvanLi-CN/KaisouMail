@@ -87,16 +87,20 @@ describe("message verification service", () => {
     });
   });
 
-  it("detects hyphenated verification codes when the subject carries confirmation context", async () => {
+  it("detects hyphenated verification codes from messages that pair confirmation copy with a standalone validation block", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "WXN-DTJ xAI confirmation code",
-      text: "Thank you for creating an xAI account.",
+      text: [
+        "Validate your email address.",
+        "Use the code below to finish signup.",
+        "WXN-DTJ",
+      ].join("\n"),
       html: null,
     });
 
     expect(verification).toEqual({
       code: "WXN-DTJ",
-      source: "subject",
+      source: "body",
       method: "rules",
     });
   });
@@ -234,6 +238,20 @@ describe("message verification service", () => {
     expect(verification).toBeNull();
   });
 
+  it("prefers the actual sign-in code over nearby reference numbers", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Sign-in request",
+      text: "To sign in, enter 123456. Reference 789012",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "123456",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("does not promote email-validation references into verification codes", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Welcome to xAI",
@@ -242,6 +260,25 @@ describe("message verification service", () => {
     });
 
     expect(verification).toBeNull();
+  });
+
+  it("does not treat generic all-caps hyphenated subject phrases as verification codes", async () => {
+    const localeVerification = await detectVerificationForMessage({} as never, {
+      subject: "EN-US confirmation code",
+      text: null,
+      html: null,
+    });
+    const templateVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "PDF-CSV confirmation code",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(localeVerification).toBeNull();
+    expect(templateVerification).toBeNull();
   });
 
   it("does not treat inline hyphenated phrases in validation emails as verification codes", async () => {
