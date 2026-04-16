@@ -125,13 +125,13 @@ describe("message verification service", () => {
       text: [
         "Validate your email address for ju**9@outlook.com.",
         "Use the code below to finish signup.",
-        "ABCD-EFGH",
+        "WXN-DTJ",
       ].join("\n"),
       html: null,
     });
 
     expect(verification).toEqual({
-      code: "ABCD-EFGH",
+      code: "WXN-DTJ",
       source: "body",
       method: "rules",
     });
@@ -445,6 +445,28 @@ describe("message verification service", () => {
 
     expect(suffixVerification).toBeNull();
     expect(prefixVerification).toBeNull();
+  });
+
+  it("does not extract verification codes from email-address fragments", async () => {
+    const numericVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "confirmation code 1234@domain.com",
+        text: null,
+        html: null,
+      },
+    );
+    const hyphenatedVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "confirmation code WXN-DTJ@domain.com",
+        text: null,
+        html: null,
+      },
+    );
+
+    expect(numericVerification).toBeNull();
+    expect(hyphenatedVerification).toBeNull();
   });
 
   it("does not treat mailbox host fragments as hyphenated verification codes", async () => {

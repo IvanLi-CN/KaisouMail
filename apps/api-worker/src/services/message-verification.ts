@@ -25,7 +25,7 @@ const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const TOKEN_CONTEXT_RADIUS = 120;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
-const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]+-[A-Z]+$/;
+const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]{2,3}-[A-Z]{2,3}$/;
 const CODE_TOKEN_PATTERN =
   /(?<![A-Za-z0-9])(?:(?=[A-Za-z0-9-]{5,9}(?=$|[^A-Za-z0-9]))[A-Za-z0-9]{1,8}-[A-Za-z0-9]{1,8}|[A-Za-z0-9]{4,8})(?=$|[^A-Za-z0-9])/g;
 const VERIFICATION_KEYWORDS = [
@@ -171,6 +171,9 @@ const findEmailValidationSignalHit = (value: string) => {
   );
 };
 
+const hasStandaloneValidationCodeSignal = (value: string) =>
+  findEmailValidationSignalHit(value) && /\bcode\b/i.test(value);
+
 const hasVerificationContextSignal = (value: string) =>
   findKeywordHit(value) ||
   GENERIC_CODE_CONTEXT_PATTERN.test(value) ||
@@ -205,6 +208,12 @@ const isStandaloneTokenLine = (value: string, token: string, index: number) => {
   return value.slice(lineStart, lineEnd).trim() === token;
 };
 
+const isEmailOrUrlSegment = (
+  value: string,
+  index: number,
+  tokenLength: number,
+) => /@|https?:\/\//i.test(getNonWhitespaceSegment(value, index, tokenLength));
+
 const extractCodeTokens = (value: string) => {
   const matches = new Map<string, number>();
 
@@ -217,21 +226,20 @@ const extractCodeTokens = (value: string) => {
 
     const normalized = normalizeVerificationCode(token);
     if (!normalized) continue;
-    const tokenSegment = getNonWhitespaceSegment(value, index, token.length);
     const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
 
     const context = value.slice(
       Math.max(0, index - TOKEN_CONTEXT_RADIUS),
       index + token.length + TOKEN_CONTEXT_RADIUS,
     );
-    if (/@|https?:\/\//i.test(tokenSegment)) continue;
+    if (isEmailOrUrlSegment(value, index, token.length)) continue;
     if (normalized.includes("-") && (previous === "-" || next === "-")) {
       continue;
     }
     if (
       normalized.includes("-") &&
       !hasVerificationContextSignal(context) &&
-      !(findEmailValidationSignalHit(context) && isStandaloneLineToken)
+      !(hasStandaloneValidationCodeSignal(context) && isStandaloneLineToken)
     ) {
       continue;
     }
@@ -260,7 +268,6 @@ const scoreToken = (
     )
     .toLowerCase();
   const hasContextSignal = hasVerificationContextSignal(window);
-  const hasEmailValidationSignal = findEmailValidationSignalHit(window);
   let score = /^\d+$/.test(token) ? 120 : 95;
 
   if (source === "subject") score += 40;
@@ -268,7 +275,7 @@ const scoreToken = (
   if (hasContextSignal) score += 40;
   if (
     token.includes("-") &&
-    hasEmailValidationSignal &&
+    hasStandaloneValidationCodeSignal(window) &&
     isStandaloneLineToken
   ) {
     score += 70;
@@ -301,7 +308,22 @@ const detectWithRules = (
   const directMatches = uniqueStrings(
     DIRECT_CODE_PATTERNS.flatMap((pattern) =>
       [...value.matchAll(pattern)]
-        .map((match) => normalizeVerificationCode(match[1]))
+        .flatMap((match) => {
+          const token = match[1];
+          const normalized = normalizeVerificationCode(token);
+          if (!normalized) return [];
+
+          const wholeMatch = match[0] ?? "";
+          const matchIndex = match.index ?? 0;
+          const tokenOffset = wholeMatch.lastIndexOf(token);
+          const tokenIndex =
+            tokenOffset >= 0 ? matchIndex + tokenOffset : matchIndex;
+          if (isEmailOrUrlSegment(value, tokenIndex, token.length)) {
+            return [];
+          }
+
+          return [normalized];
+        })
         .filter((token): token is string => Boolean(token)),
     ),
   );
