@@ -12,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { FocusEvent, MouseEvent } from "react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table";
 import type { DomainCatalogItem } from "@/lib/contracts";
 import { needsNameserverDelegation } from "@/lib/domain-catalog";
+import { classifyMailDomain } from "@/lib/domain-classification";
 import { formatDateTime } from "@/lib/format";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,74 @@ const bindingSourceLabel = (
   if (bindingSource === "project_bind") return "project_bind";
   if (projectStatus === "not_enabled") return "catalog_only";
   return "catalog";
+};
+
+const buildDelegationBannerCopy = (count: number) =>
+  `有 ${count} 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。`;
+
+const buildRowDelegationCopy = (mailDomain: string) => {
+  const classification = classifyMailDomain(mailDomain);
+
+  if (classification.type === "subdomain") {
+    return "待委派，完成父区 NS 委派后重试。";
+  }
+
+  if (classification.type === "apex") {
+    return "待切换 NS，完成权威 NS 切换后重试。";
+  }
+
+  return "待配置 NS，按当前域名类型完成 NS 配置后重试。";
+};
+
+const buildDetailNameserverNote = (mailDomain: string) => {
+  const classification = classifyMailDomain(mailDomain);
+
+  if (classification.type === "subdomain") {
+    return `这是子域接入，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS。`;
+  }
+
+  if (classification.type === "apex") {
+    return `这是 apex 接入，请把 ${mailDomain} 的权威 NS 切到下面这组值。`;
+  }
+
+  return "请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。";
+};
+
+const buildPendingNameserverNote = (mailDomain: string) => {
+  const classification = classifyMailDomain(mailDomain);
+
+  if (classification.type === "subdomain") {
+    return `nameserver 暂不可见；这是刚创建的子域接入，请先保留页面，拿到 nameserver 后去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加 NS。`;
+  }
+
+  if (classification.type === "apex") {
+    return `nameserver 暂不可见；这是刚创建的 apex 接入，请先保留页面，拿到 nameserver 后把 ${mailDomain} 的权威 NS 切到对应值。`;
+  }
+
+  return "nameserver 暂不可见；如果这是刚创建的直绑域名，请保持页面打开，稍后再回来查看。";
+};
+
+const buildDelegationRecoveryGuide = (mailDomain: string) => {
+  const classification = classifyMailDomain(mailDomain);
+
+  if (classification.type === "subdomain") {
+    return {
+      title: "先完成子域委派，再重试接入",
+      body: `当前邮箱域名还在等待 Cloudflare 完成委派。请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加当前页面展示的 NS。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。`,
+    };
+  }
+
+  if (classification.type === "apex") {
+    return {
+      title: "先切换权威 NS，再重试接入",
+      body: `当前邮箱域名还在等待 Cloudflare 完成委派。请先把 ${mailDomain} 的权威 NS 切到当前页面展示的值。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。`,
+    };
+  }
+
+  return {
+    title: "先改 NS，再重试接入",
+    body: "当前邮箱域名还在等待 Cloudflare 完成委派。请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 管理处添加 NS，apex 请切换权威 NS。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。",
+  };
 };
 
 const cloudflareStatusTone = (status: string | null) => {
@@ -163,6 +232,14 @@ export const DomainTable = ({
     ? (domains.find((domain) => domain.rootDomain === detailsRootDomain) ??
       null)
     : null;
+  const detailNameserverNote = useMemo(() => {
+    if (!detailDomain) return null;
+    return buildDetailNameserverNote(detailDomain.mailDomain);
+  }, [detailDomain]);
+  const detailDelegationGuide = useMemo(() => {
+    if (!detailDomain || !needsNameserverDelegation(detailDomain)) return null;
+    return buildDelegationRecoveryGuide(detailDomain.mailDomain);
+  }, [detailDomain]);
 
   useEffect(() => {
     if (!detailDomain) return;
@@ -228,8 +305,7 @@ export const DomainTable = ({
               data-testid="domain-catalog-delegation-guide"
             >
               <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
-                有 {delegationPendingCount} 个项目直绑域名待完成 NS
-                委派；先完成父区 NS 委派，再点“重试接入”。
+                {buildDelegationBannerCopy(delegationPendingCount)}
               </p>
               {nameserverGuideHref ? (
                 <a
@@ -410,9 +486,8 @@ export const DomainTable = ({
                               />
                               <span>
                                 <span className="font-medium text-amber-200">
-                                  待委派
+                                  {buildRowDelegationCopy(domain.mailDomain)}
                                 </span>
-                                ，完成父区 NS 委派后重试。
                               </span>
                             </span>
                             {nameserverGuideHref ? (
@@ -736,8 +811,7 @@ export const DomainTable = ({
                       Nameserver
                     </p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      子域接入时，请去父域 DNS 管理处添加 NS；apex
-                      接入时，以这里显示的值为准修改权威 NS。
+                      {detailNameserverNote}
                     </p>
                   </div>
                   <span className="text-xs leading-5 text-muted-foreground">
@@ -780,8 +854,7 @@ export const DomainTable = ({
                   </div>
                 ) : (
                   <div className="mt-3 rounded-xl border border-dashed border-border/70 bg-card/60 px-3 py-4 text-sm text-muted-foreground">
-                    nameserver
-                    暂不可见；如果这是刚创建的直绑域名，请保持页面打开，稍后再回来查看。
+                    {buildPendingNameserverNote(detailDomain.mailDomain)}
                   </div>
                 )}
               </section>
@@ -797,7 +870,7 @@ export const DomainTable = ({
                       aria-hidden="true"
                       className="h-1.5 w-1.5 rounded-full bg-amber-300/90"
                     />
-                    先改 NS，再重试接入
+                    {detailDelegationGuide?.title}
                   </span>
                   {nameserverGuideHref ? (
                     <a
@@ -812,10 +885,7 @@ export const DomainTable = ({
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm leading-6 text-amber-100/90">
-                  当前邮箱域名还在等待 Cloudflare
-                  完成委派。若这是子域，请先去父域 DNS 管理处补上对应的
-                  NS；若这是 apex，请先完成权威 NS 切换。等 Cloudflare 变成{" "}
-                  <code>active</code> 后，再回到列表点击“重试接入”。
+                  {detailDelegationGuide?.body}
                 </p>
               </section>
             ) : null}

@@ -50,6 +50,25 @@ const existingChildZoneCatalogDomain: DomainCatalogItem = {
   disabledAt: null,
 };
 
+const pendingApexBindResult: DomainCatalogItem = {
+  id: "dom_apex",
+  mailDomain: "example.com",
+  rootDomain: "example.com",
+  zoneId: "zone_example_com",
+  bindingSource: "project_bind",
+  cloudflareAvailability: "available",
+  cloudflareStatus: "pending",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "provisioning_error",
+  catchAllEnabled: false,
+  lastProvisionError:
+    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+  createdAt: "2026-04-10T08:00:00.000Z",
+  updatedAt: "2026-04-10T08:00:00.000Z",
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
+
 const longZoneDialogDomain: DomainCatalogItem = {
   id: "dom_long_zone",
   mailDomain: "long-zone.example.dev",
@@ -181,15 +200,15 @@ export const BindNextStepsDialog: Story = {
     const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
       "domain-bind-success-guide-dialog",
     );
-    await expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    await expect(dialog).toHaveTextContent("还差一步：完成子域委派");
     await expect(dialog).toHaveTextContent(
       "mail.customer.com。Cloudflare 已分配 nameserver。",
     );
     await expect(dialog).toHaveTextContent(
-      "请到父域 DNS 中为该子域添加下面的 NS",
+      "请到父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面的 NS；完成后再回来重试。",
     );
     await expect(dialog).toHaveTextContent(
-      "例如要接入 mail.example.com，就去 example.com 当前的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
+      "这是子域接入，请去父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
     );
     await expect(dialog).toHaveTextContent("amy.ns.cloudflare.com");
     await expect(dialog).toHaveTextContent("kai.ns.cloudflare.com");
@@ -214,6 +233,30 @@ export const BindNextStepsDialog: Story = {
     await expect(dialog).toHaveTextContent(
       "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
     );
+  },
+};
+
+export const ApexBindNextStepsDialog: Story = {
+  args: {
+    onBind: fn(async () => pendingApexBindResult),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("邮箱域名"), "example.com");
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    await expect(dialog).toHaveTextContent("还差一步：切换权威 NS");
+    await expect(dialog).toHaveTextContent(
+      "example.com。Cloudflare 已分配 nameserver。请把 example.com 的权威 NS 切到下面这组值；完成后再回来重试。",
+    );
+    await expect(dialog).toHaveTextContent(
+      "这是 apex 接入，请把 example.com 的权威 NS 切到下面这组值。",
+    );
+    await expect(dialog).not.toHaveTextContent("父域");
   },
 };
 
@@ -306,12 +349,12 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByTestId("domain-bind-delegation-guide"),
     ).toHaveTextContent(
-      "直绑 apex 或子域后若停在 pending / provisioning_error：先完成 NS 委派，再重试。",
+      "直绑 apex 或子域后若停在 pending / provisioning_error：先按域名类型完成 NS 配置，再重试。",
     );
     await expect(
       canvas.getByTestId("domain-catalog-delegation-guide"),
     ).toHaveTextContent(
-      "有 1 个项目直绑域名待完成 NS 委派；先完成父区 NS 委派，再点“重试接入”。",
+      "有 1 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。",
     );
     await expect(
       canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
@@ -384,7 +427,10 @@ export const ZoneDetailsDialog: Story = {
         name: "Nameserver kai.ns.cloudflare.com",
       }),
     ).toHaveValue("kai.ns.cloudflare.com");
-    await expect(dialog).toHaveTextContent("先改 NS，再重试接入");
+    await expect(dialog).toHaveTextContent("先完成子域委派，再重试接入");
+    await expect(dialog).toHaveTextContent(
+      "这是子域接入，请去父域 example.dev 的 DNS 管理处，为子域标签 staging 添加下面这组 NS。",
+    );
   },
 };
 

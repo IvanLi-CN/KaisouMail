@@ -206,7 +206,7 @@ describe("domains page view", () => {
     ).toBeInTheDocument();
     const bindGuide = screen.getByTestId("domain-bind-delegation-guide");
     expect(bindGuide).toHaveTextContent(
-      "直绑 apex 或子域后若停在 pending / provisioning_error：先完成 NS 委派，再重试。",
+      "直绑 apex 或子域后若停在 pending / provisioning_error：先按域名类型完成 NS 配置，再重试。",
     );
     expect(
       within(bindGuide).getByRole("link", { name: "查看步骤" }),
@@ -229,7 +229,7 @@ describe("domains page view", () => {
     expect(screen.queryByText("amy.ns.cloudflare.com")).not.toBeInTheDocument();
     const catalogGuide = screen.getByTestId("domain-catalog-delegation-guide");
     expect(catalogGuide).toHaveTextContent(
-      "有 1 个项目直绑域名待完成 NS 委派；先完成父区 NS 委派，再点“重试接入”。",
+      "有 1 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。",
     );
     expect(
       within(catalogGuide).getByRole("link", { name: "查看步骤" }),
@@ -268,7 +268,10 @@ describe("domains page view", () => {
         name: "Nameserver amy.ns.cloudflare.com",
       }),
     ).toHaveValue("amy.ns.cloudflare.com");
-    expect(detailsDialog).toHaveTextContent("先改 NS，再重试接入");
+    expect(detailsDialog).toHaveTextContent("先完成子域委派，再重试接入");
+    expect(detailsDialog).toHaveTextContent(
+      "这是子域接入，请去父域 example.dev 的 DNS 管理处，为子域标签 staging 添加下面这组 NS。",
+    );
     fireEvent.click(
       within(detailsDialog).getByRole("button", { name: "我知道了" }),
     );
@@ -623,7 +626,7 @@ describe("domains page view", () => {
     const dialog = await screen.findByTestId(
       "domain-bind-success-guide-dialog",
     );
-    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent("还差一步：完成子域委派");
     expect(queryClientState.setQueryData).toHaveBeenCalledWith(
       ["domains", "catalog"],
       expect.any(Function),
@@ -771,13 +774,15 @@ describe("domains page view", () => {
     const dialog = await screen.findByTestId(
       "domain-bind-success-guide-dialog",
     );
-    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent("还差一步：完成子域委派");
     expect(dialog).toHaveTextContent(
       "mail.customer.com。Cloudflare 已分配 nameserver。",
     );
-    expect(dialog).toHaveTextContent("请到父域 DNS 中为该子域添加下面的 NS");
     expect(dialog).toHaveTextContent(
-      "例如要接入 mail.example.com，就去 example.com 当前的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
+      "请到父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面的 NS；完成后再回来重试。",
+    );
+    expect(dialog).toHaveTextContent(
+      "这是子域接入，请去父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
     );
     expect(dialog).toHaveTextContent(
       "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
@@ -856,7 +861,7 @@ describe("domains page view", () => {
     const dialog = await screen.findByTestId(
       "domain-bind-success-guide-dialog",
     );
-    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent("还差一步：完成子域委派");
     expect(dialog).toHaveTextContent(
       "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
     );
@@ -908,7 +913,7 @@ describe("domains page view", () => {
 
     expect(
       screen.getByTestId("domain-catalog-delegation-guide"),
-    ).toHaveTextContent("有 1 个项目直绑域名待完成 NS 委派");
+    ).toHaveTextContent("有 1 个项目直绑域名待完成 Cloudflare NS 配置");
     const rowGuide = screen.getByTestId(
       "domain-row-delegation-guide-dom_waiting_ns",
     );
@@ -919,10 +924,122 @@ describe("domains page view", () => {
       screen.getByTestId("domain-details-trigger-dom_waiting_ns"),
     );
     const detailsDialog = await screen.findByTestId("domain-details-dialog");
-    expect(detailsDialog).toHaveTextContent("先改 NS，再重试接入");
+    expect(detailsDialog).toHaveTextContent("先完成子域委派，再重试接入");
     expect(detailsDialog).toHaveTextContent(
-      "nameserver 暂不可见；如果这是刚创建的直绑域名，请保持页面打开，稍后再回来查看。",
+      "nameserver 暂不可见；这是刚创建的子域接入，请先保留页面，拿到 nameserver 后去父域 example.dev 的 DNS 管理处，为子域标签 waiting-ns 添加 NS。",
     );
+  });
+
+  it("shows apex-specific nameserver guidance for direct binds", async () => {
+    const onBind = vi.fn(async () => ({
+      id: "dom_apex",
+      mailDomain: "example.com",
+      rootDomain: "example.com",
+      zoneId: "zone_example_com",
+      bindingSource: "project_bind" as const,
+      cloudflareAvailability: "available" as const,
+      cloudflareStatus: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      projectStatus: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("还差一步：切换权威 NS");
+    expect(dialog).toHaveTextContent(
+      "example.com。Cloudflare 已分配 nameserver。请把 example.com 的权威 NS 切到下面这组值；完成后再回来重试。",
+    );
+    expect(dialog).toHaveTextContent(
+      "这是 apex 接入，请把 example.com 的权威 NS 切到下面这组值。",
+    );
+    expect(dialog).not.toHaveTextContent("父域");
+  });
+
+  it("shows apex-specific recovery guidance in the catalog details dialog", async () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            {
+              id: "dom_apex_waiting",
+              mailDomain: "example.com",
+              rootDomain: "example.com",
+              zoneId: "zone_example_com",
+              bindingSource: "project_bind",
+              cloudflareAvailability: "available",
+              cloudflareStatus: "pending",
+              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+              projectStatus: "provisioning_error",
+              catchAllEnabled: false,
+              lastProvisionError:
+                "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+              createdAt: "2026-04-10T08:00:00.000Z",
+              updatedAt: "2026-04-10T08:00:00.000Z",
+              lastProvisionedAt: null,
+              disabledAt: null,
+            },
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const rowGuide = screen.getByTestId(
+      "domain-row-delegation-guide-dom_apex_waiting",
+    );
+    expect(rowGuide).toHaveTextContent("待切换 NS，完成权威 NS 切换后重试。");
+
+    fireEvent.click(
+      screen.getByTestId("domain-details-trigger-dom_apex_waiting"),
+    );
+    const detailsDialog = await screen.findByTestId("domain-details-dialog");
+    expect(detailsDialog).toHaveTextContent("先切换权威 NS，再重试接入");
+    expect(detailsDialog).toHaveTextContent(
+      "这是 apex 接入，请把 example.com 的权威 NS 切到下面这组值。",
+    );
+    expect(detailsDialog).toHaveTextContent(
+      "请先把 example.com 的权威 NS 切到当前页面展示的值。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。",
+    );
+    expect(detailsDialog).not.toHaveTextContent("父域");
   });
 
   it("refreshes the next-steps dialog when the domain catalog status changes", async () => {
@@ -1723,7 +1840,7 @@ describe("domains page view", () => {
     const dialog = await screen.findByTestId(
       "domain-bind-success-guide-dialog",
     );
-    expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    expect(dialog).toHaveTextContent("还差一步：完成子域委派");
     expect(dialog).toHaveTextContent(
       "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
     );

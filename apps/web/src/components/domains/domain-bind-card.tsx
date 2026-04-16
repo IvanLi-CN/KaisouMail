@@ -25,6 +25,10 @@ import {
   hasDelegationRecoveryStatus,
   isFreshDomainCatalogEntry,
 } from "@/lib/domain-catalog";
+import {
+  classifyMailDomain,
+  type MailDomainClassification,
+} from "@/lib/domain-classification";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -39,6 +43,7 @@ type BindDomainValues = z.infer<typeof bindDomainSchema>;
 
 type BindSuccessGuide = {
   mailDomain: string;
+  classification: MailDomainClassification;
   title: string;
   summary: string;
   steps: string[];
@@ -63,6 +68,7 @@ const buildBindSuccessGuide = ({
   result: DomainRecord | DomainCatalogItem;
 }): BindSuccessGuide => {
   const mailDomain = result.mailDomain;
+  const classification = classifyMailDomain(mailDomain);
   const projectStatus =
     "projectStatus" in result ? result.projectStatus : result.status;
   const cloudflareStatus =
@@ -77,6 +83,7 @@ const buildBindSuccessGuide = ({
   if (projectStatus === "active") {
     return {
       mailDomain,
+      classification,
       title: "域名已接入，可继续使用",
       summary: "当前域名已经可用，可以直接继续创建邮箱。",
       nameServers,
@@ -91,34 +98,71 @@ const buildBindSuccessGuide = ({
   }
 
   if (needsDelegationRecovery) {
-    return {
-      mailDomain,
-      title: "还差一步：完成域名委派",
-      summary:
-        nameServers.length > 0
-          ? "Cloudflare 已分配 nameserver。若接入的是子域（如 mail.example.com），请到父域 DNS 中为该子域添加下面的 NS；完成后再回来重试。"
-          : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
-      nameServers,
-      cloudflareStatus,
-      projectStatus,
-      steps:
-        nameServers.length > 0
+    const summary =
+      nameServers.length > 0
+        ? classification.type === "subdomain"
+          ? `Cloudflare 已分配 nameserver。请到父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面的 NS；完成后再回来重试。`
+          : classification.type === "apex"
+            ? `Cloudflare 已分配 nameserver。请把 ${mailDomain} 的权威 NS 切到下面这组值；完成后再回来重试。`
+            : "Cloudflare 已分配 nameserver。请按当前域名的接入方式完成 NS 配置；完成后再回来重试。"
+        : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。";
+    const steps =
+      nameServers.length > 0
+        ? classification.type === "subdomain"
           ? [
-              "若这是子域接入，请去父域 DNS 管理处为该子域添加下面显示的 NS 记录；若这是 apex 接入，则把域名权威 NS 切到 Cloudflare。",
-              "例如要接入 mail.example.com，就去 example.com 当前的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
+              `去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面显示的 NS 记录。`,
               "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
               "状态变成 active 后，对该域名点击“重试接入”。",
             ]
-          : [
+          : classification.type === "apex"
+            ? [
+                `去当前 DNS / 注册商管理处，把 ${mailDomain} 的权威 NS 改成下面显示的值。`,
+                "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+                "状态变成 active 后，对该域名点击“重试接入”。",
+              ]
+            : [
+                "按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。",
+                "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+                "状态变成 active 后，对该域名点击“重试接入”。",
+              ]
+        : classification.type === "subdomain"
+          ? [
               "先保留当前页面。",
               "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-              "拿到 nameserver 后，按子域或 apex 的接入方式完成 NS 委派，再等待状态继续刷新。",
-            ],
+              `拿到 nameserver 后，去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加对应的 NS。`,
+            ]
+          : classification.type === "apex"
+            ? [
+                "先保留当前页面。",
+                "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+                `拿到 nameserver 后，把 ${mailDomain} 的权威 NS 改成对应值，再等待状态继续刷新。`,
+              ]
+            : [
+                "先保留当前页面。",
+                "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+                "拿到 nameserver 后，按子域或 apex 的接入方式完成 NS 配置，再等待状态继续刷新。",
+              ];
+
+    return {
+      mailDomain,
+      classification,
+      title:
+        classification.type === "subdomain"
+          ? "还差一步：完成子域委派"
+          : classification.type === "apex"
+            ? "还差一步：切换权威 NS"
+            : "还差一步：完成 NS 配置",
+      summary,
+      nameServers,
+      cloudflareStatus,
+      projectStatus,
+      steps,
     };
   }
 
   return {
     mailDomain,
+    classification,
     title: "绑定已提交，稍后再试",
     summary: "Cloudflare 暂时没有完成接入；这次不需要修改 NS。",
     nameServers: [],
@@ -190,6 +234,19 @@ export const DomainBindCard = ({
   }, [domains, successGuideState]);
   const nameserverGuideHref = buildNameserverGuideHref(docsLinks);
   const successGuideTitleId = useId();
+  const successGuideNameserverNote = useMemo(() => {
+    if (!successGuide) return null;
+
+    if (successGuide.classification.type === "subdomain") {
+      return `这是子域接入，请去父域 ${successGuide.classification.parentDomain} 的 DNS 管理处，为子域标签 ${successGuide.classification.delegatedLabel} 添加下面这组 NS。`;
+    }
+
+    if (successGuide.classification.type === "apex") {
+      return `这是 apex 接入，请把 ${successGuide.mailDomain} 的权威 NS 切到下面这组值。`;
+    }
+
+    return "请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。";
+  }, [successGuide]);
 
   useEffect(() => {
     setCopiedNameserver((current) => {
@@ -243,7 +300,8 @@ export const DomainBindCard = ({
           >
             <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
               直绑 apex 或子域后若停在 <code>pending</code> /{" "}
-              <code>provisioning_error</code>：先完成 NS 委派，再重试。
+              <code>provisioning_error</code>：先按域名类型完成 NS
+              配置，再重试。
             </p>
             {nameserverGuideHref ? (
               <a
@@ -386,9 +444,8 @@ export const DomainBindCard = ({
                     需要使用的 nameserver
                   </p>
                   <p className="text-xs leading-5 text-muted-foreground">
-                    子域接入时，请在父区 DNS 为该子域添加下面这组 NS；apex
-                    接入时，再把权威 NS
-                    切到下面这组值。点击输入框会自动全选，每条可单独复制。
+                    {successGuideNameserverNote}{" "}
+                    点击输入框会自动全选，每条可单独复制。
                   </p>
                 </div>
                 <div className="mt-3 grid gap-2">
