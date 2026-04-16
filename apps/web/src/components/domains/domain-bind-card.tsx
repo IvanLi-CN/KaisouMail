@@ -28,17 +28,17 @@ import {
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
-  rootDomain: z
+  mailDomain: z
     .string()
     .trim()
     .toLowerCase()
-    .regex(rootDomainRegex, "请输入有效根域名，例如 example.com"),
+    .regex(rootDomainRegex, "请输入有效邮箱域名，例如 mail.example.com"),
 });
 
 type BindDomainValues = z.infer<typeof bindDomainSchema>;
 
 type BindSuccessGuide = {
-  rootDomain: string;
+  mailDomain: string;
   title: string;
   summary: string;
   steps: string[];
@@ -48,7 +48,7 @@ type BindSuccessGuide = {
 };
 
 type BindSuccessGuideState = {
-  rootDomain: string;
+  mailDomain: string;
   fallbackResult: DomainRecord | DomainCatalogItem;
 };
 
@@ -62,7 +62,7 @@ const buildBindSuccessGuide = ({
 }: {
   result: DomainRecord | DomainCatalogItem;
 }): BindSuccessGuide => {
-  const rootDomain = result.rootDomain;
+  const mailDomain = result.mailDomain;
   const projectStatus =
     "projectStatus" in result ? result.projectStatus : result.status;
   const cloudflareStatus =
@@ -76,7 +76,7 @@ const buildBindSuccessGuide = ({
 
   if (projectStatus === "active") {
     return {
-      rootDomain,
+      mailDomain,
       title: "域名已接入，可继续使用",
       summary: "当前域名已经可用，可以直接继续创建邮箱。",
       nameServers,
@@ -92,11 +92,11 @@ const buildBindSuccessGuide = ({
 
   if (needsDelegationRecovery) {
     return {
-      rootDomain,
+      mailDomain,
       title: "还差一步：完成域名委派",
       summary:
         nameServers.length > 0
-          ? "Cloudflare 已分配 nameserver。请把域名 NS 改成下面这组值，完成后再回来重试。"
+          ? "Cloudflare 已分配 nameserver。若接入的是子域（如 mail.example.com），请到父域 DNS 中为该子域添加下面的 NS；完成后再回来重试。"
           : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。",
       nameServers,
       cloudflareStatus,
@@ -104,20 +104,21 @@ const buildBindSuccessGuide = ({
       steps:
         nameServers.length > 0
           ? [
-              "将当前域名的 NS 改成下面显示的 Cloudflare nameserver。",
+              "若这是子域接入，请去父域 DNS 管理处为该子域添加下面显示的 NS 记录；若这是 apex 接入，则把域名权威 NS 切到 Cloudflare。",
+              "例如要接入 mail.example.com，就去 example.com 当前的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
               "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
               "状态变成 active 后，对该域名点击“重试接入”。",
             ]
           : [
               "先保留当前页面。",
               "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-              "拿到 nameserver 后，把域名 NS 改成对应值，再等待状态继续刷新。",
+              "拿到 nameserver 后，按子域或 apex 的接入方式完成 NS 委派，再等待状态继续刷新。",
             ],
     };
   }
 
   return {
-    rootDomain,
+    mailDomain,
     title: "绑定已提交，稍后再试",
     summary: "Cloudflare 暂时没有完成接入；这次不需要修改 NS。",
     nameServers: [],
@@ -135,13 +136,13 @@ const isDomainRecord = (value: unknown): value is DomainRecord =>
   typeof value === "object" &&
   value !== null &&
   "id" in value &&
-  "rootDomain" in value &&
+  "mailDomain" in value &&
   "status" in value;
 
 const isDomainCatalogItem = (value: unknown): value is DomainCatalogItem =>
   typeof value === "object" &&
   value !== null &&
-  "rootDomain" in value &&
+  "mailDomain" in value &&
   "projectStatus" in value;
 
 export const DomainBindCard = ({
@@ -164,7 +165,7 @@ export const DomainBindCard = ({
   const form = useForm<BindDomainValues>({
     resolver: zodResolver(bindDomainSchema),
     defaultValues: {
-      rootDomain: "",
+      mailDomain: "",
     },
   });
   const [submitError, setSubmitError] = useState<DomainBindErrorHint | null>(
@@ -219,7 +220,7 @@ export const DomainBindCard = ({
   const openSuccessGuide = (result: DomainRecord | DomainCatalogItem) => {
     setCopiedNameserver(null);
     setSuccessGuideState({
-      rootDomain: result.rootDomain,
+      mailDomain: result.mailDomain,
       fallbackResult: result,
     });
   };
@@ -230,19 +231,19 @@ export const DomainBindCard = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe2 className="h-4 w-4" />
-            绑定新域名
+            绑定邮箱域名
           </CardTitle>
           <CardDescription>
-            直接通过 Cloudflare API 创建 full zone，并立即尝试启用邮箱路由。
-            如果 zone 还没完成激活，域名会保留在项目里等待你后续重试。
+            可直接绑定 apex，也可绑定 `mail.example.com` 这类子域。系统会创建
+            Cloudflare zone，并在需要时引导你完成父区 NS 委派。
           </CardDescription>
           <div
             className="flex flex-wrap items-center gap-2 text-xs"
             data-testid="domain-bind-delegation-guide"
           >
             <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
-              直绑后若停在 <code>pending</code> /{" "}
-              <code>provisioning_error</code>：先改 NS，再重试。
+              直绑 apex 或子域后若停在 <code>pending</code> /{" "}
+              <code>provisioning_error</code>：先完成 NS 委派，再重试。
             </p>
             {nameserverGuideHref ? (
               <a
@@ -275,26 +276,27 @@ export const DomainBindCard = ({
             })}
           >
             <div className="order-1 min-w-0 space-y-2 md:col-start-1 md:row-start-1">
-              <Label htmlFor="rootDomain">根域名</Label>
+              <Label htmlFor="mailDomain">邮箱域名（支持子域）</Label>
               <Input
-                id="rootDomain"
-                placeholder="example.com"
+                aria-label="邮箱域名"
+                id="mailDomain"
+                placeholder="mail.example.com 或 example.com"
                 autoComplete="off"
-                {...form.register("rootDomain")}
+                {...form.register("mailDomain")}
               />
             </div>
             <div
               className="order-2 min-h-5 text-sm md:col-start-1 md:row-start-2"
               data-testid="domain-bind-error"
               role={
-                form.formState.errors.rootDomain?.message || submitError
+                form.formState.errors.mailDomain?.message || submitError
                   ? "alert"
                   : undefined
               }
             >
-              {form.formState.errors.rootDomain?.message ? (
+              {form.formState.errors.mailDomain?.message ? (
                 <p className="text-destructive">
-                  {form.formState.errors.rootDomain.message}
+                  {form.formState.errors.mailDomain.message}
                 </p>
               ) : submitError ? (
                 <div className="relative inline-flex max-w-full flex-wrap items-center gap-2 rounded-2xl border border-destructive/30 bg-background/95 px-3 py-2 text-xs shadow-sm">
@@ -362,7 +364,7 @@ export const DomainBindCard = ({
               </h3>
               <p className="text-sm leading-6 text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {successGuide.rootDomain}
+                  {successGuide.mailDomain}
                 </span>
                 。{successGuide.summary}
               </p>
@@ -384,14 +386,15 @@ export const DomainBindCard = ({
                     需要使用的 nameserver
                   </p>
                   <p className="text-xs leading-5 text-muted-foreground">
-                    把域名 NS
-                    改成下面这组值，顺序不限；点击输入框会自动全选，每条可单独复制。
+                    子域接入时，请在父区 DNS 为该子域添加下面这组 NS；apex
+                    接入时，再把权威 NS
+                    切到下面这组值。点击输入框会自动全选，每条可单独复制。
                   </p>
                 </div>
                 <div className="mt-3 grid gap-2">
                   {successGuide.nameServers.map((nameServer) => (
                     <div
-                      key={`${successGuide.rootDomain}:${nameServer}`}
+                      key={`${successGuide.mailDomain}:${nameServer}`}
                       className="flex items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2"
                     >
                       <Input
@@ -434,7 +437,7 @@ export const DomainBindCard = ({
             <ol className="mt-5 space-y-3">
               {successGuide.steps.map((step, index) => (
                 <li
-                  key={`${successGuide.rootDomain}:${step}`}
+                  key={`${successGuide.mailDomain}:${step}`}
                   className="flex gap-3 rounded-2xl border border-border/80 bg-background/50 px-4 py-3"
                 >
                   <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-xs font-semibold text-primary">

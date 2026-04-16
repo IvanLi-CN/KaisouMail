@@ -77,6 +77,7 @@ const managedCatchAllNamePrefix = "KaisouMail Catch All";
 const toDomainDto = (row: DomainRow) =>
   domainSchema.parse({
     id: row.id,
+    mailDomain: row.rootDomain,
     rootDomain: row.rootDomain,
     zoneId: row.zoneId,
     bindingSource: row.bindingSource,
@@ -96,6 +97,7 @@ const toDomainCatalogDto = (input: {
 }) =>
   domainCatalogItemSchema.parse({
     id: input.row?.id ?? null,
+    mailDomain: input.rootDomain,
     rootDomain: input.rootDomain,
     zoneId: input.zone?.id ?? input.row?.zoneId ?? null,
     bindingSource: input.row?.bindingSource ?? null,

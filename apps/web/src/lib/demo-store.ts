@@ -109,6 +109,7 @@ const buildDomainCatalog = (): DomainCatalogItem[] => {
       const zone = cloudflareZones.get(rootDomain) ?? null;
       return {
         id: local?.id ?? null,
+        mailDomain: local?.mailDomain ?? zone?.rootDomain ?? rootDomain,
         rootDomain,
         zoneId: zone?.id ?? local?.zoneId ?? null,
         bindingSource: local?.bindingSource ?? null,
@@ -218,10 +219,12 @@ export const demoApi = {
   async createMailbox(input: {
     localPart?: string;
     subdomain?: string;
+    mailDomain?: string;
     rootDomain?: string;
     expiresInMinutes?: number | null;
   }) {
     const rootDomain = (
+      input.mailDomain?.trim().toLowerCase() ??
       input.rootDomain?.trim().toLowerCase() ??
       pickRandomRootDomain(state.meta.domains)
     )?.toLowerCase();
@@ -246,6 +249,7 @@ export const demoApi = {
       userId: demoSessionUser.id,
       localPart,
       subdomain,
+      mailDomain: rootDomain,
       rootDomain,
       address,
       status: "active",
@@ -268,6 +272,7 @@ export const demoApi = {
       | {
           localPart: string;
           subdomain: string;
+          mailDomain?: string;
           rootDomain?: string;
           expiresInMinutes?: number | null;
         },
@@ -279,6 +284,7 @@ export const demoApi = {
             normalizeLabel(input.localPart),
             normalizeLabel(input.subdomain),
             (
+              input.mailDomain?.trim().toLowerCase() ??
               input.rootDomain?.trim().toLowerCase() ??
               pickRandomRootDomain(state.meta.domains)
             )?.toLowerCase() ?? "",
@@ -487,8 +493,14 @@ export const demoApi = {
       },
     };
   },
-  async createDomain(input: { rootDomain: string; zoneId: string }) {
-    const rootDomain = input.rootDomain.trim().toLowerCase();
+  async createDomain(input: {
+    mailDomain: string;
+    zoneId: string;
+    rootDomain?: string;
+  }) {
+    const rootDomain = (input.mailDomain ?? input.rootDomain)
+      .trim()
+      .toLowerCase();
     const zoneId = input.zoneId.trim();
     const catalogMatch = state.cloudflareZones.find(
       (zone) => zone.rootDomain === rootDomain && zone.id === zoneId,
@@ -507,6 +519,7 @@ export const demoApi = {
     const updatedAt = new Date().toISOString();
     const domain: DomainRecord = {
       id: existing?.id ?? randomId("dom"),
+      mailDomain: rootDomain,
       rootDomain,
       zoneId,
       bindingSource: existing?.bindingSource ?? "catalog",
@@ -528,8 +541,10 @@ export const demoApi = {
     syncMetaDomains();
     return clone(domain);
   },
-  async bindDomain(input: { rootDomain: string }) {
-    const rootDomain = input.rootDomain.trim().toLowerCase();
+  async bindDomain(input: { mailDomain: string; rootDomain?: string }) {
+    const rootDomain = (input.mailDomain ?? input.rootDomain)
+      .trim()
+      .toLowerCase();
     const existing = state.domains.find(
       (domain) => domain.rootDomain === rootDomain,
     );
@@ -554,6 +569,7 @@ export const demoApi = {
 
     const domain: DomainRecord = {
       id: existing?.id ?? randomId("dom"),
+      mailDomain: rootDomain,
       rootDomain,
       zoneId: existingZone?.id ?? zoneId,
       bindingSource: "project_bind",

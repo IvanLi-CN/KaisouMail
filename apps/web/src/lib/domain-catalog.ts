@@ -130,6 +130,7 @@ export const buildFallbackBoundDomainCatalogEntry = (
 
   return {
     id: domain.id,
+    mailDomain: domain.mailDomain,
     rootDomain: domain.rootDomain,
     zoneId: domain.zoneId,
     bindingSource: domain.bindingSource,

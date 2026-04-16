@@ -103,6 +103,7 @@ describe("domain catalog polling helpers", () => {
     expect(
       buildFallbackBoundDomainCatalogEntry({
         id: "dom_bound",
+        mailDomain: "fallback.example.dev",
         rootDomain: "fallback.example.dev",
         zoneId: "zone_fallback",
         bindingSource: "project_bind",
@@ -116,6 +117,7 @@ describe("domain catalog polling helpers", () => {
         disabledAt: null,
       }),
     ).toMatchObject({
+      mailDomain: "fallback.example.dev",
       rootDomain: "fallback.example.dev",
       cloudflareStatus: "pending",
       projectStatus: "provisioning_error",
@@ -124,6 +126,7 @@ describe("domain catalog polling helpers", () => {
     expect(
       buildFallbackBoundDomainCatalogEntry({
         id: "dom_bound",
+        mailDomain: "fallback.example.dev",
         rootDomain: "fallback.example.dev",
         zoneId: "zone_fallback",
         bindingSource: "project_bind",
@@ -136,6 +139,7 @@ describe("domain catalog polling helpers", () => {
         disabledAt: null,
       }),
     ).toMatchObject({
+      mailDomain: "fallback.example.dev",
       rootDomain: "fallback.example.dev",
       cloudflareStatus: null,
       projectStatus: "provisioning_error",

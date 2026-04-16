@@ -4,8 +4,10 @@ import {
   bindDomainRequestSchema,
   createApiKeyResponseSchema,
   createDomainRequestSchema,
+  createMailboxRequestSchema,
   createUserResponseSchema,
   domainSchema,
+  ensureMailboxRequestSchema,
   listApiKeysResponseSchema,
   listDomainCatalogResponseSchema,
   listDomainsResponseSchema,
@@ -85,6 +87,18 @@ export const resolveApiOrigin = ({
 const API_BASE = resolveApiBase();
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 type MailboxListScope = (typeof mailboxListScopes)[number];
+
+const toCanonicalMailDomainPayload = <
+  T extends {
+    mailDomain?: string;
+    rootDomain?: string;
+  },
+>(
+  payload: T,
+) => {
+  const { rootDomain: _deprecatedRootDomain, ...rest } = payload;
+  return rest as Omit<T, "rootDomain">;
+};
 
 export class ApiClientError extends Error {
   constructor(
@@ -221,13 +235,17 @@ export const apiClient = {
   async createMailbox(input: {
     localPart?: string;
     subdomain?: string;
+    mailDomain?: string;
     rootDomain?: string;
     expiresInMinutes?: number | null;
   }) {
-    if (DEMO_MODE) return demoApi.createMailbox(input);
+    const payload = toCanonicalMailDomainPayload(
+      createMailboxRequestSchema.parse(input),
+    );
+    if (DEMO_MODE) return demoApi.createMailbox(payload);
     return requestJson(
       "/api/mailboxes",
-      { method: "POST", body: JSON.stringify(input) },
+      { method: "POST", body: JSON.stringify(payload) },
       (value) => mailboxSchema.parse(value),
     );
   },
@@ -237,14 +255,20 @@ export const apiClient = {
       | {
           localPart: string;
           subdomain: string;
+          mailDomain?: string;
           rootDomain?: string;
           expiresInMinutes?: number | null;
         },
   ) {
-    if (DEMO_MODE) return demoApi.ensureMailbox(input);
+    const parsedPayload = ensureMailboxRequestSchema.parse(input);
+    const payload =
+      "address" in parsedPayload
+        ? parsedPayload
+        : toCanonicalMailDomainPayload(parsedPayload);
+    if (DEMO_MODE) return demoApi.ensureMailbox(payload);
     return requestJson(
       "/api/mailboxes/ensure",
-      { method: "POST", body: JSON.stringify(input) },
+      { method: "POST", body: JSON.stringify(payload) },
       (value) => mailboxSchema.parse(value),
     );
   },
@@ -397,8 +421,16 @@ export const apiClient = {
       listDomainCatalogResponseSchema.parse(value),
     );
   },
-  async createDomain(input: { rootDomain: string; zoneId: string }) {
-    const payload = createDomainRequestSchema.parse(input);
+  async createDomain(input: {
+    mailDomain: string;
+    zoneId: string;
+    rootDomain?: string;
+  }) {
+    const parsedPayload = createDomainRequestSchema.parse(input);
+    const payload = {
+      mailDomain: parsedPayload.mailDomain,
+      zoneId: parsedPayload.zoneId,
+    };
     if (DEMO_MODE) return demoApi.createDomain(payload);
     return requestJson(
       "/api/domains",
@@ -406,8 +438,11 @@ export const apiClient = {
       (value) => domainSchema.parse(value),
     );
   },
-  async bindDomain(input: { rootDomain: string }) {
-    const payload = bindDomainRequestSchema.parse(input);
+  async bindDomain(input: { mailDomain: string; rootDomain?: string }) {
+    const parsedPayload = bindDomainRequestSchema.parse(input);
+    const payload = {
+      mailDomain: parsedPayload.mailDomain,
+    };
     if (DEMO_MODE) return demoApi.bindDomain(payload);
     return requestJson(
       "/api/domains/bind",

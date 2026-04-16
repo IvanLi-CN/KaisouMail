@@ -142,6 +142,37 @@ describe("mailbox routes", () => {
     );
   });
 
+  it("accepts mailDomain as the canonical mailbox creation field", async () => {
+    createMailboxForUser.mockResolvedValue(activeMailbox);
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          localPart: "build",
+          subdomain: "alpha",
+          mailDomain: "707979.xyz",
+          expiresInMinutes: 60,
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(201);
+    expect(createMailboxForUser).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      expect.objectContaining({ id: "usr_1" }),
+      expect.objectContaining({
+        mailDomain: "707979.xyz",
+        rootDomain: "707979.xyz",
+      }),
+    );
+  });
+
   it("passes unlimited TTL through mailbox creation", async () => {
     createMailboxForUser.mockResolvedValue(activeMailbox);
 
@@ -195,6 +226,39 @@ describe("mailbox routes", () => {
     );
 
     expect(response.status).toBe(200);
+  });
+
+  it("accepts mailDomain for segmented ensure requests", async () => {
+    ensureMailboxForUser.mockResolvedValue({
+      mailbox: activeMailbox,
+      created: false,
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/ensure", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          localPart: "build",
+          subdomain: "alpha",
+          mailDomain: "707979.xyz",
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(ensureMailboxForUser).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      expect.objectContaining({ id: "usr_1" }),
+      expect.objectContaining({
+        mailDomain: "707979.xyz",
+        rootDomain: "707979.xyz",
+      }),
+    );
   });
 
   it("allows ensure without an explicit root domain for localPart/subdomain", async () => {

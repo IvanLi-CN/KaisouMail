@@ -122,6 +122,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   const localPartExample = "build";
   const subdomainExample = "alpha";
   const rootDomainExample = "mail.example.net";
+  const delegatedMailDomainExample = "mail.customer.com";
   const addressExample = `${localPartExample}@${subdomainExample}.${rootDomainExample}`;
 
   return [
@@ -151,8 +152,9 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   }
 }`,
           notes: [
-            "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `rootDomain`。",
-            "创建邮箱时如果省略 `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
+            "客户端可先调用这个接口拿到当前可用域名列表，再决定是否显式传入 `mailDomain`。",
+            "`mailDomain` 是当前推荐字段；`rootDomain` 仍作为兼容别名继续接受，并会被规范化成同一个值。",
+            "创建邮箱时如果同时省略 `mailDomain` / `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
             "有限 TTL 统一按分钟表达；传 `expiresInMinutes: null` 表示长期，省略该字段则回退到默认 TTL。",
             "浏览器登录页与身份认证页会同时检查 `passkeyAuthEnabled` 与 `passkeyTrustedOrigins`，只有当前页面 origin 命中可信列表时才启用 passkey CTA。",
           ],
@@ -441,6 +443,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "userId": "usr_xxx",
       "localPart": "${localPartExample}",
       "subdomain": "${subdomainExample}",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
@@ -468,7 +471,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           requestBody: `{
   "localPart": "${localPartExample}",
   "subdomain": "${subdomainExample}",
-  "rootDomain": "${rootDomainExample}",
+  "mailDomain": "${rootDomainExample}",
   "expiresInMinutes": ${ttl}
 }`,
           responseBody: `{
@@ -476,6 +479,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "userId": "usr_xxx",
       "localPart": "${localPartExample}",
       "subdomain": "${subdomainExample}",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
@@ -488,7 +492,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "`localPart` 与 `subdomain` 都是可选字段，但会经过 shared 正则校验。",
-            "`rootDomain` 可选；省略时服务端会从当前 active 域名里随机挑一个。",
+            "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续使用，二者同时传入时必须一致。",
+            "如果同时省略 `mailDomain` / `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
             `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
             "若目标域名已启用 Catch All，服务端仍会在首次使用该子域时补齐 Cloudflare Email Routing DNS，但不会再为单个邮箱创建额外的 per-address routing rule；此时响应中的 `routingRuleId` 可能为 null。",
           ],
@@ -508,6 +513,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "userId": "usr_xxx",
       "localPart": "${localPartExample}",
       "subdomain": "${subdomainExample}",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
@@ -519,7 +525,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "routingRuleId": "rule_alpha"
 }`,
           notes: [
-            "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `rootDomain` 可选。",
+            "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `mailDomain` 可选，`rootDomain` 仍是兼容别名。",
             "命中现有 active mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
             "若要创建长期邮箱，可显式传 `expiresInMinutes: null`。",
@@ -536,6 +542,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "userId": "usr_xxx",
       "localPart": "${localPartExample}",
       "subdomain": "${subdomainExample}",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
@@ -574,7 +581,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     {
       title: "Mailbox Domains",
       description:
-        "管理员先在 Cloudflare 添加域，再在单控制台里实时发现并切换项目启用状态。",
+        "管理员既可以直接绑定 apex / 子域创建 Cloudflare zone，也可以对已有 zone 走 catalog 启用。",
       endpoints: [
         {
           method: "GET",
@@ -585,6 +592,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "domains": [
     {
       "id": "dom_primary",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "zoneId": "cf-zone-primary",
       "status": "active",
@@ -617,6 +625,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "domains": [
     {
       "id": null,
+      "mailDomain": "ops.example.org",
       "rootDomain": "ops.example.org",
       "zoneId": "cf-zone-ops",
       "cloudflareAvailability": "available",
@@ -630,6 +639,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     },
     {
       "id": "dom_primary",
+      "mailDomain": "${rootDomainExample}",
       "rootDomain": "${rootDomainExample}",
       "zoneId": "cf-zone-primary",
       "cloudflareAvailability": "available",
@@ -652,16 +662,46 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
         },
         {
           method: "POST",
+          path: "/api/domains/bind",
+          summary:
+            "直接在项目里创建 Cloudflare zone；支持 apex，也支持需要父区 NS 委派的子域。",
+          auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
+          requestBody: `{
+  "mailDomain": "${delegatedMailDomainExample}"
+}`,
+          responseBody: `{
+  "id": "dom_bound",
+  "mailDomain": "${delegatedMailDomainExample}",
+  "rootDomain": "${delegatedMailDomainExample}",
+  "zoneId": "cf-zone-mail-customer-com",
+  "status": "provisioning_error",
+  "catchAllEnabled": false,
+  "lastProvisionError": "Zone is pending activation until nameserver delegation is complete",
+  "createdAt": "2026-04-03T12:00:00.000Z",
+  "updatedAt": "2026-04-03T12:00:00.000Z",
+  "lastProvisionedAt": null,
+  "disabledAt": null
+}`,
+          notes: [
+            "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续接受。",
+            "绑定 apex 时，需要把该域名的权威 NS 切到 Cloudflare；绑定子域（如 `mail.customer.com`）时，需要去父域 `customer.com` 的 DNS 管理处为子域标签 `mail` 添加 Cloudflare 下发的 NS。",
+            "直绑成功后如果 zone 还在 `pending` / `provisioning_error`，返回记录仍可保留在项目里，等 NS 委派完成后再调用 retry。",
+            "如果同名记录当前处于 `disabled` 或 `provisioning_error`，再次提交会原地修复；只有现有 active 记录才会返回 `409`。",
+          ],
+        },
+        {
+          method: "POST",
           path: "/api/domains",
           summary:
             "从 Cloudflare catalog 启用域名，并立即尝试接入 Email Routing。",
           auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           requestBody: `{
-  "rootDomain": "${rootDomainExample}",
+  "mailDomain": "${rootDomainExample}",
   "zoneId": "cf-zone-primary"
 }`,
           responseBody: `{
   "id": "dom_primary",
+  "mailDomain": "${rootDomainExample}",
   "rootDomain": "${rootDomainExample}",
   "zoneId": "cf-zone-primary",
   "status": "active",
@@ -674,10 +714,12 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
+            "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续接受。",
+            "如果目标本来就是一个已存在于 Cloudflare 的 child zone，这条入口可直接启用，无需再重复创建 zone。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
             "若上游 Cloudflare API 429，接口会直接返回 `429` 并携带 `Retry-After`，不会把域名误写成 `provisioning_error`。",
             "Cloudflare 429 错误详情里会带 `rateLimitContext`，标明触发的项目接口与 Cloudflare method/path。",
-            "相同 `rootDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
+            "相同 `mailDomain` 仅在现有记录仍是 `active` 时返回 `409`；若是 `disabled` 或 `provisioning_error`，再次提交会原地修复它。",
           ],
         },
         {
@@ -910,12 +952,20 @@ const ApiKeysDocsPageView = ({
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
               <p>
                 可用域名列表应通过 <code>GET /api/meta</code>{" "}
-                动态读取；创建邮箱时既可以显式传 <code>rootDomain</code>
-                ，也可以省略后让服务端从 active 域名中随机分配。 默认 TTL 为{" "}
+                动态读取；创建邮箱时既可以显式传 <code>mailDomain</code>
+                ，也可以省略后让服务端从 active 域名中随机分配；旧字段{" "}
+                <code>rootDomain</code> 仍作为兼容别名继续接受。 默认 TTL 为{" "}
                 <code>{meta.defaultMailboxTtlMinutes}</code> 分钟，有限上限为{" "}
                 <code>{meta.maxMailboxTtlMinutes}</code> 分钟；当{" "}
                 <code>supportsUnlimitedMailboxTtl</code> 为 true 时，还可传{" "}
                 <code>expiresInMinutes: null</code> 表示长期。
+              </p>
+              <p className="mt-2">
+                域名接入支持两条路径：一是直接调用{" "}
+                <code>/api/domains/bind</code> 创建 apex 或子域 zone；二是先把
+                zone 接入到 Cloudflare，再用 <code>/api/domains</code> 从
+                catalog 启用。子域场景仍然依赖父区 DNS 中的 NS 委派，不属于纯
+                TXT/CNAME/MX 的 DNS-only onboarding。
               </p>
               <p className="mt-2">
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：

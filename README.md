@@ -13,8 +13,9 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 - Multi-user temporary mailbox management with per-user API keys
 - Multi-domain mailbox management backed by D1-stored Cloudflare zone records and real-time Cloudflare zone discovery
-- Direct domain binding that creates a Cloudflare full zone from `/domains`, plus project-bound zone deletion with soft local cleanup
-- Random or custom mailbox creation with TTL-based cleanup and optional `rootDomain` selection
+- Direct domain binding that creates a Cloudflare full zone from `/domains/bind`, plus project-bound zone deletion with soft local cleanup
+- Apex and delegated subdomain onboarding: bind `example.com` directly, or bind `mail.example.com` and finish parent-zone NS delegation
+- Random or custom mailbox creation with TTL-based cleanup and optional `mailDomain` selection (`rootDomain` remains a compatibility alias)
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
 - Multi-level mailbox subdomains such as `alpha.<mail-root>` and `ops.alpha.<mail-root>`
@@ -320,12 +321,15 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 - Worker API aliases:
   - `https://api.cfm.example.com`
   - `https://api.km.example.com`
-- Mail root domains managed in-app:
+- Mail domains managed in-app:
   - `707979.xyz`
   - `mail.example.net`
-- Mailboxes can either select a root domain explicitly or omit it and let the API randomly choose one active domain; nested subdomains still work:
+- Mailboxes can either select a `mailDomain` explicitly or omit it and let the API randomly choose one active domain; nested subdomains still work:
   - `build@alpha.707979.xyz`
   - `spec@ops.alpha.mail.example.net`
+- For delegated subdomain onboarding, bind the child zone in KaisouMail first, then add NS records in the parent zone:
+  - child zone: `mail.customer.com`
+  - parent zone DNS: `mail NS <cloudflare-ns-1>` / `mail NS <cloudflare-ns-2>`
 
 ## Notes on Cloudflare limits
 

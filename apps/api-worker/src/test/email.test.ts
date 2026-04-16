@@ -46,7 +46,25 @@ describe("email helpers", () => {
     });
   });
 
-  it("still accepts an explicit root domain in mailbox creation payloads", () => {
+  it("leaves mailDomain omitted when mailbox creation falls back to random active domains", () => {
+    expect(createMailboxRequestSchema.parse({})).toEqual({});
+  });
+
+  it("accepts the canonical mailDomain field in mailbox creation payloads", () => {
+    expect(
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops.alpha",
+        mailDomain: "707979.xyz",
+        expiresInMinutes: 60,
+      }),
+    ).toMatchObject({
+      mailDomain: "707979.xyz",
+      rootDomain: "707979.xyz",
+    });
+  });
+
+  it("still accepts an explicit root domain alias in mailbox creation payloads", () => {
     expect(
       createMailboxRequestSchema.parse({
         localPart: "mail",
@@ -55,8 +73,21 @@ describe("email helpers", () => {
         expiresInMinutes: 60,
       }),
     ).toMatchObject({
+      mailDomain: "707979.xyz",
       rootDomain: "707979.xyz",
     });
+  });
+
+  it("rejects mismatched mailDomain and rootDomain aliases", () => {
+    expect(() =>
+      createMailboxRequestSchema.parse({
+        localPart: "mail",
+        subdomain: "ops.alpha",
+        mailDomain: "mail.example.net",
+        rootDomain: "relay.example.test",
+        expiresInMinutes: 60,
+      }),
+    ).toThrow();
   });
 
   it("accepts unlimited mailbox TTL with a null payload value", () => {

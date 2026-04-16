@@ -118,7 +118,7 @@ export const DomainTable = ({
 }: {
   domains: DomainCatalogItem[];
   onEnable: (values: {
-    rootDomain: string;
+    mailDomain: string;
     zoneId: string;
   }) => Promise<void> | void;
   onEnableCatchAll: (domainId: string) => Promise<void> | void;
@@ -205,8 +205,9 @@ export const DomainTable = ({
             <div className="space-y-2">
               <CardTitle>Cloudflare 域名目录</CardTitle>
               <CardDescription>
-                这里同时展示 Cloudflare 当前可见的
-                zones、项目里的启用状态，以及由项目直接创建的可删除域名。
+                这里同时展示 Cloudflare 当前可见的 zones、项目里的启用状态，
+                以及由项目直接创建的可删除域名。已存在的 child zone 可直接从
+                catalog 启用，无需重复创建。
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
@@ -227,8 +228,8 @@ export const DomainTable = ({
               data-testid="domain-catalog-delegation-guide"
             >
               <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
-                有 {delegationPendingCount} 个项目直绑域名待完成 NS 委派；先改
-                NS，再点“重试接入”。
+                有 {delegationPendingCount} 个项目直绑域名待完成 NS
+                委派；先完成父区 NS 委派，再点“重试接入”。
               </p>
               {nameserverGuideHref ? (
                 <a
@@ -248,7 +249,7 @@ export const DomainTable = ({
           <Table>
             <TableHead>
               <TableRow>
-                <TableHeaderCell>根域名</TableHeaderCell>
+                <TableHeaderCell>邮箱域名</TableHeaderCell>
                 <TableHeaderCell>来源</TableHeaderCell>
                 <TableHeaderCell>Cloudflare</TableHeaderCell>
                 <TableHeaderCell>项目状态</TableHeaderCell>
@@ -305,10 +306,10 @@ export const DomainTable = ({
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {domain.bindingSource === "project_bind"
-                            ? "由项目创建到 Cloudflare；支持删除该 zone"
+                            ? "由项目创建到 Cloudflare；支持 apex 或子域直绑，并可删除该 zone"
                             : domain.cloudflareAvailability === "missing"
                               ? "Cloudflare 当前 token 已不可见"
-                              : "Cloudflare 当前可管理"}
+                              : "已存在于 Cloudflare，可直接启用到项目"}
                         </p>
                       </div>
                     </TableCell>
@@ -411,7 +412,7 @@ export const DomainTable = ({
                                 <span className="font-medium text-amber-200">
                                   待委派
                                 </span>
-                                ，改 NS 后重试。
+                                ，完成父区 NS 委派后重试。
                               </span>
                             </span>
                             {nameserverGuideHref ? (
@@ -458,7 +459,7 @@ export const DomainTable = ({
                             disabled={isEnablePending}
                             onClick={() =>
                               onEnable({
-                                rootDomain: domain.rootDomain,
+                                mailDomain: domain.mailDomain,
                                 zoneId,
                               })
                             }
@@ -636,7 +637,8 @@ export const DomainTable = ({
                     {detailDomain.rootDomain}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    在这里查看当前域名的 Cloudflare zone 与 nameserver 信息。
+                    在这里查看当前邮箱域名的 Cloudflare zone 与 nameserver
+                    信息。
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -734,7 +736,8 @@ export const DomainTable = ({
                       Nameserver
                     </p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      去注册商修改 NS 时，以这里显示的值为准。
+                      子域接入时，请去父域 DNS 管理处添加 NS；apex
+                      接入时，以这里显示的值为准修改权威 NS。
                     </p>
                   </div>
                   <span className="text-xs leading-5 text-muted-foreground">
@@ -809,9 +812,10 @@ export const DomainTable = ({
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm leading-6 text-amber-100/90">
-                  当前域名还在等待 Cloudflare 完成委派。先去注册商修改 NS，等
-                  Cloudflare 变成 <code>active</code>{" "}
-                  后，再回到列表点击“重试接入”。
+                  当前邮箱域名还在等待 Cloudflare
+                  完成委派。若这是子域，请先去父域 DNS 管理处补上对应的
+                  NS；若这是 apex，请先完成权威 NS 切换。等 Cloudflare 变成{" "}
+                  <code>active</code> 后，再回到列表点击“重试接入”。
                 </p>
               </section>
             ) : null}

@@ -12,9 +12,10 @@
 ## 核心能力
 
 - 多用户临时邮箱与 API Key 管理
-- 基于 D1 的多邮箱根域管理与 Cloudflare zone 实时发现
-- `/domains` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
-- 随机或指定邮箱创建，支持多级子域
+- 基于 D1 的多邮箱域名管理与 Cloudflare zone 实时发现
+- `/domains/bind` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
+- 同时支持 apex 与子域接入：例如直接绑定 `example.com`，或绑定 `mail.example.com` 后完成父区 NS 委派
+- 随机或指定邮箱创建，支持多级子域；对外 API 以 `mailDomain` 为首选字段，`rootDomain` 保留兼容别名
 - `GET /api/meta` 暴露 active 域名、TTL 和地址规则
 - 邮件原始内容入 R2，结构化索引入 D1
 - 域名目录支持启用、停用、重试接入
@@ -169,6 +170,9 @@ deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Wo
 - API 别名：
   - `https://api.cfm.example.com`
   - `https://api.km.example.com`
-- 应用内管理的邮箱根域：
+- 应用内管理的邮箱域名：
   - `707979.xyz`
   - `mail.example.net`
+- 若接入 `mail.customer.com` 这类子域，需要先在 KaisouMail 里创建 child zone，再去父域 `customer.com` 的 DNS 管理处添加：
+  - `mail NS <cloudflare-ns-1>`
+  - `mail NS <cloudflare-ns-2>`

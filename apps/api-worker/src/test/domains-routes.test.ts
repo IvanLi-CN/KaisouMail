@@ -111,6 +111,7 @@ describe("domain routes", () => {
       domains: [
         {
           id: null,
+          mailDomain: "ops.example.org",
           rootDomain: "ops.example.org",
           zoneId: "zone_available",
           bindingSource: null,
@@ -158,16 +159,74 @@ describe("domain routes", () => {
       new Request("http://localhost/api/domains/bind", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ rootDomain: "bound.example.org" }),
+        body: JSON.stringify({ mailDomain: "bound.example.org" }),
       }),
       env,
     );
 
+    expect(bindDomain).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      expect.objectContaining({
+        mailDomain: "bound.example.org",
+        rootDomain: "bound.example.org",
+      }),
+    );
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
+      mailDomain: "bound.example.org",
       rootDomain: "bound.example.org",
       bindingSource: "project_bind",
+    });
+  });
+
+  it("accepts mailDomain when enabling a discovered catalog domain", async () => {
+    createDomain.mockResolvedValue({
+      created: true,
+      domain: {
+        id: "dom_catalog",
+        rootDomain: "mail.customer.com",
+        zoneId: "zone_mail_customer_com",
+        bindingSource: "catalog",
+        status: "active",
+        catchAllEnabled: false,
+        lastProvisionError: null,
+        createdAt: "2026-04-06T07:00:00.000Z",
+        updatedAt: "2026-04-06T07:00:00.000Z",
+        lastProvisionedAt: "2026-04-06T07:00:00.000Z",
+        disabledAt: null,
+      },
+    });
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mailDomain: "mail.customer.com",
+          zoneId: "zone_mail_customer_com",
+        }),
+      }),
+      env,
+    );
+
+    expect(createDomain).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      expect.objectContaining({
+        mailDomain: "mail.customer.com",
+        rootDomain: "mail.customer.com",
+        zoneId: "zone_mail_customer_com",
+      }),
+    );
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      id: "dom_catalog",
+      mailDomain: "mail.customer.com",
+      rootDomain: "mail.customer.com",
+      bindingSource: "catalog",
     });
   });
 
@@ -220,6 +279,7 @@ describe("domain routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
+      mailDomain: "bound.example.org",
       catchAllEnabled: true,
     });
   });
@@ -255,6 +315,7 @@ describe("domain routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
+      mailDomain: "bound.example.org",
       catchAllEnabled: false,
     });
   });

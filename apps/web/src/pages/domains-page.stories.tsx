@@ -15,8 +15,9 @@ if (!docsLinks) {
 
 const pendingBindResult: DomainCatalogItem = {
   id: "dom_bound",
-  rootDomain: "fkoai.site",
-  zoneId: "zone_fkoaisite",
+  mailDomain: "mail.customer.com",
+  rootDomain: "mail.customer.com",
+  zoneId: "zone_mail_customer_com",
   bindingSource: "project_bind",
   cloudflareAvailability: "available",
   cloudflareStatus: "pending",
@@ -31,8 +32,27 @@ const pendingBindResult: DomainCatalogItem = {
   disabledAt: null,
 };
 
+const existingChildZoneCatalogDomain: DomainCatalogItem = {
+  id: null,
+  mailDomain: "mail.customer.com",
+  rootDomain: "mail.customer.com",
+  zoneId: "zone_mail_customer_com",
+  bindingSource: null,
+  cloudflareAvailability: "available",
+  cloudflareStatus: "active",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "not_enabled",
+  catchAllEnabled: false,
+  lastProvisionError: null,
+  createdAt: null,
+  updatedAt: null,
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
+
 const longZoneDialogDomain: DomainCatalogItem = {
   id: "dom_long_zone",
+  mailDomain: "long-zone.example.dev",
   rootDomain: "long-zone.example.dev",
   zoneId: "4a2d7f0e9c1b8a6d5e4f3c2b1a09ffeeddccbbaa99887766554433221100aa55",
   bindingSource: "project_bind",
@@ -68,6 +88,14 @@ const meta = {
   title: "Pages/Domains",
   component: DomainsPageView,
   tags: ["autodocs"],
+  parameters: {
+    docs: {
+      description: {
+        component:
+          "Covers both direct Cloudflare binding and catalog enablement for apex domains and delegated child zones. Child-zone onboarding keeps the project row visible until the parent zone finishes NS delegation.",
+      },
+    },
+  },
   args: {
     domains: demoDomainCatalog,
     isDomainBindingEnabled: true,
@@ -105,7 +133,7 @@ export const BindSubmitError: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.type(canvas.getByLabelText("邮箱域名"), "fkoai.site");
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
@@ -123,7 +151,7 @@ export const BindPermissionHelp: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.type(canvas.getByLabelText("邮箱域名"), "fkoai.site");
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
@@ -143,7 +171,10 @@ export const BindNextStepsDialog: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText("根域名"), "fkoai.site");
+    await userEvent.type(
+      canvas.getByLabelText("邮箱域名"),
+      "mail.customer.com",
+    );
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
@@ -151,6 +182,15 @@ export const BindNextStepsDialog: Story = {
       "domain-bind-success-guide-dialog",
     );
     await expect(dialog).toHaveTextContent("还差一步：完成域名委派");
+    await expect(dialog).toHaveTextContent(
+      "mail.customer.com。Cloudflare 已分配 nameserver。",
+    );
+    await expect(dialog).toHaveTextContent(
+      "请到父域 DNS 中为该子域添加下面的 NS",
+    );
+    await expect(dialog).toHaveTextContent(
+      "例如要接入 mail.example.com，就去 example.com 当前的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
+    );
     await expect(dialog).toHaveTextContent("amy.ns.cloudflare.com");
     await expect(dialog).toHaveTextContent("kai.ns.cloudflare.com");
     const amyInput = within(dialog).getByRole("textbox", {
@@ -177,15 +217,41 @@ export const BindNextStepsDialog: Story = {
   },
 };
 
+export const ChildZoneCatalogEnableFlow: Story = {
+  args: {
+    domains: [
+      existingChildZoneCatalogDomain,
+      ...demoDomainCatalog.filter(
+        (domain) => domain.zoneId !== "zone_available",
+      ),
+    ],
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("mail.customer.com")).toBeInTheDocument();
+    await expect(
+      canvas.getAllByText("已存在于 Cloudflare，可直接启用到项目").length,
+    ).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole("button", { name: "启用域名" }));
+    await expect(args.onEnable).toHaveBeenCalledWith({
+      mailDomain: "mail.customer.com",
+      zoneId: "zone_mail_customer_com",
+    });
+  },
+};
+
 export const BindFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(canvas.getByLabelText("根域名"), "bound.example.org");
+    await userEvent.type(
+      canvas.getByLabelText("邮箱域名"),
+      "bound.example.org",
+    );
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
     await expect(args.onBind).toHaveBeenCalledWith({
-      rootDomain: "bound.example.org",
+      mailDomain: "bound.example.org",
     });
   },
 };
@@ -195,7 +261,7 @@ export const EnableFlow: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "启用域名" }));
     await expect(args.onEnable).toHaveBeenCalledWith({
-      rootDomain: "ops.example.org",
+      mailDomain: "ops.example.org",
       zoneId: "zone_available",
     });
   },
@@ -240,19 +306,19 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByTestId("domain-bind-delegation-guide"),
     ).toHaveTextContent(
-      "直绑后若停在 pending / provisioning_error：先改 NS，再重试。",
+      "直绑 apex 或子域后若停在 pending / provisioning_error：先完成 NS 委派，再重试。",
     );
     await expect(
       canvas.getByTestId("domain-catalog-delegation-guide"),
     ).toHaveTextContent(
-      "有 1 个项目直绑域名待完成 NS 委派；先改 NS，再点“重试接入”。",
+      "有 1 个项目直绑域名待完成 NS 委派；先完成父区 NS 委派，再点“重试接入”。",
     );
     await expect(
       canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
     ).toHaveTextContent("待委派");
     await expect(
       canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
-    ).toHaveTextContent("改 NS 后重试。");
+    ).toHaveTextContent("完成父区 NS 委派后重试。");
     await expect(
       within(
         canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
@@ -361,6 +427,7 @@ export const MissingInCloudflare: Story = {
       ...demoDomainCatalog,
       {
         id: "dom_missing",
+        mailDomain: "orphaned.example.io",
         rootDomain: "orphaned.example.io",
         zoneId: "zone_missing",
         bindingSource: "catalog",

@@ -118,6 +118,7 @@ describe("demoApi", () => {
 
   it("allows re-enabling a discovered non-active domain", async () => {
     const repaired = await demoApi.createDomain({
+      mailDomain: "staging.example.dev",
       rootDomain: "staging.example.dev",
       zoneId: "zone_failed",
     });
@@ -126,6 +127,7 @@ describe("demoApi", () => {
     await demoApi.disableDomain(repaired.id);
 
     const retried = await demoApi.createDomain({
+      mailDomain: "staging.example.dev",
       rootDomain: "staging.example.dev",
       zoneId: "zone_failed",
     });
@@ -136,6 +138,7 @@ describe("demoApi", () => {
 
   it("binds new domains as project-bound provisioning errors until retried", async () => {
     const bound = await demoApi.bindDomain({
+      mailDomain: "bound.example.org",
       rootDomain: "bound.example.org",
     });
 
@@ -152,6 +155,7 @@ describe("demoApi", () => {
     );
 
     const bound = await demoApi.bindDomain({
+      mailDomain: "cleanup.example.org",
       rootDomain: "cleanup.example.org",
     });
     await demoApi.deleteDomain(bound.id);

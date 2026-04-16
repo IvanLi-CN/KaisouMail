@@ -11,6 +11,7 @@ import {
   recipientKinds,
   userRoles,
 } from "../consts";
+import { withMailDomainAliases } from "./mail-domain";
 
 export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
@@ -89,52 +90,58 @@ export const passkeySchema = z.object({
   revokedAt: isoDateSchema.nullable(),
 });
 
-export const mailboxSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  localPart: z.string(),
-  subdomain: z.string(),
-  rootDomain: z.string(),
-  address: z.string().email(),
-  source: mailboxSourceSchema,
-  status: mailboxStatusSchema,
-  createdAt: isoDateSchema,
-  lastReceivedAt: isoDateSchema.nullable(),
-  expiresAt: isoDateSchema.nullable(),
-  destroyedAt: isoDateSchema.nullable(),
-  routingRuleId: z.string().nullable(),
-});
+export const mailboxSchema = withMailDomainAliases(
+  {
+    id: z.string(),
+    userId: z.string(),
+    localPart: z.string(),
+    subdomain: z.string(),
+    address: z.string().email(),
+    source: mailboxSourceSchema,
+    status: mailboxStatusSchema,
+    createdAt: isoDateSchema,
+    lastReceivedAt: isoDateSchema.nullable(),
+    expiresAt: isoDateSchema.nullable(),
+    destroyedAt: isoDateSchema.nullable(),
+    routingRuleId: z.string().nullable(),
+  },
+  { required: true },
+);
 
-export const domainSchema = z.object({
-  id: z.string(),
-  rootDomain: z.string(),
-  zoneId: z.string().nullable(),
-  bindingSource: domainBindingSourceSchema,
-  status: domainStatusSchema,
-  catchAllEnabled: z.boolean(),
-  lastProvisionError: z.string().nullable(),
-  createdAt: isoDateSchema,
-  updatedAt: isoDateSchema,
-  lastProvisionedAt: isoDateSchema.nullable(),
-  disabledAt: isoDateSchema.nullable(),
-});
+export const domainSchema = withMailDomainAliases(
+  {
+    id: z.string(),
+    zoneId: z.string().nullable(),
+    bindingSource: domainBindingSourceSchema,
+    status: domainStatusSchema,
+    catchAllEnabled: z.boolean(),
+    lastProvisionError: z.string().nullable(),
+    createdAt: isoDateSchema,
+    updatedAt: isoDateSchema,
+    lastProvisionedAt: isoDateSchema.nullable(),
+    disabledAt: isoDateSchema.nullable(),
+  },
+  { required: true },
+);
 
-export const domainCatalogItemSchema = z.object({
-  id: z.string().nullable(),
-  rootDomain: z.string(),
-  zoneId: z.string().nullable(),
-  bindingSource: domainBindingSourceSchema.nullable(),
-  cloudflareAvailability: domainCatalogAvailabilitySchema,
-  cloudflareStatus: z.string().nullable(),
-  nameServers: z.array(z.string()),
-  projectStatus: domainProjectStatusSchema,
-  catchAllEnabled: z.boolean(),
-  lastProvisionError: z.string().nullable(),
-  createdAt: isoDateSchema.nullable(),
-  updatedAt: isoDateSchema.nullable(),
-  lastProvisionedAt: isoDateSchema.nullable(),
-  disabledAt: isoDateSchema.nullable(),
-});
+export const domainCatalogItemSchema = withMailDomainAliases(
+  {
+    id: z.string().nullable(),
+    zoneId: z.string().nullable(),
+    bindingSource: domainBindingSourceSchema.nullable(),
+    cloudflareAvailability: domainCatalogAvailabilitySchema,
+    cloudflareStatus: z.string().nullable(),
+    nameServers: z.array(z.string()),
+    projectStatus: domainProjectStatusSchema,
+    catchAllEnabled: z.boolean(),
+    lastProvisionError: z.string().nullable(),
+    createdAt: isoDateSchema.nullable(),
+    updatedAt: isoDateSchema.nullable(),
+    lastProvisionedAt: isoDateSchema.nullable(),
+    disabledAt: isoDateSchema.nullable(),
+  },
+  { required: true },
+);
 
 export const messageSummarySchema = z.object({
   id: z.string(),

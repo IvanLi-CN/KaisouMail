@@ -20,6 +20,7 @@ import {
   userRoleSchema,
   userSchema,
 } from "./common";
+import { withMailDomainAliases } from "./mail-domain";
 
 export const createSessionRequestSchema = z.object({
   apiKey: z.string().min(16),
@@ -49,10 +50,9 @@ export const createPasskeyRequestSchema = z.object({
   name: z.string().trim().min(1).max(64),
 });
 
-export const createMailboxRequestSchema = z.object({
+export const createMailboxRequestSchema = withMailDomainAliases({
   localPart: z.string().regex(mailboxLocalPartRegex).optional(),
   subdomain: z.string().regex(mailboxSubdomainRegex).optional(),
-  rootDomain: z.string().regex(rootDomainRegex).optional(),
   expiresInMinutes: z
     .number()
     .int()
@@ -75,11 +75,10 @@ export const ensureMailboxRequestSchema = z.union([
         .optional(),
     })
     .strict(),
-  z
-    .object({
+  withMailDomainAliases(
+    {
       localPart: z.string().regex(mailboxLocalPartRegex),
       subdomain: z.string().regex(mailboxSubdomainRegex),
-      rootDomain: z.string().regex(rootDomainRegex).optional(),
       expiresInMinutes: z
         .number()
         .int()
@@ -87,8 +86,9 @@ export const ensureMailboxRequestSchema = z.union([
         .max(maxMailboxTtlMinutes)
         .nullable()
         .optional(),
-    })
-    .strict(),
+    },
+    { strict: true },
+  ),
 ]);
 
 export const resolveMailboxQuerySchema = z.object({
@@ -118,14 +118,17 @@ export const createUserResponseSchema = z.object({
   initialKey: createApiKeyResponseSchema,
 });
 
-export const createDomainRequestSchema = z.object({
-  rootDomain: z.string().regex(rootDomainRegex),
-  zoneId: z.string().min(1).max(128),
-});
+export const createDomainRequestSchema = withMailDomainAliases(
+  {
+    zoneId: z.string().min(1).max(128),
+  },
+  { required: true },
+);
 
-export const bindDomainRequestSchema = z.object({
-  rootDomain: z.string().regex(rootDomainRegex),
-});
+export const bindDomainRequestSchema = withMailDomainAliases(
+  {},
+  { required: true },
+);
 
 export const listMailboxesResponseSchema = z.object({
   mailboxes: z.array(mailboxSchema),
