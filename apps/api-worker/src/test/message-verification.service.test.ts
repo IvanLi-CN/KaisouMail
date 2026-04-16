@@ -118,6 +118,36 @@ describe("message verification service", () => {
     });
   });
 
+  it("recognizes plain verification codes after dash separators", async () => {
+    const englishVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "verification code-123456",
+        text: null,
+        html: null,
+      },
+    );
+    const chineseVerification = await detectVerificationForMessage(
+      {} as never,
+      {
+        subject: "安全通知",
+        text: "验证码-654321",
+        html: null,
+      },
+    );
+
+    expect(englishVerification).toEqual({
+      code: "123456",
+      source: "subject",
+      method: "rules",
+    });
+    expect(chineseVerification).toEqual({
+      code: "654321",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("does not truncate longer identifiers into direct verification matches", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Your verification code is AB1234567",
@@ -142,6 +172,20 @@ describe("message verification service", () => {
 
     expect(suffixVerification).toBeNull();
     expect(prefixVerification).toBeNull();
+  });
+
+  it("does not treat sign-in phrasing as a hyphenated verification code", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your sign-in confirmation code",
+      text: "Use verification code 842911 to continue.",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "842911",
+      source: "body",
+      method: "rules",
+    });
   });
 
   it("ignores generic code-review subjects that only contain build numbers", async () => {

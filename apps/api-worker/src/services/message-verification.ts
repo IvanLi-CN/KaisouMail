@@ -24,6 +24,7 @@ const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
 const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
+const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]+-[A-Z]+$/;
 const CODE_TOKEN_PATTERN = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?/g;
 const VERIFICATION_KEYWORDS = [
   "verification code",
@@ -56,15 +57,17 @@ const VERIFICATION_SIGNAL_PHRASES = [
 const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
   keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
 );
-const DIRECT_CODE_CAPTURE =
+const FORWARD_DIRECT_CODE_CAPTURE =
+  "([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
+const REVERSE_DIRECT_CODE_CAPTURE =
   "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const DIRECT_CODE_PATTERNS = [
   new RegExp(
-    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}${DIRECT_CODE_CAPTURE}`,
+    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}${FORWARD_DIRECT_CODE_CAPTURE}`,
     "gi",
   ),
   new RegExp(
-    `${DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
+    `${REVERSE_DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
     "gi",
   ),
 ] as const;
@@ -123,6 +126,13 @@ const normalizeVerificationCode = (value: string | null | undefined) => {
     return null;
   }
 
+  if (
+    !/\d/.test(compact) &&
+    !UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN.test(normalized)
+  ) {
+    return null;
+  }
+
   return normalized;
 };
 
@@ -161,7 +171,7 @@ const hasVerificationContextSignal = (value: string) =>
   VERIFICATION_CONTEXT_PATTERN.test(value);
 
 const isSafeBoundary = (value: string | undefined) =>
-  !value || !/[A-Za-z0-9-]/.test(value);
+  !value || !/[A-Za-z0-9]/.test(value);
 
 const extractCodeTokens = (value: string) => {
   const matches = new Map<string, number>();
@@ -181,6 +191,9 @@ const extractCodeTokens = (value: string) => {
       index + token.length + 40,
     );
     if (/@|https?:\/\//i.test(context)) continue;
+    if (normalized.includes("-") && (previous === "-" || next === "-")) {
+      continue;
+    }
     if (normalized.includes("-") && !hasVerificationContextSignal(context)) {
       continue;
     }
