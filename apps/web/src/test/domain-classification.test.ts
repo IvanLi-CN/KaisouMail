@@ -47,6 +47,20 @@ describe("classifyMailDomain", () => {
     });
   });
 
+  it("prefers the nearest known parent zone for nested delegated child zones", () => {
+    expect(
+      classifyMailDomain("ops.mail.example.com", {
+        knownParentZones: ["example.com", "mail.example.com"],
+      }),
+    ).toEqual({
+      type: "subdomain",
+      mailDomain: "ops.mail.example.com",
+      registrableDomain: "example.com",
+      parentDomain: "mail.example.com",
+      delegatedLabel: "ops",
+    });
+  });
+
   it("normalizes casing and returns unknown for empty or invalid inputs", () => {
     expect(classifyMailDomain(" Mail.Customer.COM ")).toEqual({
       type: "subdomain",

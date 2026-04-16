@@ -23,8 +23,18 @@ export type MailDomainClassification =
       delegatedLabel: null;
     };
 
+const normalizeKnownParentZones = (knownParentZones?: string[]) =>
+  [
+    ...new Set(
+      (knownParentZones ?? []).map((zone) => zone.trim().toLowerCase()),
+    ),
+  ]
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
+
 export const classifyMailDomain = (
   mailDomain: string,
+  options?: { knownParentZones?: string[] },
 ): MailDomainClassification => {
   const normalizedMailDomain = mailDomain.trim().toLowerCase();
   if (!normalizedMailDomain) {
@@ -60,10 +70,15 @@ export const classifyMailDomain = (
     };
   }
 
-  if (normalizedMailDomain.endsWith(`.${registrableDomain}`)) {
+  const knownParentZone = normalizeKnownParentZones(options?.knownParentZones)
+    .filter((zone) => zone !== normalizedMailDomain)
+    .find((zone) => normalizedMailDomain.endsWith(`.${zone}`));
+  const parentDomain = knownParentZone ?? registrableDomain;
+
+  if (normalizedMailDomain.endsWith(`.${parentDomain}`)) {
     const delegatedLabel = normalizedMailDomain.slice(
       0,
-      -(registrableDomain.length + 1),
+      -(parentDomain.length + 1),
     );
 
     if (delegatedLabel) {
@@ -71,7 +86,7 @@ export const classifyMailDomain = (
         type: "subdomain",
         mailDomain: normalizedMailDomain,
         registrableDomain,
-        parentDomain: registrableDomain,
+        parentDomain,
         delegatedLabel,
       };
     }

@@ -985,6 +985,80 @@ describe("domains page view", () => {
     expect(dialog).not.toHaveTextContent("父域");
   });
 
+  it("uses the nearest known parent zone for nested delegated child zones", async () => {
+    const onBind = vi.fn(async () => ({
+      id: "dom_nested",
+      mailDomain: "ops.mail.example.com",
+      rootDomain: "ops.mail.example.com",
+      zoneId: "zone_ops_mail_example_com",
+      bindingSource: "project_bind" as const,
+      cloudflareAvailability: "available" as const,
+      cloudflareStatus: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      projectStatus: "provisioning_error" as const,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            {
+              id: null,
+              mailDomain: "mail.example.com",
+              rootDomain: "mail.example.com",
+              zoneId: "zone_mail_example_com",
+              bindingSource: null,
+              cloudflareAvailability: "available",
+              cloudflareStatus: "active",
+              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+              projectStatus: "not_enabled",
+              catchAllEnabled: false,
+              lastProvisionError: null,
+              createdAt: null,
+              updatedAt: null,
+              lastProvisionedAt: null,
+              disabledAt: null,
+            },
+            ...demoDomainCatalog,
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "ops.mail.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent(
+      "请到父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面的 NS；完成后再回来重试。",
+    );
+    expect(dialog).toHaveTextContent(
+      "这是子域接入，请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS。",
+    );
+    expect(dialog).not.toHaveTextContent("子域标签 ops.mail");
+    expect(dialog).not.toHaveTextContent("父域 example.com");
+  });
+
   it("shows apex-specific recovery guidance in the catalog details dialog", async () => {
     render(
       <MemoryRouter>

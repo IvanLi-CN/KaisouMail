@@ -64,11 +64,13 @@ const buildNameserverGuideHref = (docsLinks?: PublicDocsLinks | null) =>
 
 const buildBindSuccessGuide = ({
   result,
+  knownParentZones,
 }: {
   result: DomainRecord | DomainCatalogItem;
+  knownParentZones?: string[];
 }): BindSuccessGuide => {
   const mailDomain = result.mailDomain;
-  const classification = classifyMailDomain(mailDomain);
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
   const projectStatus =
     "projectStatus" in result ? result.projectStatus : result.status;
   const cloudflareStatus =
@@ -229,6 +231,7 @@ export const DomainBindCard = ({
     );
 
     return buildBindSuccessGuide({
+      knownParentZones: domains.map((domain) => domain.mailDomain),
       result: latestDomain ?? successGuideState.fallbackResult,
     });
   }, [domains, successGuideState]);

@@ -92,8 +92,11 @@ const bindingSourceLabel = (
 const buildDelegationBannerCopy = (count: number) =>
   `有 ${count} 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。`;
 
-const buildRowDelegationCopy = (mailDomain: string) => {
-  const classification = classifyMailDomain(mailDomain);
+const buildRowDelegationCopy = (
+  mailDomain: string,
+  knownParentZones?: string[],
+) => {
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
     return "待委派，完成父区 NS 委派后重试。";
@@ -106,8 +109,11 @@ const buildRowDelegationCopy = (mailDomain: string) => {
   return "待配置 NS，按当前域名类型完成 NS 配置后重试。";
 };
 
-const buildDetailNameserverNote = (mailDomain: string) => {
-  const classification = classifyMailDomain(mailDomain);
+const buildDetailNameserverNote = (
+  mailDomain: string,
+  knownParentZones?: string[],
+) => {
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
     return `这是子域接入，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS。`;
@@ -120,8 +126,11 @@ const buildDetailNameserverNote = (mailDomain: string) => {
   return "请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。";
 };
 
-const buildPendingNameserverNote = (mailDomain: string) => {
-  const classification = classifyMailDomain(mailDomain);
+const buildPendingNameserverNote = (
+  mailDomain: string,
+  knownParentZones?: string[],
+) => {
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
     return `nameserver 暂不可见；这是刚创建的子域接入，请先保留页面，拿到 nameserver 后去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加 NS。`;
@@ -134,8 +143,11 @@ const buildPendingNameserverNote = (mailDomain: string) => {
   return "nameserver 暂不可见；如果这是刚创建的直绑域名，请保持页面打开，稍后再回来查看。";
 };
 
-const buildDelegationRecoveryGuide = (mailDomain: string) => {
-  const classification = classifyMailDomain(mailDomain);
+const buildDelegationRecoveryGuide = (
+  mailDomain: string,
+  knownParentZones?: string[],
+) => {
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
     return {
@@ -228,18 +240,25 @@ export const DomainTable = ({
   const nameserverGuideHref = docsLinks?.projectDomainBinding
     ? `${docsLinks.projectDomainBinding}#zone-pending-or-nameserver-not-delegated`
     : null;
+  const knownParentZones = useMemo(
+    () => domains.map((domain) => domain.mailDomain),
+    [domains],
+  );
   const detailDomain = detailsRootDomain
     ? (domains.find((domain) => domain.rootDomain === detailsRootDomain) ??
       null)
     : null;
   const detailNameserverNote = useMemo(() => {
     if (!detailDomain) return null;
-    return buildDetailNameserverNote(detailDomain.mailDomain);
-  }, [detailDomain]);
+    return buildDetailNameserverNote(detailDomain.mailDomain, knownParentZones);
+  }, [detailDomain, knownParentZones]);
   const detailDelegationGuide = useMemo(() => {
     if (!detailDomain || !needsNameserverDelegation(detailDomain)) return null;
-    return buildDelegationRecoveryGuide(detailDomain.mailDomain);
-  }, [detailDomain]);
+    return buildDelegationRecoveryGuide(
+      detailDomain.mailDomain,
+      knownParentZones,
+    );
+  }, [detailDomain, knownParentZones]);
 
   useEffect(() => {
     if (!detailDomain) return;
@@ -486,7 +505,10 @@ export const DomainTable = ({
                               />
                               <span>
                                 <span className="font-medium text-amber-200">
-                                  {buildRowDelegationCopy(domain.mailDomain)}
+                                  {buildRowDelegationCopy(
+                                    domain.mailDomain,
+                                    knownParentZones,
+                                  )}
                                 </span>
                               </span>
                             </span>
@@ -854,7 +876,10 @@ export const DomainTable = ({
                   </div>
                 ) : (
                   <div className="mt-3 rounded-xl border border-dashed border-border/70 bg-card/60 px-3 py-4 text-sm text-muted-foreground">
-                    {buildPendingNameserverNote(detailDomain.mailDomain)}
+                    {buildPendingNameserverNote(
+                      detailDomain.mailDomain,
+                      knownParentZones,
+                    )}
                   </div>
                 )}
               </section>
