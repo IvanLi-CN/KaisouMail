@@ -87,6 +87,37 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects hyphenated verification codes when the subject carries confirmation context", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "WXN-DTJ xAI confirmation code",
+      text: "Thank you for creating an xAI account.",
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
+  it("detects traditional Chinese Microsoft security codes from text and html bodies", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "個人 Microsoft 帳戶安全性代碼",
+      text: "請使用下列 Microsoft 帳戶 Ju**9@outlook.com 的安全性代碼。安全代碼：007206 僅在官方網站或應用程式上輸入此代碼。",
+      html: [
+        "<p>請使用下列個人 Microsoft 帳戶 <strong>Ju**9@outlook.com</strong> 的安全性代碼。</p>",
+        "<p><strong>安全代碼: 007206</strong></p>",
+      ].join(""),
+    });
+
+    expect(verification).toEqual({
+      code: "007206",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("does not truncate longer identifiers into direct verification matches", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Your verification code is AB1234567",
@@ -273,6 +304,23 @@ describe("message verification service", () => {
       {
         subject: "Weekend sale",
         text: "Use code 123456 to save 20% on your next order.",
+        html: null,
+      },
+    );
+
+    expect(detection).toEqual({
+      verification: null,
+      shouldRetry: false,
+      retryAfter: null,
+    });
+  });
+
+  it("does not treat mailbox host fragments as hyphenated verification codes", async () => {
+    const detection = await resolveVerificationDetectionForMessage(
+      {} as never,
+      {
+        subject: "xAI confirmation code",
+        text: "Mailbox ID: GROK-698F7E26@BOX-C14F5924.707979.XYZ",
         html: null,
       },
     );

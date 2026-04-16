@@ -23,10 +23,13 @@ const WORKERS_AI_RATE_LIMITED_UNTIL_KEY =
 const MESSAGE_VERIFICATION_BACKFILL_BATCH_SIZE = 20;
 const MESSAGE_VERIFICATION_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
-const CODE_TOKEN_PATTERN = /[A-Za-z0-9]{4,8}/g;
+const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
+const CODE_TOKEN_PATTERN = /[A-Za-z0-9]+(?:-[A-Za-z0-9]+)?/g;
 const VERIFICATION_KEYWORDS = [
   "verification code",
   "security code",
+  "confirmation code",
+  "validation code",
   "passcode",
   "one-time code",
   "one time code",
@@ -39,24 +42,34 @@ const VERIFICATION_KEYWORDS = [
   "认证码",
   "登入码",
   "登录码",
+  "驗證碼",
+  "安全代碼",
+  "安全性代碼",
+] as const;
+const VERIFICATION_SIGNAL_PHRASES = [
+  ...VERIFICATION_KEYWORDS,
+  "validate your email",
+  "validate email",
+  "email validation",
+  "驗證電子郵件",
 ] as const;
 const escapedKeywords = VERIFICATION_KEYWORDS.map((keyword) =>
   keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
 );
 const DIRECT_CODE_PATTERNS = [
   new RegExp(
-    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}\\b([A-Za-z0-9]{4,8})\\b`,
+    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}\\b([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\\b`,
     "gi",
   ),
   new RegExp(
-    `\\b([A-Za-z0-9]{4,8})\\b[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
+    `\\b([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\\b[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
     "gi",
   ),
 ] as const;
 const GENERIC_CODE_CONTEXT_PATTERN =
-  /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm|authentication|authenticate|access)\s+code\b/i;
+  /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm(?:ation)?|validation|authentication|authenticate|access)\s+code\b/i;
 const VERIFICATION_CONTEXT_PATTERN =
-  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码/i;
+  /\b(verification|verify|otp|passcode|login|log[ -]?in|sign(?:ing)?[ -]?in|confirm(?:ation)?|validat(?:e|ion)|security|one[- ]time|authentication|authenticate)\b|验证码|校验码|动态码|认证码|登入码|登录码|驗證碼|安全代碼|安全性代碼|驗證電子郵件/i;
 
 const aiDecisionSchema = z.object({
   verdict: z.enum(["match", "none"]),
@@ -95,7 +108,20 @@ const normalizeBodyText = (value: string | null | undefined) =>
 
 const normalizeVerificationCode = (value: string | null | undefined) => {
   const normalized = value?.replace(/\s+/g, "").trim() ?? "";
-  return CODE_PATTERN.test(normalized) ? normalized : null;
+  if (CODE_PATTERN.test(normalized)) {
+    return normalized;
+  }
+
+  if (!HYPHENATED_CODE_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  const compact = normalized.replace(/-/g, "");
+  if (compact.length < 4 || compact.length > 8 || /^\d+$/.test(compact)) {
+    return null;
+  }
+
+  return normalized;
 };
 
 const compareVerificationCodes = (left: string, right: string) =>
@@ -122,7 +148,9 @@ const stripHtmlToText = (html: string | null | undefined) => {
 
 const findKeywordHit = (value: string) => {
   const lowered = value.toLowerCase();
-  return VERIFICATION_KEYWORDS.some((keyword) => lowered.includes(keyword));
+  return VERIFICATION_SIGNAL_PHRASES.some((keyword) =>
+    lowered.includes(keyword),
+  );
 };
 
 const hasVerificationContextSignal = (value: string) =>
@@ -131,7 +159,7 @@ const hasVerificationContextSignal = (value: string) =>
   VERIFICATION_CONTEXT_PATTERN.test(value);
 
 const isSafeBoundary = (value: string | undefined) =>
-  !value || !/[A-Za-z0-9]/.test(value);
+  !value || !/[A-Za-z0-9-]/.test(value);
 
 const extractCodeTokens = (value: string) => {
   const matches = new Map<string, number>();
@@ -147,10 +175,13 @@ const extractCodeTokens = (value: string) => {
     if (!normalized) continue;
 
     const context = value.slice(
-      Math.max(0, index - 12),
-      index + token.length + 12,
+      Math.max(0, index - 40),
+      index + token.length + 40,
     );
     if (/@|https?:\/\//i.test(context)) continue;
+    if (normalized.includes("-") && !hasVerificationContextSignal(context)) {
+      continue;
+    }
     matches.set(normalized, index);
   }
 
