@@ -27,7 +27,7 @@ const CODE_PATTERN = /^(?:\d{4,8}|(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9]{4,8})$/;
 const HYPHENATED_CODE_PATTERN = /^(?=.*[A-Za-z])[A-Za-z0-9]+-[A-Za-z0-9]+$/;
 const UPPERCASE_ALPHA_HYPHENATED_CODE_PATTERN = /^[A-Z]+-[A-Z]+$/;
 const CODE_TOKEN_PATTERN =
-  /(?<![A-Za-z0-9])(?:[A-Za-z0-9]{4,8}|[A-Za-z0-9]{1,8}-[A-Za-z0-9]{1,8})(?=$|[^A-Za-z0-9])/g;
+  /(?<![A-Za-z0-9])(?:(?=[A-Za-z0-9-]{5,9}(?=$|[^A-Za-z0-9]))[A-Za-z0-9]{1,8}-[A-Za-z0-9]{1,8}|[A-Za-z0-9]{4,8})(?=$|[^A-Za-z0-9])/g;
 const VERIFICATION_KEYWORDS = [
   "verification code",
   "security code",
@@ -179,6 +179,32 @@ const hasVerificationContextSignal = (value: string) =>
 const isSafeBoundary = (value: string | undefined) =>
   !value || !/[A-Za-z0-9]/.test(value);
 
+const getNonWhitespaceSegment = (
+  value: string,
+  index: number,
+  tokenLength: number,
+) => {
+  let start = index;
+  let end = index + tokenLength;
+
+  while (start > 0 && !/\s/.test(value[start - 1] ?? "")) {
+    start -= 1;
+  }
+
+  while (end < value.length && !/\s/.test(value[end] ?? "")) {
+    end += 1;
+  }
+
+  return value.slice(start, end);
+};
+
+const isStandaloneTokenLine = (value: string, token: string, index: number) => {
+  const lineStart = value.lastIndexOf("\n", index - 1) + 1;
+  const lineEndIndex = value.indexOf("\n", index + token.length);
+  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+  return value.slice(lineStart, lineEnd).trim() === token;
+};
+
 const extractCodeTokens = (value: string) => {
   const matches = new Map<string, number>();
 
@@ -191,19 +217,21 @@ const extractCodeTokens = (value: string) => {
 
     const normalized = normalizeVerificationCode(token);
     if (!normalized) continue;
+    const tokenSegment = getNonWhitespaceSegment(value, index, token.length);
+    const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
 
     const context = value.slice(
       Math.max(0, index - TOKEN_CONTEXT_RADIUS),
       index + token.length + TOKEN_CONTEXT_RADIUS,
     );
-    if (/@|https?:\/\//i.test(context)) continue;
+    if (/@|https?:\/\//i.test(tokenSegment)) continue;
     if (normalized.includes("-") && (previous === "-" || next === "-")) {
       continue;
     }
     if (
       normalized.includes("-") &&
       !hasVerificationContextSignal(context) &&
-      !findEmailValidationSignalHit(context)
+      !(findEmailValidationSignalHit(context) && isStandaloneLineToken)
     ) {
       continue;
     }
@@ -224,6 +252,7 @@ const scoreToken = (
   index: number,
   source: "subject" | "body",
 ) => {
+  const isStandaloneLineToken = isStandaloneTokenLine(value, token, index);
   const window = value
     .slice(
       Math.max(0, index - TOKEN_CONTEXT_RADIUS),
@@ -237,7 +266,13 @@ const scoreToken = (
   if (source === "subject") score += 40;
   if (findKeywordHit(window)) score += 120;
   if (hasContextSignal) score += 40;
-  if (token.includes("-") && hasEmailValidationSignal) score += 70;
+  if (
+    token.includes("-") &&
+    hasEmailValidationSignal &&
+    isStandaloneLineToken
+  ) {
+    score += 70;
+  }
   if (/^(?:code|otp|passcode)\d+[a-z0-9]*$/.test(token)) score -= 220;
   if (/^\d{6}$/.test(token)) score += 15;
   if (/^(19|20)\d{2}$/.test(token) && !findKeywordHit(window)) score -= 160;
@@ -255,7 +290,10 @@ const detectWithRules = (
   rawValue: string | null | undefined,
   source: "subject" | "body",
 ): RuleDetection => {
-  const value = normalizeWhitespace(rawValue ?? "");
+  const value =
+    source === "body"
+      ? normalizeBodyText(rawValue)
+      : normalizeWhitespace(rawValue ?? "");
   if (!value) {
     return { match: null, candidates: [], ambiguous: false, hadSignal: false };
   }

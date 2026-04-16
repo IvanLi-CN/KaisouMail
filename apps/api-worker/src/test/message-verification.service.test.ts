@@ -119,6 +119,24 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects standalone hyphenated validation codes even when the destination address is nearby", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Welcome to xAI",
+      text: [
+        "Validate your email address for ju**9@outlook.com.",
+        "Use the code below to finish signup.",
+        "ABCD-EFGH",
+      ].join("\n"),
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "ABCD-EFGH",
+      source: "body",
+      method: "rules",
+    });
+  });
+
   it("detects traditional Chinese Microsoft security codes from text and html bodies", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "個人 Microsoft 帳戶安全性代碼",
@@ -220,6 +238,16 @@ describe("message verification service", () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Welcome to xAI",
       text: "Please validate your email. Reference 123456.",
+      html: null,
+    });
+
+    expect(verification).toBeNull();
+  });
+
+  it("does not treat inline hyphenated phrases in validation emails as verification codes", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Welcome to xAI",
+      text: "Validate your email and use SAVE-MORE to continue.",
       html: null,
     });
 
