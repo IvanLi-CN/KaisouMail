@@ -55,10 +55,14 @@ type DomainsPageViewProps = {
     details?: string | null;
   } | null;
   onReload?: () => void;
-  onBind: (values: { rootDomain: string }) => Promise<unknown> | unknown;
+  onBind: (values: {
+    mailDomain: string;
+    rootDomain?: string;
+  }) => Promise<unknown> | unknown;
   onEnable: (values: {
-    rootDomain: string;
+    mailDomain: string;
     zoneId: string;
+    rootDomain?: string;
   }) => Promise<unknown> | unknown;
   onDisable: (domainId: string) => Promise<unknown> | unknown;
   onDelete: (domainId: string) => Promise<unknown> | unknown;

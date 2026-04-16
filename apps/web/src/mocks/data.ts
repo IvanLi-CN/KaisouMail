@@ -207,6 +207,7 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "build",
     subdomain: "alpha",
+    mailDomain: primaryRootDomain,
     rootDomain: primaryRootDomain,
     address: primaryMailboxAddress,
     status: "active",
@@ -222,6 +223,7 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "spec",
     subdomain: "ops.beta",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     address: "spec@ops.beta.mail.example.net",
     status: "active",
@@ -237,6 +239,7 @@ export const demoMailboxes: Mailbox[] = [
     userId: baseUser.id,
     localPart: "noreply",
     subdomain: "wild",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     address: "noreply@wild.mail.example.net",
     status: "active",
@@ -252,6 +255,7 @@ export const demoMailboxes: Mailbox[] = [
     userId: memberUser.id,
     localPart: "qa",
     subdomain: "team.gamma",
+    mailDomain: "disabled.example.org",
     rootDomain: "disabled.example.org",
     address: "qa@team.gamma.disabled.example.org",
     status: "destroyed",
@@ -451,6 +455,7 @@ export const demoSessionUser = baseUser;
 export const demoDomains: DomainRecord[] = [
   {
     id: "dom_primary",
+    mailDomain: primaryRootDomain,
     rootDomain: primaryRootDomain,
     zoneId: "zone_primary",
     bindingSource: "catalog",
@@ -464,6 +469,7 @@ export const demoDomains: DomainRecord[] = [
   },
   {
     id: "dom_secondary",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     zoneId: "zone_secondary",
     bindingSource: "project_bind",
@@ -477,6 +483,7 @@ export const demoDomains: DomainRecord[] = [
   },
   {
     id: "dom_failed",
+    mailDomain: "staging.example.dev",
     rootDomain: "staging.example.dev",
     zoneId: "zone_failed",
     bindingSource: "project_bind",
@@ -491,6 +498,7 @@ export const demoDomains: DomainRecord[] = [
   },
   {
     id: "dom_disabled",
+    mailDomain: "disabled.example.org",
     rootDomain: "disabled.example.org",
     zoneId: "zone_disabled",
     bindingSource: "catalog",
@@ -507,30 +515,35 @@ export const demoDomains: DomainRecord[] = [
 export const demoCloudflareZones = [
   {
     id: "zone_primary",
+    mailDomain: primaryRootDomain,
     rootDomain: primaryRootDomain,
     status: "active",
     nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
   },
   {
     id: "zone_secondary",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     status: "active",
     nameServers: ["liz.ns.cloudflare.com", "noah.ns.cloudflare.com"],
   },
   {
     id: "zone_failed",
+    mailDomain: "staging.example.dev",
     rootDomain: "staging.example.dev",
     status: "pending",
     nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
   },
   {
     id: "zone_disabled",
+    mailDomain: "disabled.example.org",
     rootDomain: "disabled.example.org",
     status: "active",
     nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
   },
   {
     id: "zone_available",
+    mailDomain: "ops.example.org",
     rootDomain: "ops.example.org",
     status: "active",
     nameServers: ["sue.ns.cloudflare.com", "taro.ns.cloudflare.com"],
@@ -540,6 +553,7 @@ export const demoCloudflareZones = [
 export const demoDomainCatalog: DomainCatalogItem[] = [
   {
     id: "dom_primary",
+    mailDomain: primaryRootDomain,
     rootDomain: primaryRootDomain,
     zoneId: "zone_primary",
     bindingSource: "catalog",
@@ -556,6 +570,7 @@ export const demoDomainCatalog: DomainCatalogItem[] = [
   },
   {
     id: "dom_secondary",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     zoneId: "zone_secondary",
     bindingSource: "project_bind",
@@ -572,6 +587,7 @@ export const demoDomainCatalog: DomainCatalogItem[] = [
   },
   {
     id: "dom_failed",
+    mailDomain: "staging.example.dev",
     rootDomain: "staging.example.dev",
     zoneId: "zone_failed",
     bindingSource: "project_bind",
@@ -589,6 +605,7 @@ export const demoDomainCatalog: DomainCatalogItem[] = [
   },
   {
     id: "dom_disabled",
+    mailDomain: "disabled.example.org",
     rootDomain: "disabled.example.org",
     zoneId: "zone_disabled",
     bindingSource: "catalog",
@@ -605,6 +622,7 @@ export const demoDomainCatalog: DomainCatalogItem[] = [
   },
   {
     id: null,
+    mailDomain: "ops.example.org",
     rootDomain: "ops.example.org",
     zoneId: "zone_available",
     bindingSource: null,

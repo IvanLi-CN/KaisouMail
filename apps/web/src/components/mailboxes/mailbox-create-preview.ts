@@ -9,6 +9,7 @@ export type MailboxCreateInputMode = "segmented" | "address";
 
 export type MailboxCreatePreviewState = {
   mode: MailboxCreateInputMode;
+  mailDomain?: string;
   rootDomain?: string;
   address?: string;
 };
@@ -19,6 +20,7 @@ type MailboxCreatePreviewOptions = Partial<MailboxCreatePreviewState> & {
 
 export const buildMailboxCreateAddressExample = ({
   mode = "segmented",
+  mailDomain,
   rootDomain,
   address,
   hasAvailableDomains = true,
@@ -31,7 +33,8 @@ export const buildMailboxCreateAddressExample = ({
           : UNAVAILABLE_ROOT_DOMAIN_EXAMPLE,
       )
     : buildRealisticMailboxAddressExample(
-        rootDomain ||
+        mailDomain ||
+          rootDomain ||
           (hasAvailableDomains
             ? RANDOM_ROOT_DOMAIN_EXAMPLE
             : UNAVAILABLE_ROOT_DOMAIN_EXAMPLE),
@@ -39,6 +42,7 @@ export const buildMailboxCreateAddressExample = ({
 
 export const buildMailboxCreateDomainHint = ({
   mode = "segmented",
+  mailDomain,
   rootDomain,
   address,
   hasAvailableDomains = true,
@@ -49,7 +53,7 @@ export const buildMailboxCreateDomainHint = ({
       : hasAvailableDomains
         ? "切换后可直接输入完整邮箱地址；只有当前支持域名下的地址才可提交。"
         : "当前没有 active 邮箱域名可供分配；启用域名后才能输入受支持的完整邮箱地址。"
-    : rootDomain
+    : mailDomain || rootDomain
       ? "当前已手动指定邮箱域名；提交后会绑定这个具体域名。"
       : hasAvailableDomains
         ? "默认会随机分配一个 active 域名；只有手动选择时才会固定到具体域名。"

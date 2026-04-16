@@ -45,6 +45,7 @@ const demoLongMailbox: Mailbox = {
   localPart:
     "operations-escalation-and-release-triage-for-super-long-workspace-verification",
   subdomain: "extremely-long-subdomain-chain.ops.beta",
+  mailDomain: "mail.example.net",
   rootDomain: "mail.example.net",
 };
 const demoLongMailboxMessages: MessageSummary[] = [
@@ -148,6 +149,7 @@ const createWorkspaceScopeMailboxes = () => {
     address: "active@ops.mail.example.net",
     localPart: "active",
     subdomain: "ops",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     status: "active",
     createdAt: "2026-04-08T11:05:00.000Z",
@@ -163,6 +165,7 @@ const createWorkspaceScopeMailboxes = () => {
     address: "retry@ops.mail.example.net",
     localPart: "retry",
     subdomain: "ops",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     status: "destroying",
     createdAt: "2026-04-08T10:55:00.000Z",
@@ -180,6 +183,7 @@ const createWorkspaceScopeMailboxes = () => {
       address: `destroyed-${index.toString().padStart(3, "0")}@archive.mail.example.net`,
       localPart: `destroyed-${index.toString().padStart(3, "0")}`,
       subdomain: "archive",
+      mailDomain: "mail.example.net",
       rootDomain: "mail.example.net",
       status: "destroyed" as const,
       createdAt: `2026-04-08T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
@@ -196,6 +200,7 @@ const createWorkspaceScopeMailboxes = () => {
     address: "destroyed-stale@archive.mail.example.net",
     localPart: "destroyed-stale",
     subdomain: "archive",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     status: "destroyed",
     createdAt: "2026-03-25T10:00:00.000Z",
@@ -211,6 +216,7 @@ const createWorkspaceScopeMailboxes = () => {
     address: "destroyed-missing@archive.mail.example.net",
     localPart: "destroyed-missing",
     subdomain: "archive",
+    mailDomain: "mail.example.net",
     rootDomain: "mail.example.net",
     status: "destroyed",
     createdAt: "2026-04-08T10:10:00.000Z",
@@ -538,6 +544,7 @@ const WorkspaceStoryHarness = ({
             userId: "usr_demo_admin",
             localPart,
             subdomain,
+            mailDomain: rootDomain,
             rootDomain,
             address: `${localPart}@${subdomain}.${rootDomain}`,
             source: "registered",
@@ -1065,6 +1072,7 @@ export const ToolbarCreateFlow: Story = {
     const canvas = within(canvasElement);
     const randomDomainPreviewAddress = buildMailboxCreateAddressExample({});
     const selectedDomainPreviewAddress = buildMailboxCreateAddressExample({
+      mailDomain: "mail.example.net",
       rootDomain: "mail.example.net",
     });
 

@@ -91,6 +91,7 @@ const toMailboxDto = (
     userId: row.userId,
     localPart: row.localPart,
     subdomain: row.subdomain,
+    mailDomain: row.rootDomain,
     rootDomain: row.rootDomain,
     address: row.address,
     source: row.source,
