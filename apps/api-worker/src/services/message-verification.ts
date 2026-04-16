@@ -64,14 +64,20 @@ const FORWARD_DIRECT_CODE_CAPTURE =
 const REVERSE_DIRECT_CODE_CAPTURE =
   "(?<![A-Za-z0-9-])([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)(?=$|[^A-Za-z0-9-])";
 const DIRECT_CODE_PATTERNS = [
-  new RegExp(
-    `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}${FORWARD_DIRECT_CODE_CAPTURE}`,
-    "gi",
-  ),
-  new RegExp(
-    `${REVERSE_DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
-    "gi",
-  ),
+  {
+    direction: "forward" as const,
+    pattern: new RegExp(
+      `(?:${escapedKeywords.join("|")})[^A-Za-z0-9]{0,24}${FORWARD_DIRECT_CODE_CAPTURE}`,
+      "gi",
+    ),
+  },
+  {
+    direction: "reverse" as const,
+    pattern: new RegExp(
+      `${REVERSE_DIRECT_CODE_CAPTURE}[^A-Za-z0-9]{0,24}(?:${escapedKeywords.join("|")})`,
+      "gi",
+    ),
+  },
 ] as const;
 const GENERIC_CODE_CONTEXT_PATTERN =
   /\b(one[- ]time|login|log[ -]?in|sign(?:ing)?[ -]?in|verification|security|confirm(?:ation)?|validation|authentication|authenticate|access)\s+code\b/i;
@@ -182,6 +188,8 @@ const hasVerificationContextSignal = (value: string) =>
 
 const REFERENCE_LABEL_PATTERN =
   /\b(reference|ref|order|invoice|ticket|case|build|tracking|request|number|no\.?)\s*[:#-]?\s*$/i;
+const SUBJECT_CODE_ASSIGNMENT_PATTERN =
+  /\b(?:verification|security|confirmation|validation|login|confirm|passcode|otp)\s+code(?:\s+is)?\s*[:：-]?\s*$/i;
 
 const isSafeBoundary = (value: string | undefined) =>
   !value || !/[A-Za-z0-9]/.test(value);
@@ -193,6 +201,11 @@ const getTokenContextRadius = (token: string) =>
   token.includes("-")
     ? HYPHENATED_TOKEN_CONTEXT_RADIUS
     : DEFAULT_TOKEN_CONTEXT_RADIUS;
+
+const hasSubjectCodeAssignmentCue = (value: string, index: number) =>
+  SUBJECT_CODE_ASSIGNMENT_PATTERN.test(
+    value.slice(Math.max(0, index - 48), index),
+  );
 
 const getNonWhitespaceSegment = (
   value: string,
@@ -322,13 +335,19 @@ const detectWithRules = (
   }
 
   const directMatches = uniqueStrings(
-    DIRECT_CODE_PATTERNS.flatMap((pattern) =>
+    DIRECT_CODE_PATTERNS.flatMap(({ direction, pattern }) =>
       [...value.matchAll(pattern)]
         .flatMap((match) => {
           const token = match[1];
           const normalized = normalizeVerificationCode(token);
           if (!normalized) return [];
-          if (isPureAlphaHyphenatedCode(normalized)) return [];
+          if (
+            source === "subject" &&
+            direction === "reverse" &&
+            isPureAlphaHyphenatedCode(normalized)
+          ) {
+            return [];
+          }
 
           const wholeMatch = match[0] ?? "";
           const matchIndex = match.index ?? 0;
@@ -368,10 +387,13 @@ const detectWithRules = (
   }
 
   const scored = extractCodeTokens(value)
-    .filter(
-      ({ token }) =>
-        !(source === "subject" && isPureAlphaHyphenatedCode(token)),
-    )
+    .filter(({ token, index }) => {
+      if (!(source === "subject" && isPureAlphaHyphenatedCode(token))) {
+        return true;
+      }
+
+      return hasSubjectCodeAssignmentCue(value, index);
+    })
     .map(({ token, index }) => ({
       token,
       ...scoreToken(value, token, index, source),

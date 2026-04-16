@@ -105,6 +105,20 @@ describe("message verification service", () => {
     });
   });
 
+  it("detects pure-alpha hyphenated OTPs when the subject explicitly assigns the code", async () => {
+    const verification = await detectVerificationForMessage({} as never, {
+      subject: "Your confirmation code is WXN-DTJ",
+      text: null,
+      html: null,
+    });
+
+    expect(verification).toEqual({
+      code: "WXN-DTJ",
+      source: "subject",
+      method: "rules",
+    });
+  });
+
   it("detects hyphenated verification codes from email-validation body content", async () => {
     const verification = await detectVerificationForMessage({} as never, {
       subject: "Welcome to xAI",
