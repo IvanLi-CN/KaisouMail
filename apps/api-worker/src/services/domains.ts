@@ -1051,22 +1051,6 @@ export const bindDomain = async (
   input: { rootDomain: string },
 ) => {
   const rootDomain = normalizeRootDomain(input.rootDomain);
-  const classification = classifyMailDomain(rootDomain);
-
-  if (classification.type === "subdomain") {
-    const recommendation = recommendApexMailboxBinding(rootDomain);
-
-    throw new ApiError(400, "Direct subdomain binding is not supported", {
-      code: "subdomain_direct_bind_not_supported",
-      mailDomain: rootDomain,
-      recommendedApex:
-        recommendation?.recommendedApex ?? classification.registrableDomain,
-      recommendedMailboxSubdomain:
-        recommendation?.recommendedMailboxSubdomain ??
-        classification.delegatedLabel,
-    });
-  }
-
   const existing = await getDomainByRootDomain(env, rootDomain, {
     includeDeleted: true,
   });
@@ -1100,6 +1084,22 @@ export const bindDomain = async (
         );
       }
     }
+  }
+
+  const classification = classifyMailDomain(rootDomain);
+
+  if (classification.type === "subdomain") {
+    const recommendation = recommendApexMailboxBinding(rootDomain);
+
+    throw new ApiError(400, "Direct subdomain binding is not supported", {
+      code: "subdomain_direct_bind_not_supported",
+      mailDomain: rootDomain,
+      recommendedApex:
+        recommendation?.recommendedApex ?? classification.registrableDomain,
+      recommendedMailboxSubdomain:
+        recommendation?.recommendedMailboxSubdomain ??
+        classification.delegatedLabel,
+    });
   }
 
   return createAndPersistBoundZone(env, config, rootDomain);

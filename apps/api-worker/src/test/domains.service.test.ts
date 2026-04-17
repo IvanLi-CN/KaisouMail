@@ -624,6 +624,86 @@ describe("domain catalog", () => {
     });
   });
 
+  it("reuses existing disabled subdomain zones instead of forcing apex guidance", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_disabled",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_existing",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_subdomain_existing",
+        name: "mail.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "mail.example.org",
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(result.domain).toMatchObject({
+      rootDomain: "mail.example.org",
+      zoneId: "zone_subdomain_existing",
+      bindingSource: "catalog",
+      status: "active",
+    });
+  });
+
+  it("still rejects direct subdomain bind when no reusable subdomain zone exists", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_stale",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_stale",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_other",
+        name: "other.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.example.org",
+        recommendedApex: "example.org",
+        recommendedMailboxSubdomain: "mail",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+  });
+
   it("creates a fresh Cloudflare zone when a stale disabled domain no longer matches the catalog", async () => {
     const db = createDb({
       domainRows: [
