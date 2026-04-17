@@ -327,7 +327,7 @@ const findCatalogZone = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   rootDomain: string,
-  zoneId: string,
+  zoneId: string | null,
   requestSource: CloudflareRequestSource,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
@@ -338,7 +338,8 @@ const findCatalogZone = async (
     requestSource,
   );
   const zone = zonesByRootDomain.get(rootDomain);
-  return zone && zone.id === zoneId ? zone : null;
+  if (!zone) return null;
+  return zoneId ? (zone.id === zoneId ? zone : null) : zone;
 };
 
 const requireCatalogZone = async (
@@ -1089,6 +1090,25 @@ export const bindDomain = async (
   const classification = classifyMailDomain(rootDomain);
 
   if (classification.type === "subdomain") {
+    const catalogZone = await findCatalogZone(
+      env,
+      config,
+      rootDomain,
+      null,
+      domainRouteContexts.bind,
+    );
+    if (catalogZone) {
+      throw new ApiError(
+        409,
+        "Mailbox domain is already available in Cloudflare",
+        {
+          code: "subdomain_zone_available_in_catalog",
+          mailDomain: rootDomain,
+          zoneId: catalogZone.id,
+        },
+      );
+    }
+
     const recommendation = recommendApexMailboxBinding(rootDomain);
 
     throw new ApiError(400, "Direct subdomain binding is not supported", {

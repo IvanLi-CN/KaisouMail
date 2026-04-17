@@ -672,6 +672,88 @@ describe("domains page view", () => {
     );
   });
 
+  it("preserves parent-zone NS guidance when bind reuses an existing child zone", async () => {
+    const existingNestedChildZone = {
+      id: "dom_nested_bind",
+      mailDomain: "ops.mail.example.com",
+      rootDomain: "ops.mail.example.com",
+      zoneId: "zone_ops_mail_example_com",
+      bindingSource: "project_bind" as const,
+      cloudflareAvailability: "available" as const,
+      cloudflareStatus: "pending",
+      nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+      projectStatus: "provisioning_error" as const,
+      catchAllEnabled: false,
+      lastProvisionError:
+        "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+      createdAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+      lastProvisionedAt: null,
+      disabledAt: null,
+    };
+
+    const onBind = vi.fn(async () => existingNestedChildZone);
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            existingNestedChildZone,
+            {
+              id: null,
+              mailDomain: "mail.example.com",
+              rootDomain: "mail.example.com",
+              zoneId: "zone_mail_example_com",
+              bindingSource: null,
+              cloudflareAvailability: "available",
+              cloudflareStatus: "active",
+              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+              projectStatus: "not_enabled",
+              catchAllEnabled: false,
+              lastProvisionError: null,
+              createdAt: null,
+              updatedAt: null,
+              lastProvisionedAt: null,
+              disabledAt: null,
+            },
+            ...demoDomainCatalog,
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "ops.mail.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const dialog = await screen.findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    expect(dialog).toHaveTextContent("还差一步：在父域添加 NS");
+    expect(dialog).toHaveTextContent(
+      "ops.mail.example.com。Cloudflare 已分配 nameserver。请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS；完成后再回来重试。",
+    );
+    expect(dialog).toHaveTextContent(
+      "这是已有子域 zone 记录。若你继续维护它，请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS。",
+    );
+    expect(dialog).toHaveTextContent(
+      "去父域 mail.example.com 的 DNS / 注册商管理处，为子域标签 ops 添加下面显示的 NS 记录。",
+    );
+    expect(dialog).not.toHaveTextContent("权威 NS 切到下面这组值");
+    expect(dialog).not.toHaveTextContent("父域 example.com");
+  });
+
   it("seeds fallback catalog polling when bind succeeds before the catalog catches up", async () => {
     domainsHookState.bindMutateAsync = vi.fn(async () => ({
       id: "dom_bound",
@@ -1710,6 +1792,77 @@ describe("domains page view", () => {
     );
     expect(errorBubble).toHaveTextContent(
       "请改为绑定 customer.com，再在创建邮箱时把子域填成 mail，即可继续使用 user@mail.customer.com 这类地址。",
+    );
+  });
+
+  it("routes existing child zones to the catalog enable flow instead of apex-only guidance", async () => {
+    const onBind = vi.fn(async () => {
+      throw new ApiClientError(
+        "Mailbox domain is already available in Cloudflare",
+        {
+          code: "subdomain_zone_available_in_catalog",
+          mailDomain: "mail.customer.com",
+          zoneId: "zone_mail_customer_com",
+        },
+        409,
+      );
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            {
+              id: null,
+              mailDomain: "mail.customer.com",
+              rootDomain: "mail.customer.com",
+              zoneId: "zone_mail_customer_com",
+              bindingSource: null,
+              cloudflareAvailability: "available",
+              cloudflareStatus: "active",
+              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+              projectStatus: "not_enabled",
+              catchAllEnabled: false,
+              lastProvisionError: null,
+              createdAt: null,
+              updatedAt: null,
+              lastProvisionedAt: null,
+              disabledAt: null,
+            },
+            ...demoDomainCatalog,
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "mail.customer.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    const errorBubble = await screen.findByTestId("domain-bind-error");
+    expect(errorBubble).toHaveTextContent("这个子域 zone 已经在 Cloudflare 里");
+    expect(errorBubble).toHaveTextContent(
+      "请回到域名目录，找到 mail.customer.com 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。",
+    );
+    expect(errorBubble).not.toHaveTextContent(
+      "当前 Cloudflare 账号不支持直接绑定子域",
+    );
+    expect(
+      within(errorBubble).getByRole("link", { name: "查看处理步骤" }),
+    ).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/domain-catalog-enablement#enable-zone-in-project",
     );
   });
 

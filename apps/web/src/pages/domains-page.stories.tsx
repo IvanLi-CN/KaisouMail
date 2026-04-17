@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { ApiClientError } from "@/lib/api";
 import type { CloudflareSync, DomainCatalogItem } from "@/lib/contracts";
 import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { demoDomainCatalog, demoSessionUser, demoVersion } from "@/mocks/data";
@@ -36,6 +37,25 @@ const pendingApexBindResult: DomainCatalogItem = {
   mailDomain: "example.com",
   rootDomain: "example.com",
   zoneId: "zone_example_com",
+  bindingSource: "project_bind",
+  cloudflareAvailability: "available",
+  cloudflareStatus: "pending",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "provisioning_error",
+  catchAllEnabled: false,
+  lastProvisionError:
+    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+  createdAt: "2026-04-10T08:00:00.000Z",
+  updatedAt: "2026-04-10T08:00:00.000Z",
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
+
+const pendingExistingChildZoneBindResult: DomainCatalogItem = {
+  id: "dom_nested_bind",
+  mailDomain: "ops.mail.example.com",
+  rootDomain: "ops.mail.example.com",
+  zoneId: "zone_ops_mail_example_com",
   bindingSource: "project_bind",
   cloudflareAvailability: "available",
   cloudflareStatus: "pending",
@@ -206,6 +226,97 @@ export const ApexBindNextStepsDialog: Story = {
       "这是 apex 接入，请把 example.com 的权威 NS 切到下面这组值。",
     );
     await expect(dialog).not.toHaveTextContent("父域");
+  },
+};
+
+export const ExistingChildZoneBindNextStepsDialog: Story = {
+  args: {
+    domains: [
+      pendingExistingChildZoneBindResult,
+      {
+        id: null,
+        mailDomain: "mail.example.com",
+        rootDomain: "mail.example.com",
+        zoneId: "zone_mail_example_com",
+        bindingSource: null,
+        cloudflareAvailability: "available",
+        cloudflareStatus: "active",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+        projectStatus: "not_enabled",
+        catchAllEnabled: false,
+        lastProvisionError: null,
+        createdAt: null,
+        updatedAt: null,
+        lastProvisionedAt: null,
+        disabledAt: null,
+      },
+      ...demoDomainCatalog,
+    ],
+    onBind: fn(async () => pendingExistingChildZoneBindResult),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByLabelText("邮箱域名"),
+      "ops.mail.example.com",
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    await expect(dialog).toHaveTextContent("还差一步：在父域添加 NS");
+    await expect(dialog).toHaveTextContent(
+      "ops.mail.example.com。Cloudflare 已分配 nameserver。请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS；完成后再回来重试。",
+    );
+    await expect(dialog).toHaveTextContent(
+      "这是已有子域 zone 记录。若你继续维护它，请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS。",
+    );
+    await expect(dialog).not.toHaveTextContent("权威 NS 切到下面这组值");
+    await expect(dialog).not.toHaveTextContent("父域 example.com");
+  },
+};
+
+export const ExistingChildZoneBindCatalogHint: Story = {
+  args: {
+    domains: [
+      existingChildZoneCatalogDomain,
+      ...demoDomainCatalog.filter(
+        (domain) => domain.zoneId !== "zone_available",
+      ),
+    ],
+    onBind: fn(async () => {
+      throw new ApiClientError(
+        "Mailbox domain is already available in Cloudflare",
+        {
+          code: "subdomain_zone_available_in_catalog",
+          mailDomain: "mail.customer.com",
+          zoneId: "zone_mail_customer_com",
+        },
+        409,
+      );
+    }),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByLabelText("邮箱域名"),
+      "mail.customer.com",
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    await expect(args.onBind).toHaveBeenCalledWith({
+      mailDomain: "mail.customer.com",
+    });
+    const errorBubble = await canvas.findByTestId("domain-bind-error");
+    await expect(errorBubble).toHaveTextContent(
+      "这个子域 zone 已经在 Cloudflare 里",
+    );
+    await expect(errorBubble).toHaveTextContent(
+      "请回到域名目录，找到 mail.customer.com 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。",
+    );
   },
 };
 

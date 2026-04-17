@@ -11,6 +11,30 @@ if (!docsLinks) {
 }
 
 describe("classifyDomainBindError", () => {
+  it("maps an existing Cloudflare child zone into catalog-enable guidance", () => {
+    const hint = classifyDomainBindError(
+      new ApiClientError(
+        "Mailbox domain is already available in Cloudflare",
+        {
+          code: "subdomain_zone_available_in_catalog",
+          mailDomain: "mail.customer.com",
+          zoneId: "zone_mail_customer_com",
+        },
+        409,
+      ),
+      docsLinks,
+      "mail.customer.com",
+    );
+
+    expect(hint).toEqual({
+      title: "这个子域 zone 已经在 Cloudflare 里",
+      docsHref:
+        "https://docs.example.test/zh/domain-catalog-enablement#enable-zone-in-project",
+      rawMessage:
+        "请回到域名目录，找到 mail.customer.com 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。",
+    });
+  });
+
   it("maps the structured subdomain bind error into apex guidance", () => {
     const hint = classifyDomainBindError(
       new ApiClientError(

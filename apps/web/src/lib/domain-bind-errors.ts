@@ -15,6 +15,7 @@ type DomainBindStructuredDetails = {
   mailDomain?: string;
   recommendedApex?: string;
   recommendedMailboxSubdomain?: string;
+  zoneId?: string;
 };
 
 const serializeDetails = (value: unknown) => {
@@ -80,6 +81,20 @@ export const buildSubdomainDirectBindHint = (
   rawMessage: `请改为绑定 ${details.recommendedApex}，再在创建邮箱时把子域填成 ${details.recommendedMailboxSubdomain}，即可继续使用 user@${details.mailDomain} 这类地址。`,
 });
 
+export const buildExistingCatalogSubdomainHint = (
+  details: {
+    mailDomain: string;
+  },
+  docsLinks?: PublicDocsLinks | null,
+): DomainBindErrorHint => ({
+  title: "这个子域 zone 已经在 Cloudflare 里",
+  docsHref: withAnchor(
+    docsLinks?.domainCatalogEnablement,
+    "enable-zone-in-project",
+  ),
+  rawMessage: `请回到域名目录，找到 ${details.mailDomain} 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。`,
+});
+
 export const classifyDomainBindError = (
   error: unknown,
   docsLinks?: PublicDocsLinks | null,
@@ -94,6 +109,18 @@ export const classifyDomainBindError = (
     .join("\n");
   const normalized = normalizeForMatch(error);
   const structuredDetails = getStructuredDetails(error);
+
+  if (
+    structuredDetails?.code === "subdomain_zone_available_in_catalog" &&
+    structuredDetails.mailDomain
+  ) {
+    return buildExistingCatalogSubdomainHint(
+      {
+        mailDomain: structuredDetails.mailDomain,
+      },
+      docsLinks,
+    );
+  }
 
   if (
     structuredDetails?.code === "subdomain_direct_bind_not_supported" &&

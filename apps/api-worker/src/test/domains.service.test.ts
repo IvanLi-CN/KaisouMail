@@ -704,6 +704,34 @@ describe("domain catalog", () => {
     expect(createZone).not.toHaveBeenCalled();
   });
 
+  it("returns catalog guidance when a subdomain zone already exists in Cloudflare", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_mail_example_org",
+        name: "mail.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: {
+        code: "subdomain_zone_available_in_catalog",
+        mailDomain: "mail.example.org",
+        zoneId: "zone_mail_example_org",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+  });
+
   it("creates a fresh Cloudflare zone when a stale disabled domain no longer matches the catalog", async () => {
     const db = createDb({
       domainRows: [

@@ -26,7 +26,10 @@ import {
   hasDelegationRecoveryStatus,
   isFreshDomainCatalogEntry,
 } from "@/lib/domain-catalog";
-import { recommendApexMailboxBinding } from "@/lib/domain-classification";
+import {
+  classifyMailDomain,
+  recommendApexMailboxBinding,
+} from "@/lib/domain-classification";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -45,6 +48,7 @@ type BindSuccessGuide = {
   summary: string;
   steps: string[];
   nameServers: string[];
+  nameserverNote: string | null;
   cloudflareStatus?: string | null;
   projectStatus: DomainCatalogItem["projectStatus"] | DomainRecord["status"];
 };
@@ -61,8 +65,10 @@ const buildNameserverGuideHref = (docsLinks?: PublicDocsLinks | null) =>
 
 const buildBindSuccessGuide = ({
   result,
+  knownParentZones,
 }: {
   result: DomainRecord | DomainCatalogItem;
+  knownParentZones?: string[];
 }): BindSuccessGuide => {
   const mailDomain = result.mailDomain;
   const projectStatus =
@@ -70,6 +76,7 @@ const buildBindSuccessGuide = ({
   const cloudflareStatus =
     "cloudflareStatus" in result ? result.cloudflareStatus : null;
   const nameServers = "nameServers" in result ? result.nameServers : [];
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
   const needsDelegationRecovery = hasDelegationRecoveryStatus({
     cloudflareStatus,
     lastProvisionError: result.lastProvisionError,
@@ -82,6 +89,7 @@ const buildBindSuccessGuide = ({
       title: "域名已接入，可继续使用",
       summary: "当前域名已经可用，可以直接继续创建邮箱。",
       nameServers,
+      nameserverNote: null,
       cloudflareStatus,
       projectStatus,
       steps: [
@@ -93,28 +101,53 @@ const buildBindSuccessGuide = ({
   }
 
   if (needsDelegationRecovery) {
+    const isSubdomain = classification.type === "subdomain";
+    const title = isSubdomain
+      ? "还差一步：在父域添加 NS"
+      : "还差一步：切换权威 NS";
     const summary =
       nameServers.length > 0
-        ? `Cloudflare 已分配 nameserver。请把 ${mailDomain} 的权威 NS 切到下面这组值；完成后再回来重试。`
+        ? isSubdomain
+          ? `Cloudflare 已分配 nameserver。请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS；完成后再回来重试。`
+          : `Cloudflare 已分配 nameserver。请把 ${mailDomain} 的权威 NS 切到下面这组值；完成后再回来重试。`
         : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。";
     const steps =
       nameServers.length > 0
-        ? [
-            `去当前 DNS / 注册商管理处，把 ${mailDomain} 的权威 NS 改成下面显示的值。`,
-            "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
-            "状态变成 active 后，对该域名点击“重试接入”。",
-          ]
-        : [
-            "先保留当前页面。",
-            "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-            `拿到 nameserver 后，把 ${mailDomain} 的权威 NS 改成对应值，再等待状态继续刷新。`,
-          ];
+        ? isSubdomain
+          ? [
+              `去父域 ${classification.parentDomain} 的 DNS / 注册商管理处，为子域标签 ${classification.delegatedLabel} 添加下面显示的 NS 记录。`,
+              "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+              "状态变成 active 后，对该域名点击“重试接入”。",
+            ]
+          : [
+              `去当前 DNS / 注册商管理处，把 ${mailDomain} 的权威 NS 改成下面显示的值。`,
+              "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+              "状态变成 active 后，对该域名点击“重试接入”。",
+            ]
+        : isSubdomain
+          ? [
+              "先保留当前页面。",
+              "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+              `拿到 nameserver 后，去父域 ${classification.parentDomain} 的 DNS / 注册商管理处，为子域标签 ${classification.delegatedLabel} 添加对应的 NS 记录，再等待状态继续刷新。`,
+            ]
+          : [
+              "先保留当前页面。",
+              "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+              `拿到 nameserver 后，把 ${mailDomain} 的权威 NS 改成对应值，再等待状态继续刷新。`,
+            ];
+    const nameserverNote =
+      nameServers.length > 0
+        ? isSubdomain
+          ? `这是已有子域 zone 记录。若你继续维护它，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS。`
+          : `这是 apex 接入，请把 ${mailDomain} 的权威 NS 切到下面这组值。`
+        : null;
 
     return {
       mailDomain,
-      title: "还差一步：切换权威 NS",
+      title,
       summary,
       nameServers,
+      nameserverNote,
       cloudflareStatus,
       projectStatus,
       steps,
@@ -126,6 +159,7 @@ const buildBindSuccessGuide = ({
     title: "绑定已提交，稍后再试",
     summary: "Cloudflare 暂时没有完成接入；这次不需要修改 NS。",
     nameServers: [],
+    nameserverNote: null,
     cloudflareStatus,
     projectStatus,
     steps: [
@@ -178,6 +212,10 @@ export const DomainBindCard = ({
   const [successGuideState, setSuccessGuideState] =
     useState<BindSuccessGuideState | null>(null);
   const [copiedNameserver, setCopiedNameserver] = useState<string | null>(null);
+  const knownParentZones = useMemo(
+    () => domains.map((domain) => domain.mailDomain),
+    [domains],
+  );
   const successGuide = useMemo<BindSuccessGuide | null>(() => {
     if (!successGuideState) return null;
 
@@ -190,14 +228,11 @@ export const DomainBindCard = ({
 
     return buildBindSuccessGuide({
       result: latestDomain ?? successGuideState.fallbackResult,
+      knownParentZones,
     });
-  }, [domains, successGuideState]);
+  }, [domains, knownParentZones, successGuideState]);
   const nameserverGuideHref = buildNameserverGuideHref(docsLinks);
   const successGuideTitleId = useId();
-  const successGuideNameserverNote = useMemo(() => {
-    if (!successGuide) return null;
-    return `这是 apex 接入，请把 ${successGuide.mailDomain} 的权威 NS 切到下面这组值。`;
-  }, [successGuide]);
 
   useEffect(() => {
     setCopiedNameserver((current) => {
@@ -415,10 +450,12 @@ export const DomainBindCard = ({
                   <p className="text-sm font-medium text-foreground">
                     需要使用的 nameserver
                   </p>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {successGuideNameserverNote}{" "}
-                    点击输入框会自动全选，每条可单独复制。
-                  </p>
+                  {successGuide.nameserverNote ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {successGuide.nameserverNote}{" "}
+                      点击输入框会自动全选，每条可单独复制。
+                    </p>
+                  ) : null}
                 </div>
                 <div className="mt-3 grid gap-2">
                   {successGuide.nameServers.map((nameServer) => (
