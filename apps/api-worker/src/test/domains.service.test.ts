@@ -564,6 +564,9 @@ describe("domain catalog", () => {
   it("rejects direct subdomain bind requests before creating a Cloudflare zone", async () => {
     const db = createDb();
     getDb.mockReturnValue(db);
+    listZones.mockRejectedValue(
+      new Error("Cloudflare catalog temporarily unavailable"),
+    );
 
     await expect(
       bindDomain(env, runtimeConfig, {
@@ -580,6 +583,7 @@ describe("domain catalog", () => {
     });
 
     expect(createZone).not.toHaveBeenCalled();
+    expect(listZones).not.toHaveBeenCalled();
     expect(validateZoneAccess).not.toHaveBeenCalled();
     expect(enableDomainRouting).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
@@ -698,34 +702,6 @@ describe("domain catalog", () => {
         mailDomain: "mail.example.org",
         recommendedApex: "example.org",
         recommendedMailboxSubdomain: "mail",
-      },
-    });
-
-    expect(createZone).not.toHaveBeenCalled();
-  });
-
-  it("returns catalog guidance when a subdomain zone already exists in Cloudflare", async () => {
-    const db = createDb();
-    getDb.mockReturnValue(db);
-    listZones.mockResolvedValue([
-      {
-        id: "zone_mail_example_org",
-        name: "mail.example.org",
-        status: "active",
-        nameServers: [],
-      },
-    ]);
-
-    await expect(
-      bindDomain(env, runtimeConfig, {
-        rootDomain: "mail.example.org",
-      }),
-    ).rejects.toMatchObject({
-      status: 409,
-      details: {
-        code: "subdomain_zone_available_in_catalog",
-        mailDomain: "mail.example.org",
-        zoneId: "zone_mail_example_org",
       },
     });
 

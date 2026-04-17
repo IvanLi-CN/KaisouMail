@@ -138,8 +138,8 @@ describe("demoApi", () => {
 
   it("binds new domains as project-bound provisioning errors until retried", async () => {
     const bound = await demoApi.bindDomain({
-      mailDomain: "bound.example.org",
-      rootDomain: "bound.example.org",
+      mailDomain: "boundexample.org",
+      rootDomain: "boundexample.org",
     });
 
     expect(bound.bindingSource).toBe("project_bind");
@@ -149,13 +149,13 @@ describe("demoApi", () => {
     expect(retried.status).toBe("active");
   });
 
-  it("redirects existing child zones to the catalog-enable path instead of re-binding", async () => {
+  it("rejects direct subdomain binds so the demo stays aligned with production", async () => {
     await expect(
       demoApi.bindDomain({
         mailDomain: "ops.example.org",
         rootDomain: "ops.example.org",
       }),
-    ).rejects.toThrow("Mailbox domain is already available in Cloudflare");
+    ).rejects.toThrow("Direct subdomain binding is not supported");
   });
 
   it("deletes project-bound domains only when they have no non-destroyed mailboxes", async () => {
@@ -164,8 +164,8 @@ describe("demoApi", () => {
     );
 
     const bound = await demoApi.bindDomain({
-      mailDomain: "cleanup.example.org",
-      rootDomain: "cleanup.example.org",
+      mailDomain: "cleanupexample.org",
+      rootDomain: "cleanupexample.org",
     });
     await demoApi.deleteDomain(bound.id);
 

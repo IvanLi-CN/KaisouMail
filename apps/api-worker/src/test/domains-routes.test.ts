@@ -214,36 +214,6 @@ describe("domain routes", () => {
     });
   });
 
-  it("returns catalog-enable guidance when /api/domains/bind hits an existing Cloudflare child zone", async () => {
-    bindDomain.mockRejectedValue(
-      new ApiError(409, "Mailbox domain is already available in Cloudflare", {
-        code: "subdomain_zone_available_in_catalog",
-        mailDomain: "mail.customer.com",
-        zoneId: "zone_mail_customer_com",
-      }),
-    );
-
-    const app = createApp();
-    const response = await app.fetch(
-      new Request("http://localhost/api/domains/bind", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mailDomain: "mail.customer.com" }),
-      }),
-      env,
-    );
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
-      error: "Mailbox domain is already available in Cloudflare",
-      details: {
-        code: "subdomain_zone_available_in_catalog",
-        mailDomain: "mail.customer.com",
-        zoneId: "zone_mail_customer_com",
-      },
-    });
-  });
-
   it("accepts mailDomain when enabling a discovered catalog domain", async () => {
     createDomain.mockResolvedValue({
       created: true,

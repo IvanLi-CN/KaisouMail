@@ -153,7 +153,6 @@ export const DomainsPageView = ({
           <DomainBindCard
             domains={domains}
             isPending={isBindPending}
-            isCatalogLive={cloudflareSync?.status !== "rate_limited"}
             docsLinks={docsLinks}
             onSubmit={
               onBind as Parameters<typeof DomainBindCard>[0]["onSubmit"]

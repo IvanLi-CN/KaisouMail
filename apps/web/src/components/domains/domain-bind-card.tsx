@@ -187,7 +187,6 @@ export const DomainBindCard = ({
   onSubmit,
   domains = [],
   docsLinks = null,
-  isCatalogLive = true,
   isPending = false,
 }: {
   onSubmit: (
@@ -199,7 +198,6 @@ export const DomainBindCard = ({
     | undefined;
   domains?: DomainCatalogItem[];
   docsLinks?: PublicDocsLinks | null;
-  isCatalogLive?: boolean;
   isPending?: boolean;
 }) => {
   const form = useForm<BindDomainValues>({
@@ -320,11 +318,7 @@ export const DomainBindCard = ({
                   )
                 : null;
 
-              if (
-                subdomainRecommendation &&
-                !existingSubdomainRecord &&
-                isCatalogLive
-              ) {
+              if (subdomainRecommendation && !existingSubdomainRecord) {
                 setSubmitError(
                   buildSubdomainDirectBindHint(
                     subdomainRecommendation,

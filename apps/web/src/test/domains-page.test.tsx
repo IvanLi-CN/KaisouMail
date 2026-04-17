@@ -1795,90 +1795,8 @@ describe("domains page view", () => {
     );
   });
 
-  it("routes existing child zones to the catalog enable flow instead of apex-only guidance", async () => {
-    const onBind = vi.fn(async () => {
-      throw new ApiClientError(
-        "Mailbox domain is already available in Cloudflare",
-        {
-          code: "subdomain_zone_available_in_catalog",
-          mailDomain: "mail.customer.com",
-          zoneId: "zone_mail_customer_com",
-        },
-        409,
-      );
-    });
-
-    render(
-      <MemoryRouter>
-        <DomainsPageView
-          domains={[
-            {
-              id: null,
-              mailDomain: "mail.customer.com",
-              rootDomain: "mail.customer.com",
-              zoneId: "zone_mail_customer_com",
-              bindingSource: null,
-              cloudflareAvailability: "available",
-              cloudflareStatus: "active",
-              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
-              projectStatus: "not_enabled",
-              catchAllEnabled: false,
-              lastProvisionError: null,
-              createdAt: null,
-              updatedAt: null,
-              lastProvisionedAt: null,
-              disabledAt: null,
-            },
-            ...demoDomainCatalog,
-          ]}
-          isDomainBindingEnabled
-          isDomainLifecycleEnabled
-          docsLinks={docsLinks}
-          onBind={onBind}
-          onEnable={vi.fn()}
-          onEnableCatchAll={vi.fn()}
-          onDisableCatchAll={vi.fn()}
-          onDisable={vi.fn()}
-          onDelete={vi.fn()}
-          onRetry={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
-
-    fireEvent.change(screen.getByLabelText("邮箱域名"), {
-      target: { value: "mail.customer.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
-
-    const errorBubble = await screen.findByTestId("domain-bind-error");
-    expect(errorBubble).toHaveTextContent("这个子域 zone 已经在 Cloudflare 里");
-    expect(errorBubble).toHaveTextContent(
-      "请回到域名目录，找到 mail.customer.com 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。",
-    );
-    expect(errorBubble).not.toHaveTextContent(
-      "当前 Cloudflare 账号不支持直接绑定子域",
-    );
-    expect(
-      within(errorBubble).getByRole("link", { name: "查看处理步骤" }),
-    ).toHaveAttribute(
-      "href",
-      "https://docs.example.test/zh/domain-catalog-enablement#enable-zone-in-project",
-    );
-  });
-
-  it("lets stale rate-limited catalogs defer subdomain guidance to the backend", async () => {
-    const onBind = vi.fn(async () => {
-      throw new ApiClientError(
-        "Mailbox domain is already available in Cloudflare",
-        {
-          code: "subdomain_zone_available_in_catalog",
-          mailDomain: "mail.customer.com",
-          zoneId: "zone_mail_customer_com",
-        },
-        409,
-      );
-    });
-
+  it("keeps blocking direct subdomain binds locally even when the catalog is stale", async () => {
+    const onBind = vi.fn();
     render(
       <MemoryRouter>
         <DomainsPageView
@@ -1916,15 +1834,10 @@ describe("domains page view", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
 
-    await waitFor(() =>
-      expect(onBind).toHaveBeenCalledWith({
-        mailDomain: "mail.customer.com",
-      }),
-    );
+    await waitFor(() => expect(onBind).not.toHaveBeenCalled());
 
     const errorBubble = await screen.findByTestId("domain-bind-error");
-    expect(errorBubble).toHaveTextContent("这个子域 zone 已经在 Cloudflare 里");
-    expect(errorBubble).not.toHaveTextContent(
+    expect(errorBubble).toHaveTextContent(
       "当前 Cloudflare 账号不支持直接绑定子域",
     );
   });

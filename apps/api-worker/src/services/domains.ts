@@ -1090,25 +1090,6 @@ export const bindDomain = async (
   const classification = classifyMailDomain(rootDomain);
 
   if (classification.type === "subdomain") {
-    const catalogZone = await findCatalogZone(
-      env,
-      config,
-      rootDomain,
-      null,
-      domainRouteContexts.bind,
-    );
-    if (catalogZone) {
-      throw new ApiError(
-        409,
-        "Mailbox domain is already available in Cloudflare",
-        {
-          code: "subdomain_zone_available_in_catalog",
-          mailDomain: rootDomain,
-          zoneId: catalogZone.id,
-        },
-      );
-    }
-
     const recommendation = recommendApexMailboxBinding(rootDomain);
 
     throw new ApiError(400, "Direct subdomain binding is not supported", {

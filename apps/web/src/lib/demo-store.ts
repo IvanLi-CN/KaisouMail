@@ -560,8 +560,8 @@ export const demoApi = {
       (zone) => zone.rootDomain === rootDomain,
     );
 
-    if (subdomainRecommendation && existingZone) {
-      throw new Error("Mailbox domain is already available in Cloudflare");
+    if (subdomainRecommendation) {
+      throw new Error("Direct subdomain binding is not supported");
     }
 
     if (!existingZone) {

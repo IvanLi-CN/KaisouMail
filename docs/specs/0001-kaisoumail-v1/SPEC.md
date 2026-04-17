@@ -272,8 +272,6 @@ PR: include
 
 ![Domains bind follow-up dialog preserving parent-zone NS guidance when a historical child-zone record is reused](./assets/domains-existing-child-zone-bind-next-steps.png)
 
-![Domains bind error guiding operators to enable an already-existing child-zone record from the catalog instead of retrying apex direct bind](./assets/domains-existing-child-zone-bind-catalog-hint.png)
-
 ![Domains legacy subdomain-zone details dialog preserving NS guidance for an already-existing delegated record](./assets/domains-existing-child-zone-details.png)
 
 ### Mailbox Creation
