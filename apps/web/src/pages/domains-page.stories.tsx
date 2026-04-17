@@ -280,12 +280,10 @@ export const ExistingChildZoneBindNextStepsDialog: Story = {
 
 export const ExistingChildZoneBindCatalogHint: Story = {
   args: {
-    domains: [
-      existingChildZoneCatalogDomain,
-      ...demoDomainCatalog.filter(
-        (domain) => domain.zoneId !== "zone_available",
-      ),
-    ],
+    domains: demoDomainCatalog.filter(
+      (domain) => domain.mailDomain !== "mail.customer.com",
+    ),
+    cloudflareSync: rateLimitedCloudflareSync,
     onBind: fn(async () => {
       throw new ApiClientError(
         "Mailbox domain is already available in Cloudflare",

@@ -35,6 +35,22 @@ describe("classifyDomainBindError", () => {
     });
   });
 
+  it("falls back to catalog-enable guidance when the backend only returns a plain existing-zone message", () => {
+    const hint = classifyDomainBindError(
+      new Error("Mailbox domain is already available in Cloudflare"),
+      docsLinks,
+      "mail.customer.com",
+    );
+
+    expect(hint).toEqual({
+      title: "这个子域 zone 已经在 Cloudflare 里",
+      docsHref:
+        "https://docs.example.test/zh/domain-catalog-enablement#enable-zone-in-project",
+      rawMessage:
+        "请回到域名目录，找到 mail.customer.com 后点击“启用域名”；这条已有 zone 不需要再改走 apex 直绑。",
+    });
+  });
+
   it("maps the structured subdomain bind error into apex guidance", () => {
     const hint = classifyDomainBindError(
       new ApiClientError(

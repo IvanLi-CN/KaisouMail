@@ -123,6 +123,19 @@ export const classifyDomainBindError = (
   }
 
   if (
+    normalized.includes("already available in cloudflare") &&
+    mailDomain &&
+    recommendApexMailboxBinding(mailDomain)
+  ) {
+    return buildExistingCatalogSubdomainHint(
+      {
+        mailDomain,
+      },
+      docsLinks,
+    );
+  }
+
+  if (
     structuredDetails?.code === "subdomain_direct_bind_not_supported" &&
     structuredDetails.mailDomain &&
     structuredDetails.recommendedApex &&

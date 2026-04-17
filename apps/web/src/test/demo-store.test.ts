@@ -149,6 +149,15 @@ describe("demoApi", () => {
     expect(retried.status).toBe("active");
   });
 
+  it("redirects existing child zones to the catalog-enable path instead of re-binding", async () => {
+    await expect(
+      demoApi.bindDomain({
+        mailDomain: "ops.example.org",
+        rootDomain: "ops.example.org",
+      }),
+    ).rejects.toThrow("Mailbox domain is already available in Cloudflare");
+  });
+
   it("deletes project-bound domains only when they have no non-destroyed mailboxes", async () => {
     await expect(demoApi.deleteDomain("dom_secondary")).rejects.toThrow(
       "Mailbox domain still has non-destroyed mailboxes",

@@ -5,6 +5,7 @@ import {
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
   type mailboxListScopes,
+  recommendApexMailboxBinding,
 } from "@kaisoumail/shared";
 
 import type {
@@ -545,6 +546,7 @@ export const demoApi = {
     const rootDomain = (input.mailDomain ?? input.rootDomain)
       .trim()
       .toLowerCase();
+    const subdomainRecommendation = recommendApexMailboxBinding(rootDomain);
     const existing = state.domains.find(
       (domain) => domain.rootDomain === rootDomain,
     );
@@ -557,6 +559,10 @@ export const demoApi = {
     const existingZone = state.cloudflareZones.find(
       (zone) => zone.rootDomain === rootDomain,
     );
+
+    if (subdomainRecommendation && existingZone) {
+      throw new Error("Mailbox domain is already available in Cloudflare");
+    }
 
     if (!existingZone) {
       state.cloudflareZones.unshift({

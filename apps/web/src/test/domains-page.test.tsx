@@ -1866,6 +1866,69 @@ describe("domains page view", () => {
     );
   });
 
+  it("lets stale rate-limited catalogs defer subdomain guidance to the backend", async () => {
+    const onBind = vi.fn(async () => {
+      throw new ApiClientError(
+        "Mailbox domain is already available in Cloudflare",
+        {
+          code: "subdomain_zone_available_in_catalog",
+          mailDomain: "mail.customer.com",
+          zoneId: "zone_mail_customer_com",
+        },
+        409,
+      );
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          cloudflareSync={{
+            status: "rate_limited",
+            retryAfter: "2026-04-14T10:00:00.000Z",
+            retryAfterSeconds: 120,
+            rateLimitContext: {
+              triggeredAt: "2026-04-14T09:58:00.000Z",
+              projectOperation: "domains.catalog",
+              projectRoute: "GET /api/domains/catalog",
+              cloudflareMethod: "GET",
+              cloudflarePath: "/zones",
+              lastBlockedAt: null,
+              lastBlockedBy: null,
+            },
+          }}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "mail.customer.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    await waitFor(() =>
+      expect(onBind).toHaveBeenCalledWith({
+        mailDomain: "mail.customer.com",
+      }),
+    );
+
+    const errorBubble = await screen.findByTestId("domain-bind-error");
+    expect(errorBubble).toHaveTextContent("这个子域 zone 已经在 Cloudflare 里");
+    expect(errorBubble).not.toHaveTextContent(
+      "当前 Cloudflare 账号不支持直接绑定子域",
+    );
+  });
+
   it("preserves the backend error text for unclassified bind failures", async () => {
     const onBind = vi.fn(async () => {
       throw new Error("Cloudflare API request failed: plan limit exceeded");
