@@ -634,6 +634,44 @@ describe("domains page view", () => {
     expect(onBind).not.toHaveBeenCalled();
   });
 
+  it("lets existing subdomain records reach the bind API for reuse flows", async () => {
+    const onBind = vi.fn(async () => {
+      throw new Error("Mailbox domain already exists");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={onBind}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText("邮箱域名"), {
+      target: { value: "mail.example.net" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
+
+    await waitFor(() =>
+      expect(onBind).toHaveBeenCalledWith({
+        mailDomain: "mail.example.net",
+      }),
+    );
+    expect(screen.getByTestId("domain-bind-error")).toHaveTextContent(
+      "Mailbox domain already exists",
+    );
+  });
+
   it("seeds fallback catalog polling when bind succeeds before the catalog catches up", async () => {
     domainsHookState.bindMutateAsync = vi.fn(async () => ({
       id: "dom_bound",
