@@ -158,6 +158,20 @@ describe("demoApi", () => {
     ).rejects.toThrow("Direct subdomain binding is not supported");
   });
 
+  it("reuses disabled subdomain zones that already exist in the demo catalog", async () => {
+    await demoApi.disableDomain("dom_secondary");
+
+    const rebound = await demoApi.bindDomain({
+      mailDomain: "mail.example.net",
+      rootDomain: "mail.example.net",
+    });
+
+    expect(rebound.bindingSource).toBe("project_bind");
+    expect(rebound.status).toBe("active");
+    expect(rebound.disabledAt).toBeNull();
+    expect(rebound.zoneId).toBe("zone_secondary");
+  });
+
   it("deletes project-bound domains only when they have no non-destroyed mailboxes", async () => {
     await expect(demoApi.deleteDomain("dom_secondary")).rejects.toThrow(
       "Mailbox domain still has non-destroyed mailboxes",

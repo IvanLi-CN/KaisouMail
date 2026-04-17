@@ -1052,6 +1052,7 @@ export const bindDomain = async (
   input: { rootDomain: string },
 ) => {
   const rootDomain = normalizeRootDomain(input.rootDomain);
+  const classification = classifyMailDomain(rootDomain);
   const existing = await getDomainByRootDomain(env, rootDomain, {
     includeDeleted: true,
   });
@@ -1065,13 +1066,22 @@ export const bindDomain = async (
   if (createState.kind === "replace") {
     const existingZoneId = createState.row.zoneId?.trim();
     if (existingZoneId) {
-      const catalogZone = await findCatalogZone(
-        env,
-        config,
-        rootDomain,
-        existingZoneId,
-        domainRouteContexts.bind,
-      );
+      const catalogZone =
+        classification.type === "subdomain"
+          ? await findCatalogZone(
+              env,
+              config,
+              rootDomain,
+              existingZoneId,
+              domainRouteContexts.bind,
+            ).catch(() => null)
+          : await findCatalogZone(
+              env,
+              config,
+              rootDomain,
+              existingZoneId,
+              domainRouteContexts.bind,
+            );
       if (catalogZone) {
         return await persistBoundZone(
           env,
@@ -1086,8 +1096,6 @@ export const bindDomain = async (
       }
     }
   }
-
-  const classification = classifyMailDomain(rootDomain);
 
   if (classification.type === "subdomain") {
     const recommendation = recommendApexMailboxBinding(rootDomain);

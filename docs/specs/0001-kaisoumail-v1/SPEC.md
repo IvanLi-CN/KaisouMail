@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-16
+Last: 2026-04-17
 
 ## Objective
 
@@ -39,6 +39,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Admin-only mailbox domain catalog and Cloudflare provisioning status surface
 - Discover currently manageable Cloudflare zones in real time, bind apex zones directly into Cloudflare, and manage enable/disable/retry/delete flows inside the project
 - Direct project binding is apex-only; mailbox-level subdomains are produced by binding the apex first and then creating mailboxes with `subdomain`. Historical or externally created subdomain zones may still appear in the catalog or project records, but they are not a standard onboarding promise.
+- Historical or externally created subdomain zones remain maintenance-only: the project may restore an existing local child-zone record when the same zone is still discoverable, but brand-new subdomain onboarding must still fall back to apex binding guidance instead of depending on Cloudflare catalog health.
 - Bind-form failures translate Cloudflare permission, configuration, activation, and unsupported-subdomain errors into actionable Chinese guidance with deep links to public docs
 
 ### Messages
@@ -69,6 +70,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET|POST /api/domains` plus `POST /api/domains/bind`, `POST /api/domains/:id/catch-all/enable|disable`, and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `mailDomain` is the canonical public field name and `rootDomain` remains a compatibility alias
 - `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI only for apex domains
 - `POST /api/domains/bind` rejects direct subdomain input with `400 + details.code=subdomain_direct_bind_not_supported`, returning `recommendedApex` plus `recommendedMailboxSubdomain`; subdomain zones that appear through history or external setup remain maintenance-only records rather than a standard onboarding path
+- If `/api/domains/bind` is asked to re-bind a previously known subdomain record, it may only restore that record when the exact Cloudflare zone is still discoverable; otherwise the API must still return the structured unsupported-subdomain guidance instead of surfacing transient Cloudflare catalog failures.
 - Cloudflare-backed domain write operations (`POST /api/domains`, `/api/domains/bind`, `/api/domains/:id/retry`, catch-all enable/disable, and project-bound delete) fail fast on upstream `429` with a propagated `Retry-After` header; Cloudflare rate limiting never mutates a domain into `provisioning_error`
 - `POST /api/mailboxes` accepts optional `mailDomain`; `rootDomain` remains a compatibility alias, and when both are omitted the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox; on `catchAllEnabled=true` domains it now registers the mailbox locally without creating a per-address Cloudflare routing rule
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
@@ -138,6 +140,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-17: Synced the spec after review-only convergence so unsupported subdomain binds fail deterministically even when reusable-zone catalog checks fail upstream, while the maintenance-only reuse path for already known child-zone records remains aligned across the API and demo surfaces.
 - 2026-04-14: Hardened `/domains` against upstream `429` loops by degrading `GET /api/domains/catalog` to `200 + cloudflareSync`, propagating `Retry-After` on Cloudflare-backed writes, pausing Workers AI verification on both daily exhaustion and temporary rate limits, and restoring the spec-defined visible-only polling behavior.
 - 2026-04-16: Promoted `mailDomain` to the canonical public API field while keeping `rootDomain` as a compatibility alias, refreshed the docs/API examples, and clarified that `/domains/bind` is apex-only while historical subdomain records remain maintenance-only with preserved delegation guidance.
 - 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.

@@ -561,6 +561,29 @@ export const demoApi = {
     );
 
     if (subdomainRecommendation) {
+      if (existing && existingZone?.id === existing.zoneId) {
+        const restoredDomain: DomainRecord = {
+          ...existing,
+          rootDomain,
+          mailDomain: rootDomain,
+          zoneId: existingZone.id,
+          bindingSource: existing.bindingSource,
+          status:
+            existingZone.status === "active" ? "active" : "provisioning_error",
+          lastProvisionError:
+            existingZone.status === "active"
+              ? null
+              : "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+          updatedAt: createdAt,
+          lastProvisionedAt:
+            existingZone.status === "active" ? createdAt : null,
+          disabledAt: null,
+        };
+        Object.assign(existing, restoredDomain);
+        syncMetaDomains();
+        return clone(existing);
+      }
+
       throw new Error("Direct subdomain binding is not supported");
     }
 

@@ -708,6 +708,44 @@ describe("domain catalog", () => {
     expect(createZone).not.toHaveBeenCalled();
   });
 
+  it("still returns subdomain guidance when reusable subdomain lookup fails upstream", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_stale",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_stale",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockRejectedValue(
+      new Error("Cloudflare catalog temporarily unavailable"),
+    );
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.example.org",
+        recommendedApex: "example.org",
+        recommendedMailboxSubdomain: "mail",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(validateZoneAccess).not.toHaveBeenCalled();
+    expect(enableDomainRouting).not.toHaveBeenCalled();
+  });
+
   it("creates a fresh Cloudflare zone when a stale disabled domain no longer matches the catalog", async () => {
     const db = createDb({
       domainRows: [
