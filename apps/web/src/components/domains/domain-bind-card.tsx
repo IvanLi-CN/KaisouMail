@@ -311,14 +311,16 @@ export const DomainBindCard = ({
               const subdomainRecommendation = recommendApexMailboxBinding(
                 values.mailDomain,
               );
-              const existingSubdomainRecord = subdomainRecommendation
+              const reusableSubdomainRecord = subdomainRecommendation
                 ? domains.find(
                     (domain) =>
-                      domain.mailDomain === subdomainRecommendation.mailDomain,
+                      domain.mailDomain ===
+                        subdomainRecommendation.mailDomain &&
+                      domain.id !== null,
                   )
                 : null;
 
-              if (subdomainRecommendation && !existingSubdomainRecord) {
+              if (subdomainRecommendation && !reusableSubdomainRecord) {
                 setSubmitError(
                   buildSubdomainDirectBindHint(
                     subdomainRecommendation,
