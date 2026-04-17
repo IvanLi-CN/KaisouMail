@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { DomainCatalogItem, DomainRecord } from "@/lib/contracts";
 import {
+  buildSubdomainDirectBindHint,
   classifyDomainBindError,
   type DomainBindErrorHint,
 } from "@/lib/domain-bind-errors";
@@ -25,10 +26,7 @@ import {
   hasDelegationRecoveryStatus,
   isFreshDomainCatalogEntry,
 } from "@/lib/domain-catalog";
-import {
-  classifyMailDomain,
-  type MailDomainClassification,
-} from "@/lib/domain-classification";
+import { recommendApexMailboxBinding } from "@/lib/domain-classification";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -36,14 +34,13 @@ const bindDomainSchema = z.object({
     .string()
     .trim()
     .toLowerCase()
-    .regex(rootDomainRegex, "请输入有效邮箱域名，例如 mail.example.com"),
+    .regex(rootDomainRegex, "请输入有效邮箱域名，例如 example.com"),
 });
 
 type BindDomainValues = z.infer<typeof bindDomainSchema>;
 
 type BindSuccessGuide = {
   mailDomain: string;
-  classification: MailDomainClassification;
   title: string;
   summary: string;
   steps: string[];
@@ -64,13 +61,10 @@ const buildNameserverGuideHref = (docsLinks?: PublicDocsLinks | null) =>
 
 const buildBindSuccessGuide = ({
   result,
-  knownParentZones,
 }: {
   result: DomainRecord | DomainCatalogItem;
-  knownParentZones?: string[];
 }): BindSuccessGuide => {
   const mailDomain = result.mailDomain;
-  const classification = classifyMailDomain(mailDomain, { knownParentZones });
   const projectStatus =
     "projectStatus" in result ? result.projectStatus : result.status;
   const cloudflareStatus =
@@ -85,7 +79,6 @@ const buildBindSuccessGuide = ({
   if (projectStatus === "active") {
     return {
       mailDomain,
-      classification,
       title: "域名已接入，可继续使用",
       summary: "当前域名已经可用，可以直接继续创建邮箱。",
       nameServers,
@@ -102,58 +95,24 @@ const buildBindSuccessGuide = ({
   if (needsDelegationRecovery) {
     const summary =
       nameServers.length > 0
-        ? classification.type === "subdomain"
-          ? `Cloudflare 已分配 nameserver。请到父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面的 NS；完成后再回来重试。`
-          : classification.type === "apex"
-            ? `Cloudflare 已分配 nameserver。请把 ${mailDomain} 的权威 NS 切到下面这组值；完成后再回来重试。`
-            : "Cloudflare 已分配 nameserver。请按当前域名的接入方式完成 NS 配置；完成后再回来重试。"
+        ? `Cloudflare 已分配 nameserver。请把 ${mailDomain} 的权威 NS 切到下面这组值；完成后再回来重试。`
         : "Cloudflare 已创建 zone，但 nameserver 还没返回；请先保持当前页面打开，系统会继续刷新。";
     const steps =
       nameServers.length > 0
-        ? classification.type === "subdomain"
-          ? [
-              `去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面显示的 NS 记录。`,
-              "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
-              "状态变成 active 后，对该域名点击“重试接入”。",
-            ]
-          : classification.type === "apex"
-            ? [
-                `去当前 DNS / 注册商管理处，把 ${mailDomain} 的权威 NS 改成下面显示的值。`,
-                "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
-                "状态变成 active 后，对该域名点击“重试接入”。",
-              ]
-            : [
-                "按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。",
-                "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
-                "状态变成 active 后，对该域名点击“重试接入”。",
-              ]
-        : classification.type === "subdomain"
-          ? [
-              "先保留当前页面。",
-              "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-              `拿到 nameserver 后，去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加对应的 NS。`,
-            ]
-          : classification.type === "apex"
-            ? [
-                "先保留当前页面。",
-                "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-                `拿到 nameserver 后，把 ${mailDomain} 的权威 NS 改成对应值，再等待状态继续刷新。`,
-              ]
-            : [
-                "先保留当前页面。",
-                "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
-                "拿到 nameserver 后，按子域或 apex 的接入方式完成 NS 配置，再等待状态继续刷新。",
-              ];
+        ? [
+            `去当前 DNS / 注册商管理处，把 ${mailDomain} 的权威 NS 改成下面显示的值。`,
+            "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+            "状态变成 active 后，对该域名点击“重试接入”。",
+          ]
+        : [
+            "先保留当前页面。",
+            "保持当前页面打开，等待系统自动刷新拿到 nameserver。",
+            `拿到 nameserver 后，把 ${mailDomain} 的权威 NS 改成对应值，再等待状态继续刷新。`,
+          ];
 
     return {
       mailDomain,
-      classification,
-      title:
-        classification.type === "subdomain"
-          ? "还差一步：完成子域委派"
-          : classification.type === "apex"
-            ? "还差一步：切换权威 NS"
-            : "还差一步：完成 NS 配置",
+      title: "还差一步：切换权威 NS",
       summary,
       nameServers,
       cloudflareStatus,
@@ -164,7 +123,6 @@ const buildBindSuccessGuide = ({
 
   return {
     mailDomain,
-    classification,
     title: "绑定已提交，稍后再试",
     summary: "Cloudflare 暂时没有完成接入；这次不需要修改 NS。",
     nameServers: [],
@@ -231,7 +189,6 @@ export const DomainBindCard = ({
     );
 
     return buildBindSuccessGuide({
-      knownParentZones: domains.map((domain) => domain.mailDomain),
       result: latestDomain ?? successGuideState.fallbackResult,
     });
   }, [domains, successGuideState]);
@@ -239,16 +196,7 @@ export const DomainBindCard = ({
   const successGuideTitleId = useId();
   const successGuideNameserverNote = useMemo(() => {
     if (!successGuide) return null;
-
-    if (successGuide.classification.type === "subdomain") {
-      return `这是子域接入，请去父域 ${successGuide.classification.parentDomain} 的 DNS 管理处，为子域标签 ${successGuide.classification.delegatedLabel} 添加下面这组 NS。`;
-    }
-
-    if (successGuide.classification.type === "apex") {
-      return `这是 apex 接入，请把 ${successGuide.mailDomain} 的权威 NS 切到下面这组值。`;
-    }
-
-    return "请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 添加 NS，apex 请切换权威 NS。";
+    return `这是 apex 接入，请把 ${successGuide.mailDomain} 的权威 NS 切到下面这组值。`;
   }, [successGuide]);
 
   useEffect(() => {
@@ -294,17 +242,17 @@ export const DomainBindCard = ({
             绑定邮箱域名
           </CardTitle>
           <CardDescription>
-            可直接绑定 apex，也可绑定 `mail.example.com` 这类子域。系统会创建
-            Cloudflare zone，并在需要时引导你完成父区 NS 委派。
+            项目直绑目前仅支持 apex，例如 `example.com`。如果你需要
+            `user@mail.example.com` 这类地址，请先绑定 apex，再在创建邮箱时把
+            subdomain 填成 `mail`。
           </CardDescription>
           <div
             className="flex flex-wrap items-center gap-2 text-xs"
             data-testid="domain-bind-delegation-guide"
           >
             <p className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-100">
-              直绑 apex 或子域后若停在 <code>pending</code> /{" "}
-              <code>provisioning_error</code>：先按域名类型完成 NS
-              配置，再重试。
+              apex 直绑若停在 <code>pending</code> /{" "}
+              <code>provisioning_error</code>：先完成权威 NS 切换，再重试。
             </p>
             {nameserverGuideHref ? (
               <a
@@ -325,6 +273,20 @@ export const DomainBindCard = ({
             data-testid="domain-bind-form"
             onSubmit={form.handleSubmit(async (values) => {
               setSubmitError(null);
+              const subdomainRecommendation = recommendApexMailboxBinding(
+                values.mailDomain,
+              );
+
+              if (subdomainRecommendation) {
+                setSubmitError(
+                  buildSubdomainDirectBindHint(
+                    subdomainRecommendation,
+                    docsLinks,
+                  ),
+                );
+                return;
+              }
+
               try {
                 const result = await onSubmit(values);
                 form.reset();
@@ -332,16 +294,18 @@ export const DomainBindCard = ({
                   openSuccessGuide(result);
                 }
               } catch (reason) {
-                setSubmitError(classifyDomainBindError(reason, docsLinks));
+                setSubmitError(
+                  classifyDomainBindError(reason, docsLinks, values.mailDomain),
+                );
               }
             })}
           >
             <div className="order-1 min-w-0 space-y-2 md:col-start-1 md:row-start-1">
-              <Label htmlFor="mailDomain">邮箱域名（支持子域）</Label>
+              <Label htmlFor="mailDomain">邮箱域名（仅支持 apex 直绑）</Label>
               <Input
                 aria-label="邮箱域名"
                 id="mailDomain"
-                placeholder="mail.example.com 或 example.com"
+                placeholder="example.com"
                 autoComplete="off"
                 {...form.register("mailDomain")}
               />
@@ -365,8 +329,7 @@ export const DomainBindCard = ({
                   <p className="font-medium text-destructive">
                     {submitError.title}
                   </p>
-                  {submitError.rawMessage !== submitError.title &&
-                  !submitError.docsHref ? (
+                  {submitError.rawMessage !== submitError.title ? (
                     <p className="basis-full text-muted-foreground">
                       {submitError.rawMessage}
                     </p>

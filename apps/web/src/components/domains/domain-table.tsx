@@ -90,7 +90,7 @@ const bindingSourceLabel = (
 };
 
 const buildDelegationBannerCopy = (count: number) =>
-  `有 ${count} 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。`;
+  `有 ${count} 个项目域名待完成 Cloudflare NS 配置；请按域名详情里的当前指引处理后，再点“重试接入”。`;
 
 const buildRowDelegationCopy = (
   mailDomain: string,
@@ -99,7 +99,7 @@ const buildRowDelegationCopy = (
   const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
-    return "待委派，完成父区 NS 委派后重试。";
+    return "待配置 NS，完成现有委派配置后重试。";
   }
 
   if (classification.type === "apex") {
@@ -116,7 +116,7 @@ const buildDetailNameserverNote = (
   const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
-    return `这是子域接入，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS。`;
+    return `这是已有子域 zone 记录。若你继续维护它，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加下面这组 NS。`;
   }
 
   if (classification.type === "apex") {
@@ -133,7 +133,7 @@ const buildPendingNameserverNote = (
   const classification = classifyMailDomain(mailDomain, { knownParentZones });
 
   if (classification.type === "subdomain") {
-    return `nameserver 暂不可见；这是刚创建的子域接入，请先保留页面，拿到 nameserver 后去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加 NS。`;
+    return `nameserver 暂不可见；这是已有子域 zone 记录，请先保留页面，拿到 nameserver 后去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加 NS。`;
   }
 
   if (classification.type === "apex") {
@@ -151,8 +151,8 @@ const buildDelegationRecoveryGuide = (
 
   if (classification.type === "subdomain") {
     return {
-      title: "先完成子域委派，再重试接入",
-      body: `当前邮箱域名还在等待 Cloudflare 完成委派。请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加当前页面展示的 NS。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。`,
+      title: "先完成现有子域委派，再重试接入",
+      body: `当前邮箱域名还在等待 Cloudflare 完成委派。若你继续维护这条已有子域 zone 记录，请去父域 ${classification.parentDomain} 的 DNS 管理处，为子域标签 ${classification.delegatedLabel} 添加当前页面展示的 NS。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。`,
     };
   }
 
@@ -167,6 +167,19 @@ const buildDelegationRecoveryGuide = (
     title: "先改 NS，再重试接入",
     body: "当前邮箱域名还在等待 Cloudflare 完成委派。请按当前域名的接入方式完成 NS 配置：子域请在父域 DNS 管理处添加 NS，apex 请切换权威 NS。等 Cloudflare 变成 active 后，再回到列表点击“重试接入”。",
   };
+};
+
+const buildProjectBindDescription = (
+  mailDomain: string,
+  knownParentZones?: string[],
+) => {
+  const classification = classifyMailDomain(mailDomain, { knownParentZones });
+
+  if (classification.type === "subdomain") {
+    return "这是历史或外部创建的子域 zone 记录；当前产品不提供新的子域接入流程，但现有记录仍可查看、重试或删除。";
+  }
+
+  return "由项目直接创建到 Cloudflare；新的项目直绑仅支持 apex，并可删除该 zone。";
 };
 
 const cloudflareStatusTone = (status: string | null) => {
@@ -302,8 +315,8 @@ export const DomainTable = ({
               <CardTitle>Cloudflare 域名目录</CardTitle>
               <CardDescription>
                 这里同时展示 Cloudflare 当前可见的 zones、项目里的启用状态，
-                以及由项目直接创建的可删除域名。已存在的 child zone 可直接从
-                catalog 启用，无需重复创建。
+                以及由项目直接创建的可删除域名。若目录中出现子域
+                zone，请将其视为历史或外部接入记录，而不是当前产品的标准接入方式。
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
@@ -401,10 +414,13 @@ export const DomainTable = ({
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {domain.bindingSource === "project_bind"
-                            ? "由项目创建到 Cloudflare；支持 apex 或子域直绑，并可删除该 zone"
+                            ? buildProjectBindDescription(
+                                domain.mailDomain,
+                                knownParentZones,
+                              )
                             : domain.cloudflareAvailability === "missing"
                               ? "Cloudflare 当前 token 已不可见"
-                              : "已存在于 Cloudflare，可直接启用到项目"}
+                              : "Cloudflare 中已发现该 zone，可按当前记录启用到项目"}
                         </p>
                       </div>
                     </TableCell>

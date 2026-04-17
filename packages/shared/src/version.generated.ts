@@ -1,6 +1,6 @@
 export const versionInfo = {
   version: "0.1.0",
-  commitSha: "1bbe321",
-  branch: "th/maildomain-subdomain-delegation",
-  builtAt: "2026-04-16T16:08:46.624Z",
+  commitSha: "c44fb53",
+  branch: "th/apex-only-domain-bind",
+  builtAt: "2026-04-17T05:43:55.992Z",
 } as const;

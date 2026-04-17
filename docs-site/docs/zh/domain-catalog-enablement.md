@@ -2,7 +2,7 @@
 
 这份文档适用于：**域名已经在 Cloudflare 里，或者你希望先手动在 Cloudflare 完成 zone 接入，再让 KaisouMail 接管启用和后续使用。**
 
-和“在项目里直接绑定新域名”相比，这条链路不会由项目替你创建 zone，而是要求你先在 Cloudflare 里把根域名接入好，再回到 `/domains` 启用。
+和“在项目里直接绑定新域名”相比，这条链路不会由项目替你创建 zone，而是要求你先在 Cloudflare 里把域名接入好，再回到 `/domains` 启用。
 
 ## 启用本功能前的准备 {#feature-enablement}
 

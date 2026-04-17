@@ -24,5 +24,5 @@
 ## 关键说明
 
 - `cloudflareDomainLifecycleEnabled=true` 表示项目已经能管理 Cloudflare 里现有的 zone。
-- `cloudflareDomainBindingEnabled=true` 才表示项目已经能直接创建新的 Cloudflare zone。
+- `cloudflareDomainBindingEnabled=true` 才表示项目已经能直接创建新的 apex Cloudflare zone。
 - 新域只有在 `/domains` 启用成功并进入 `active` 后，才会进入 `GET /api/meta` 的域名列表，并参与随机邮箱分配。

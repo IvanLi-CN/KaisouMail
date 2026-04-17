@@ -1,4 +1,5 @@
 export * from "./consts";
+export * from "./mail-domain-classification";
 export * from "./mailbox-address";
 export * from "./mailbox-generator";
 export * from "./schemas/api";

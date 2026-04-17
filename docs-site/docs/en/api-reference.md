@@ -9,7 +9,7 @@ This page lists the implemented endpoints and their purpose. For request and res
 | `GET /api/meta` | read active domains, TTL, address rules, and passkey capability |
 | `GET /api/domains/catalog` | read Cloudflare-visible zones plus project status |
 | `GET /api/domains` | read project-managed domain records |
-| `POST /api/domains/bind` | create a Cloudflare full zone and attach it to the project |
+| `POST /api/domains/bind` | create an apex Cloudflare full zone and attach it to the project; subdomains return apex/subdomain guidance instead |
 | `POST /api/domains` | enable a catalog domain |
 | `POST /api/domains/:id/catch-all/enable` | enable the project-managed catch-all flow and point Cloudflare catch-all at the mail Worker |
 | `POST /api/domains/:id/catch-all/disable` | disable the project-managed catch-all flow and restore the previous Cloudflare catch-all configuration |

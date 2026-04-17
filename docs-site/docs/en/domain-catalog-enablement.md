@@ -2,7 +2,7 @@
 
 Use this guide when **the domain already exists in Cloudflare, or you prefer to onboard the zone manually in Cloudflare before KaisouMail enables and uses it.**
 
-Unlike the project-direct bind flow, this path does not let KaisouMail create the zone for you. You add the root domain in Cloudflare first, then return to `/domains` to enable it.
+Unlike the project-direct bind flow, this path does not let KaisouMail create the zone for you. You add the domain in Cloudflare first, then return to `/domains` to enable it.
 
 ## Prepare the feature before first use {#feature-enablement}
 

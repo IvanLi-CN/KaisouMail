@@ -20,9 +20,12 @@ Continue with:
 
 Use this when:
 
-- you want to enter the root domain directly in `/domains`
+- you want to enter the apex root domain directly in `/domains`
 - runtime already has the broader Cloudflare permissions required
-- you want the project to call Cloudflare `POST /zones` for you
+- you want the project to call Cloudflare `POST /zones` for an apex zone
+- if you need `user@mail.example.com`, you are okay binding the apex first and setting mailbox `subdomain=mail`
+
+> The product does not treat child-zone onboarding as a standard free-tier path; for subdomain-style addresses, use apex binding plus the mailbox `subdomain` field.
 
 Continue with:
 
@@ -54,6 +57,6 @@ Once a domain becomes `active`:
 ## Common entry points
 
 - want to onboard an existing zone: [Manual bind & enable](/domain-catalog-enablement)
-- want to create a new zone directly: [Direct bind in project](/project-domain-binding)
+- want to create a new apex zone directly: [Direct bind in project](/project-domain-binding)
 - want to verify permissions first: [Token Permissions](/cloudflare-token-permissions)
 - want the full runtime checklist: [Deployment & Environment](/deployment-environment)

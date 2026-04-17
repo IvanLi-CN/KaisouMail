@@ -122,7 +122,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   const localPartExample = "build";
   const subdomainExample = "alpha";
   const rootDomainExample = "mail.example.net";
-  const delegatedMailDomainExample = "mail.customer.com";
+  const apexBindDomainExample = "example.net";
   const addressExample = `${localPartExample}@${subdomainExample}.${rootDomainExample}`;
 
   return [
@@ -581,7 +581,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
     {
       title: "Mailbox Domains",
       description:
-        "管理员既可以直接绑定 apex / 子域创建 Cloudflare zone，也可以对已有 zone 走 catalog 启用。",
+        "管理员可以直接绑定 apex 创建 Cloudflare zone，也可以对 Cloudflare 里已存在的 zone 走 catalog 启用。",
       endpoints: [
         {
           method: "GET",
@@ -663,20 +663,19 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
         {
           method: "POST",
           path: "/api/domains/bind",
-          summary:
-            "直接在项目里创建 Cloudflare zone；支持 apex，也支持需要父区 NS 委派的子域。",
+          summary: "直接在项目里创建 apex Cloudflare zone。",
           auth: "Bearer 或 `kaisoumail_session` cookie（admin only）",
           requestBody: `{
-  "mailDomain": "${delegatedMailDomainExample}"
+  "mailDomain": "${apexBindDomainExample}"
 }`,
           responseBody: `{
   "id": "dom_bound",
-  "mailDomain": "${delegatedMailDomainExample}",
-  "rootDomain": "${delegatedMailDomainExample}",
-  "zoneId": "cf-zone-mail-customer-com",
+  "mailDomain": "${apexBindDomainExample}",
+  "rootDomain": "${apexBindDomainExample}",
+  "zoneId": "cf-zone-example-net",
   "status": "provisioning_error",
   "catchAllEnabled": false,
-  "lastProvisionError": "Zone is pending activation until nameserver delegation is complete",
+  "lastProvisionError": "Zone is pending activation until the authoritative nameservers are switched",
   "createdAt": "2026-04-03T12:00:00.000Z",
   "updatedAt": "2026-04-03T12:00:00.000Z",
   "lastProvisionedAt": null,
@@ -684,8 +683,9 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续接受。",
-            "绑定 apex 时，需要把该域名的权威 NS 切到 Cloudflare；绑定子域（如 `mail.customer.com`）时，需要去父域 `customer.com` 的 DNS 管理处为子域标签 `mail` 添加 Cloudflare 下发的 NS。",
-            "直绑成功后如果 zone 还在 `pending` / `provisioning_error`，返回记录仍可保留在项目里，等 NS 委派完成后再调用 retry。",
+            "这条入口现在只接受 apex；如果你想得到 `user@mail.customer.com` 这类地址，请先绑定 `customer.com`，再在邮箱创建时把 `subdomain=mail`。",
+            "直绑成功后如果 zone 还在 `pending` / `provisioning_error`，返回记录仍会保留在项目里，等 apex 的权威 NS 切到 Cloudflare 后再调用 retry。",
+            "若提交子域（如 `mail.customer.com`），接口会返回 `400`，并在 `details` 里给出 `recommendedApex` 与 `recommendedMailboxSubdomain`。",
             "如果同名记录当前处于 `disabled` 或 `provisioning_error`，再次提交会原地修复；只有现有 active 记录才会返回 `409`。",
           ],
         },
@@ -715,7 +715,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "建议先通过 `GET /api/domains/catalog` 获取可见域，再选择目标 zone 提交绑定。",
             "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续接受。",
-            "如果目标本来就是一个已存在于 Cloudflare 的 child zone，这条入口可直接启用，无需再重复创建 zone。",
+            "如果目标 zone 已经在 Cloudflare 里，这条入口可直接启用，无需再重复创建 zone。",
             "若 Cloudflare 接入失败，接口仍会返回记录，但 `status` 会是 `provisioning_error`。",
             "若上游 Cloudflare API 429，接口会直接返回 `429` 并携带 `Retry-After`，不会把域名误写成 `provisioning_error`。",
             "Cloudflare 429 错误详情里会带 `rateLimitContext`，标明触发的项目接口与 Cloudflare method/path。",
@@ -962,10 +962,11 @@ const ApiKeysDocsPageView = ({
               </p>
               <p className="mt-2">
                 域名接入支持两条路径：一是直接调用{" "}
-                <code>/api/domains/bind</code> 创建 apex 或子域 zone；二是先把
-                zone 接入到 Cloudflare，再用 <code>/api/domains</code> 从
-                catalog 启用。子域场景仍然依赖父区 DNS 中的 NS 委派，不属于纯
-                TXT/CNAME/MX 的 DNS-only onboarding。
+                <code>/api/domains/bind</code> 创建 apex zone；二是先把 zone
+                接入到 Cloudflare，再用 <code>/api/domains</code> 从 catalog
+                启用。若你只想得到 <code>user@mail.example.com</code>{" "}
+                这类地址，请绑定 apex 后在邮箱层设置 <code>subdomain=mail</code>
+                。
               </p>
               <p className="mt-2">
                 地址格式固定为 <code>{meta.addressRules.format}</code>，示例：

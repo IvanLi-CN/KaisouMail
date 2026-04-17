@@ -1,12 +1,20 @@
 import { ApiClientError } from "@/lib/api";
 import { formatCloudflareRateLimitDetails } from "@/lib/cloudflare-rate-limit";
 import { hasDelegationPendingProvisionError } from "@/lib/domain-catalog";
+import { recommendApexMailboxBinding } from "@/lib/domain-classification";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 export type DomainBindErrorHint = {
   title: string;
   docsHref?: string | null;
   rawMessage: string;
+};
+
+type DomainBindStructuredDetails = {
+  code?: string;
+  mailDomain?: string;
+  recommendedApex?: string;
+  recommendedMailboxSubdomain?: string;
 };
 
 const serializeDetails = (value: unknown) => {
@@ -51,9 +59,31 @@ const formatRetryAfterHint = (error: unknown) => {
 const withAnchor = (href: string | undefined, anchor: string) =>
   href ? `${href}#${anchor}` : null;
 
+const getStructuredDetails = (
+  error: unknown,
+): DomainBindStructuredDetails | null => {
+  if (!(error instanceof ApiClientError)) return null;
+  if (!error.details || typeof error.details !== "object") return null;
+  return error.details as DomainBindStructuredDetails;
+};
+
+export const buildSubdomainDirectBindHint = (
+  details: {
+    mailDomain: string;
+    recommendedApex: string;
+    recommendedMailboxSubdomain: string;
+  },
+  docsLinks?: PublicDocsLinks | null,
+): DomainBindErrorHint => ({
+  title: "当前 Cloudflare 账号不支持直接绑定子域",
+  docsHref: withAnchor(docsLinks?.projectDomainBinding, "bind-apex-only"),
+  rawMessage: `请改为绑定 ${details.recommendedApex}，再在创建邮箱时把子域填成 ${details.recommendedMailboxSubdomain}，即可继续使用 user@${details.mailDomain} 这类地址。`,
+});
+
 export const classifyDomainBindError = (
   error: unknown,
   docsLinks?: PublicDocsLinks | null,
+  mailDomain?: string,
 ): DomainBindErrorHint => {
   const retryAfterHint = formatRetryAfterHint(error);
   const rawMessage = [
@@ -63,6 +93,44 @@ export const classifyDomainBindError = (
     .filter(Boolean)
     .join("\n");
   const normalized = normalizeForMatch(error);
+  const structuredDetails = getStructuredDetails(error);
+
+  if (
+    structuredDetails?.code === "subdomain_direct_bind_not_supported" &&
+    structuredDetails.mailDomain &&
+    structuredDetails.recommendedApex &&
+    structuredDetails.recommendedMailboxSubdomain
+  ) {
+    return buildSubdomainDirectBindHint(
+      {
+        mailDomain: structuredDetails.mailDomain,
+        recommendedApex: structuredDetails.recommendedApex,
+        recommendedMailboxSubdomain:
+          structuredDetails.recommendedMailboxSubdomain,
+      },
+      docsLinks,
+    );
+  }
+
+  if (
+    (normalized.includes("root domain") &&
+      normalized.includes("not any subdomains")) ||
+    normalized.includes("provide the root domain and not any subdomains")
+  ) {
+    const recommendation = mailDomain
+      ? recommendApexMailboxBinding(mailDomain)
+      : null;
+
+    if (recommendation) {
+      return buildSubdomainDirectBindHint(recommendation, docsLinks);
+    }
+
+    return {
+      title: "当前 Cloudflare 账号不支持直接绑定子域",
+      docsHref: withAnchor(docsLinks?.projectDomainBinding, "bind-apex-only"),
+      rawMessage,
+    };
+  }
 
   if (
     (error instanceof ApiClientError && error.status === 429) ||

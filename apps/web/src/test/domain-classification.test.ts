@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { classifyMailDomain } from "@/lib/domain-classification";
+import {
+  classifyMailDomain,
+  recommendApexMailboxBinding,
+} from "@/lib/domain-classification";
 
 describe("classifyMailDomain", () => {
   it("treats registrable domains as apex", () => {
@@ -85,5 +88,21 @@ describe("classifyMailDomain", () => {
       parentDomain: null,
       delegatedLabel: null,
     });
+  });
+
+  it("recommends apex binding plus mailbox subdomain for direct child-zone inputs", () => {
+    expect(recommendApexMailboxBinding("mail.example.com")).toEqual({
+      mailDomain: "mail.example.com",
+      recommendedApex: "example.com",
+      recommendedMailboxSubdomain: "mail",
+    });
+
+    expect(recommendApexMailboxBinding("ops.mail.example.com")).toEqual({
+      mailDomain: "ops.mail.example.com",
+      recommendedApex: "example.com",
+      recommendedMailboxSubdomain: "ops.mail",
+    });
+
+    expect(recommendApexMailboxBinding("example.com")).toBeNull();
   });
 });
