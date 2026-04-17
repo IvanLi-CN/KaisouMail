@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.25.1",
+  "base_stable_version": "0.25.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-17T16:29:53Z",
+  "next_stable_version": "0.25.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "607ad2148eace3248ea93340cbb54e9605d5dd13",
+  "pr_number": 53,
+  "pr_title": "fix: remove unsupported child-zone onboarding",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.25.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.25.1",
+  "target_sha": "0594be7249f6b779f7dd546e9c7b4203c41cabc8",
+  "type_label": "type:patch"
+}
