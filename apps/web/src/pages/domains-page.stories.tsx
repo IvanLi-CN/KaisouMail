@@ -185,6 +185,11 @@ export const BindPermissionHelp: Story = {
 };
 
 export const SubdomainBindBlocked: Story = {
+  args: {
+    onBind: fn(async () => {
+      throw new Error("Direct subdomain binding is not supported");
+    }),
+  },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
@@ -200,7 +205,9 @@ export const SubdomainBindBlocked: Story = {
     await expect(canvas.getByTestId("domain-bind-error")).toHaveTextContent(
       "请改为绑定 customer.com，再在创建邮箱时把子域填成 mail，即可继续使用 user@mail.customer.com 这类地址。",
     );
-    await expect(args.onBind).not.toHaveBeenCalled();
+    await expect(args.onBind).toHaveBeenCalledWith({
+      mailDomain: "mail.customer.com",
+    });
   },
 };
 

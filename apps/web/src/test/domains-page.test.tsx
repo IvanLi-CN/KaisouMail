@@ -592,8 +592,19 @@ describe("domains page view", () => {
     );
   });
 
-  it("blocks direct subdomain bind locally and recommends apex plus mailbox subdomain", async () => {
-    const onBind = vi.fn();
+  it("shows apex guidance when the bind API rejects direct subdomain input", async () => {
+    const onBind = vi.fn(async () => {
+      throw new ApiClientError(
+        "Direct subdomain binding is not supported",
+        {
+          code: "subdomain_direct_bind_not_supported",
+          mailDomain: "mail.customer.com",
+          recommendedApex: "customer.com",
+          recommendedMailboxSubdomain: "mail",
+        },
+        400,
+      );
+    });
 
     render(
       <MemoryRouter>
@@ -631,7 +642,9 @@ describe("domains page view", () => {
       "href",
       "https://docs.example.test/zh/project-domain-binding#bind-apex-only",
     );
-    expect(onBind).not.toHaveBeenCalled();
+    expect(onBind).toHaveBeenCalledWith({
+      mailDomain: "mail.customer.com",
+    });
   });
 
   it("lets existing subdomain records reach the bind API for reuse flows", async () => {
@@ -1795,8 +1808,19 @@ describe("domains page view", () => {
     );
   });
 
-  it("keeps blocking direct subdomain binds locally even when the catalog is stale", async () => {
-    const onBind = vi.fn();
+  it("renders backend subdomain guidance even when the catalog is stale", async () => {
+    const onBind = vi.fn(async () => {
+      throw new ApiClientError(
+        "Direct subdomain binding is not supported",
+        {
+          code: "subdomain_direct_bind_not_supported",
+          mailDomain: "mail.customer.com",
+          recommendedApex: "customer.com",
+          recommendedMailboxSubdomain: "mail",
+        },
+        400,
+      );
+    });
     render(
       <MemoryRouter>
         <DomainsPageView
@@ -1834,60 +1858,11 @@ describe("domains page view", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
 
-    await waitFor(() => expect(onBind).not.toHaveBeenCalled());
-
-    const errorBubble = await screen.findByTestId("domain-bind-error");
-    expect(errorBubble).toHaveTextContent(
-      "当前 Cloudflare 账号不支持直接绑定子域",
+    await waitFor(() =>
+      expect(onBind).toHaveBeenCalledWith({
+        mailDomain: "mail.customer.com",
+      }),
     );
-  });
-
-  it("keeps blocking catalog-only subdomains in the bind form", async () => {
-    const onBind = vi.fn();
-
-    render(
-      <MemoryRouter>
-        <DomainsPageView
-          domains={[
-            {
-              id: null,
-              mailDomain: "mail.customer.com",
-              rootDomain: "mail.customer.com",
-              zoneId: "zone_mail_customer_com",
-              bindingSource: null,
-              cloudflareAvailability: "available",
-              cloudflareStatus: "active",
-              nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
-              projectStatus: "not_enabled",
-              catchAllEnabled: false,
-              lastProvisionError: null,
-              createdAt: null,
-              updatedAt: null,
-              lastProvisionedAt: null,
-              disabledAt: null,
-            },
-            ...demoDomainCatalog,
-          ]}
-          isDomainBindingEnabled
-          isDomainLifecycleEnabled
-          docsLinks={docsLinks}
-          onBind={onBind}
-          onEnable={vi.fn()}
-          onEnableCatchAll={vi.fn()}
-          onDisableCatchAll={vi.fn()}
-          onDisable={vi.fn()}
-          onDelete={vi.fn()}
-          onRetry={vi.fn()}
-        />
-      </MemoryRouter>,
-    );
-
-    fireEvent.change(screen.getByLabelText("邮箱域名"), {
-      target: { value: "mail.customer.com" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "绑定到 Cloudflare" }));
-
-    await waitFor(() => expect(onBind).not.toHaveBeenCalled());
 
     const errorBubble = await screen.findByTestId("domain-bind-error");
     expect(errorBubble).toHaveTextContent(

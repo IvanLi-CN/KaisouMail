@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { DomainCatalogItem, DomainRecord } from "@/lib/contracts";
 import {
-  buildSubdomainDirectBindHint,
   classifyDomainBindError,
   type DomainBindErrorHint,
 } from "@/lib/domain-bind-errors";
@@ -26,10 +25,7 @@ import {
   hasDelegationRecoveryStatus,
   isFreshDomainCatalogEntry,
 } from "@/lib/domain-catalog";
-import {
-  classifyMailDomain,
-  recommendApexMailboxBinding,
-} from "@/lib/domain-classification";
+import { classifyMailDomain } from "@/lib/domain-classification";
 import type { PublicDocsLinks } from "@/lib/public-docs";
 
 const bindDomainSchema = z.object({
@@ -308,28 +304,6 @@ export const DomainBindCard = ({
             data-testid="domain-bind-form"
             onSubmit={form.handleSubmit(async (values) => {
               setSubmitError(null);
-              const subdomainRecommendation = recommendApexMailboxBinding(
-                values.mailDomain,
-              );
-              const reusableSubdomainRecord = subdomainRecommendation
-                ? domains.find(
-                    (domain) =>
-                      domain.mailDomain ===
-                        subdomainRecommendation.mailDomain &&
-                      domain.id !== null,
-                  )
-                : null;
-
-              if (subdomainRecommendation && !reusableSubdomainRecord) {
-                setSubmitError(
-                  buildSubdomainDirectBindHint(
-                    subdomainRecommendation,
-                    docsLinks,
-                  ),
-                );
-                return;
-              }
-
               try {
                 const result = await onSubmit(values);
                 form.reset();
