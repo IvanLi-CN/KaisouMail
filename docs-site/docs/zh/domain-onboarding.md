@@ -20,9 +20,12 @@ KaisouMail 目前支持两种域名接入方式：
 
 适合这些场景：
 
-- 你希望直接在 `/domains` 里输入根域名并完成接入
+- 你希望直接在 `/domains` 里输入 apex 根域名并完成接入
 - 你已经配好了更完整的 runtime 权限
-- 你接受项目直接调用 Cloudflare `POST /zones`
+- 你接受项目直接调用 Cloudflare `POST /zones` 创建 apex zone
+- 如果你想要 `user@mail.example.com`，你愿意绑定 apex 后在邮箱层设置 `subdomain=mail`
+
+> 当前产品不把 child-zone / 子域 zone onboarding 作为免费层标准能力；子域地址请优先走 apex + mailbox subdomain。
 
 继续阅读：
 
@@ -54,6 +57,6 @@ KaisouMail 目前支持两种域名接入方式：
 ## 常见入口
 
 - 想先接入已有 zone：看 [手动绑定并启用](/zh/domain-catalog-enablement)
-- 想直接新建 zone：看 [项目内直接绑定](/zh/project-domain-binding)
+- 想直接新建 apex zone：看 [项目内直接绑定](/zh/project-domain-binding)
 - 想先核对权限：看 [Token 权限](/zh/cloudflare-token-permissions)
 - 想看完整环境变量：看 [部署与环境](/zh/deployment-environment)

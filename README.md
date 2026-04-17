@@ -14,7 +14,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 - Multi-user temporary mailbox management with per-user API keys
 - Multi-domain mailbox management backed by D1-stored Cloudflare zone records and real-time Cloudflare zone discovery
 - Direct domain binding that creates a Cloudflare full zone from `/domains/bind`, plus project-bound zone deletion with soft local cleanup
-- Apex and delegated subdomain onboarding: bind `example.com` directly, or bind `mail.example.com` and finish parent-zone NS delegation
+- The direct-bind entry is apex-only: bind `example.com` directly; for `user@mail.example.com`, bind the apex first and use mailbox-level `subdomain=mail`
 - Random or custom mailbox creation with TTL-based cleanup and optional `mailDomain` selection (`rootDomain` remains a compatibility alias)
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
@@ -110,7 +110,7 @@ The Worker expects these bindings and variables:
 
 ### Optional live-management runtime config
 
-- `CLOUDFLARE_ACCOUNT_ID` (runtime variable; required for direct zone binding from `/domains`)
+- `CLOUDFLARE_ACCOUNT_ID` (runtime variable; required for apex direct binding from `/domains`)
 - `CLOUDFLARE_API_TOKEN` (runtime secret fallback)
 - `CLOUDFLARE_RUNTIME_API_TOKEN` (preferred runtime secret)
 
@@ -327,9 +327,7 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 - Mailboxes can either select a `mailDomain` explicitly or omit it and let the API randomly choose one active domain; nested subdomains still work:
   - `build@alpha.707979.xyz`
   - `spec@ops.alpha.mail.example.net`
-- For delegated subdomain onboarding, bind the child zone in KaisouMail first, then add NS records in the parent zone:
-  - child zone: `mail.customer.com`
-  - parent zone DNS: `mail NS <cloudflare-ns-1>` / `mail NS <cloudflare-ns-2>`
+- If you only want addresses like `user@mail.customer.com`, bind the apex `customer.com` and set the mailbox `subdomain` to `mail`.
 
 ## Notes on Cloudflare limits
 

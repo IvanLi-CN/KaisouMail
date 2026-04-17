@@ -56,6 +56,7 @@ vi.mock("../services/domains", async () => {
 });
 
 import { createApp } from "../app";
+import { ApiError } from "../lib/errors";
 
 const env = {
   APP_ENV: "development",
@@ -141,7 +142,7 @@ describe("domain routes", () => {
       created: true,
       domain: {
         id: "dom_bound",
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
         bindingSource: "project_bind",
         status: "provisioning_error",
@@ -159,7 +160,7 @@ describe("domain routes", () => {
       new Request("http://localhost/api/domains/bind", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mailDomain: "bound.example.org" }),
+        body: JSON.stringify({ mailDomain: "example.org" }),
       }),
       env,
     );
@@ -168,16 +169,48 @@ describe("domain routes", () => {
       env,
       expect.any(Object),
       expect.objectContaining({
-        mailDomain: "bound.example.org",
-        rootDomain: "bound.example.org",
+        mailDomain: "example.org",
+        rootDomain: "example.org",
       }),
     );
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
-      mailDomain: "bound.example.org",
-      rootDomain: "bound.example.org",
+      mailDomain: "example.org",
+      rootDomain: "example.org",
       bindingSource: "project_bind",
+    });
+  });
+
+  it("returns structured guidance when /api/domains/bind rejects direct subdomain binding", async () => {
+    bindDomain.mockRejectedValue(
+      new ApiError(400, "Direct subdomain binding is not supported", {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.customer.com",
+        recommendedApex: "customer.com",
+        recommendedMailboxSubdomain: "mail",
+      }),
+    );
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domains/bind", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mailDomain: "mail.customer.com" }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Direct subdomain binding is not supported",
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.customer.com",
+        recommendedApex: "customer.com",
+        recommendedMailboxSubdomain: "mail",
+      },
     });
   });
 
@@ -250,7 +283,7 @@ describe("domain routes", () => {
   it("enables catch-all from /api/domains/:id/catch-all/enable", async () => {
     enableDomainCatchAll.mockResolvedValue({
       id: "dom_bound",
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
       status: "active",
@@ -279,7 +312,7 @@ describe("domain routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
-      mailDomain: "bound.example.org",
+      mailDomain: "example.org",
       catchAllEnabled: true,
     });
   });
@@ -287,7 +320,7 @@ describe("domain routes", () => {
   it("disables catch-all from /api/domains/:id/catch-all/disable", async () => {
     disableDomainCatchAll.mockResolvedValue({
       id: "dom_bound",
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
       status: "active",
@@ -315,7 +348,7 @@ describe("domain routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       id: "dom_bound",
-      mailDomain: "bound.example.org",
+      mailDomain: "example.org",
       catchAllEnabled: false,
     });
   });

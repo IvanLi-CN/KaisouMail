@@ -138,8 +138,8 @@ describe("demoApi", () => {
 
   it("binds new domains as project-bound provisioning errors until retried", async () => {
     const bound = await demoApi.bindDomain({
-      mailDomain: "bound.example.org",
-      rootDomain: "bound.example.org",
+      mailDomain: "boundexample.org",
+      rootDomain: "boundexample.org",
     });
 
     expect(bound.bindingSource).toBe("project_bind");
@@ -149,14 +149,37 @@ describe("demoApi", () => {
     expect(retried.status).toBe("active");
   });
 
+  it("rejects direct subdomain binds so the demo stays aligned with production", async () => {
+    await expect(
+      demoApi.bindDomain({
+        mailDomain: "ops.example.org",
+        rootDomain: "ops.example.org",
+      }),
+    ).rejects.toThrow("Direct subdomain binding is not supported");
+  });
+
+  it("reuses disabled subdomain zones that already exist in the demo catalog", async () => {
+    await demoApi.disableDomain("dom_secondary");
+
+    const rebound = await demoApi.bindDomain({
+      mailDomain: "mail.example.net",
+      rootDomain: "mail.example.net",
+    });
+
+    expect(rebound.bindingSource).toBe("project_bind");
+    expect(rebound.status).toBe("active");
+    expect(rebound.disabledAt).toBeNull();
+    expect(rebound.zoneId).toBe("zone_secondary");
+  });
+
   it("deletes project-bound domains only when they have no non-destroyed mailboxes", async () => {
     await expect(demoApi.deleteDomain("dom_secondary")).rejects.toThrow(
       "Mailbox domain still has non-destroyed mailboxes",
     );
 
     const bound = await demoApi.bindDomain({
-      mailDomain: "cleanup.example.org",
-      rootDomain: "cleanup.example.org",
+      mailDomain: "cleanupexample.org",
+      rootDomain: "cleanupexample.org",
     });
     await demoApi.deleteDomain(bound.id);
 

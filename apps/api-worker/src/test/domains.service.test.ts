@@ -539,7 +539,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -547,23 +547,46 @@ describe("domain catalog", () => {
     enableDomainRouting.mockResolvedValue(undefined);
 
     const result = await bindDomain(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
     });
 
-    expect(createZone).toHaveBeenCalledWith(
-      env,
-      runtimeConfig,
-      "bound.example.org",
-      {
-        projectOperation: "domains.bind",
-        projectRoute: "POST /api/domains/bind",
-      },
-    );
+    expect(createZone).toHaveBeenCalledWith(env, runtimeConfig, "example.org", {
+      projectOperation: "domains.bind",
+      projectRoute: "POST /api/domains/bind",
+    });
     expect(result.domain).toMatchObject({
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
     });
+  });
+
+  it("rejects direct subdomain bind requests before creating a Cloudflare zone", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    listZones.mockRejectedValue(
+      new Error("Cloudflare catalog temporarily unavailable"),
+    );
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.example.org",
+        recommendedApex: "example.org",
+        recommendedMailboxSubdomain: "mail",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(listZones).not.toHaveBeenCalled();
+    expect(validateZoneAccess).not.toHaveBeenCalled();
+    expect(enableDomainRouting).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
   });
 
   it("reuses existing disabled domains instead of creating a duplicate Cloudflare zone", async () => {
@@ -572,7 +595,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_disabled",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_existing",
           bindingSource: "catalog",
           status: "disabled",
@@ -584,7 +607,7 @@ describe("domain catalog", () => {
     listZones.mockResolvedValue([
       {
         id: "zone_existing",
-        name: "bound.example.org",
+        name: "example.org",
         status: "active",
         nameServers: [],
       },
@@ -593,16 +616,134 @@ describe("domain catalog", () => {
     enableDomainRouting.mockResolvedValue(undefined);
 
     const result = await bindDomain(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
     });
 
     expect(createZone).not.toHaveBeenCalled();
     expect(result.domain).toMatchObject({
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_existing",
       bindingSource: "catalog",
       status: "active",
     });
+  });
+
+  it("reuses existing disabled subdomain zones instead of forcing apex guidance", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_disabled",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_existing",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_subdomain_existing",
+        name: "mail.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockResolvedValue(undefined);
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "mail.example.org",
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(result.domain).toMatchObject({
+      rootDomain: "mail.example.org",
+      zoneId: "zone_subdomain_existing",
+      bindingSource: "catalog",
+      status: "active",
+    });
+  });
+
+  it("still rejects direct subdomain bind when no reusable subdomain zone exists", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_stale",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_stale",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockResolvedValue([
+      {
+        id: "zone_other",
+        name: "other.example.org",
+        status: "active",
+        nameServers: [],
+      },
+    ]);
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.example.org",
+        recommendedApex: "example.org",
+        recommendedMailboxSubdomain: "mail",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+  });
+
+  it("still returns subdomain guidance when reusable subdomain lookup fails upstream", async () => {
+    const db = createDb({
+      domainRows: [
+        {
+          ...baseDomain,
+          id: "dom_subdomain_stale",
+          rootDomain: "mail.example.org",
+          zoneId: "zone_subdomain_stale",
+          bindingSource: "catalog",
+          status: "disabled",
+          disabledAt: "2026-04-04T00:00:00.000Z",
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    listZones.mockRejectedValue(
+      new Error("Cloudflare catalog temporarily unavailable"),
+    );
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "mail.example.org",
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: {
+        code: "subdomain_direct_bind_not_supported",
+        mailDomain: "mail.example.org",
+        recommendedApex: "example.org",
+        recommendedMailboxSubdomain: "mail",
+      },
+    });
+
+    expect(createZone).not.toHaveBeenCalled();
+    expect(validateZoneAccess).not.toHaveBeenCalled();
+    expect(enableDomainRouting).not.toHaveBeenCalled();
   });
 
   it("creates a fresh Cloudflare zone when a stale disabled domain no longer matches the catalog", async () => {
@@ -611,7 +752,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_disabled",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_stale",
           bindingSource: "catalog",
           status: "disabled",
@@ -632,27 +773,22 @@ describe("domain catalog", () => {
     enableDomainRouting.mockResolvedValue(undefined);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
 
     const result = await bindDomain(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
     });
 
-    expect(createZone).toHaveBeenCalledWith(
-      env,
-      runtimeConfig,
-      "bound.example.org",
-      {
-        projectOperation: "domains.bind",
-        projectRoute: "POST /api/domains/bind",
-      },
-    );
+    expect(createZone).toHaveBeenCalledWith(env, runtimeConfig, "example.org", {
+      projectOperation: "domains.bind",
+      projectRoute: "POST /api/domains/bind",
+    });
     expect(validateZoneAccess).toHaveBeenCalledTimes(1);
     expect(result.domain).toMatchObject({
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
       status: "active",
@@ -663,7 +799,7 @@ describe("domain catalog", () => {
     const winningDomain = {
       ...baseDomain,
       id: "dom_bound",
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
     };
@@ -673,7 +809,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -681,11 +817,11 @@ describe("domain catalog", () => {
     enableDomainRouting.mockResolvedValue(undefined);
 
     const result = await bindDomain(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
     });
 
     expect(result.domain).toMatchObject({
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       bindingSource: "project_bind",
       status: "active",
@@ -698,7 +834,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -707,11 +843,11 @@ describe("domain catalog", () => {
     );
 
     const result = await bindDomain(env, runtimeConfig, {
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
     });
 
     expect(result.domain).toMatchObject({
-      rootDomain: "bound.example.org",
+      rootDomain: "example.org",
       zoneId: "zone_bound",
       status: "provisioning_error",
       catchAllEnabled: false,
@@ -725,7 +861,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -745,7 +881,7 @@ describe("domain catalog", () => {
 
     await expect(
       bindDomain(env, runtimeConfig, {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
       }),
     ).rejects.toMatchObject({
       status: 429,
@@ -762,7 +898,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -780,7 +916,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -811,7 +947,7 @@ describe("domain catalog", () => {
 
     await expect(
       bindDomain(env, runtimeConfig, {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
       }),
     ).rejects.toMatchObject({
       status: 429,
@@ -831,7 +967,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -849,7 +985,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -863,7 +999,7 @@ describe("domain catalog", () => {
 
     await expect(
       bindDomain(env, runtimeConfig, {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
       }),
     ).rejects.toMatchObject({
       status: 500,
@@ -875,7 +1011,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -900,7 +1036,7 @@ describe("domain catalog", () => {
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
       id: "zone_bound",
-      name: "bound.example.org",
+      name: "example.org",
       status: "pending",
       nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
     });
@@ -910,7 +1046,7 @@ describe("domain catalog", () => {
 
     await expect(
       bindDomain(env, runtimeConfig, {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
       }),
     ).rejects.toThrow("D1 write failed");
 
@@ -918,7 +1054,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -937,7 +1073,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_bound",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_bound",
           bindingSource: "project_bind",
         },
@@ -955,7 +1091,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -973,7 +1109,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_bound",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_bound",
           bindingSource: "project_bind",
           status: "disabled",
@@ -994,7 +1130,7 @@ describe("domain catalog", () => {
       env,
       runtimeConfig,
       {
-        rootDomain: "bound.example.org",
+        rootDomain: "example.org",
         zoneId: "zone_bound",
       },
       {
@@ -1012,7 +1148,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_bound",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_bound",
           bindingSource: "project_bind",
         },
@@ -1053,7 +1189,7 @@ describe("domain catalog", () => {
         {
           ...baseDomain,
           id: "dom_bound",
-          rootDomain: "bound.example.org",
+          rootDomain: "example.org",
           zoneId: "zone_bound",
           bindingSource: "project_bind",
         },
@@ -1061,7 +1197,7 @@ describe("domain catalog", () => {
       mailboxRows: [
         {
           id: "mbx_destroying",
-          address: "mail@box.bound.example.org",
+          address: "mail@box.example.org",
           subdomain: "box",
           domainId: "dom_bound",
           status: "destroying",
@@ -1087,7 +1223,7 @@ describe("domain catalog", () => {
           {
             ...baseDomain,
             id: "dom_bound",
-            rootDomain: "bound.example.org",
+            rootDomain: "example.org",
             zoneId: "zone_bound",
             bindingSource: "project_bind",
           },
@@ -1095,7 +1231,7 @@ describe("domain catalog", () => {
         mailboxRows: [
           {
             id: "mbx_legacy",
-            address: "mail@box.bound.example.org",
+            address: "mail@box.example.org",
             subdomain: "box",
             domainId: null,
             status: "active",

@@ -1,6 +1,6 @@
 # Bind a new domain directly from the project
 
-Use this guide when **you want to enter a root domain in KaisouMail `/domains` and let the project create the Cloudflare full zone on your behalf.**
+Use this guide when **you want to enter an apex root domain in KaisouMail `/domains` and let the project create the Cloudflare full zone on your behalf.**
 
 This is the flow we are using right now. Compared with “manually add the zone in Cloudflare and enable it in the project later”, it removes one manual handoff but requires more complete runtime permissions and configuration.
 
@@ -40,17 +40,30 @@ After deploy, confirm:
 
 1. `GET /api/meta` returns `cloudflareDomainLifecycleEnabled=true`
 2. `GET /api/meta` returns `cloudflareDomainBindingEnabled=true`
-3. `/domains` shows the **Bind new domain** form
+3. `/domains` shows the **Bind mailbox domain** form
 
 If the second value is still `false`, check whether `CLOUDFLARE_ACCOUNT_ID` actually reached Worker runtime instead of existing only in the GitHub Actions job environment.
 
 ## Use the feature to bind a new domain {#bind-domain-from-project}
 
-### Step 1: enter the root domain in `/domains`
+### Step 1: enter the apex root domain in `/domains`
 
 Open `/domains` in the control plane and locate the **Bind new domain** card:
 
 ![Control-plane entry for project-direct domain binding in /domains](./assets/project-domain-binding-ui-bind.png)
+
+### `/api/domains/bind` is apex-only {#bind-apex-only}
+
+If you want addresses such as `user@mail.customer.com`, do not submit
+`mail.customer.com` directly to `/api/domains/bind`. The recommended path is:
+
+1. bind the apex first: `customer.com`
+2. create the mailbox with `subdomain=mail`
+3. the final address still becomes `user@mail.customer.com`
+
+If Cloudflare already has a zone, you can use the
+[`/domains` catalog enable flow](/domain-catalog-enablement) instead, but the
+product does not treat child-zone onboarding as a standard free-tier path.
 
 ### Step 2: submit the bind request
 
@@ -60,7 +73,7 @@ After you click **Bind to Cloudflare**, the project calls `POST /api/domains/bin
 - Cloudflare `GET /zones/:zone_id`
 - Cloudflare `POST /zones/:zone_id/email/routing/enable`
 
-### Step 3: if the page does not go straight to `active`, update nameservers at the registrar first
+### Step 3: if the page does not go straight to `active`, update the apex authoritative nameservers first
 
 You usually land in one of these states:
 
@@ -88,7 +101,8 @@ After updating nameservers:
 3. click **Retry** for that row
 4. confirm the project status becomes `active`
 
-If nameserver delegation is still incomplete, repeatedly clicking **Retry** usually will not help.
+If the apex authoritative nameservers are still not switched, repeatedly
+clicking **Retry** usually will not help.
 
 ## Use the domain after binding {#use-bound-domain}
 
@@ -176,7 +190,7 @@ Typical messages:
 - `Zone is pending activation`
 - or any message mentioning `pending`, `activation`, `nameserver`, or `delegated`
 
-This means Cloudflare accepted the zone creation request, but nameserver delegation is not complete yet, so Email Routing cannot be enabled.
+This means Cloudflare accepted the apex zone creation request, but authoritative nameserver switching is not complete yet, so Email Routing cannot be enabled.
 
 In the UI, this usually appears as a retained row with `provisioning_error`, plus a **details icon** and **Retry** in the action column:
 
@@ -191,7 +205,7 @@ This is the most common recoverable failure in the project-direct flow:
 Fix steps:
 
 1. check whether the zone is still `pending` in Cloudflare
-2. click the **details icon** for that row and update registrar nameservers to the exact Cloudflare values shown in the dialog
+2. click the **details icon** for that row and update the apex registrar / DNS provider nameservers to the exact Cloudflare values shown in the dialog
 3. wait until the zone becomes `active`
 4. return to `/domains` and click **Retry**
 

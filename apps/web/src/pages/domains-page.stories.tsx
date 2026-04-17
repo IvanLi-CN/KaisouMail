@@ -13,25 +13,6 @@ if (!docsLinks) {
   throw new Error("docs links are required for domains stories");
 }
 
-const pendingBindResult: DomainCatalogItem = {
-  id: "dom_bound",
-  mailDomain: "mail.customer.com",
-  rootDomain: "mail.customer.com",
-  zoneId: "zone_mail_customer_com",
-  bindingSource: "project_bind",
-  cloudflareAvailability: "available",
-  cloudflareStatus: "pending",
-  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
-  projectStatus: "provisioning_error",
-  catchAllEnabled: false,
-  lastProvisionError:
-    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
-  createdAt: "2026-04-10T08:00:00.000Z",
-  updatedAt: "2026-04-10T08:00:00.000Z",
-  lastProvisionedAt: null,
-  disabledAt: null,
-};
-
 const existingChildZoneCatalogDomain: DomainCatalogItem = {
   id: null,
   mailDomain: "mail.customer.com",
@@ -55,6 +36,25 @@ const pendingApexBindResult: DomainCatalogItem = {
   mailDomain: "example.com",
   rootDomain: "example.com",
   zoneId: "zone_example_com",
+  bindingSource: "project_bind",
+  cloudflareAvailability: "available",
+  cloudflareStatus: "pending",
+  nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+  projectStatus: "provisioning_error",
+  catchAllEnabled: false,
+  lastProvisionError:
+    "Zone is pending activation in Cloudflare; retry after nameservers are delegated",
+  createdAt: "2026-04-10T08:00:00.000Z",
+  updatedAt: "2026-04-10T08:00:00.000Z",
+  lastProvisionedAt: null,
+  disabledAt: null,
+};
+
+const pendingExistingChildZoneBindResult: DomainCatalogItem = {
+  id: "dom_nested_bind",
+  mailDomain: "ops.mail.example.com",
+  rootDomain: "ops.mail.example.com",
+  zoneId: "zone_ops_mail_example_com",
   bindingSource: "project_bind",
   cloudflareAvailability: "available",
   cloudflareStatus: "pending",
@@ -111,7 +111,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Covers both direct Cloudflare binding and catalog enablement for apex domains and delegated child zones. Child-zone onboarding keeps the project row visible until the parent zone finishes NS delegation.",
+          "Covers apex-only direct binding, local subdomain blocking, generic catalog enablement, and legacy subdomain-zone guidance for already-existing records.",
       },
     },
   },
@@ -184,11 +184,13 @@ export const BindPermissionHelp: Story = {
   },
 };
 
-export const BindNextStepsDialog: Story = {
+export const SubdomainBindBlocked: Story = {
   args: {
-    onBind: fn(async () => pendingBindResult),
+    onBind: fn(async () => {
+      throw new Error("Direct subdomain binding is not supported");
+    }),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
       canvas.getByLabelText("邮箱域名"),
@@ -197,42 +199,15 @@ export const BindNextStepsDialog: Story = {
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
-    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
-      "domain-bind-success-guide-dialog",
-    );
-    await expect(dialog).toHaveTextContent("还差一步：完成子域委派");
-    await expect(dialog).toHaveTextContent(
-      "mail.customer.com。Cloudflare 已分配 nameserver。",
-    );
-    await expect(dialog).toHaveTextContent(
-      "请到父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面的 NS；完成后再回来重试。",
-    );
-    await expect(dialog).toHaveTextContent(
-      "这是子域接入，请去父域 customer.com 的 DNS 管理处，为子域标签 mail 添加下面这组 NS。",
-    );
-    await expect(dialog).toHaveTextContent("amy.ns.cloudflare.com");
-    await expect(dialog).toHaveTextContent("kai.ns.cloudflare.com");
-    const amyInput = within(dialog).getByRole("textbox", {
-      name: "Nameserver amy.ns.cloudflare.com",
-    });
-    const kaiInput = within(dialog).getByRole("textbox", {
-      name: "Nameserver kai.ns.cloudflare.com",
-    });
-    await expect(amyInput).toHaveAttribute("readonly");
-    await expect(kaiInput).toHaveAttribute("readonly");
     await expect(
-      within(dialog).getByRole("button", {
-        name: "复制 amy.ns.cloudflare.com",
-      }),
+      canvas.getByText("当前 Cloudflare 账号不支持直接绑定子域"),
     ).toBeInTheDocument();
-    await expect(
-      within(dialog).getByRole("button", {
-        name: "复制 kai.ns.cloudflare.com",
-      }),
-    ).toBeInTheDocument();
-    await expect(dialog).toHaveTextContent(
-      "保持当前页面打开，系统会自动刷新状态；等 Cloudflare 从 pending 变成 active。",
+    await expect(canvas.getByTestId("domain-bind-error")).toHaveTextContent(
+      "请改为绑定 customer.com，再在创建邮箱时把子域填成 mail，即可继续使用 user@mail.customer.com 这类地址。",
     );
+    await expect(args.onBind).toHaveBeenCalledWith({
+      mailDomain: "mail.customer.com",
+    });
   },
 };
 
@@ -260,6 +235,55 @@ export const ApexBindNextStepsDialog: Story = {
   },
 };
 
+export const ExistingChildZoneBindNextStepsDialog: Story = {
+  args: {
+    domains: [
+      pendingExistingChildZoneBindResult,
+      {
+        id: null,
+        mailDomain: "mail.example.com",
+        rootDomain: "mail.example.com",
+        zoneId: "zone_mail_example_com",
+        bindingSource: null,
+        cloudflareAvailability: "available",
+        cloudflareStatus: "active",
+        nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
+        projectStatus: "not_enabled",
+        catchAllEnabled: false,
+        lastProvisionError: null,
+        createdAt: null,
+        updatedAt: null,
+        lastProvisionedAt: null,
+        disabledAt: null,
+      },
+      ...demoDomainCatalog,
+    ],
+    onBind: fn(async () => pendingExistingChildZoneBindResult),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByLabelText("邮箱域名"),
+      "ops.mail.example.com",
+    );
+    await userEvent.click(
+      canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
+    );
+    const dialog = await within(canvasElement.ownerDocument.body).findByTestId(
+      "domain-bind-success-guide-dialog",
+    );
+    await expect(dialog).toHaveTextContent("还差一步：在父域添加 NS");
+    await expect(dialog).toHaveTextContent(
+      "ops.mail.example.com。Cloudflare 已分配 nameserver。请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS；完成后再回来重试。",
+    );
+    await expect(dialog).toHaveTextContent(
+      "这是已有子域 zone 记录。若你继续维护它，请去父域 mail.example.com 的 DNS 管理处，为子域标签 ops 添加下面这组 NS。",
+    );
+    await expect(dialog).not.toHaveTextContent("权威 NS 切到下面这组值");
+    await expect(dialog).not.toHaveTextContent("父域 example.com");
+  },
+};
+
 export const ChildZoneCatalogEnableFlow: Story = {
   args: {
     domains: [
@@ -273,7 +297,8 @@ export const ChildZoneCatalogEnableFlow: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("mail.customer.com")).toBeInTheDocument();
     await expect(
-      canvas.getAllByText("已存在于 Cloudflare，可直接启用到项目").length,
+      canvas.getAllByText("Cloudflare 中已发现该 zone，可按当前记录启用到项目")
+        .length,
     ).toBeGreaterThan(0);
     await userEvent.click(canvas.getByRole("button", { name: "启用域名" }));
     await expect(args.onEnable).toHaveBeenCalledWith({
@@ -286,15 +311,12 @@ export const ChildZoneCatalogEnableFlow: Story = {
 export const BindFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.type(
-      canvas.getByLabelText("邮箱域名"),
-      "bound.example.org",
-    );
+    await userEvent.type(canvas.getByLabelText("邮箱域名"), "example.org");
     await userEvent.click(
       canvas.getByRole("button", { name: "绑定到 Cloudflare" }),
     );
     await expect(args.onBind).toHaveBeenCalledWith({
-      mailDomain: "bound.example.org",
+      mailDomain: "example.org",
     });
   },
 };
@@ -349,19 +371,19 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByTestId("domain-bind-delegation-guide"),
     ).toHaveTextContent(
-      "直绑 apex 或子域后若停在 pending / provisioning_error：先按域名类型完成 NS 配置，再重试。",
+      "apex 直绑若停在 pending / provisioning_error：先完成权威 NS 切换，再重试。",
     );
     await expect(
       canvas.getByTestId("domain-catalog-delegation-guide"),
     ).toHaveTextContent(
-      "有 1 个项目直绑域名待完成 Cloudflare NS 配置；请按域名详情里的子域委派或 apex 权威 NS 指引处理后，再点“重试接入”。",
+      "有 1 个项目域名待完成 Cloudflare NS 配置；请按域名详情里的当前指引处理后，再点“重试接入”。",
     );
     await expect(
       canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
-    ).toHaveTextContent("待委派");
+    ).toHaveTextContent("待配置 NS");
     await expect(
       canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
-    ).toHaveTextContent("完成父区 NS 委派后重试。");
+    ).toHaveTextContent("完成现有委派配置后重试。");
     await expect(
       within(
         canvas.getByTestId("domain-row-delegation-guide-dom_failed"),
@@ -427,9 +449,9 @@ export const ZoneDetailsDialog: Story = {
         name: "Nameserver kai.ns.cloudflare.com",
       }),
     ).toHaveValue("kai.ns.cloudflare.com");
-    await expect(dialog).toHaveTextContent("先完成子域委派，再重试接入");
+    await expect(dialog).toHaveTextContent("先完成现有子域委派，再重试接入");
     await expect(dialog).toHaveTextContent(
-      "这是子域接入，请去父域 example.dev 的 DNS 管理处，为子域标签 staging 添加下面这组 NS。",
+      "这是已有子域 zone 记录。若你继续维护它，请去父域 example.dev 的 DNS 管理处，为子域标签 staging 添加下面这组 NS。",
     );
   },
 };

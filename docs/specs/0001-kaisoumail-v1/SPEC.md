@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-16
+Last: 2026-04-17
 
 ## Objective
 
@@ -37,9 +37,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ### Domains
 - `/domains`
 - Admin-only mailbox domain catalog and Cloudflare provisioning status surface
-- Discover currently manageable Cloudflare zones in real time, bind apex or delegated child zones directly into Cloudflare, and manage enable/disable/retry/delete flows inside the project
-- Child-zone direct binding explicitly guides the operator to finish parent-zone NS delegation, while already-existing child zones can be enabled directly from the catalog without creating a duplicate zone
-- Bind-form failures translate Cloudflare permission, configuration, and activation errors into actionable Chinese guidance with deep links to public docs
+- Discover currently manageable Cloudflare zones in real time, bind apex zones directly into Cloudflare, and manage enable/disable/retry/delete flows inside the project
+- Direct project binding is apex-only; mailbox-level subdomains are produced by binding the apex first and then creating mailboxes with `subdomain`. Historical or externally created subdomain zones may still appear in the catalog or project records, but they are not a standard onboarding promise.
+- Historical or externally created subdomain zones remain maintenance-only: the project may restore an existing local child-zone record when the same zone is still discoverable, but brand-new subdomain onboarding must still fall back to apex binding guidance instead of depending on Cloudflare catalog health.
+- Bind-form failures translate Cloudflare permission, configuration, activation, and unsupported-subdomain errors into actionable Chinese guidance with deep links to public docs
 
 ### Messages
 - `/messages/:messageId`
@@ -67,8 +68,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `GET /api/meta` is the runtime truth source for active mailbox domains, TTL defaults, TTL bounds, unlimited-TTL capability, address validation hints, and whether browser passkey auth is currently enabled
 - `GET /api/domains/catalog` returns the real-time Cloudflare-visible domain catalog merged with project-local enablement state, including `cloudflareAvailability`, `projectStatus`, `bindingSource`, `cloudflareStatus`, `nameServers`, `catchAllEnabled`, and a top-level `cloudflareSync` status object (`live | rate_limited`) with cooldown metadata plus `rateLimitContext` attribution for the project operation / Cloudflare endpoint that first triggered the active cooldown
 - `GET|POST /api/domains` plus `POST /api/domains/bind`, `POST /api/domains/:id/catch-all/enable|disable`, and `POST /api/domains/:id/retry|disable|delete` provide admin-only mailbox domain management for multiple Cloudflare zones in one shared instance; `mailDomain` is the canonical public field name and `rootDomain` remains a compatibility alias
-- `POST /api/domains` enables a discovered catalog domain (including an already-existing child zone), while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI for either an apex domain or a delegated child zone
-- Child-zone direct binding still requires parent-zone NS delegation after the zone is created; the product surfaces keep the project-bound record visible in `pending` / `provisioning_error` until the operator finishes that NS handoff and retries
+- `POST /api/domains` enables a discovered catalog domain, while `POST /api/domains/bind` creates a Cloudflare `full` zone directly from the Web UI only for apex domains
+- `POST /api/domains/bind` rejects direct subdomain input with `400 + details.code=subdomain_direct_bind_not_supported`, returning `recommendedApex` plus `recommendedMailboxSubdomain`; subdomain zones that appear through history or external setup remain maintenance-only records rather than a standard onboarding path
+- If `/api/domains/bind` is asked to re-bind a previously known subdomain record, it may only restore that record when the exact Cloudflare zone is still discoverable; otherwise the API must still return the structured unsupported-subdomain guidance instead of surfacing transient Cloudflare catalog failures.
 - Cloudflare-backed domain write operations (`POST /api/domains`, `/api/domains/bind`, `/api/domains/:id/retry`, catch-all enable/disable, and project-bound delete) fail fast on upstream `429` with a propagated `Retry-After` header; Cloudflare rate limiting never mutates a domain into `provisioning_error`
 - `POST /api/mailboxes` accepts optional `mailDomain`; `rootDomain` remains a compatibility alias, and when both are omitted the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox; on `catchAllEnabled=true` domains it now registers the mailbox locally without creating a per-address Cloudflare routing rule
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
@@ -120,7 +122,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
 - Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
-- Domains management includes a dedicated bind form, explicit apex/child-zone NS delegation guidance, catalog enablement for pre-existing child zones, and a confirmation popover for destructive delete
+- Domains management includes a dedicated apex-only bind form, explicit apex NS guidance plus local unsupported-subdomain intercepts, generic catalog enablement for discovered zones, legacy guidance for historical subdomain records, and a confirmation popover for destructive delete
 - Refresh controls stay compact and header-aligned on wide layouts, while narrow viewports may wrap the action row without truncating the primary operations or introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
@@ -138,8 +140,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-17: Synced the spec after review-only convergence so unsupported subdomain binds fail deterministically even when reusable-zone catalog checks fail upstream, while the maintenance-only reuse path for already known child-zone records remains aligned across the API and demo surfaces.
 - 2026-04-14: Hardened `/domains` against upstream `429` loops by degrading `GET /api/domains/catalog` to `200 + cloudflareSync`, propagating `Retry-After` on Cloudflare-backed writes, pausing Workers AI verification on both daily exhaustion and temporary rate limits, and restoring the spec-defined visible-only polling behavior.
-- 2026-04-16: Productized delegated child-zone onboarding on `/domains`, promoted `mailDomain` to the canonical public API field while keeping `rootDomain` as a compatibility alias, refreshed the docs/API examples, and updated domains visual guidance for parent-zone NS delegation plus existing child-zone catalog enablement.
+- 2026-04-16: Promoted `mailDomain` to the canonical public API field while keeping `rootDomain` as a compatibility alias, refreshed the docs/API examples, and clarified that `/domains/bind` is apex-only while historical subdomain records remain maintenance-only with preserved delegation guidance.
 - 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.
 - 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
 - 2026-04-12: Added domain-level Catch All controls with Cloudflare catch-all snapshot/restore, auto-materialized `source=catch_all` mailboxes for unregistered addresses, refreshed the mailbox/domain/API docs surfaces, and updated the workspace/mailboxes rails to a two-line dense layout with Catch All badges.
@@ -259,32 +262,20 @@ PR: include
 ### Domains
 
 PR: include
-![Domains page overview highlighting apex and delegated child-zone onboarding in one console](./assets/domains-page-overview.png)
-
-![Domains bind form with Cloudflare status columns](./assets/domains-bind-overview.png)
+![Domains page overview with apex-only direct-bind guidance and generic catalog hints](./assets/domains-apex-bind-overview.png)
 
 PR: include
-![Domains bind form submit error with aligned action button](./assets/domains-bind-submit-error.png)
-
-![Domains bind form permission guidance with docs deep link](./assets/domains-bind-permission-help.png)
+![Domains bind card blocking direct subdomain input and recommending apex plus mailbox subdomain instead](./assets/domains-subdomain-bind-blocked.png)
 
 PR: include
-![Domains bind follow-up dialog that explains parent-zone NS delegation for child zones and auto-refresh retry guidance](./assets/domains-bind-next-steps-dialog-auto-refresh.png)
+![Domains apex bind follow-up dialog explaining authoritative nameserver cutover after Cloudflare allocation](./assets/domains-apex-bind-next-steps.png)
 
 PR: include
-![Domains catalog showing an already-existing child zone that can be enabled directly without rebinding](./assets/domains-child-zone-catalog-enable.png)
+![Domains catalog showing an externally existing zone record that can still be enabled without using direct bind](./assets/domains-existing-child-zone-catalog-enable.png)
 
-![Domains page row that routes Zone and nameserver inspection into a details dialog](./assets/domains-ns-delegation-guide-main.png)
+![Domains bind follow-up dialog preserving parent-zone NS guidance when a historical child-zone record is reused](./assets/domains-existing-child-zone-bind-next-steps.png)
 
-![Domains zone details dialog with copyable zone values plus parent-zone NS delegation guidance](./assets/domains-zone-details-dialog.png)
-
-![Domains catalog rows with Catch All status badges and enable/disable controls](./assets/domains-page-catch-all-toggle.png)
-
-![Domains delete confirmation popover](./assets/domains-delete-confirmation.png)
-
-![Domains page with Cloudflare-missing domain](./assets/domains-page-missing-cloudflare.png)
-
-![Domains page with Cloudflare catalog cooldown banner and degraded local rows](./assets/domains-rate-limited-catalog.png)
+![Domains legacy subdomain-zone details dialog preserving NS guidance for an already-existing delegated record](./assets/domains-existing-child-zone-details.png)
 
 ### Mailbox Creation
 

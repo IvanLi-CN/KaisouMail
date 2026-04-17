@@ -9,7 +9,7 @@
 | `GET /api/meta` | 读取 active 域名、TTL、地址规则与 Passkey 能力 |
 | `GET /api/domains/catalog` | 读取 Cloudflare 可见 zone + 项目状态 |
 | `GET /api/domains` | 读取项目内已有域记录 |
-| `POST /api/domains/bind` | 创建 Cloudflare full zone 并接入项目 |
+| `POST /api/domains/bind` | 创建 apex Cloudflare full zone 并接入项目；子域会返回推荐的 apex/subdomain 指引 |
 | `POST /api/domains` | 启用一个 catalog 域 |
 | `POST /api/domains/:id/catch-all/enable` | 开启项目侧 Catch All，并接管 Cloudflare catch-all 到邮件 Worker |
 | `POST /api/domains/:id/catch-all/disable` | 关闭项目侧 Catch All，并恢复开启前的 Cloudflare catch-all 配置 |

@@ -93,6 +93,7 @@
       "name": "@kaisoumail/shared",
       "version": "0.1.0",
       "dependencies": {
+        "tldts": "^7.0.28",
         "zod": "^4.3.6",
       },
     },

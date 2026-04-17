@@ -1,4 +1,9 @@
-import { domainCatalogItemSchema, domainSchema } from "@kaisoumail/shared";
+import {
+  classifyMailDomain,
+  domainCatalogItemSchema,
+  domainSchema,
+  recommendApexMailboxBinding,
+} from "@kaisoumail/shared";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 
@@ -322,7 +327,7 @@ const findCatalogZone = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   rootDomain: string,
-  zoneId: string,
+  zoneId: string | null,
   requestSource: CloudflareRequestSource,
 ) => {
   if (!config.EMAIL_ROUTING_MANAGEMENT_ENABLED) return null;
@@ -333,7 +338,8 @@ const findCatalogZone = async (
     requestSource,
   );
   const zone = zonesByRootDomain.get(rootDomain);
-  return zone && zone.id === zoneId ? zone : null;
+  if (!zone) return null;
+  return zoneId ? (zone.id === zoneId ? zone : null) : zone;
 };
 
 const requireCatalogZone = async (
@@ -1046,6 +1052,7 @@ export const bindDomain = async (
   input: { rootDomain: string },
 ) => {
   const rootDomain = normalizeRootDomain(input.rootDomain);
+  const classification = classifyMailDomain(rootDomain);
   const existing = await getDomainByRootDomain(env, rootDomain, {
     includeDeleted: true,
   });
@@ -1059,13 +1066,22 @@ export const bindDomain = async (
   if (createState.kind === "replace") {
     const existingZoneId = createState.row.zoneId?.trim();
     if (existingZoneId) {
-      const catalogZone = await findCatalogZone(
-        env,
-        config,
-        rootDomain,
-        existingZoneId,
-        domainRouteContexts.bind,
-      );
+      const catalogZone =
+        classification.type === "subdomain"
+          ? await findCatalogZone(
+              env,
+              config,
+              rootDomain,
+              existingZoneId,
+              domainRouteContexts.bind,
+            ).catch(() => null)
+          : await findCatalogZone(
+              env,
+              config,
+              rootDomain,
+              existingZoneId,
+              domainRouteContexts.bind,
+            );
       if (catalogZone) {
         return await persistBoundZone(
           env,
@@ -1079,6 +1095,20 @@ export const bindDomain = async (
         );
       }
     }
+  }
+
+  if (classification.type === "subdomain") {
+    const recommendation = recommendApexMailboxBinding(rootDomain);
+
+    throw new ApiError(400, "Direct subdomain binding is not supported", {
+      code: "subdomain_direct_bind_not_supported",
+      mailDomain: rootDomain,
+      recommendedApex:
+        recommendation?.recommendedApex ?? classification.registrableDomain,
+      recommendedMailboxSubdomain:
+        recommendation?.recommendedMailboxSubdomain ??
+        classification.delegatedLabel,
+    });
   }
 
   return createAndPersistBoundZone(env, config, rootDomain);
