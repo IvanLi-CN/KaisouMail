@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { type ComponentProps, useEffect, useMemo, useState } from "react";
 import { expect, fn, userEvent, waitFor, within } from "storybook/test";
 
+import { ExistingMailboxPopover } from "@/components/mailboxes/existing-mailbox-popover";
 import { buildMailboxCreateAddressExample } from "@/components/mailboxes/mailbox-create-preview";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
@@ -71,6 +72,18 @@ const demoLongMailboxDetail: MessageDetail = {
   previewText:
     "Verify how the workspace behaves when the mailbox address becomes much longer than the available rail width.",
 };
+const existingMailboxConflictStoryMailbox: Mailbox = {
+  ...((demoMailboxes[1] ?? demoMailboxes[0]) as Mailbox),
+  expiresAt: "2026-12-18T18:30:00.000Z",
+  lastReceivedAt: "2026-04-18T09:36:00.000Z",
+};
+
+const existingMailboxConflictVisibleMailboxes = demoMailboxes.map((mailbox) =>
+  mailbox.id === existingMailboxConflictStoryMailbox.id
+    ? existingMailboxConflictStoryMailbox
+    : mailbox,
+);
+
 const demoLongMailboxList: Mailbox[] = [
   demoMailboxes[0] ?? demoLongMailbox,
   demoLongMailbox,
@@ -1250,6 +1263,44 @@ export const SearchEmptyState: Story = {
     selectedMessageId: null,
     selectedMessage: null,
     messageDetailHref: null,
+  },
+};
+
+export const ExistingMailboxConflictPrompt: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction({
+      isOpen: false,
+    }),
+    mailboxPrompt: {
+      mailboxId: "mbx_beta",
+      content: (
+        <ExistingMailboxPopover
+          mailbox={existingMailboxConflictStoryMailbox}
+          requestedExpiresInMinutes={demoMeta.defaultMailboxTtlMinutes}
+          onClose={fn()}
+          onConfirm={fn()}
+        />
+      ),
+    },
+    visibleMailboxes: existingMailboxConflictVisibleMailboxes,
+    mailboxMessageCounts: buildMailboxMessageCounts(
+      existingMailboxConflictVisibleMailboxes,
+      demoMessages,
+    ),
+    selectedMailboxId: "mbx_beta",
+    selectedMailbox: existingMailboxConflictStoryMailbox,
+    messages: demoMessages.filter(
+      (message) => message.mailboxId === "mbx_beta",
+    ),
+    selectedMessageId: "msg_beta",
+    selectedMessage: demoMessageDetails.msg_beta,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("邮箱已存在")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", { name: "延长有效期" }),
+    ).toBeInTheDocument();
   },
 };
 

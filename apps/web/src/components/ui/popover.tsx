@@ -8,9 +8,19 @@ export const PopoverTrigger = PopoverPrimitive.Trigger;
 export const PopoverAnchor = PopoverPrimitive.Anchor;
 export const PopoverClose = PopoverPrimitive.Close;
 
+type PopoverContentProps = React.ComponentPropsWithoutRef<
+  typeof PopoverPrimitive.Content
+> & {
+  hideArrow?: boolean;
+  arrowClassName?: string;
+  arrowStyle?: React.CSSProperties;
+  arrowWidth?: number;
+  arrowHeight?: number;
+};
+
 export const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
+  PopoverContentProps
 >(
   (
     {
@@ -24,6 +34,11 @@ export const PopoverContent = React.forwardRef<
       hideWhenDetached = true,
       children,
       style,
+      hideArrow = false,
+      arrowClassName,
+      arrowStyle,
+      arrowWidth = 18,
+      arrowHeight = 10,
       ...props
     },
     ref,
@@ -49,12 +64,22 @@ export const PopoverContent = React.forwardRef<
         {...props}
       >
         {children}
-        <PopoverPrimitive.Arrow
-          className="drop-shadow-[0_8px_18px_rgba(2,6,23,0.24)]"
-          height={10}
-          style={{ fill: "hsl(var(--card))" }}
-          width={18}
-        />
+        {hideArrow ? null : (
+          <PopoverPrimitive.Arrow
+            className={cn(
+              "drop-shadow-[0_8px_18px_rgba(2,6,23,0.24)]",
+              arrowClassName,
+            )}
+            height={arrowHeight}
+            style={{
+              fill: "hsl(var(--card))",
+              stroke: "hsl(var(--border))",
+              strokeWidth: 1,
+              ...arrowStyle,
+            }}
+            width={arrowWidth}
+          />
+        )}
       </PopoverPrimitive.Content>
     </PopoverPrimitive.Portal>
   ),

@@ -355,10 +355,6 @@ export const storeIncomingMessage = async (
     forwardable.setReject("Mailbox unavailable");
     return;
   }
-  if (mailbox.expiresAt && Date.now() > new Date(mailbox.expiresAt).getTime()) {
-    forwardable.setReject("Mailbox expired");
-    return;
-  }
 
   const rawBuffer = await new Response(forwardable.raw).arrayBuffer();
   const parser = new PostalMime();

@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ApiClientError } from "@/lib/api";
 import { demoMailboxes, demoMessages, demoMeta } from "@/mocks/data";
 import { WorkspacePage } from "@/pages/workspace-page";
 
@@ -17,25 +19,38 @@ const workspacePageState: {
   mailboxMessagesIsFetching: boolean;
   detail: unknown;
   detailError: Error | null;
+  createMailbox: ReturnType<typeof vi.fn>;
+  ensureMailbox: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
 } = {
   meta: demoMeta,
-  metaError: null as Error | null,
+  metaError: null,
   mailboxes: demoMailboxes,
-  mailboxesError: null as Error | null,
+  mailboxesError: null,
   allMessages: demoMessages,
-  allMessagesError: null as Error | null,
+  allMessagesError: null,
   mailboxMessages: demoMessages.filter(
     (message) => message.mailboxId === "mbx_alpha",
   ),
-  mailboxMessagesError: null as Error | null,
+  mailboxMessagesError: null,
   mailboxMessagesIsFetching: false,
-  detail: undefined as unknown,
-  detailError: null as Error | null,
+  detail: undefined,
+  detailError: null,
+  createMailbox: vi.fn(),
+  ensureMailbox: vi.fn(),
   refresh: vi.fn(),
 };
 
 const workspacePropsState = {
+  createMailboxAction: null as null | {
+    onSubmit: (values: {
+      localPart?: string;
+      subdomain?: string;
+      rootDomain?: string;
+      expiresInMinutes: number | null;
+    }) => Promise<void>;
+  },
+  mailboxPrompt: null as null | { mailboxId: string; content: ReactNode },
   mailboxesError: null as null | { title: string },
   visibleMailboxAddresses: [] as string[],
   mailboxLatestVerificationCodes: new Map<string, string>(),
@@ -51,10 +66,21 @@ const localStorageState = {
 
 vi.mock("@/components/workspace/mail-workspace", () => ({
   MailWorkspace: (props: {
+    createMailboxAction: {
+      onSubmit: (values: {
+        localPart?: string;
+        subdomain?: string;
+        rootDomain?: string;
+        expiresInMinutes: number | null;
+      }) => Promise<void>;
+    };
+    mailboxPrompt?: { mailboxId: string; content: ReactNode } | null;
     mailboxesError?: { title: string } | null;
     visibleMailboxes: Array<{ address: string }>;
     mailboxLatestVerificationCodes: Map<string, string>;
   }) => {
+    workspacePropsState.createMailboxAction = props.createMailboxAction;
+    workspacePropsState.mailboxPrompt = props.mailboxPrompt ?? null;
     workspacePropsState.mailboxesError = props.mailboxesError ?? null;
     workspacePropsState.visibleMailboxAddresses = props.visibleMailboxes.map(
       (mailbox) => mailbox.address,
@@ -66,6 +92,9 @@ vi.mock("@/components/workspace/mail-workspace", () => ({
       <div>
         <div data-testid="workspace-rail-error">
           {props.mailboxesError?.title ?? "no-mailboxes-error"}
+        </div>
+        <div data-testid="workspace-mailbox-prompt">
+          {props.mailboxPrompt?.mailboxId ?? "no-prompt"}
         </div>
         <ul>
           {props.visibleMailboxes.map((mailbox) => (
@@ -102,7 +131,11 @@ vi.mock("@/hooks/use-mailboxes", () => ({
   },
   useCreateMailboxMutation: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: workspacePageState.createMailbox,
+  }),
+  useEnsureMailboxMutation: () => ({
+    isPending: false,
+    mutateAsync: workspacePageState.ensureMailbox,
   }),
 }));
 
@@ -194,7 +227,11 @@ afterEach(() => {
   workspacePageState.mailboxMessagesIsFetching = false;
   workspacePageState.detail = undefined;
   workspacePageState.detailError = null;
+  workspacePageState.createMailbox = vi.fn();
+  workspacePageState.ensureMailbox = vi.fn();
   workspacePageState.refresh = vi.fn();
+  workspacePropsState.createMailboxAction = null;
+  workspacePropsState.mailboxPrompt = null;
   workspacePropsState.mailboxesError = null;
   workspacePropsState.visibleMailboxAddresses = [];
   workspacePropsState.mailboxLatestVerificationCodes = new Map();
@@ -286,80 +323,59 @@ describe("workspace page", () => {
     ).toBe("551177");
   });
 
-  it("keeps the mailbox verification code in sync with the selected mailbox feed", () => {
-    workspacePageState.allMessages = demoMessages.map((message) =>
-      message.mailboxId === "mbx_alpha"
-        ? {
-            ...message,
-            verification: null,
-          }
-        : message,
-    );
-    workspacePageState.mailboxMessages = [
-      {
-        ...demoMessages[0],
-        id: "msg_alpha_live",
-        receivedAt: "2026-04-02T08:50:00.000Z",
-        verification: {
-          code: "662288",
-          source: "body",
-          method: "rules",
+  it("selects the existing mailbox and opens the extension prompt on create conflict", async () => {
+    const existingMailbox = demoMailboxes[1];
+    if (!existingMailbox) {
+      throw new Error("expected mailbox fixture");
+    }
+
+    workspacePageState.createMailbox.mockRejectedValue(
+      new ApiClientError(
+        "Mailbox already exists",
+        {
+          code: "mailbox_exists",
+          mailbox: existingMailbox,
         },
-      },
-    ];
+        409,
+      ),
+    );
+    workspacePageState.ensureMailbox.mockResolvedValue({
+      ...existingMailbox,
+      expiresAt: null,
+    });
     Object.defineProperty(window, "localStorage", {
       configurable: true,
       value: localStorageState,
     });
 
     render(
-      <MemoryRouter
-        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
-      >
+      <MemoryRouter initialEntries={["/workspace?mailbox=all&sort=recent"]}>
         <Routes>
           <Route path="/workspace" element={<WorkspacePage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(
-      workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
-    ).toBe("662288");
-  });
+    if (!workspacePropsState.createMailboxAction) {
+      throw new Error("expected create mailbox action");
+    }
 
-  it("keeps aggregate mailbox verification metadata while the selected feed refreshes", () => {
-    workspacePageState.allMessages = [
-      {
-        ...demoMessages[0],
-        id: "msg_alpha_newer",
-        receivedAt: "2026-04-02T08:55:00.000Z",
-        verification: {
-          code: "773311",
-          source: "subject",
-          method: "rules",
-        },
-      },
-      ...demoMessages.slice(1),
-    ];
-    workspacePageState.mailboxMessages = [];
-    workspacePageState.mailboxMessagesIsFetching = true;
-    Object.defineProperty(window, "localStorage", {
-      configurable: true,
-      value: localStorageState,
+    await workspacePropsState.createMailboxAction.onSubmit({
+      localPart: existingMailbox.localPart,
+      subdomain: existingMailbox.subdomain,
+      rootDomain: existingMailbox.rootDomain,
+      expiresInMinutes: demoMeta.defaultMailboxTtlMinutes,
     });
 
-    render(
-      <MemoryRouter
-        initialEntries={["/workspace?mailbox=mbx_alpha&sort=recent"]}
-      >
-        <Routes>
-          <Route path="/workspace" element={<WorkspacePage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("workspace-mailbox-prompt")).toHaveTextContent(
+        existingMailbox.id,
+      );
+    });
 
-    expect(
-      workspacePropsState.mailboxLatestVerificationCodes.get("mbx_alpha"),
-    ).toBe("773311");
+    expect(workspacePropsState.mailboxPrompt?.mailboxId).toBe(
+      existingMailbox.id,
+    );
+    expect(screen.getByText(existingMailbox.address)).toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import {
   generateRealisticMailboxSubdomain,
   type mailboxListScopes,
   mailboxSchema,
+  mergeMailboxExpiryByExtension,
 } from "@kaisoumail/shared";
 import { and, desc, eq, inArray, isNotNull, lte } from "drizzle-orm";
 
@@ -72,6 +73,11 @@ const shouldUseCatchAllDelivery = (
 
 const toMailboxApiExpiresAt = (expiresAt: string | null) =>
   expiresAt === longTermMailboxExpirySentinel ? null : expiresAt;
+
+const toMailboxStorageExpiresAt = (expiresAt: string | null | undefined) => {
+  if (expiresAt === undefined) return undefined;
+  return expiresAt === null ? longTermMailboxExpirySentinel : expiresAt;
+};
 
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
@@ -185,6 +191,34 @@ const ensureAddressAvailable = async (env: WorkerEnv, address: string) => {
   if (rows.some((row) => row.status !== "destroyed")) {
     throw new ApiError(409, "Mailbox already exists");
   }
+};
+
+const buildVisibleMailboxExistsError = async (
+  env: WorkerEnv,
+  row: MailboxRow,
+) => {
+  const [mailbox] = await attachLastReceivedAt(env, [row]);
+  return new ApiError(409, "Mailbox already exists", {
+    code: "mailbox_exists",
+    mailbox,
+  });
+};
+
+const buildMailboxExistsErrorForAddress = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  address: string,
+) => {
+  const classification = classifyMailboxAddressState(
+    await listMailboxesByAddress(env, address),
+    user,
+  );
+
+  if (classification.kind === "reuse") {
+    return buildVisibleMailboxExistsError(env, classification.row);
+  }
+
+  return new ApiError(409, "Mailbox already exists");
 };
 
 const domainNoLongerAvailableError = (domainId: string, rootDomain: string) =>
@@ -341,6 +375,17 @@ const updateMailboxRegistration = async (
     .where(eq(mailboxes.id, mailboxId));
 };
 
+const updateMailboxExpiry = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+  expiresAt: string,
+) => {
+  await db
+    .update(mailboxes)
+    .set({ expiresAt })
+    .where(eq(mailboxes.id, mailboxId));
+};
+
 const activateMailbox = async (
   db: ReturnType<typeof getDb>,
   mailboxId: string,
@@ -394,13 +439,11 @@ const resolveMailboxExpiresAt = (
   expiresInMinutes: number | null | undefined,
   fallbackExpiresAt: string | null,
 ) => {
-  if (expiresInMinutes === undefined) {
-    return fallbackExpiresAt;
-  }
-  if (expiresInMinutes === null) {
-    return longTermMailboxExpirySentinel;
-  }
-  return new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
+  const resolved = mergeMailboxExpiryByExtension({
+    currentExpiresAt: toMailboxApiExpiresAt(fallbackExpiresAt),
+    requestedExpiresInMinutes: expiresInMinutes,
+  });
+  return toMailboxStorageExpiresAt(resolved.expiresAt) ?? fallbackExpiresAt;
 };
 
 const upsertSubdomainUsage = async (
@@ -522,6 +565,38 @@ const promoteCatchAllMailbox = async (
   ]);
 
   return promoted;
+};
+
+const extendExistingMailboxExpiry = async (
+  env: WorkerEnv,
+  mailbox: MailboxRow,
+  expiresInMinutes: number | null | undefined,
+) => {
+  const db = getDb(env);
+  const resolved = mergeMailboxExpiryByExtension({
+    currentExpiresAt: toMailboxApiExpiresAt(mailbox.expiresAt),
+    requestedExpiresInMinutes: expiresInMinutes,
+  });
+
+  if (!resolved.changed) {
+    const [currentMailbox] = await attachLastReceivedAt(env, [mailbox]);
+    return currentMailbox;
+  }
+
+  const nextExpiresAt = toMailboxStorageExpiresAt(resolved.expiresAt);
+  if (!nextExpiresAt) {
+    const [currentMailbox] = await attachLastReceivedAt(env, [mailbox]);
+    return currentMailbox;
+  }
+
+  await updateMailboxExpiry(db, mailbox.id, nextExpiresAt);
+  const [updatedMailbox] = await attachLastReceivedAt(env, [
+    {
+      ...mailbox,
+      expiresAt: nextExpiresAt,
+    },
+  ]);
+  return updatedMailbox;
 };
 
 const attachRootDomains = async (
@@ -700,16 +775,7 @@ export const createMailboxForUser = async (
     );
 
     if (classification.kind === "reuse") {
-      if (classification.row.source === "catch_all") {
-        return promoteCatchAllMailbox(
-          env,
-          config,
-          classification.row,
-          expiresInMinutes,
-          mailboxRouteContexts.create,
-        );
-      }
-      throw new ApiError(409, "Mailbox already exists");
+      throw await buildVisibleMailboxExistsError(env, classification.row);
     }
 
     if (classification.kind === "conflict") {
@@ -736,6 +802,18 @@ export const createMailboxForUser = async (
           continue;
         }
 
+        if (input.localPart && input.subdomain) {
+          throw await buildMailboxExistsErrorForAddress(
+            env,
+            user,
+            buildMailboxAddress(
+              normalizeLabel(input.localPart),
+              normalizeLabel(input.subdomain),
+              domain.rootDomain,
+            ).address,
+          );
+        }
+
         throw new ApiError(409, "Mailbox already exists");
       }
 
@@ -747,16 +825,7 @@ export const createMailboxForUser = async (
       user,
     );
     if (classification.kind === "reuse") {
-      if (classification.row.source === "catch_all") {
-        return promoteCatchAllMailbox(
-          env,
-          config,
-          classification.row,
-          expiresInMinutes,
-          mailboxRouteContexts.create,
-        );
-      }
-      throw new ApiError(409, "Mailbox already exists");
+      throw await buildVisibleMailboxExistsError(env, classification.row);
     }
     if (classification.kind === "conflict") {
       throw new ApiError(409, "Mailbox already exists");
@@ -883,7 +952,11 @@ export const createMailboxForUser = async (
           continue;
         }
 
-        throw new ApiError(409, "Mailbox already exists");
+        throw await buildMailboxExistsErrorForAddress(
+          env,
+          user,
+          created.address,
+        );
       }
 
       throw error;
@@ -934,9 +1007,12 @@ export const ensureMailboxForUser = async (
         created: false,
       };
     }
-    const [mailbox] = await attachLastReceivedAt(env, [classification.row]);
     return {
-      mailbox,
+      mailbox: await extendExistingMailboxExpiry(
+        env,
+        classification.row,
+        expiresInMinutes,
+      ),
       created: false,
     };
   }

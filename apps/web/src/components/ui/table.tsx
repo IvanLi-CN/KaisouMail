@@ -1,8 +1,9 @@
-import type {
-  HTMLAttributes,
-  TableHTMLAttributes,
-  TdHTMLAttributes,
-  ThHTMLAttributes,
+import {
+  forwardRef,
+  type HTMLAttributes,
+  type TableHTMLAttributes,
+  type TdHTMLAttributes,
+  type ThHTMLAttributes,
 } from "react";
 
 import { cn } from "@/lib/utils";
@@ -33,15 +34,18 @@ export const TableBody = ({
   <tbody className={cn("divide-y divide-border", className)} {...props} />
 );
 
-export const TableRow = ({
-  className,
-  ...props
-}: HTMLAttributes<HTMLTableRowElement>) => (
+export const TableRow = forwardRef<
+  HTMLTableRowElement,
+  HTMLAttributes<HTMLTableRowElement>
+>(({ className, ...props }, ref) => (
   <tr
+    ref={ref}
     className={cn("transition-colors hover:bg-white/5", className)}
     {...props}
   />
-);
+));
+
+TableRow.displayName = "TableRow";
 
 export const TableHeaderCell = ({
   className,
