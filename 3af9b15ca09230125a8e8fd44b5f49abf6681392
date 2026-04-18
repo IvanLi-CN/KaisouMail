@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.25.2",
+  "base_stable_version": "0.25.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-18T13:12:31Z",
+  "next_stable_version": "0.25.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "0ace74d6827619b579fe89c9c1bf973656ece6d2",
+  "pr_number": 54,
+  "pr_title": "fix: keep active mailboxes usable until destroy",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.25.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.25.2",
+  "target_sha": "3af9b15ca09230125a8e8fd44b5f49abf6681392",
+  "type_label": "type:patch"
+}
