@@ -495,6 +495,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续使用，二者同时传入时必须一致。",
             "如果同时省略 `mailDomain` / `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
             `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
+            '若当前用户已经拥有同地址的 active 邮箱，接口会返回 `409`，并在 `details` 里附带 `{ code: "mailbox_exists", mailbox }` 供 Web 直接选中现有邮箱。',
             "若目标域名已启用 Catch All，服务端仍会在首次使用该子域时补齐 Cloudflare Email Routing DNS，但不会再为单个邮箱创建额外的 per-address routing rule；此时响应中的 `routingRuleId` 可能为 null。",
           ],
         },
@@ -527,6 +528,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `mailDomain` 可选，`rootDomain` 仍是兼容别名。",
             "命中现有 active mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
+            "命中已有 active mailbox 且携带 `expiresInMinutes` 时，只会延长有效期，不会缩短；已有长期邮箱也不会被有限 TTL 改短。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
             "若要创建长期邮箱，可显式传 `expiresInMinutes: null`。",
             "若命中新建的 Catch-all 域名子域，服务端会先确保该子域具备 Email Routing DNS，再复用 Catch All 收信；不会额外创建单邮箱 routing rule。",

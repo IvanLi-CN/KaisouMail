@@ -130,10 +130,10 @@ const createMailboxDb = (options?: {
         }
       }),
     })),
-    update: vi.fn((table: unknown) => ({
+    update: vi.fn((_table: unknown) => ({
       set: vi.fn(() => ({
         where: vi.fn(async () => {
-          if (table === subdomains && options?.subdomainUpdateError) {
+          if (_table === subdomains && options?.subdomainUpdateError) {
             throw options.subdomainUpdateError;
           }
         }),
@@ -938,7 +938,7 @@ describe("mailbox service helpers", () => {
     expect(db.delete).not.toHaveBeenCalledWith(mailboxes);
   });
 
-  it("promotes an active catch-all mailbox into a registered mailbox on explicit create", async () => {
+  it("returns a structured conflict when explicit create hits a visible catch-all mailbox", async () => {
     const domain = {
       id: "dom_primary",
       rootDomain: "707979.xyz",
@@ -984,43 +984,36 @@ describe("mailbox service helpers", () => {
     ensureSubdomainEnabled.mockResolvedValue(undefined);
     createRoutingRule.mockResolvedValue("rule_promoted");
 
-    const mailbox = await createMailboxForUser(
-      {
-        DB: {
-          prepare: vi.fn(),
+    await expect(
+      createMailboxForUser(
+        {
+          DB: {
+            prepare: vi.fn(),
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          localPart: "build",
+          subdomain: "ops",
+          rootDomain: domain.rootDomain,
         },
-      } as never,
-      runtimeConfig,
-      memberUser,
-      {
-        localPart: "build",
-        subdomain: "ops",
-        rootDomain: domain.rootDomain,
-      },
-    );
-
-    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
-    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
-      expect.any(Object),
-      runtimeConfig,
-      expect.objectContaining({
-        rootDomain: domain.rootDomain,
-        zoneId: domain.zoneId,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      details: expect.objectContaining({
+        code: "mailbox_exists",
+        mailbox: expect.objectContaining({
+          id: catchAllMailbox.id,
+          address: catchAllMailbox.address,
+          source: "catch_all",
+        }),
       }),
-      "ops",
-      {
-        projectOperation: "mailboxes.create",
-        projectRoute: "POST /api/mailboxes",
-      },
-    );
-    expect(createRoutingRule).not.toHaveBeenCalled();
-    expect(db.update).toHaveBeenCalledWith(mailboxes);
-    expect(mailbox).toMatchObject({
-      id: catchAllMailbox.id,
-      source: "registered",
-      routingRuleId: null,
     });
-    expect(mailbox.expiresAt).toEqual(expect.any(String));
+
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it("promotes an active catch-all mailbox during ensure without creating a second row", async () => {
@@ -1103,7 +1096,7 @@ describe("mailbox service helpers", () => {
         routingRuleId: null,
       }),
     });
-    expect(ensured.mailbox.expiresAt).toEqual(expect.any(String));
+    expect(ensured.mailbox.expiresAt).toBeNull();
   });
 
   it("still enables email-routing DNS for a new subdomain on catch-all domains without creating a per-address rule", async () => {
@@ -1186,5 +1179,210 @@ describe("mailbox service helpers", () => {
       routingRuleId: null,
       source: "registered",
     });
+  });
+
+  it("returns structured mailbox details when create hits a visible mailbox conflict", async () => {
+    const conflictMailbox = {
+      ...baseMailbox,
+      id: "mbx_conflict",
+      domainId: "dom_mail",
+      localPart: "spec",
+      subdomain: "ops.beta",
+      address: "spec@ops.beta.mail.example.net",
+      expiresAt: "2026-04-18T13:15:00.000Z",
+    };
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: "dom_mail",
+          rootDomain: "mail.example.net",
+          status: "active",
+          zoneId: "zone_mail",
+          deletedAt: null,
+          catchAllEnabled: false,
+          catchAllOwnerUserId: null,
+        },
+      ],
+      mailboxRows: [conflictMailbox],
+      subdomainRows: [],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue({
+      id: "dom_mail",
+      rootDomain: "mail.example.net",
+      zoneId: "zone_mail",
+    });
+
+    await expect(
+      createMailboxForUser(
+        {
+          DB: {
+            prepare: vi.fn(),
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          localPart: "spec",
+          subdomain: "ops.beta",
+          rootDomain: "mail.example.net",
+          expiresInMinutes: 60,
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Mailbox already exists",
+      details: expect.objectContaining({
+        code: "mailbox_exists",
+        mailbox: expect.objectContaining({
+          id: conflictMailbox.id,
+          address: conflictMailbox.address,
+        }),
+      }),
+    });
+  });
+
+  it("extends an existing registered mailbox without creating or deleting routing rules", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-18T12:00:00.000Z"));
+
+    const updateWhere = vi.fn(async () => undefined);
+    const updateSet = vi.fn(() => ({
+      where: updateWhere,
+    }));
+    const db = {
+      ...createMailboxDb({
+        domainRows: [
+          {
+            id: baseMailbox.domainId,
+            rootDomain: "707979.xyz",
+          },
+        ],
+        mailboxRows: [baseMailbox],
+        subdomainRows: [],
+      }),
+      update: vi.fn((_table: unknown) => ({
+        set: updateSet,
+      })),
+    };
+    getDb.mockReturnValue(db);
+    listActiveRootDomains.mockResolvedValue(["707979.xyz"]);
+
+    try {
+      const ensured = await ensureMailboxForUser(
+        {} as never,
+        runtimeConfig,
+        memberUser,
+        {
+          address: baseMailbox.address,
+          expiresInMinutes: 180,
+        },
+      );
+
+      expect(ensured.created).toBe(false);
+      expect(ensured.mailbox.expiresAt).toBe("2026-04-18T15:00:00.000Z");
+      expect(db.update).toHaveBeenCalledWith(mailboxes);
+      expect(updateSet).toHaveBeenCalledWith({
+        expiresAt: "2026-04-18T15:00:00.000Z",
+      });
+      expect(createRoutingRule).not.toHaveBeenCalled();
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not shorten an existing registered mailbox when ensure requests a shorter TTL", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-18T12:00:00.000Z"));
+
+    const updateSet = vi.fn(() => ({
+      where: vi.fn(async () => undefined),
+    }));
+    const db = {
+      ...createMailboxDb({
+        domainRows: [
+          {
+            id: baseMailbox.domainId,
+            rootDomain: "707979.xyz",
+          },
+        ],
+        mailboxRows: [
+          {
+            ...baseMailbox,
+            expiresAt: "2026-04-18T18:00:00.000Z",
+          },
+        ],
+        subdomainRows: [],
+      }),
+      update: vi.fn(() => ({
+        set: updateSet,
+      })),
+    };
+    getDb.mockReturnValue(db);
+    listActiveRootDomains.mockResolvedValue(["707979.xyz"]);
+
+    try {
+      const ensured = await ensureMailboxForUser(
+        {} as never,
+        runtimeConfig,
+        memberUser,
+        {
+          address: baseMailbox.address,
+          expiresInMinutes: 60,
+        },
+      );
+
+      expect(ensured.created).toBe(false);
+      expect(ensured.mailbox.expiresAt).toBe("2026-04-18T18:00:00.000Z");
+      expect(db.update).not.toHaveBeenCalled();
+      expect(createRoutingRule).not.toHaveBeenCalled();
+      expect(deleteRoutingRule).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps long-term mailboxes long-term when ensure requests a finite TTL", async () => {
+    const longTermMailbox = {
+      ...baseMailbox,
+      expiresAt: "9999-12-31T23:59:59.999Z",
+    };
+    const updateSet = vi.fn(() => ({
+      where: vi.fn(async () => undefined),
+    }));
+    const db = {
+      ...createMailboxDb({
+        domainRows: [
+          {
+            id: baseMailbox.domainId,
+            rootDomain: "707979.xyz",
+          },
+        ],
+        mailboxRows: [longTermMailbox],
+        subdomainRows: [],
+      }),
+      update: vi.fn(() => ({
+        set: updateSet,
+      })),
+    };
+    getDb.mockReturnValue(db);
+    listActiveRootDomains.mockResolvedValue(["707979.xyz"]);
+
+    const ensured = await ensureMailboxForUser(
+      {} as never,
+      runtimeConfig,
+      memberUser,
+      {
+        address: baseMailbox.address,
+        expiresInMinutes: 60,
+      },
+    );
+
+    expect(ensured.created).toBe(false);
+    expect(ensured.mailbox.expiresAt).toBeNull();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(deleteRoutingRule).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-17
+Last: 2026-04-18
 
 ## Objective
 
@@ -21,6 +21,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace-scoped data intentionally hides stale destroyed history: `active` / `destroying` mailboxes always stay visible, while `destroyed` rows are limited to the most recent 7 days and at most 50 entries so the operator rail stays dense and query-safe
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
+- When Web creation hits an existing visible mailbox, both `/mailboxes` and `/workspace` must select that mailbox in-place and surface a prompt that only offers TTL extension; shorter requested TTLs must explicitly keep the current expiry unchanged
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
 - Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh; workspace message streams must stay aligned with the same mailbox visibility window used by the left rail
 
@@ -73,8 +74,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - If `/api/domains/bind` is asked to re-bind a previously known subdomain record, it may only restore that record when the exact Cloudflare zone is still discoverable; otherwise the API must still return the structured unsupported-subdomain guidance instead of surfacing transient Cloudflare catalog failures.
 - Cloudflare-backed domain write operations (`POST /api/domains`, `/api/domains/bind`, `/api/domains/:id/retry`, catch-all enable/disable, and project-bound delete) fail fast on upstream `429` with a propagated `Retry-After` header; Cloudflare rate limiting never mutates a domain into `provisioning_error`
 - `POST /api/mailboxes` accepts optional `mailDomain`; `rootDomain` remains a compatibility alias, and when both are omitted the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox; on `catchAllEnabled=true` domains it now registers the mailbox locally without creating a per-address Cloudflare routing rule
+- `POST /api/mailboxes` keeps create semantics: if the caller already owns the same active mailbox, the API returns `409` with structured `details={ code: "mailbox_exists", mailbox }` so the Web console can select and reuse the existing row instead of silently promoting/recreating it
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
-- `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional mailDomain/rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox; promoting a `source=catch_all` mailbox on a Catch-all-enabled domain stays a local-only state transition (`catch_all -> registered`) without an extra per-address Cloudflare rule write, while the first use of a new subdomain still ensures the required Email Routing DNS
+- `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional mailDomain/rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox; when `expiresInMinutes` is provided for an existing mailbox, the API only extends TTL and never shortens it, with `null` treated as long-term/infinite; promoting a `source=catch_all` mailbox on a Catch-all-enabled domain stays a local-only state transition (`catch_all -> registered`) without an extra per-address Cloudflare rule write, while the first use of a new subdomain still ensures the required Email Routing DNS
+- Active mailboxes continue accepting inbound mail until destroy begins; `expiresAt` no longer blocks message ingestion on its own, and only `destroying` / `destroyed` state stops normal receive flow
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
 - Mailbox records now expose `source: registered | catch_all`; auto-materialized Catch All mailboxes keep `routingRuleId = null` and `expiresAt = null`
 - `GET /api/mailboxes` accepts optional `scope=workspace`; the default scope returns the caller's full mailbox history, while workspace scope keeps all `active` / `destroying` rows and only the newest 50 `destroyed` rows whose `destroyedAt` is within the last 7 days, preserving that destroyed-history slice in descending `destroyedAt` order
@@ -222,6 +225,8 @@ PR: include
 PR: include
 ![Workspace inline mailbox creation popover](./assets/workspace-create-popover.png)
 
+![Workspace repeated create flow selects the existing mailbox and offers TTL extension](./assets/workspace-existing-mailbox-conflict.png)
+
 PR: include
 ![Workspace selected mailbox header with wrapped address text and inline copy button](./assets/workspace-selected-mailbox-address.png)
 
@@ -234,6 +239,10 @@ PR: include
 ![Workspace toolbar create button with the repaired focus halo](./assets/workspace-new-mailbox-button-focus-ring.png)
 
 ![Workspace mailbox rail two-line rows with Catch All badges and inline verification actions](./assets/workspace-catch-all-rows.png)
+
+### Mailboxes
+
+![Mailboxes repeated create flow selects the existing mailbox and offers TTL extension](./assets/mailboxes-existing-mailbox-conflict.png)
 
 ### UI Primitives
 

@@ -78,12 +78,31 @@ export const useCreateMailboxMutation = () => {
   });
 };
 
+const upsertMailboxList = (mailbox: Mailbox, current?: Mailbox[]) => {
+  if (!current) return [mailbox];
+
+  const existingIndex = current.findIndex((entry) => entry.id === mailbox.id);
+  if (existingIndex < 0) {
+    return [mailbox, ...current];
+  }
+
+  return current.map((entry) => (entry.id === mailbox.id ? mailbox : entry));
+};
+
 export const useEnsureMailboxMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: apiClient.ensureMailbox,
     onSuccess: (mailbox) => {
       queryClient.setQueryData(mailboxKeys.detail(mailbox.id), mailbox);
+      queryClient.setQueryData<Mailbox[]>(
+        mailboxKeys.list("default"),
+        (current) => upsertMailboxList(mailbox, current),
+      );
+      queryClient.setQueryData<Mailbox[]>(
+        mailboxKeys.list("workspace"),
+        (current) => upsertMailboxList(mailbox, current),
+      );
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
     },
   });

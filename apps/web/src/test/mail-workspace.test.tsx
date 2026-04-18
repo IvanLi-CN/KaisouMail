@@ -657,6 +657,33 @@ describe("MailWorkspace", () => {
     expect(screen.getByText("全部邮箱邮件")).toBeInTheDocument();
   });
 
+  it("renders the mailbox prompt on the selected row", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          mailboxPrompt={{
+            mailboxId: "mbx_beta",
+            content: <div>prompt content</div>,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("prompt content")).toBeInTheDocument();
+  });
+
   it("submits normalized full addresses from the create popover", () => {
     const onSubmit = vi.fn();
 

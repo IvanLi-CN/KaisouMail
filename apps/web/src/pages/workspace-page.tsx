@@ -9,11 +9,13 @@ import {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { ExistingMailboxPopover } from "@/components/mailboxes/existing-mailbox-popover";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import {
   mailboxKeys,
   useCreateMailboxMutation,
+  useEnsureMailboxMutation,
   useMailboxesQuery,
 } from "@/hooks/use-mailboxes";
 import {
@@ -24,7 +26,12 @@ import {
 import { useMetaQuery } from "@/hooks/use-meta";
 import { useQueryRefresh } from "@/hooks/use-query-refresh";
 import { ApiClientError } from "@/lib/api";
+import type { Mailbox } from "@/lib/contracts";
 import { getErrorDetails, isNotFoundError } from "@/lib/error-utils";
+import {
+  extractExistingMailboxConflict,
+  resolveMailboxTtlUpdateOutcome,
+} from "@/lib/mailbox-conflicts";
 import { markMessageAsRead } from "@/lib/message-read-state";
 import {
   resolveLatestRefreshAt,
@@ -41,6 +48,13 @@ import {
 
 const DEFAULT_SORT_MODE: MailboxSortMode = "recent";
 const DEFAULT_WORKSPACE_TTL_MINUTES = 60;
+
+type ExistingMailboxPromptState = {
+  mailbox: Mailbox;
+  requestedExpiresInMinutes: number | null;
+  result: "updated" | "unchanged" | null;
+  error: string | null;
+};
 
 const buildMailboxLatestVerificationCodes = (
   messages: Array<{
@@ -115,6 +129,14 @@ const readStoredSortMode = () => {
   return isMailboxSortMode(value) ? value : DEFAULT_SORT_MODE;
 };
 
+const resolveSelectedMailbox = (
+  selectedMailboxId: string,
+  mailboxes: Mailbox[],
+) =>
+  selectedMailboxId === "all"
+    ? null
+    : (mailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ?? null);
+
 export const WorkspacePage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateMailboxOpen, setIsCreateMailboxOpen] = useState(false);
@@ -124,11 +146,14 @@ export const WorkspacePage = () => {
   const [highlightedMailboxId, setHighlightedMailboxId] = useState<
     string | null
   >(null);
+  const [mailboxPrompt, setMailboxPrompt] =
+    useState<ExistingMailboxPromptState | null>(null);
   const metaQuery = useMetaQuery();
   const mailboxesQuery = useMailboxesQuery({
     scope: "workspace",
   });
   const createMailboxMutation = useCreateMailboxMutation();
+  const ensureMailboxMutation = useEnsureMailboxMutation();
   const mailboxes = mailboxesQuery.data ?? [];
 
   const selectedMailboxId = searchParams.get("mailbox") ?? "all";
@@ -172,10 +197,7 @@ export const WorkspacePage = () => {
     window.localStorage.setItem(MAILBOX_SORT_STORAGE_KEY, resolvedSortMode);
   }, [resolvedSortMode]);
 
-  const selectedMailbox =
-    selectedMailboxId === "all"
-      ? null
-      : (mailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ?? null);
+  const selectedMailbox = resolveSelectedMailbox(selectedMailboxId, mailboxes);
 
   const allMessagesQuery = useMessagesQuery([], undefined, {
     pollingIntervalMs: selectedMailbox ? 60_000 : 15_000,
@@ -359,17 +381,25 @@ export const WorkspacePage = () => {
     await manualRefresh.refresh();
   }, [manualRefresh]);
 
+  const clearMailboxPrompt = useCallback(() => {
+    setMailboxPrompt(null);
+  }, []);
+
   const handleOpenCreateMailbox = useCallback(() => {
-    if (createMailboxMutation.isPending) return;
+    if (createMailboxMutation.isPending || ensureMailboxMutation.isPending) {
+      return;
+    }
     setCreateMailboxError(null);
     setIsCreateMailboxOpen(true);
-  }, [createMailboxMutation.isPending]);
+  }, [createMailboxMutation.isPending, ensureMailboxMutation.isPending]);
 
   const handleCancelCreateMailbox = useCallback(() => {
-    if (createMailboxMutation.isPending) return;
+    if (createMailboxMutation.isPending || ensureMailboxMutation.isPending) {
+      return;
+    }
     setCreateMailboxError(null);
     setIsCreateMailboxOpen(false);
-  }, [createMailboxMutation.isPending]);
+  }, [createMailboxMutation.isPending, ensureMailboxMutation.isPending]);
 
   const handleCreateMailbox = useCallback(
     async (values: {
@@ -379,6 +409,7 @@ export const WorkspacePage = () => {
       expiresInMinutes: number | null;
     }) => {
       setCreateMailboxError(null);
+      clearMailboxPrompt();
 
       try {
         const createdMailbox = await createMailboxMutation.mutateAsync(values);
@@ -392,7 +423,29 @@ export const WorkspacePage = () => {
             draft.set("sort", resolvedSortMode);
           }
         });
+        return;
       } catch (reason) {
+        const existingConflict = extractExistingMailboxConflict(reason);
+        if (existingConflict) {
+          setHighlightedMailboxId(existingConflict.mailbox.id);
+          setIsCreateMailboxOpen(false);
+          updateSearchParams((draft) => {
+            draft.delete("q");
+            draft.delete("message");
+            draft.set("mailbox", existingConflict.mailbox.id);
+            if (!isMailboxSortMode(draft.get("sort"))) {
+              draft.set("sort", resolvedSortMode);
+            }
+          });
+          setMailboxPrompt({
+            mailbox: existingConflict.mailbox,
+            requestedExpiresInMinutes: values.expiresInMinutes,
+            result: null,
+            error: null,
+          });
+          return;
+        }
+
         setCreateMailboxError(
           reason instanceof ApiClientError || reason instanceof Error
             ? reason.message
@@ -400,8 +453,64 @@ export const WorkspacePage = () => {
         );
       }
     },
-    [createMailboxMutation, resolvedSortMode, updateSearchParams],
+    [
+      clearMailboxPrompt,
+      createMailboxMutation,
+      resolvedSortMode,
+      updateSearchParams,
+    ],
   );
+
+  const handleConfirmMailboxPrompt = useCallback(async () => {
+    if (!mailboxPrompt) return;
+
+    setMailboxPrompt((current) =>
+      current
+        ? {
+            ...current,
+            error: null,
+          }
+        : current,
+    );
+
+    try {
+      const nextMailbox = await ensureMailboxMutation.mutateAsync({
+        address: mailboxPrompt.mailbox.address,
+        expiresInMinutes: mailboxPrompt.requestedExpiresInMinutes,
+      });
+      setHighlightedMailboxId(nextMailbox.id);
+      updateSearchParams((draft) => {
+        draft.set("mailbox", nextMailbox.id);
+        draft.delete("message");
+        if (!isMailboxSortMode(draft.get("sort"))) {
+          draft.set("sort", resolvedSortMode);
+        }
+      });
+      setMailboxPrompt({
+        mailbox: nextMailbox,
+        requestedExpiresInMinutes: mailboxPrompt.requestedExpiresInMinutes,
+        result: resolveMailboxTtlUpdateOutcome({
+          previousMailbox: mailboxPrompt.mailbox,
+          nextMailbox,
+        }),
+        error: null,
+      });
+    } catch (error) {
+      setMailboxPrompt((current) =>
+        current
+          ? {
+              ...current,
+              error: error instanceof Error ? error.message : "更新有效期失败",
+            }
+          : current,
+      );
+    }
+  }, [
+    ensureMailboxMutation,
+    mailboxPrompt,
+    resolvedSortMode,
+    updateSearchParams,
+  ]);
 
   const workspaceMetaError =
     metaQuery.error instanceof Error && !hasMetaData
@@ -458,7 +567,8 @@ export const WorkspacePage = () => {
           error: createMailboxError,
           isMetaLoading: metaQuery.isLoading,
           isOpen: isCreateMailboxOpen,
-          isPending: createMailboxMutation.isPending,
+          isPending:
+            createMailboxMutation.isPending || ensureMailboxMutation.isPending,
           minTtlMinutes:
             metaQuery.data?.minMailboxTtlMinutes ?? minMailboxTtlMinutes,
           maxTtlMinutes:
@@ -470,10 +580,30 @@ export const WorkspacePage = () => {
           supportsUnlimitedTtl:
             metaQuery.data?.supportsUnlimitedMailboxTtl ?? false,
         }}
+        highlightedMailboxId={highlightedMailboxId}
+        mailboxPrompt={
+          mailboxPrompt
+            ? {
+                mailboxId: mailboxPrompt.mailbox.id,
+                content: (
+                  <ExistingMailboxPopover
+                    error={mailboxPrompt.error}
+                    isPending={ensureMailboxMutation.isPending}
+                    mailbox={mailboxPrompt.mailbox}
+                    requestedExpiresInMinutes={
+                      mailboxPrompt.requestedExpiresInMinutes
+                    }
+                    result={mailboxPrompt.result}
+                    onClose={clearMailboxPrompt}
+                    onConfirm={handleConfirmMailboxPrompt}
+                  />
+                ),
+              }
+            : null
+        }
         mailboxesError={mailboxesPaneError}
         messagesError={messagesPaneError}
         messageError={messagePaneError}
-        highlightedMailboxId={highlightedMailboxId}
         visibleMailboxes={visibleMailboxes}
         totalMailboxCount={mailboxes.length}
         totalMessageCount={messages.length}

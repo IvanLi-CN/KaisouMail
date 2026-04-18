@@ -148,6 +148,10 @@ type MailWorkspaceProps = {
   messagesError?: WorkspacePaneError | null;
   messageError?: WorkspacePaneError | null;
   highlightedMailboxId?: string | null;
+  mailboxPrompt?: {
+    mailboxId: string;
+    content: ReactNode;
+  } | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
   totalMessageCount: number;
@@ -179,6 +183,7 @@ export const MailWorkspace = ({
   messagesError = null,
   messageError = null,
   highlightedMailboxId = null,
+  mailboxPrompt = null,
   visibleMailboxes,
   totalMailboxCount,
   totalMessageCount,
@@ -672,6 +677,8 @@ export const MailWorkspace = ({
                       const isActive = selectedMailboxId === mailbox.id;
                       const isDestroyed = mailbox.status === "destroyed";
                       const isHighlighted = highlightedMailboxId === mailbox.id;
+                      const isPromptOpen =
+                        mailboxPrompt?.mailboxId === mailbox.id;
                       const messageCount =
                         mailboxMessageCounts.get(mailbox.id) ?? 0;
                       const verificationCode =
@@ -803,9 +810,28 @@ export const MailWorkspace = ({
                                   </Badge>
                                 ) : null}
                                 {expiryLabel && !isDestroyed ? (
-                                  <span className="truncate">
-                                    {expiryLabel}
-                                  </span>
+                                  isPromptOpen ? (
+                                    <Popover open>
+                                      <PopoverAnchor asChild>
+                                        <span className="truncate rounded-md px-0.5">
+                                          {expiryLabel}
+                                        </span>
+                                      </PopoverAnchor>
+                                      <PopoverContent
+                                        align="center"
+                                        className="w-[min(calc(100vw-2rem),22rem)] space-y-4 px-4 py-4"
+                                        hideWhenDetached={false}
+                                        side="right"
+                                        sideOffset={8}
+                                      >
+                                        {mailboxPrompt?.content}
+                                      </PopoverContent>
+                                    </Popover>
+                                  ) : (
+                                    <span className="truncate">
+                                      {expiryLabel}
+                                    </span>
+                                  )
                                 ) : null}
                                 {isDestroyed ? (
                                   <span className="truncate">已销毁</span>

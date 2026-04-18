@@ -30,6 +30,37 @@ describe("MailboxList", () => {
     expect(screen.getByRole("button", { name: "销毁邮箱" })).toBeEnabled();
   });
 
+  it("marks the selected row and renders the existing-mailbox popover", () => {
+    const mailbox = demoMailboxes[1];
+    if (!mailbox) {
+      throw new Error("expected mailbox fixture");
+    }
+
+    render(
+      <MemoryRouter>
+        <MailboxList
+          highlightedMailboxId={mailbox.id}
+          mailboxes={[mailbox]}
+          messageStatsByMailbox={
+            new Map([[mailbox.id, { unread: 1, total: 2 }]])
+          }
+          rowPopover={{
+            mailboxId: mailbox.id,
+            content: <div>邮箱已存在</div>,
+          }}
+          selectedMailboxId={mailbox.id}
+        />
+      </MemoryRouter>,
+    );
+
+    const row = screen
+      .getByRole("link", { name: mailbox.address })
+      .closest("tr");
+    expect(row).toHaveAttribute("data-active", "true");
+    expect(row).toHaveAttribute("data-highlighted", "true");
+    expect(screen.getByText("邮箱已存在")).toBeInTheDocument();
+  });
+
   it("still disables destroy for already destroyed mailboxes", () => {
     const destroyedMailbox = demoMailboxes.find(
       (mailbox) => mailbox.status === "destroyed",

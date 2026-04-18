@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
-
 import { AppShell } from "@/components/layout/app-shell";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import {
@@ -59,6 +58,30 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+const existingMailboxConflictStoryMailbox = {
+  ...(demoMailboxes[1] ?? demoMailboxes[0]),
+  expiresAt: "2026-12-18T18:30:00.000Z",
+  lastReceivedAt: "2026-04-18T09:36:00.000Z",
+};
+
+const existingMailboxConflictVisibleMailboxes = demoMailboxes.map((mailbox) =>
+  mailbox.id === existingMailboxConflictStoryMailbox.id
+    ? existingMailboxConflictStoryMailbox
+    : mailbox,
+);
+
+const existingMailboxConflictMessageStatsByMailbox = new Map(
+  existingMailboxConflictVisibleMailboxes.map((mailbox) => [
+    mailbox.id,
+    {
+      unread: demoMessages.filter((message) => message.mailboxId === mailbox.id)
+        .length,
+      total: demoMessages.filter((message) => message.mailboxId === mailbox.id)
+        .length,
+    },
+  ]),
+);
+
 export const Overview: Story = {};
 
 export const LoadingMeta: Story = {
@@ -94,6 +117,30 @@ export const CreateFlow: Story = {
     await expect(
       canvas.getByRole("link", { name: "打开邮件工作台" }),
     ).toBeInTheDocument();
+  },
+};
+
+export const ExistingMailboxConflict: Story = {
+  args: {
+    mailboxes: existingMailboxConflictVisibleMailboxes,
+    messageStatsByMailbox: existingMailboxConflictMessageStatsByMailbox,
+    selectedMailboxId: "mbx_beta",
+    highlightedMailboxId: "mbx_beta",
+    mailboxPrompt: {
+      mailbox: existingMailboxConflictStoryMailbox,
+      requestedExpiresInMinutes: demoMeta.defaultMailboxTtlMinutes,
+      result: null,
+      error: null,
+    },
+    onConfirmPrompt: fn(),
+    onClosePrompt: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("邮箱已存在")).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "延长有效期" }));
+    await expect(args.onConfirmPrompt).toHaveBeenCalled();
   },
 };
 

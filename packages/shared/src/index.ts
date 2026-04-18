@@ -1,6 +1,7 @@
 export * from "./consts";
 export * from "./mail-domain-classification";
 export * from "./mailbox-address";
+export * from "./mailbox-expiry";
 export * from "./mailbox-generator";
 export * from "./schemas/api";
 export * from "./schemas/common";
