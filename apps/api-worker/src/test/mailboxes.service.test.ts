@@ -99,6 +99,8 @@ const createMailboxDb = (options?: {
   subdomainRows?: unknown[];
   subdomainInsertError?: Error | null;
   subdomainUpdateError?: Error | null;
+  onSubdomainInsert?: (values: unknown) => void;
+  onSubdomainUpdate?: (values: Record<string, unknown>) => void;
 }) => {
   const domainRows = options?.domainRows ?? [];
   const mailboxRows = options?.mailboxRows ?? [];
@@ -125,15 +127,21 @@ const createMailboxDb = (options?: {
       })),
     })),
     insert: vi.fn((table: unknown) => ({
-      values: vi.fn(async () => {
+      values: vi.fn(async (values: unknown) => {
+        if (table === subdomains) {
+          options?.onSubdomainInsert?.(values);
+        }
         if (table === subdomains && options?.subdomainInsertError) {
           throw options.subdomainInsertError;
         }
       }),
     })),
     update: vi.fn((_table: unknown) => ({
-      set: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => ({
         where: vi.fn(async () => {
+          if (_table === subdomains) {
+            options?.onSubdomainUpdate?.(values);
+          }
           if (_table === subdomains && options?.subdomainUpdateError) {
             throw options.subdomainUpdateError;
           }
@@ -1175,6 +1183,93 @@ describe("mailbox service helpers", () => {
       },
     );
     expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(created).toMatchObject({
+      address: "build@ops.707979.xyz",
+      routingRuleId: null,
+      source: "registered",
+    });
+  });
+
+  it("skips per-subdomain DNS enablement for wildcard catch-all domains and records wildcard metadata locally", async () => {
+    const subdomainInsertValues: unknown[] = [];
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_1",
+      catchAllRestoreStateJson:
+        '{"enabled":false,"name":"Catch all","matchers":[{"type":"all"}],"actions":[]}',
+      catchAllUpdatedAt: "2026-04-03T12:00:00.000Z",
+      subdomainDnsMode: "wildcard",
+      wildcardDnsVerifiedAt: "2026-04-03T12:05:00.000Z",
+      wildcardDnsLastError: null,
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:05:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+          catchAllEnabled: true,
+          catchAllOwnerUserId: "usr_1",
+          subdomainDnsMode: "wildcard",
+          wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+          wildcardDnsLastError: null,
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [],
+      onSubdomainInsert: (values) => subdomainInsertValues.push(values),
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+
+    const created = await createMailboxForUser(
+      {
+        DB: {
+          prepare: vi.fn(() => ({
+            bind: vi.fn(() => ({
+              run: vi.fn(async () => ({
+                meta: {
+                  changes: 1,
+                },
+              })),
+            })),
+          })),
+        },
+      } as never,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [domain.rootDomain],
+      },
+      memberUser,
+      {
+        localPart: "build",
+        subdomain: "ops",
+        rootDomain: domain.rootDomain,
+      },
+    );
+
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(subdomainInsertValues).toEqual([
+      expect.objectContaining({
+        domainId: domain.id,
+        name: "ops",
+        metadata: JSON.stringify({ mode: "wildcard" }),
+      }),
+    ]);
     expect(created).toMatchObject({
       address: "build@ops.707979.xyz",
       routingRuleId: null,

@@ -41,6 +41,21 @@ const resolveNextCleanupAttemptAt = (now: string) =>
 const resolveCleanupLeaseUntil = (now: string) =>
   new Date(Date.parse(now) + subdomainCleanupLeaseTtlMs).toISOString();
 
+const resolveSubdomainLifecycleMode = (row: Pick<SubdomainRow, "metadata">) => {
+  if (!row.metadata) {
+    return "explicit" as const;
+  }
+
+  try {
+    const parsed = JSON.parse(row.metadata) as { mode?: unknown };
+    return parsed.mode === "wildcard"
+      ? ("wildcard" as const)
+      : ("explicit" as const);
+  } catch {
+    return "explicit" as const;
+  }
+};
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -232,12 +247,14 @@ export const runSubdomainCleanup = async (
     let cleanedCount = 0;
     let retryScheduledCount = 0;
     let liveReferenceSkipCount = 0;
+    let wildcardLocalCleanupCount = 0;
     let rateLimitAbortCount = 0;
     let deadlineReached = false;
     const deadlineAt = Date.now() + subdomainCleanupRunDeadlineMs;
     const pacer = createCloudflareRequestPacer(deadlineAt);
 
     for (const row of pending) {
+      const lifecycleMode = resolveSubdomainLifecycleMode(row);
       if (!pacer.hasTimeRemaining()) {
         deadlineReached = true;
         break;
@@ -248,19 +265,21 @@ export const runSubdomainCleanup = async (
           const cleanupStartedAt = nowIso();
 
           try {
-            await ensureSubdomainEnabled(
-              env,
-              config,
-              {
-                rootDomain: row.rootDomain,
-                zoneId: row.zoneId,
-              },
-              row.name,
-              subdomainCleanupRequestSource,
-              {
-                beforeRequest: () => pacer.beforeRequest(),
-              },
-            );
+            if (lifecycleMode === "explicit") {
+              await ensureSubdomainEnabled(
+                env,
+                config,
+                {
+                  rootDomain: row.rootDomain,
+                  zoneId: row.zoneId,
+                },
+                row.name,
+                subdomainCleanupRequestSource,
+                {
+                  beforeRequest: () => pacer.beforeRequest(),
+                },
+              );
+            }
             await clearSubdomainCleanupState(db, row.id);
           } catch (error) {
             if (error instanceof CloudflareRequestExecutionAbortedError) {
@@ -292,6 +311,14 @@ export const runSubdomainCleanup = async (
       }
 
       const cleanupStartedAt = nowIso();
+
+      if (lifecycleMode === "wildcard") {
+        await db.delete(subdomains).where(eq(subdomains.id, row.id));
+        cleanedCount += 1;
+        wildcardLocalCleanupCount += 1;
+        continue;
+      }
+
       await markSubdomainCleanupPending(db, row, cleanupStartedAt);
 
       try {
@@ -363,6 +390,7 @@ export const runSubdomainCleanup = async (
       cleanedCount,
       retryScheduledCount,
       liveReferenceSkipCount,
+      wildcardLocalCleanupCount,
       rateLimitAbortCount,
       deadlineReached,
       hostWindowLimit: config.SUBDOMAIN_CLEANUP_BATCH_SIZE,

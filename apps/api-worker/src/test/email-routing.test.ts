@@ -16,6 +16,7 @@ import {
   deleteRoutingRule,
   deleteSubdomainEmailRoutingDnsRecords,
   deleteZone,
+  ensureWildcardEmailRoutingDnsRecords,
   listZones,
 } from "../services/emailRouting";
 
@@ -325,6 +326,157 @@ describe("email routing service", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe(
       "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_txt_1",
     );
+  });
+
+  it("clones apex Email Routing DNS into a wildcard hostname without hardcoded targets", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "created" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              type: "MX",
+              name: "707979.xyz",
+              content: "amir.mx.cloudflare.net",
+              priority: 13,
+              ttl: 300,
+            },
+            {
+              type: "MX",
+              name: "707979.xyz",
+              content: "linda.mx.cloudflare.net",
+              priority: 86,
+              ttl: 300,
+            },
+            {
+              type: "MX",
+              name: "707979.xyz",
+              content: "isaac.mx.cloudflare.net",
+              priority: 24,
+              ttl: 300,
+            },
+            {
+              type: "TXT",
+              name: "707979.xyz",
+              content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"',
+              ttl: 300,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "rec_existing",
+              type: "MX",
+              name: "*.707979.xyz",
+              content: "amir.mx.cloudflare.net",
+              priority: 13,
+              ttl: 300,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      ensureWildcardEmailRoutingDnsRecords(env, baseConfig, {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      }),
+    ).resolves.toEqual({
+      createdRecordCount: 3,
+      matchedRecordCount: 1,
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/email/routing/dns",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records?per_page=100&name=*.707979.xyz",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    for (const [, init] of fetchMock.mock.calls.slice(2)) {
+      expect(init?.method).toBe("POST");
+      expect(init?.body).toContain('"name":"*.707979.xyz"');
+    }
+  });
+
+  it("refuses wildcard Email Routing DNS rollout when conflicting wildcard records already exist", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              type: "MX",
+              name: "707979.xyz",
+              content: "amir.mx.cloudflare.net",
+              priority: 13,
+              ttl: 300,
+            },
+            {
+              type: "TXT",
+              name: "707979.xyz",
+              content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"',
+              ttl: 300,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "txt_conflict",
+              type: "TXT",
+              name: "*.707979.xyz",
+              content: '"v=spf1 include:mailgun.org -all"',
+              ttl: 300,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      ensureWildcardEmailRoutingDnsRecords(env, baseConfig, {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Wildcard Email Routing DNS conflicts with existing records",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("treats missing DNS records as already deleted during subdomain cleanup", async () => {

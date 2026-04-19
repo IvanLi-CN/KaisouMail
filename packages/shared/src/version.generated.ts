@@ -1,6 +1,6 @@
 export const versionInfo = {
-  version: "0.1.0",
-  commitSha: "0594be7",
-  branch: "th/mailbox-active-until-destroy",
-  builtAt: "2026-04-18T07:58:00.267Z",
+  version: "0.25.4",
+  commitSha: "5ea0da8",
+  branch: "th/wildcard-subdomain-dns-rollout",
+  builtAt: "2026-04-19T17:02:22.304Z",
 } as const;

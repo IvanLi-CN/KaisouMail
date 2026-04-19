@@ -18,6 +18,7 @@ import {
   parseMailboxAddressAgainstDomains,
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
+import { logOperationalEvent } from "../lib/observability";
 import {
   type CloudflareCatchAllRule,
   type CloudflareRateLimitContext,
@@ -30,6 +31,7 @@ import {
   type EmailRoutingDomain,
   enableDomainRouting,
   ensureSubdomainEnabled,
+  ensureWildcardEmailRoutingDnsRecords,
   getCatchAllRule,
   listZones,
   updateCatchAllRule,
@@ -88,6 +90,9 @@ const toDomainDto = (row: DomainRow) =>
     bindingSource: row.bindingSource,
     status: row.status,
     catchAllEnabled: row.catchAllEnabled,
+    subdomainDnsMode: row.subdomainDnsMode,
+    wildcardDnsVerifiedAt: row.wildcardDnsVerifiedAt,
+    wildcardDnsLastError: row.wildcardDnsLastError,
     lastProvisionError: row.lastProvisionError,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -111,6 +116,9 @@ const toDomainCatalogDto = (input: {
     nameServers: input.zone?.nameServers ?? [],
     projectStatus: input.row?.status ?? "not_enabled",
     catchAllEnabled: input.row?.catchAllEnabled ?? false,
+    subdomainDnsMode: input.row?.subdomainDnsMode ?? "explicit",
+    wildcardDnsVerifiedAt: input.row?.wildcardDnsVerifiedAt ?? null,
+    wildcardDnsLastError: input.row?.wildcardDnsLastError ?? null,
     lastProvisionError: input.row?.lastProvisionError ?? null,
     createdAt: input.row?.createdAt ?? null,
     updatedAt: input.row?.updatedAt ?? null,
@@ -169,6 +177,8 @@ const resetCatchAllState = <TRow extends DomainRow>(
   catchAllOwnerUserId: null,
   catchAllRestoreStateJson: null,
   catchAllUpdatedAt: updatedAt,
+  subdomainDnsMode: "explicit",
+  wildcardDnsLastError: null,
 });
 
 const retireCatchAllMailboxes = async (
@@ -195,6 +205,61 @@ const retireCatchAllMailboxes = async (
 const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
 const domainNotDeletedFilter = isNull(domains.deletedAt);
+
+const shouldAllowWildcardSubdomainDns = (
+  config: Pick<
+    RuntimeConfig,
+    "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
+  >,
+  rootDomain: string,
+) =>
+  config.WILDCARD_SUBDOMAIN_DNS_ENABLED === true &&
+  (config.WILDCARD_SUBDOMAIN_DNS_ALLOWLIST ?? []).includes(
+    normalizeRootDomain(rootDomain),
+  );
+
+export const shouldUseWildcardSubdomainDnsForDomain = (
+  config: Pick<
+    RuntimeConfig,
+    "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
+  >,
+  domain: Pick<
+    DomainRow,
+    "catchAllEnabled" | "rootDomain" | "subdomainDnsMode"
+  >,
+) =>
+  domain.catchAllEnabled &&
+  domain.subdomainDnsMode === "wildcard" &&
+  shouldAllowWildcardSubdomainDns(config, domain.rootDomain);
+
+const persistExplicitSubdomainHost = async (
+  db: ReturnType<typeof getDb>,
+  domain: Pick<DomainRow, "id">,
+  subdomainName: string,
+  timestamp: string,
+) => {
+  await db
+    .insert(subdomains)
+    .values({
+      id: randomId("sub"),
+      domainId: domain.id,
+      name: subdomainName,
+      enabledAt: timestamp,
+      lastUsedAt: timestamp,
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
+      metadata: JSON.stringify({ mode: "explicit" }),
+    })
+    .onConflictDoUpdate({
+      target: [subdomains.domainId, subdomains.name],
+      set: {
+        lastUsedAt: timestamp,
+        cleanupNextAttemptAt: null,
+        cleanupLastError: null,
+        metadata: JSON.stringify({ mode: "explicit" }),
+      },
+    });
+};
 
 export const classifyDomainCreateState = (existing: DomainRow | null) => {
   if (!existing) {
@@ -247,6 +312,49 @@ const requireCatchAllManagementEnabled = (
     409,
     `Catch-all ${operation} requires EMAIL_ROUTING_MANAGEMENT_ENABLED=true`,
   );
+};
+
+const resolveCatchAllSubdomainDnsState = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: DomainRow,
+  updatedAt: string,
+  requestSource: CloudflareRequestSource,
+) => {
+  if (!shouldAllowWildcardSubdomainDns(config, domain.rootDomain)) {
+    return {
+      subdomainDnsMode: "explicit" as const,
+      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: null,
+    };
+  }
+
+  try {
+    await ensureWildcardEmailRoutingDnsRecords(
+      env,
+      config,
+      domain,
+      requestSource,
+    );
+    return {
+      subdomainDnsMode: "wildcard" as const,
+      wildcardDnsVerifiedAt: updatedAt,
+      wildcardDnsLastError: null,
+    };
+  } catch (error) {
+    const wildcardDnsLastError =
+      error instanceof Error ? error.message : String(error);
+    logOperationalEvent("warn", "domains.wildcard_dns.ensure_failed", {
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
+      error: wildcardDnsLastError,
+    });
+    return {
+      subdomainDnsMode: "explicit" as const,
+      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+      wildcardDnsLastError,
+    };
+  }
 };
 
 const domainRouteContexts = {
@@ -573,6 +681,9 @@ const persistManagedDomain = async (
       zoneId: input.zoneId,
       bindingSource: input.bindingSource,
       status: input.provisionState.status,
+      subdomainDnsMode: baseRow.subdomainDnsMode,
+      wildcardDnsVerifiedAt: baseRow.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: baseRow.wildcardDnsLastError,
       lastProvisionError: input.provisionState.lastProvisionError,
       updatedAt,
       lastProvisionedAt: input.provisionState.lastProvisionedAt,
@@ -590,6 +701,9 @@ const persistManagedDomain = async (
         catchAllOwnerUserId: next.catchAllOwnerUserId,
         catchAllRestoreStateJson: next.catchAllRestoreStateJson,
         catchAllUpdatedAt: next.catchAllUpdatedAt,
+        subdomainDnsMode: next.subdomainDnsMode,
+        wildcardDnsVerifiedAt: next.wildcardDnsVerifiedAt,
+        wildcardDnsLastError: next.wildcardDnsLastError,
         lastProvisionError: next.lastProvisionError,
         updatedAt: next.updatedAt,
         lastProvisionedAt: next.lastProvisionedAt,
@@ -614,6 +728,9 @@ const persistManagedDomain = async (
     catchAllOwnerUserId: existing?.catchAllOwnerUserId ?? null,
     catchAllRestoreStateJson: existing?.catchAllRestoreStateJson ?? null,
     catchAllUpdatedAt: existing?.catchAllUpdatedAt ?? null,
+    subdomainDnsMode: existing?.subdomainDnsMode ?? "explicit",
+    wildcardDnsVerifiedAt: existing?.wildcardDnsVerifiedAt ?? null,
+    wildcardDnsLastError: existing?.wildcardDnsLastError ?? null,
     lastProvisionError: input.provisionState.lastProvisionError,
     createdAt: existing?.createdAt ?? updatedAt,
     updatedAt,
@@ -678,6 +795,13 @@ const restoreSoftDeletedDomainLocally = async (
       zoneId: domain.zoneId,
       bindingSource: domain.bindingSource,
       status: domain.status,
+      catchAllEnabled: domain.catchAllEnabled,
+      catchAllOwnerUserId: domain.catchAllOwnerUserId,
+      catchAllRestoreStateJson: domain.catchAllRestoreStateJson,
+      catchAllUpdatedAt: domain.catchAllUpdatedAt,
+      subdomainDnsMode: domain.subdomainDnsMode,
+      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: domain.wildcardDnsLastError,
       lastProvisionError: domain.lastProvisionError,
       updatedAt: domain.updatedAt,
       lastProvisionedAt: domain.lastProvisionedAt,
@@ -809,6 +933,12 @@ const backfillMailboxRoutesForCatchAllDisable = async (
         .update(mailboxes)
         .set({ routingRuleId })
         .where(eq(mailboxes.id, mailbox.id));
+      await persistExplicitSubdomainHost(
+        db,
+        domain,
+        mailbox.subdomain,
+        nowIso(),
+      );
     }
   } catch (error) {
     for (const createdRoute of [...createdRoutes].reverse()) {
@@ -1177,7 +1307,37 @@ export const enableDomainCatchAll = async (
     throw new ApiError(409, "Only active mailbox domains can enable catch-all");
   }
   if (existing.catchAllEnabled) {
-    return toDomainDto(existing);
+    const updatedAt = nowIso();
+    const dnsState = await resolveCatchAllSubdomainDnsState(
+      env,
+      config,
+      existing,
+      updatedAt,
+      domainRouteContexts.catchAllEnable,
+    );
+    const next: DomainRow = {
+      ...existing,
+      subdomainDnsMode: dnsState.subdomainDnsMode,
+      wildcardDnsVerifiedAt: dnsState.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: dnsState.wildcardDnsLastError,
+      updatedAt:
+        existing.subdomainDnsMode !== dnsState.subdomainDnsMode ||
+        existing.wildcardDnsVerifiedAt !== dnsState.wildcardDnsVerifiedAt ||
+        existing.wildcardDnsLastError !== dnsState.wildcardDnsLastError
+          ? updatedAt
+          : existing.updatedAt,
+    };
+
+    await db
+      .update(domains)
+      .set({
+        subdomainDnsMode: next.subdomainDnsMode,
+        wildcardDnsVerifiedAt: next.wildcardDnsVerifiedAt,
+        wildcardDnsLastError: next.wildcardDnsLastError,
+        updatedAt: next.updatedAt,
+      })
+      .where(eq(domains.id, existing.id));
+    return toDomainDto(next);
   }
 
   const currentRule = await getCatchAllRule(
@@ -1203,12 +1363,23 @@ export const enableDomainCatchAll = async (
   );
 
   const updatedAt = nowIso();
+  const dnsState = await resolveCatchAllSubdomainDnsState(
+    env,
+    config,
+    existing,
+    updatedAt,
+    domainRouteContexts.catchAllEnable,
+  );
+
   const next: DomainRow = {
     ...existing,
     catchAllEnabled: true,
     catchAllOwnerUserId: actor.id,
     catchAllRestoreStateJson: serializeCatchAllRestoreState(restoreState),
     catchAllUpdatedAt: updatedAt,
+    subdomainDnsMode: dnsState.subdomainDnsMode,
+    wildcardDnsVerifiedAt: dnsState.wildcardDnsVerifiedAt,
+    wildcardDnsLastError: dnsState.wildcardDnsLastError,
     updatedAt,
   };
 
@@ -1219,6 +1390,9 @@ export const enableDomainCatchAll = async (
       catchAllOwnerUserId: actor.id,
       catchAllRestoreStateJson: next.catchAllRestoreStateJson,
       catchAllUpdatedAt: updatedAt,
+      subdomainDnsMode: next.subdomainDnsMode,
+      wildcardDnsVerifiedAt: next.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: next.wildcardDnsLastError,
       updatedAt,
     })
     .where(eq(domains.id, existing.id));
@@ -1263,6 +1437,8 @@ export const disableDomainCatchAll = async (
     catchAllOwnerUserId: null,
     catchAllRestoreStateJson: null,
     catchAllUpdatedAt: updatedAt,
+    subdomainDnsMode: "explicit",
+    wildcardDnsLastError: null,
     updatedAt,
   };
 
@@ -1273,6 +1449,8 @@ export const disableDomainCatchAll = async (
       catchAllOwnerUserId: null,
       catchAllRestoreStateJson: null,
       catchAllUpdatedAt: updatedAt,
+      subdomainDnsMode: "explicit",
+      wildcardDnsLastError: null,
       updatedAt,
     })
     .where(eq(domains.id, existing.id));
@@ -1438,6 +1616,9 @@ export const resolveMailboxDomain = async (
       catchAllOwnerUserId: null,
       catchAllRestoreStateJson: null,
       catchAllUpdatedAt: null,
+      subdomainDnsMode: "explicit",
+      wildcardDnsVerifiedAt: null,
+      wildcardDnsLastError: null,
       lastProvisionError: null,
       createdAt: timestamp,
       updatedAt: timestamp,
