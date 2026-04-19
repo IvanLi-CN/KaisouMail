@@ -140,13 +140,13 @@ describe("runtime config parsing", () => {
     expect(enabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(true);
   });
 
-  it("defaults subdomain cleanup to a single host per scheduled run", () => {
+  it("defaults subdomain cleanup to a larger backlog window per scheduled run", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
       SUBDOMAIN_CLEANUP_BATCH_SIZE: undefined,
     } as never);
 
-    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(1);
+    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(500);
   });
 
   it("accepts zero as the subdomain cleanup kill switch", () => {
@@ -156,5 +156,11 @@ describe("runtime config parsing", () => {
     } as never);
 
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);
+  });
+
+  it("accepts runtime config without any separate Cloudflare request budget knob", () => {
+    const result = safeParseRuntimeConfig(baseEnv as never);
+
+    expect(result.success).toBe(true);
   });
 });

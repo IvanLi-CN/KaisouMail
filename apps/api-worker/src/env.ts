@@ -28,8 +28,8 @@ const runtimeConfigSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(5)
-    .default(1),
+    .max(500)
+    .default(500),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
