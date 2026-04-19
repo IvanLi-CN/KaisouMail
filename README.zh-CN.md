@@ -16,6 +16,7 @@
 - `/domains/bind` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
 - 直绑入口仅支持 apex：例如直接绑定 `example.com`；如果要 `user@mail.example.com` 这类地址，请绑定 apex 后在邮箱层使用 `subdomain=mail`
 - 随机或指定邮箱创建，支持多级子域；对外 API 以 `mailDomain` 为首选字段，`rootDomain` 保留兼容别名
+- 定时清理现在会额外渐进回收孤儿子域的 Email Routing DNS，避免历史 MX/SPF 记录长期堆积
 - `GET /api/meta` 暴露 active 域名、TTL 和地址规则
 - 邮件原始内容入 R2，结构化索引入 D1
 - 域名目录支持启用、停用、重试接入
@@ -118,6 +119,7 @@ Worker 侧重点变量：
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
+- `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `1`）
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
 - `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
@@ -132,6 +134,7 @@ Web 侧重点变量：
 一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + `API` Service Binding 转发。这个仓库跟随当前线上配置，把 Pages 项目名固定为 `kaisoumail`，并让代理绑定到现有的 `kaisoumail-api` 服务；对于 `.pages.dev` 预览域名，请求会在代理层直接 fail-closed，避免误打到线上控制面。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
 `VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release；如果变量里有格式错误的域名项，workflow 现在会直接失败而不是静默跳过。
 deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Worker 的运行时配置里；只把它放进 GitHub Actions job 环境是不够的，否则 `/api/meta` 会继续返回 `cloudflareDomainBindingEnabled=false`。
+如果 `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`，应用仍可在 demo / 本地模式运行，但不会改动 Cloudflare 资源，孤儿子域 DNS 清理也会一起停用。
 
 ## 发布工作流门禁
 
@@ -174,3 +177,10 @@ deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Wo
   - `707979.xyz`
   - `mail.example.net`
 - 若你只是想得到 `user@mail.customer.com` 这类地址，请改为绑定 apex `customer.com`，再在创建邮箱时把 `subdomain` 设成 `mail`。
+
+## Cloudflare 限额说明
+
+- Email Routing 单封邮件上限是 25 MiB
+- D1 只存结构化索引，原始/解析后的正文仍放在 R2
+- 过期邮箱清理会按批次执行，避免超过 Worker 单次执行预算
+- 孤儿子域 DNS 清理通过 `SUBDOMAIN_CLEANUP_BATCH_SIZE` 单独限速，默认生产值是每轮只处理 `1` 个 host

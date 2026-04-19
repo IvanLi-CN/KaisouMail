@@ -14,6 +14,7 @@ import {
   createRoutingRule,
   createZone,
   deleteRoutingRule,
+  deleteSubdomainEmailRoutingDnsRecords,
   deleteZone,
   listZones,
 } from "../services/emailRouting";
@@ -24,6 +25,7 @@ const baseConfig = {
   EMAIL_WORKER_NAME: "email-receiver-worker",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "token_123",
   SESSION_SECRET: "super-secret-session-key",
@@ -236,6 +238,132 @@ describe("email routing service", () => {
         "rule_missing",
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("deletes only exact-name Email Routing DNS records for a subdomain", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "deleted" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "rec_mx_1",
+              type: "MX",
+              name: "ops.707979.xyz",
+              content: "route1.mx.cloudflare.net",
+            },
+            {
+              id: "rec_mx_2",
+              type: "MX",
+              name: "ops.707979.xyz",
+              content: "route2.mx.cloudflare.net",
+            },
+            {
+              id: "rec_txt_1",
+              type: "TXT",
+              name: "ops.707979.xyz",
+              content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"',
+            },
+            {
+              id: "rec_txt_custom",
+              type: "TXT",
+              name: "ops.707979.xyz",
+              content:
+                '"v=spf1 include:_spf.mx.cloudflare.net include:mailgun.org -all"',
+            },
+            {
+              id: "rec_child",
+              type: "MX",
+              name: "other.ops.707979.xyz",
+              content: "route3.mx.cloudflare.net",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteSubdomainEmailRoutingDnsRecords(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "ops",
+      ),
+    ).resolves.toEqual({ matchedRecordCount: 3 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records?per_page=100&name=ops.707979.xyz",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_mx_1",
+    );
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_mx_2",
+    );
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_txt_1",
+    );
+  });
+
+  it("treats missing DNS records as already deleted during subdomain cleanup", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "rec_mx_1",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 81044, message: "DNS record not found" }],
+            result: null,
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+    await expect(
+      deleteSubdomainEmailRoutingDnsRecords(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "ops",
+      ),
+    ).resolves.toEqual({ matchedRecordCount: 1 });
   });
 
   it("does not swallow zone-level 404s when deleting a routing rule", async () => {

@@ -26,6 +26,7 @@
     "MAIL_DOMAIN": "707979.xyz",
     "DEFAULT_MAILBOX_TTL_MINUTES": "60",
     "CLEANUP_BATCH_SIZE": "3",
+    "SUBDOMAIN_CLEANUP_BATCH_SIZE": "1",
     "EMAIL_ROUTING_MANAGEMENT_ENABLED": "false",
     "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },

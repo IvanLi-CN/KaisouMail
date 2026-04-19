@@ -12,6 +12,7 @@ const baseEnv = {
   APP_ENV: "development",
   DEFAULT_MAILBOX_TTL_MINUTES: "60",
   CLEANUP_BATCH_SIZE: "3",
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
@@ -59,6 +60,7 @@ describe("runtime config parsing", () => {
       APP_ENV: "development",
       DEFAULT_MAILBOX_TTL_MINUTES: "60",
       CLEANUP_BATCH_SIZE: "3",
+      SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
       EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
       BOOTSTRAP_ADMIN_NAME: "Ivan",
       CF_ROUTE_RULESET_TAG: "kaisoumail",
@@ -136,5 +138,23 @@ describe("runtime config parsing", () => {
 
     expect(disabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(false);
     expect(enabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(true);
+  });
+
+  it("defaults subdomain cleanup to a single host per scheduled run", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      SUBDOMAIN_CLEANUP_BATCH_SIZE: undefined,
+    } as never);
+
+    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(1);
+  });
+
+  it("accepts zero as the subdomain cleanup kill switch", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      SUBDOMAIN_CLEANUP_BATCH_SIZE: "0",
+    } as never);
+
+    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);
   });
 });
