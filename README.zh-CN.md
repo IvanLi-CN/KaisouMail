@@ -120,7 +120,7 @@ Worker 侧重点变量：
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `200`）
-- `SUBDOMAIN_CLEANUP_REQUEST_BUDGET`（每轮孤儿子域清理最多可消耗的 Cloudflare REST 请求数；默认 `400`）
+- `SUBDOMAIN_CLEANUP_REQUEST_BUDGET`（每轮孤儿子域清理最多可消耗的 Cloudflare REST 请求数；默认 `400`，合法最小值 `4`）
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
 - `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
@@ -184,4 +184,4 @@ deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Wo
 - Email Routing 单封邮件上限是 25 MiB
 - D1 只存结构化索引，原始/解析后的正文仍放在 R2
 - 过期邮箱清理会按批次执行，避免超过 Worker 单次执行预算
-- Cloudflare REST API 目前按 token 提供 `5 分钟 1200 次请求` 的全局限额，所以孤儿子域 DNS 清理改成了双层预算：每轮最多扫描 `200` 个 host（`SUBDOMAIN_CLEANUP_BATCH_SIZE`），同时最多消耗 `400` 次 Cloudflare 请求（`SUBDOMAIN_CLEANUP_REQUEST_BUDGET`），并继续在任一 upstream/local `429` 时立刻停下
+- Cloudflare REST API 目前按 token 提供 `5 分钟 1200 次请求` 的全局限额，所以孤儿子域 DNS 清理改成了双层预算：每轮最多扫描 `200` 个 host（`SUBDOMAIN_CLEANUP_BATCH_SIZE`），同时把 `SUBDOMAIN_CLEANUP_REQUEST_BUDGET=400` 作为每轮 Cloudflare 请求的硬上限，并继续在任一 upstream/local `429` 时立刻停下；如果某个 host 在剩余额度内删不完，就保留精确 fqdn 的部分清理进度，等后续 scheduled cleanup 继续

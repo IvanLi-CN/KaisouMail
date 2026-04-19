@@ -162,4 +162,24 @@ describe("runtime config parsing", () => {
 
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);
   });
+
+  it("rejects subdomain cleanup request budgets that cannot make forward progress", () => {
+    const result = safeParseRuntimeConfig({
+      ...baseEnv,
+      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "3",
+    } as never);
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("expected config parse to fail");
+    }
+
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["SUBDOMAIN_CLEANUP_REQUEST_BUDGET"],
+        }),
+      ]),
+    );
+  });
 });

@@ -122,7 +122,7 @@ The Worker expects these bindings and variables:
 - `DEFAULT_MAILBOX_TTL_MINUTES`
 - `CLEANUP_BATCH_SIZE`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE` (`0` disables orphaned subdomain DNS cleanup; default `200`)
-- `SUBDOMAIN_CLEANUP_REQUEST_BUDGET` (max Cloudflare REST requests the orphaned-subdomain pass may spend per scheduled run; default `400`)
+- `SUBDOMAIN_CLEANUP_REQUEST_BUDGET` (max Cloudflare REST requests the orphaned-subdomain pass may spend per scheduled run; default `400`, minimum valid value `4`)
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
@@ -337,5 +337,5 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 - Email Routing single-message limit is 25 MiB
 - D1 stores structured indices only; raw/parsed payloads stay in R2
 - Expired mailbox cleanup is batched to stay within Worker execution limits
-- Cloudflare's REST API currently allows `1,200 requests / 5 minutes / API token`, so orphaned subdomain DNS cleanup now uses a two-layer budget: `SUBDOMAIN_CLEANUP_BATCH_SIZE=200` hosts scanned per run plus `SUBDOMAIN_CLEANUP_REQUEST_BUDGET=400` Cloudflare requests per run, while still aborting immediately on upstream/local `429`
+- Cloudflare's REST API currently allows `1,200 requests / 5 minutes / API token`, so orphaned subdomain DNS cleanup now uses a two-layer budget: `SUBDOMAIN_CLEANUP_BATCH_SIZE=200` hosts scanned per run plus `SUBDOMAIN_CLEANUP_REQUEST_BUDGET=400` as a hard Cloudflare-request ceiling per run, while still aborting immediately on upstream/local `429`; if one host cannot finish within the remaining request budget, the partial exact-fqdn cleanup is left pending and resumes on a later scheduled pass
 - Active mailbox concurrency is still bounded by Cloudflare Email Routing rule limits

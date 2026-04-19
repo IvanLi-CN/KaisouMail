@@ -103,6 +103,20 @@ interface CloudflareDnsRecordResult {
   priority?: number | null;
 }
 
+interface DeleteSubdomainEmailRoutingDnsRecordsOptions {
+  requestBudget?: number;
+}
+
+interface DeleteSubdomainEmailRoutingDnsRecordsResult {
+  matchedRecordCount: number;
+  requestCount: number;
+  completed: boolean;
+}
+
+interface CloudflareRequestExecutionOptions {
+  onRequestAttempted?: () => void;
+}
+
 const toZoneSummary = (zone: CloudflareZoneResult): CloudflareZoneSummary => ({
   id: zone.id,
   name: zone.name,
@@ -232,6 +246,50 @@ const defaultCloudflareRequestSource: CloudflareRequestSource = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const getCloudflareRequestCount = (value: unknown) => {
+  if (!isRecord(value)) return null;
+  return typeof value.cloudflareRequestCount === "number"
+    ? value.cloudflareRequestCount
+    : null;
+};
+
+const withCloudflareRequestCount = (error: unknown, requestCount: number) => {
+  if (requestCount <= 0) {
+    return error;
+  }
+
+  if (error instanceof ApiError) {
+    const details = isRecord(error.details)
+      ? {
+          ...error.details,
+          cloudflareRequestCount: requestCount,
+        }
+      : { cloudflareRequestCount: requestCount };
+    const wrapped = new ApiError(
+      error.status,
+      error.message,
+      details,
+      error.headers,
+    );
+    wrapped.stack = error.stack;
+    return wrapped;
+  }
+
+  if (error instanceof Error) {
+    return Object.assign(error, { cloudflareRequestCount: requestCount });
+  }
+
+  return new ApiError(500, "Cloudflare API request failed", {
+    cause: error,
+    cloudflareRequestCount: requestCount,
+  });
+};
+
+export const getCloudflareRequestCountFromError = (error: unknown) =>
+  error instanceof ApiError
+    ? (getCloudflareRequestCount(error.details) ?? 0)
+    : (getCloudflareRequestCount(error) ?? 0);
 
 const isCloudflareRequestSource = (
   value: unknown,
@@ -463,6 +521,7 @@ const cfRequest = async <T>(
       response: Response;
       data: CloudflareEnvelope<T> | null;
     }) => boolean;
+    onRequestAttempted?: () => void;
     skipRateLimitCheck?: boolean;
   },
 ) => {
@@ -470,6 +529,7 @@ const cfRequest = async <T>(
     await ensureCloudflareRequestAllowed(env, requestContext);
   }
 
+  options?.onRequestAttempted?.();
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
     headers: {
@@ -623,6 +683,7 @@ export const ensureSubdomainEnabled = async (
   domain: EmailRoutingDomain,
   subdomain: string,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const fqdn = `${subdomain}.${domain.rootDomain}`;
@@ -640,6 +701,9 @@ export const ensureSubdomainEnabled = async (
       method: "POST",
       body: JSON.stringify({ name: fqdn }),
     },
+    {
+      onRequestAttempted: options?.onRequestAttempted,
+    },
   );
 };
 
@@ -649,49 +713,77 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
   domain: EmailRoutingDomain,
   subdomain: string,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
-) => {
+  options?: DeleteSubdomainEmailRoutingDnsRecordsOptions,
+): Promise<DeleteSubdomainEmailRoutingDnsRecordsResult> => {
   if (!ensureManagementEnabled(config)) {
-    return { matchedRecordCount: 0, requestCount: 0 };
+    return { matchedRecordCount: 0, requestCount: 0, completed: true };
   }
 
   const zoneId = requireZoneId(domain);
   const fqdn = `${subdomain}.${domain.rootDomain}`;
   const encodedName = encodeURIComponent(fqdn);
   const listPath = `/zones/${zoneId}/dns_records?per_page=100&name=${encodedName}`;
-  const records =
-    (await cfRequest<CloudflareDnsRecordResult[]>(
-      env,
-      config,
-      listPath,
-      buildCloudflareRequestContext(requestSource, "GET", listPath),
-    )) ?? [];
+  let requestCount = 0;
 
-  const candidateRecords = records.filter((record) =>
-    isEmailRoutingDnsRecord(record, fqdn),
-  );
+  try {
+    const records =
+      (await cfRequest<CloudflareDnsRecordResult[]>(
+        env,
+        config,
+        listPath,
+        buildCloudflareRequestContext(requestSource, "GET", listPath),
+        undefined,
+        {
+          onRequestAttempted: () => {
+            requestCount += 1;
+          },
+        },
+      )) ?? [];
 
-  for (const record of candidateRecords) {
-    const deletePath = `/zones/${zoneId}/dns_records/${record.id}`;
-    await cfRequest(
-      env,
-      config,
-      deletePath,
-      buildCloudflareRequestContext(requestSource, "DELETE", deletePath),
-      {
-        method: "DELETE",
-      },
-      {
-        ignoreWhen: ({ response, data }) =>
-          response.status === 404 &&
-          hasOnlyMissingDnsRecordErrors(data?.errors),
-      },
+    const candidateRecords = records.filter((record) =>
+      isEmailRoutingDnsRecord(record, fqdn),
     );
-  }
 
-  return {
-    matchedRecordCount: candidateRecords.length,
-    requestCount: candidateRecords.length + 1,
-  };
+    for (const record of candidateRecords) {
+      if (
+        options?.requestBudget !== undefined &&
+        requestCount >= options.requestBudget
+      ) {
+        return {
+          matchedRecordCount: candidateRecords.length,
+          requestCount,
+          completed: false,
+        };
+      }
+
+      const deletePath = `/zones/${zoneId}/dns_records/${record.id}`;
+      await cfRequest(
+        env,
+        config,
+        deletePath,
+        buildCloudflareRequestContext(requestSource, "DELETE", deletePath),
+        {
+          method: "DELETE",
+        },
+        {
+          ignoreWhen: ({ response, data }) =>
+            response.status === 404 &&
+            hasOnlyMissingDnsRecordErrors(data?.errors),
+          onRequestAttempted: () => {
+            requestCount += 1;
+          },
+        },
+      );
+    }
+
+    return {
+      matchedRecordCount: candidateRecords.length,
+      requestCount,
+      completed: true,
+    };
+  } catch (error) {
+    throw withCloudflareRequestCount(error, requestCount);
+  }
 };
 
 export const createRoutingRule = async (

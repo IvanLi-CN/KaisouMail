@@ -36,7 +36,7 @@ const runtimeConfigSchema = z.object({
   SUBDOMAIN_CLEANUP_REQUEST_BUDGET: z.coerce
     .number()
     .int()
-    .min(1)
+    .min(4)
     .max(1000)
     .default(400),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),

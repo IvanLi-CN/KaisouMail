@@ -307,7 +307,11 @@ describe("email routing service", () => {
         },
         "ops",
       ),
-    ).resolves.toEqual({ matchedRecordCount: 3, requestCount: 4 });
+    ).resolves.toEqual({
+      matchedRecordCount: 3,
+      requestCount: 4,
+      completed: true,
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -364,7 +368,145 @@ describe("email routing service", () => {
         },
         "ops",
       ),
-    ).resolves.toEqual({ matchedRecordCount: 1, requestCount: 2 });
+    ).resolves.toEqual({
+      matchedRecordCount: 1,
+      requestCount: 2,
+      completed: true,
+    });
+  });
+
+  it("stops deleting once the remaining Cloudflare request budget is exhausted", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "deleted" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "rec_mx_1",
+              type: "MX",
+              name: "ops.707979.xyz",
+              content: "route1.mx.cloudflare.net",
+            },
+            {
+              id: "rec_mx_2",
+              type: "MX",
+              name: "ops.707979.xyz",
+              content: "route2.mx.cloudflare.net",
+            },
+            {
+              id: "rec_txt_1",
+              type: "TXT",
+              name: "ops.707979.xyz",
+              content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"',
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      deleteSubdomainEmailRoutingDnsRecords(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "ops",
+        undefined,
+        {
+          requestBudget: 2,
+        },
+      ),
+    ).resolves.toEqual({
+      matchedRecordCount: 3,
+      requestCount: 2,
+      completed: false,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_mx_1",
+    );
+  });
+
+  it("surfaces Cloudflare request counts when a later delete fails", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "rec_mx_1",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+              },
+              {
+                id: "rec_mx_2",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route2.mx.cloudflare.net",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "rec_mx_1" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ message: "delete failed" }],
+            result: null,
+          }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+    await expect(
+      deleteSubdomainEmailRoutingDnsRecords(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "ops",
+      ),
+    ).rejects.toMatchObject({
+      status: 500,
+      message: "delete failed",
+      details: {
+        cloudflareRequestCount: 3,
+      },
+    });
   });
 
   it("does not swallow zone-level 404s when deleting a routing rule", async () => {

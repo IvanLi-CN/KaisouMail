@@ -9,6 +9,7 @@ import { logOperationalEvent } from "../lib/observability";
 import {
   deleteSubdomainEmailRoutingDnsRecords,
   ensureSubdomainEnabled,
+  getCloudflareRequestCountFromError,
 } from "./emailRouting";
 
 type SubdomainRow = typeof subdomains.$inferSelect;
@@ -24,7 +25,7 @@ const subdomainCleanupRequestSource = {
 } as const;
 
 const subdomainCleanupRetryDelayMs = 60 * 60 * 1000;
-const minimumCloudflareRequestsPerSubdomainAttempt = 1;
+const minimumCloudflareRequestsPerSubdomainAttempt = 2;
 
 const formatCleanupError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -45,6 +46,20 @@ const clearSubdomainCleanupState = async (
       cleanupLastError: null,
     })
     .where(eq(subdomains.id, subdomainId));
+};
+
+const markSubdomainCleanupPending = async (
+  db: ReturnType<typeof getDb>,
+  row: Pick<PendingSubdomainCleanupRow, "id">,
+  now: string,
+) => {
+  await db
+    .update(subdomains)
+    .set({
+      cleanupNextAttemptAt: now,
+      cleanupLastError: null,
+    })
+    .where(eq(subdomains.id, row.id));
 };
 
 const markSubdomainCleanupBackoff = async (
@@ -114,12 +129,16 @@ export const listSubdomainsPendingCleanup = async (
     WHERE d.deleted_at IS NULL
       AND d.zone_id IS NOT NULL
       AND (s.cleanup_next_attempt_at IS NULL OR s.cleanup_next_attempt_at <= ?)
-      AND NOT EXISTS (
-        SELECT 1
-        FROM mailboxes m
-        WHERE m.domain_id = s.domain_id
-          AND m.subdomain = s.name
-          AND m.status != 'destroyed'
+      AND (
+        s.cleanup_next_attempt_at IS NOT NULL
+        OR s.cleanup_last_error IS NOT NULL
+        OR NOT EXISTS (
+          SELECT 1
+          FROM mailboxes m
+          WHERE m.domain_id = s.domain_id
+            AND m.subdomain = s.name
+            AND m.status != 'destroyed'
+        )
       )
     ORDER BY s.last_used_at ASC, s.id ASC
     LIMIT ?`,
@@ -143,6 +162,55 @@ export const runSubdomainCleanup = async (
   let requestBudgetExhausted = false;
 
   for (const row of pending) {
+    if (await hasLiveMailboxReference(env, row)) {
+      if (row.cleanupNextAttemptAt || row.cleanupLastError) {
+        if (requestBudgetUsed + 1 > config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET) {
+          requestBudgetExhausted = true;
+          break;
+        }
+
+        const cleanupStartedAt = nowIso();
+
+        try {
+          await ensureSubdomainEnabled(
+            env,
+            config,
+            {
+              rootDomain: row.rootDomain,
+              zoneId: row.zoneId,
+            },
+            row.name,
+            subdomainCleanupRequestSource,
+            {
+              onRequestAttempted: () => {
+                requestBudgetUsed += 1;
+              },
+            },
+          );
+          await clearSubdomainCleanupState(db, row.id);
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 429) {
+            throw error;
+          }
+
+          await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
+          retryScheduledCount += 1;
+          logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
+            subdomainId: row.id,
+            domainId: row.domainId,
+            rootDomain: row.rootDomain,
+            subdomain: row.name,
+            error: formatCleanupError(error),
+          });
+        }
+      } else {
+        await clearSubdomainCleanupState(db, row.id);
+      }
+
+      liveReferenceSkipCount += 1;
+      continue;
+    }
+
     if (
       requestBudgetUsed + minimumCloudflareRequestsPerSubdomainAttempt >
       config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET
@@ -152,12 +220,6 @@ export const runSubdomainCleanup = async (
     }
 
     const cleanupStartedAt = nowIso();
-
-    if (await hasLiveMailboxReference(env, row)) {
-      await clearSubdomainCleanupState(db, row.id);
-      liveReferenceSkipCount += 1;
-      continue;
-    }
 
     try {
       const cleanupResult = await deleteSubdomainEmailRoutingDnsRecords(
@@ -169,8 +231,18 @@ export const runSubdomainCleanup = async (
         },
         row.name,
         subdomainCleanupRequestSource,
+        {
+          requestBudget:
+            config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET - requestBudgetUsed - 1,
+        },
       );
       requestBudgetUsed += cleanupResult.requestCount;
+
+      if (!cleanupResult.completed) {
+        await markSubdomainCleanupPending(db, row, cleanupStartedAt);
+        requestBudgetExhausted = true;
+        break;
+      }
 
       if (await hasLiveMailboxReference(env, row)) {
         await ensureSubdomainEnabled(
@@ -182,6 +254,11 @@ export const runSubdomainCleanup = async (
           },
           row.name,
           subdomainCleanupRequestSource,
+          {
+            onRequestAttempted: () => {
+              requestBudgetUsed += 1;
+            },
+          },
         );
         await clearSubdomainCleanupState(db, row.id, cleanupStartedAt);
         continue;
@@ -190,6 +267,8 @@ export const runSubdomainCleanup = async (
       await db.delete(subdomains).where(eq(subdomains.id, row.id));
       cleanedCount += 1;
     } catch (error) {
+      requestBudgetUsed += getCloudflareRequestCountFromError(error);
+
       if (error instanceof ApiError && error.status === 429) {
         throw error;
       }
