@@ -16,6 +16,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 - Direct domain binding that creates a Cloudflare full zone from `/domains/bind`, plus project-bound zone deletion with soft local cleanup
 - The direct-bind entry is apex-only: bind `example.com` directly; for `user@mail.example.com`, bind the apex first and use mailbox-level `subdomain=mail`
 - Random or custom mailbox creation with TTL-based cleanup and optional `mailDomain` selection (`rootDomain` remains a compatibility alias)
+- Scheduled cleanup now also reclaims orphaned per-subdomain Email Routing DNS in a budgeted background pass, instead of leaving historical MX/SPF records behind indefinitely
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
 - Multi-level mailbox subdomains such as `alpha.<mail-root>` and `ops.alpha.<mail-root>`
@@ -120,6 +121,7 @@ The Worker expects these bindings and variables:
 - `EMAIL_WORKER_NAME` (required when live Email Routing management is enabled)
 - `DEFAULT_MAILBOX_TTL_MINUTES`
 - `CLEANUP_BATCH_SIZE`
+- `SUBDOMAIN_CLEANUP_BATCH_SIZE` (`0` disables orphaned subdomain DNS cleanup; default `1`)
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
@@ -134,7 +136,7 @@ The Worker expects these bindings and variables:
 
 These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
-If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources.
+If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources, and orphaned subdomain DNS cleanup is skipped as well.
 The deploy workflow must inject `CLOUDFLARE_ACCOUNT_ID` into the API Worker runtime config before publish. Setting the GitHub Actions job environment alone is not enough; `/api/meta` reports `cloudflareDomainBindingEnabled=false` until the Worker runtime receives the binding.
 First-party browser traffic now uses same-origin `/api`, served by Cloudflare Pages Functions and forwarded through the `API` Service Binding declared in `apps/web/wrangler.jsonc`. The checked-in Pages config now stays aligned with the live `kaisoumail` project and points at the existing `kaisoumail-api` service; preview `.pages.dev` requests fail closed inside the proxy instead of being allowed to reach the live control plane. Keep `api.cfm...` / `api.km...` style API aliases available for compatibility, automation, and direct API consumers, and keep `WEB_APP_ORIGINS` aligned with every live control-plane origin so those direct API aliases still receive the correct CORS allowlist.
 `VITE_API_BASE_URL` is no longer the production browser API locator baked into the bundle. It is only used for local dev, tests, explicit non-browser overrides, and the deploy workflow's canonical direct-API smoke target. The deploy workflow separately uses `CF_PAGES_SMOKE_ORIGINS` to prove that every live Pages alias serves the same release through same-origin `/api/version` after Pages deploy completes, and malformed smoke-origin entries now fail the workflow instead of being skipped silently.
@@ -334,4 +336,5 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 - Email Routing single-message limit is 25 MiB
 - D1 stores structured indices only; raw/parsed payloads stay in R2
 - Expired mailbox cleanup is batched to stay within Worker execution limits
+- Orphaned subdomain DNS cleanup is separately budgeted via `SUBDOMAIN_CLEANUP_BATCH_SIZE`; the default production-safe value is `1` host per scheduled run
 - Active mailbox concurrency is still bounded by Cloudflare Email Routing rule limits

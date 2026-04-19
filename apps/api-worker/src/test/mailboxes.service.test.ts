@@ -84,6 +84,7 @@ const runtimeConfig = {
   APP_ENV: "development",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "cf-token",
   EMAIL_WORKER_NAME: "mail-worker",
@@ -1179,6 +1180,147 @@ describe("mailbox service helpers", () => {
       routingRuleId: null,
       source: "registered",
     });
+  });
+
+  it("repairs and clears subdomain cleanup backoff when a mailbox reuses that host", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: false,
+      catchAllOwnerUserId: null,
+      lastProvisionError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:00:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const subdomainUpdateValues: Array<Record<string, unknown>> = [];
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === domains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: domain.id,
+                    status: "active",
+                    zoneId: domain.zoneId,
+                    deletedAt: null,
+                    catchAllEnabled: false,
+                    catchAllOwnerUserId: null,
+                  },
+                ]),
+              })),
+            };
+          }
+
+          if (table === mailboxes) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => []),
+                orderBy: vi.fn(async () => []),
+              })),
+              orderBy: vi.fn(async () => []),
+            };
+          }
+
+          if (table === subdomains) {
+            return {
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  {
+                    id: "sub_ops",
+                    domainId: domain.id,
+                    name: "ops",
+                    enabledAt: "2026-04-03T12:00:00.000Z",
+                    lastUsedAt: "2026-04-03T12:00:00.000Z",
+                    cleanupNextAttemptAt: "2026-04-03T13:00:00.000Z",
+                    cleanupLastError: "partial Cloudflare DNS delete",
+                    metadata: '{"mode":"live"}',
+                  },
+                ]),
+              })),
+            };
+          }
+
+          throw new Error("Unexpected table");
+        }),
+      })),
+      insert: vi.fn(() => ({
+        values: vi.fn(async () => undefined),
+      })),
+      update: vi.fn((table: unknown) => ({
+        set: vi.fn((values: Record<string, unknown>) => ({
+          where: vi.fn(async () => {
+            if (table === subdomains) {
+              subdomainUpdateValues.push(values);
+            }
+          }),
+        })),
+      })),
+      delete: vi.fn(() => ({
+        where: vi.fn(async () => undefined),
+      })),
+    };
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
+    createRoutingRule.mockResolvedValue("rule_repaired");
+
+    await expect(
+      createMailboxForUser(
+        {
+          DB: {
+            prepare: vi.fn(() => ({
+              bind: vi.fn(() => ({
+                run: vi.fn(async () => ({
+                  meta: {
+                    changes: 1,
+                  },
+                })),
+              })),
+            })),
+          },
+        } as never,
+        runtimeConfig,
+        memberUser,
+        {
+          localPart: "build",
+          subdomain: "ops",
+          rootDomain: domain.rootDomain,
+        },
+      ),
+    ).resolves.toMatchObject({
+      address: "build@ops.707979.xyz",
+      routingRuleId: "rule_repaired",
+    });
+
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      expect.any(Object),
+      runtimeConfig,
+      expect.objectContaining({
+        rootDomain: domain.rootDomain,
+        zoneId: domain.zoneId,
+      }),
+      "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
+    expect(subdomainUpdateValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cleanupNextAttemptAt: null,
+          cleanupLastError: null,
+        }),
+      ]),
+    );
   });
 
   it("returns structured mailbox details when create hits a visible mailbox conflict", async () => {

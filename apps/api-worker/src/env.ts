@@ -24,6 +24,12 @@ const runtimeConfigSchema = z.object({
     .max(maxMailboxTtlMinutes)
     .default(60),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(3),
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(5)
+    .default(1),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
@@ -48,6 +54,7 @@ export interface WorkerEnv {
   EMAIL_WORKER_NAME?: string;
   DEFAULT_MAILBOX_TTL_MINUTES: string;
   CLEANUP_BATCH_SIZE: string;
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: string;
   EMAIL_ROUTING_MANAGEMENT_ENABLED: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;

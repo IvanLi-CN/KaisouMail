@@ -113,11 +113,17 @@ export const subdomains = sqliteTable(
     name: text("name").notNull(),
     enabledAt: text("enabled_at").notNull(),
     lastUsedAt: text("last_used_at").notNull(),
+    cleanupNextAttemptAt: text("cleanup_next_attempt_at"),
+    cleanupLastError: text("cleanup_last_error"),
     metadata: text("metadata"),
   },
   (table) => [
     uniqueIndex("subdomains_domain_name_unique").on(table.domainId, table.name),
     index("subdomains_domain_idx").on(table.domainId),
+    index("subdomains_cleanup_idx").on(
+      table.cleanupNextAttemptAt,
+      table.lastUsedAt,
+    ),
   ],
 );
 
@@ -153,6 +159,11 @@ export const mailboxes = sqliteTable(
       .where(sql`${table.status} != 'destroyed'`),
     index("mailboxes_user_idx").on(table.userId),
     index("mailboxes_domain_idx").on(table.domainId, table.status),
+    index("mailboxes_domain_subdomain_status_idx").on(
+      table.domainId,
+      table.subdomain,
+      table.status,
+    ),
     index("mailboxes_status_expires_idx").on(table.status, table.expiresAt),
   ],
 );

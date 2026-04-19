@@ -94,6 +94,15 @@ interface CloudflareCatchAllRuleResult {
   actions?: CloudflareEmailRoutingAction[] | null;
 }
 
+interface CloudflareDnsRecordResult {
+  id: string;
+  type: string;
+  name: string;
+  content?: string | null;
+  ttl?: number | null;
+  priority?: number | null;
+}
+
 const toZoneSummary = (zone: CloudflareZoneResult): CloudflareZoneSummary => ({
   id: zone.id,
   name: zone.name,
@@ -170,6 +179,49 @@ const hasOnlyMissingRoutingRuleErrors = (
   errors?.length
     ? errors.every((error) => /rule not found/i.test(error.message))
     : false;
+
+const hasOnlyMissingDnsRecordErrors = (
+  errors: CloudflareError[] | undefined,
+) =>
+  errors?.length
+    ? errors.every((error) =>
+        /dns record not found|record not found/i.test(error.message),
+      )
+    : false;
+
+const emailRoutingMxTargets = new Set([
+  "route1.mx.cloudflare.net",
+  "route2.mx.cloudflare.net",
+  "route3.mx.cloudflare.net",
+]);
+
+const normalizeDnsValue = (value: string | null | undefined) =>
+  value?.trim().toLowerCase().replace(/\.$/, "") ?? "";
+
+const isEmailRoutingSpfRecord = (content: string | null | undefined) => {
+  const normalized = normalizeDnsValue(content).replace(/^"|"$/g, "");
+  return normalized === "v=spf1 include:_spf.mx.cloudflare.net ~all";
+};
+
+const isEmailRoutingDnsRecord = (
+  record: CloudflareDnsRecordResult,
+  fqdn: string,
+) => {
+  const normalizedName = normalizeDnsValue(record.name);
+  if (normalizedName !== normalizeDnsValue(fqdn)) {
+    return false;
+  }
+
+  if (record.type === "MX") {
+    return emailRoutingMxTargets.has(normalizeDnsValue(record.content));
+  }
+
+  if (record.type === "TXT") {
+    return isEmailRoutingSpfRecord(record.content);
+  }
+
+  return false;
+};
 
 const CLOUDFLARE_RATE_LIMITED_UNTIL_KEY = "cloudflare_api_rate_limited_until";
 const CLOUDFLARE_RATE_LIMIT_CONTEXT_KEY = "cloudflare_api_rate_limit_context";
@@ -589,6 +641,54 @@ export const ensureSubdomainEnabled = async (
       body: JSON.stringify({ name: fqdn }),
     },
   );
+};
+
+export const deleteSubdomainEmailRoutingDnsRecords = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  subdomain: string,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+) => {
+  if (!ensureManagementEnabled(config)) return { matchedRecordCount: 0 };
+
+  const zoneId = requireZoneId(domain);
+  const fqdn = `${subdomain}.${domain.rootDomain}`;
+  const encodedName = encodeURIComponent(fqdn);
+  const listPath = `/zones/${zoneId}/dns_records?per_page=100&name=${encodedName}`;
+  const records =
+    (await cfRequest<CloudflareDnsRecordResult[]>(
+      env,
+      config,
+      listPath,
+      buildCloudflareRequestContext(requestSource, "GET", listPath),
+    )) ?? [];
+
+  const candidateRecords = records.filter((record) =>
+    isEmailRoutingDnsRecord(record, fqdn),
+  );
+
+  for (const record of candidateRecords) {
+    const deletePath = `/zones/${zoneId}/dns_records/${record.id}`;
+    await cfRequest(
+      env,
+      config,
+      deletePath,
+      buildCloudflareRequestContext(requestSource, "DELETE", deletePath),
+      {
+        method: "DELETE",
+      },
+      {
+        ignoreWhen: ({ response, data }) =>
+          response.status === 404 &&
+          hasOnlyMissingDnsRecordErrors(data?.errors),
+      },
+    );
+  }
+
+  return {
+    matchedRecordCount: candidateRecords.length,
+  };
 };
 
 export const createRoutingRule = async (

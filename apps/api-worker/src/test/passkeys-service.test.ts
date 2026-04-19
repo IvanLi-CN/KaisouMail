@@ -46,6 +46,7 @@ const baseConfig = {
   APP_ENV: "development",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
+  SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
   BOOTSTRAP_ADMIN_NAME: "Owner",
   SESSION_SECRET: "super-secret-session-key",

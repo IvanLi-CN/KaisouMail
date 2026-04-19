@@ -463,15 +463,25 @@ const upsertSubdomainUsage = async (
     )
     .limit(1);
 
-  if (!knownSubdomain[0]) {
+  const existingSubdomain = knownSubdomain[0];
+  const shouldRepairKnownSubdomain = Boolean(
+    existingSubdomain?.cleanupNextAttemptAt ||
+      existingSubdomain?.cleanupLastError,
+  );
+
+  if (!existingSubdomain || shouldRepairKnownSubdomain) {
     await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
   }
 
-  if (knownSubdomain[0]) {
+  if (existingSubdomain) {
     await db
       .update(subdomains)
-      .set({ lastUsedAt: now })
-      .where(eq(subdomains.id, knownSubdomain[0].id));
+      .set({
+        lastUsedAt: now,
+        cleanupNextAttemptAt: null,
+        cleanupLastError: null,
+      })
+      .where(eq(subdomains.id, existingSubdomain.id));
   } else {
     await db.insert(subdomains).values({
       id: randomId("sub"),
@@ -479,6 +489,8 @@ const upsertSubdomainUsage = async (
       name: subdomain,
       enabledAt: now,
       lastUsedAt: now,
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
       metadata: JSON.stringify({
         mode: shouldUseCatchAllDelivery(domain)
           ? "catch_all"

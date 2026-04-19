@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-18
+Last: 2026-04-19
 
 ## Objective
 
@@ -77,6 +77,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/mailboxes` keeps create semantics: if the caller already owns the same active mailbox, the API returns `409` with structured `details={ code: "mailbox_exists", mailbox }` so the Web console can select and reuse the existing row instead of silently promoting/recreating it
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional mailDomain/rootDomain)`, reuses an existing visible `active` mailbox when present, and otherwise creates a fresh mailbox; when `expiresInMinutes` is provided for an existing mailbox, the API only extends TTL and never shortens it, with `null` treated as long-term/infinite; promoting a `source=catch_all` mailbox on a Catch-all-enabled domain stays a local-only state transition (`catch_all -> registered`) without an extra per-address Cloudflare rule write, while the first use of a new subdomain still ensures the required Email Routing DNS
+- Reusing a known subdomain now clears any pending cleanup backoff and, if a prior cleanup attempt partially removed DNS, re-runs the Email Routing DNS ensure before the mailbox create/ensure flow proceeds
 - Active mailboxes continue accepting inbound mail until destroy begins; `expiresAt` no longer blocks message ingestion on its own, and only `destroying` / `destroyed` state stops normal receive flow
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` mailbox directly from its address without forcing clients to list-and-filter locally
 - Mailbox records now expose `source: registered | catch_all`; auto-materialized Catch All mailboxes keep `routingRuleId = null` and `expiresAt = null`
@@ -88,7 +89,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/domains/:id/delete` is restricted to `bindingSource=project_bind`, deletes the Cloudflare zone first, then soft-deletes the local domain record and clears cached `subdomains` rows for that domain
 - `GET /api/messages` accepts repeated `mailbox` params, optional repeated `mailboxId` params, plus `after` / `since` ISO datetime filters and optional `scope=workspace`; when both cursor aliases are present, the later timestamp is used as the strict lower bound, and workspace scope can pin reused-address mailbox selection by `mailboxId` so the middle pane does not mix message history across visible mailbox generations
 - All D1-backed dynamic `IN (...)` lookups used by workspace mailbox hydration, message mailbox filtering, and mailbox cleanup are chunked in batches of 50 to stay below Cloudflare D1 parameter limits
-- Mailbox destroy/cleanup now keeps message metadata until R2 deletion succeeds, hides `destroying` mailbox messages from read APIs, clears `lastReceivedAt` hydration for `destroying` mailboxes so the rail stays aligned with the visible message feed, and scheduled cleanup retries mailboxes stuck in `destroying` ahead of fresh `active` cleanup work while continuing through the rest of the batch even after an earlier mailbox failure
+- Mailbox destroy/cleanup now keeps message metadata until R2 deletion succeeds, hides `destroying` mailbox messages from read APIs, clears `lastReceivedAt` hydration for `destroying` mailboxes so the rail stays aligned with the visible message feed, retries mailboxes stuck in `destroying` ahead of fresh `active` cleanup work while continuing through the rest of the batch even after an earlier mailbox failure, and then runs a second orphaned-subdomain pass that deletes only exact-fqdn Email Routing `MX` / SPF `TXT` records through Cloudflare DNS-record deletes; that pass is strictly serial, defaults to `SUBDOMAIN_CLEANUP_BATCH_SIZE=1`, only enqueues domains that still have a known `zoneId`, honors the shared Cloudflare cooldown on upstream/local `429`, writes a per-row `cleanupNextAttemptAt + cleanupLastError` one-hour backoff on non-429 failures, deletes the local `subdomains` row only after successful DNS cleanup, and applies the same explicit subdomain lifecycle to Catch All domains
 - All JSON error responses use the same `{ error, details }` envelope
 - HTTP traffic only enters the API after runtime-config validation; when required config is missing, the Worker still returns the standard 500 JSON envelope instead of a platform-generated exception page
 - `GET /health` and `GET /api/version` stay behind the runtime-config gate but bypass bootstrap side effects, allowing deploy smoke checks to validate the newly published API without depending on bootstrap side effects
@@ -143,6 +144,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-19: Added gradual orphaned subdomain DNS reclamation for Email Routing (`cleanupNextAttemptAt` / `cleanupLastError`, default `SUBDOMAIN_CLEANUP_BATCH_SIZE=1`), wired the scheduled cleanup pipeline to delete only exact-fqdn Email Routing MX/SPF records with shared Cloudflare `429` cooldown handling, skipped legacy domains that still lack a backfilled `zoneId`, and clarified that Catch All domains follow the same explicit subdomain lifecycle.
 - 2026-04-17: Synced the spec after review-only convergence so unsupported subdomain binds fail deterministically even when reusable-zone catalog checks fail upstream, while the maintenance-only reuse path for already known child-zone records remains aligned across the API and demo surfaces.
 - 2026-04-14: Hardened `/domains` against upstream `429` loops by degrading `GET /api/domains/catalog` to `200 + cloudflareSync`, propagating `Retry-After` on Cloudflare-backed writes, pausing Workers AI verification on both daily exhaustion and temporary rate limits, and restoring the spec-defined visible-only polling behavior.
 - 2026-04-16: Promoted `mailDomain` to the canonical public API field while keeping `rootDomain` as a compatibility alias, refreshed the docs/API examples, and clarified that `/domains/bind` is apex-only while historical subdomain records remain maintenance-only with preserved delegation guidance.
