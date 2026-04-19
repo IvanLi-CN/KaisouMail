@@ -13,6 +13,7 @@ const baseEnv = {
   DEFAULT_MAILBOX_TTL_MINUTES: "60",
   CLEANUP_BATCH_SIZE: "3",
   SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
+  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
@@ -61,6 +62,7 @@ describe("runtime config parsing", () => {
       DEFAULT_MAILBOX_TTL_MINUTES: "60",
       CLEANUP_BATCH_SIZE: "3",
       SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
+      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
       EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
       BOOTSTRAP_ADMIN_NAME: "Ivan",
       CF_ROUTE_RULESET_TAG: "kaisoumail",
@@ -140,19 +142,22 @@ describe("runtime config parsing", () => {
     expect(enabled.EMAIL_ROUTING_MANAGEMENT_ENABLED).toBe(true);
   });
 
-  it("defaults subdomain cleanup to a single host per scheduled run", () => {
+  it("defaults subdomain cleanup to a larger backlog window per scheduled run", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
       SUBDOMAIN_CLEANUP_BATCH_SIZE: undefined,
+      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: undefined,
     } as never);
 
-    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(1);
+    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(200);
+    expect(config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET).toBe(400);
   });
 
   it("accepts zero as the subdomain cleanup kill switch", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
       SUBDOMAIN_CLEANUP_BATCH_SIZE: "0",
+      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
     } as never);
 
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);

@@ -650,7 +650,9 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
   subdomain: string,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
 ) => {
-  if (!ensureManagementEnabled(config)) return { matchedRecordCount: 0 };
+  if (!ensureManagementEnabled(config)) {
+    return { matchedRecordCount: 0, requestCount: 0 };
+  }
 
   const zoneId = requireZoneId(domain);
   const fqdn = `${subdomain}.${domain.rootDomain}`;
@@ -688,6 +690,7 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
 
   return {
     matchedRecordCount: candidateRecords.length,
+    requestCount: candidateRecords.length + 1,
   };
 };
 

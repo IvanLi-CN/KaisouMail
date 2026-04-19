@@ -24,6 +24,7 @@ const subdomainCleanupRequestSource = {
 } as const;
 
 const subdomainCleanupRetryDelayMs = 60 * 60 * 1000;
+const minimumCloudflareRequestsPerSubdomainAttempt = 1;
 
 const formatCleanupError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -136,17 +137,30 @@ export const runSubdomainCleanup = async (
   const db = getDb(env);
   const pending = await listSubdomainsPendingCleanup(env, config);
   let cleanedCount = 0;
+  let requestBudgetUsed = 0;
+  let retryScheduledCount = 0;
+  let liveReferenceSkipCount = 0;
+  let requestBudgetExhausted = false;
 
   for (const row of pending) {
+    if (
+      requestBudgetUsed + minimumCloudflareRequestsPerSubdomainAttempt >
+      config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET
+    ) {
+      requestBudgetExhausted = true;
+      break;
+    }
+
     const cleanupStartedAt = nowIso();
 
     if (await hasLiveMailboxReference(env, row)) {
       await clearSubdomainCleanupState(db, row.id);
+      liveReferenceSkipCount += 1;
       continue;
     }
 
     try {
-      await deleteSubdomainEmailRoutingDnsRecords(
+      const cleanupResult = await deleteSubdomainEmailRoutingDnsRecords(
         env,
         config,
         {
@@ -156,6 +170,7 @@ export const runSubdomainCleanup = async (
         row.name,
         subdomainCleanupRequestSource,
       );
+      requestBudgetUsed += cleanupResult.requestCount;
 
       if (await hasLiveMailboxReference(env, row)) {
         await ensureSubdomainEnabled(
@@ -180,6 +195,7 @@ export const runSubdomainCleanup = async (
       }
 
       await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
+      retryScheduledCount += 1;
       logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
         subdomainId: row.id,
         domainId: row.domainId,
@@ -189,6 +205,17 @@ export const runSubdomainCleanup = async (
       });
     }
   }
+
+  logOperationalEvent("info", "subdomains.cleanup.completed", {
+    candidateCount: pending.length,
+    cleanedCount,
+    retryScheduledCount,
+    liveReferenceSkipCount,
+    requestBudgetUsed,
+    requestBudgetLimit: config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET,
+    requestBudgetExhausted,
+    hostBudgetLimit: config.SUBDOMAIN_CLEANUP_BATCH_SIZE,
+  });
 
   return cleanedCount;
 };

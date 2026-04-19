@@ -48,6 +48,7 @@ const runtimeConfig = {
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
   SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
+  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "cf-token",
   EMAIL_WORKER_NAME: "mail-worker",
@@ -121,6 +122,7 @@ describe("subdomain cleanup service", () => {
     nowIso.mockReturnValue("2026-04-08T12:00:00.000Z");
     deleteSubdomainEmailRoutingDnsRecords.mockResolvedValue({
       matchedRecordCount: 4,
+      requestCount: 5,
     });
     ensureSubdomainEnabled.mockResolvedValue(undefined);
   });
@@ -162,6 +164,7 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 0,
+          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
     ).resolves.toEqual([]);
@@ -210,7 +213,7 @@ describe("subdomain cleanup service", () => {
     getDb.mockReturnValue(db);
     deleteSubdomainEmailRoutingDnsRecords
       .mockRejectedValueOnce(new Error("DNS unavailable"))
-      .mockResolvedValueOnce({ matchedRecordCount: 4 });
+      .mockResolvedValueOnce({ matchedRecordCount: 4, requestCount: 5 });
 
     const prepare = vi.fn(() => ({
       bind: vi.fn(() => ({
@@ -235,6 +238,7 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
+          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
     ).resolves.toBe(1);
@@ -279,6 +283,7 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
+          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
     ).rejects.toMatchObject({
@@ -331,5 +336,40 @@ describe("subdomain cleanup service", () => {
       }),
     );
     expect(db.delete).not.toHaveBeenCalledWith(subdomains);
+  });
+
+  it("stops after the configured Cloudflare request budget is exhausted", async () => {
+    const db = createDb([false, false]);
+    getDb.mockReturnValue(db);
+
+    const prepare = vi.fn(() => ({
+      bind: vi.fn(() => ({
+        all: vi.fn(async () => ({
+          results: [
+            pendingRow,
+            {
+              ...pendingRow,
+              id: "sub_beta",
+              name: "beta",
+            },
+          ],
+        })),
+      })),
+    }));
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        {
+          ...runtimeConfig,
+          SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
+          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
+        },
+      ),
+    ).resolves.toBe(1);
+
+    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
   });
 });

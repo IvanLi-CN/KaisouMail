@@ -37,6 +37,7 @@ describe("cleanup runner", () => {
   const config = {
     CLEANUP_BATCH_SIZE: 3,
     SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
+    SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
   } as never;
 
   beforeEach(() => {

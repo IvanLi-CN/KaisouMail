@@ -26,6 +26,7 @@ const baseConfig = {
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
   SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
+  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "token_123",
   SESSION_SECRET: "super-secret-session-key",
@@ -306,7 +307,7 @@ describe("email routing service", () => {
         },
         "ops",
       ),
-    ).resolves.toEqual({ matchedRecordCount: 3 });
+    ).resolves.toEqual({ matchedRecordCount: 3, requestCount: 4 });
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
@@ -363,7 +364,7 @@ describe("email routing service", () => {
         },
         "ops",
       ),
-    ).resolves.toEqual({ matchedRecordCount: 1 });
+    ).resolves.toEqual({ matchedRecordCount: 1, requestCount: 2 });
   });
 
   it("does not swallow zone-level 404s when deleting a routing rule", async () => {
