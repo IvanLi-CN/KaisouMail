@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.25.4",
+  "base_stable_version": "0.25.3",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-19T15:51:11Z",
+  "next_stable_version": "0.25.4",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "a8e84a99b9ec95451d7e21bf8339a0dfe60e94fc",
+  "pr_number": 56,
+  "pr_title": "fix(api-worker): pace subdomain cleanup requests",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.25.4",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.25.4",
+  "target_sha": "5ea0da874cdeb3602365b2e5e2bdbbcce6c08956",
+  "type_label": "type:patch"
+}
