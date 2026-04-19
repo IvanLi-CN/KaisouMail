@@ -242,6 +242,28 @@ describe("subdomain cleanup service", () => {
     expect(releaseRuntimeLease).not.toHaveBeenCalled();
   });
 
+  it("releases the lease when candidate selection fails before cleanup starts", async () => {
+    getDb.mockReturnValue(createDb([]));
+    const prepare = vi.fn(() => {
+      throw new Error("D1 unavailable");
+    });
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).rejects.toThrow("D1 unavailable");
+
+    expect(releaseRuntimeLease).toHaveBeenCalledWith(
+      expect.any(Object),
+      "subdomain_cleanup_lease",
+      "lease_cleanup",
+    );
+  });
+
   it("marks the row pending, deletes DNS, and then removes the local row", async () => {
     const db = createDb([false, false]);
     getDb.mockReturnValue(db);

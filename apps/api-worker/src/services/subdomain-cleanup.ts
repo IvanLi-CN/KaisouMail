@@ -226,17 +226,17 @@ export const runSubdomainCleanup = async (
     return 0;
   }
 
-  const db = getDb(env);
-  const pending = await listSubdomainsPendingCleanup(env, config);
-  let cleanedCount = 0;
-  let retryScheduledCount = 0;
-  let liveReferenceSkipCount = 0;
-  let rateLimitAbortCount = 0;
-  let deadlineReached = false;
-  const deadlineAt = Date.now() + subdomainCleanupRunDeadlineMs;
-  const pacer = createCloudflareRequestPacer(deadlineAt);
-
   try {
+    const db = getDb(env);
+    const pending = await listSubdomainsPendingCleanup(env, config);
+    let cleanedCount = 0;
+    let retryScheduledCount = 0;
+    let liveReferenceSkipCount = 0;
+    let rateLimitAbortCount = 0;
+    let deadlineReached = false;
+    const deadlineAt = Date.now() + subdomainCleanupRunDeadlineMs;
+    const pacer = createCloudflareRequestPacer(deadlineAt);
+
     for (const row of pending) {
       if (!pacer.hasTimeRemaining()) {
         deadlineReached = true;
