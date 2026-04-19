@@ -29,16 +29,7 @@ const runtimeConfigSchema = z.object({
     .int()
     .min(0)
     .max(500)
-    .default(200),
-  // Cloudflare REST API currently allows 1,200 requests / 5 minutes / token.
-  // Keep one scheduled cleanup pass well below that ceiling while still
-  // draining backlog within hours instead of days.
-  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: z.coerce
-    .number()
-    .int()
-    .min(4)
-    .max(1000)
-    .default(400),
+    .default(500),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
@@ -64,7 +55,6 @@ export interface WorkerEnv {
   DEFAULT_MAILBOX_TTL_MINUTES: string;
   CLEANUP_BATCH_SIZE: string;
   SUBDOMAIN_CLEANUP_BATCH_SIZE: string;
-  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: string;
   EMAIL_ROUTING_MANAGEMENT_ENABLED: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;

@@ -104,7 +104,8 @@ interface CloudflareDnsRecordResult {
 }
 
 interface DeleteSubdomainEmailRoutingDnsRecordsOptions {
-  requestBudget?: number;
+  beforeRequest?: () => Promise<void>;
+  shouldContinue?: () => boolean;
 }
 
 interface DeleteSubdomainEmailRoutingDnsRecordsResult {
@@ -114,7 +115,18 @@ interface DeleteSubdomainEmailRoutingDnsRecordsResult {
 }
 
 interface CloudflareRequestExecutionOptions {
+  beforeRequest?: () => Promise<void>;
   onRequestAttempted?: () => void;
+}
+
+export class CloudflareRequestExecutionAbortedError extends Error {
+  constructor(
+    public readonly reason: "deadline_reached",
+    message = "Cloudflare request execution aborted",
+  ) {
+    super(message);
+    this.name = "CloudflareRequestExecutionAbortedError";
+  }
 }
 
 const toZoneSummary = (zone: CloudflareZoneResult): CloudflareZoneSummary => ({
@@ -255,6 +267,10 @@ const getCloudflareRequestCount = (value: unknown) => {
 };
 
 const withCloudflareRequestCount = (error: unknown, requestCount: number) => {
+  if (error instanceof CloudflareRequestExecutionAbortedError) {
+    return error;
+  }
+
   if (requestCount <= 0) {
     return error;
   }
@@ -521,6 +537,7 @@ const cfRequest = async <T>(
       response: Response;
       data: CloudflareEnvelope<T> | null;
     }) => boolean;
+    beforeRequest?: () => Promise<void>;
     onRequestAttempted?: () => void;
     skipRateLimitCheck?: boolean;
   },
@@ -529,6 +546,7 @@ const cfRequest = async <T>(
     await ensureCloudflareRequestAllowed(env, requestContext);
   }
 
+  await options?.beforeRequest?.();
   options?.onRequestAttempted?.();
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
     ...init,
@@ -702,6 +720,7 @@ export const ensureSubdomainEnabled = async (
       body: JSON.stringify({ name: fqdn }),
     },
     {
+      beforeRequest: options?.beforeRequest,
       onRequestAttempted: options?.onRequestAttempted,
     },
   );
@@ -726,6 +745,10 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
   let requestCount = 0;
 
   try {
+    if (options?.shouldContinue && !options.shouldContinue()) {
+      return { matchedRecordCount: 0, requestCount: 0, completed: false };
+    }
+
     const records =
       (await cfRequest<CloudflareDnsRecordResult[]>(
         env,
@@ -734,6 +757,7 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
         buildCloudflareRequestContext(requestSource, "GET", listPath),
         undefined,
         {
+          beforeRequest: options?.beforeRequest,
           onRequestAttempted: () => {
             requestCount += 1;
           },
@@ -745,10 +769,7 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
     );
 
     for (const record of candidateRecords) {
-      if (
-        options?.requestBudget !== undefined &&
-        requestCount >= options.requestBudget
-      ) {
+      if (options?.shouldContinue && !options.shouldContinue()) {
         return {
           matchedRecordCount: candidateRecords.length,
           requestCount,
@@ -769,6 +790,7 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
           ignoreWhen: ({ response, data }) =>
             response.status === 404 &&
             hasOnlyMissingDnsRecordErrors(data?.errors),
+          beforeRequest: options?.beforeRequest,
           onRequestAttempted: () => {
             requestCount += 1;
           },

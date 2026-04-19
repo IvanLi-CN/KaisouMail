@@ -13,7 +13,6 @@ const baseEnv = {
   DEFAULT_MAILBOX_TTL_MINUTES: "60",
   CLEANUP_BATCH_SIZE: "3",
   SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
-  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
   EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
   BOOTSTRAP_ADMIN_NAME: "Ivan",
   SESSION_SECRET: "super-secret-session-key",
@@ -62,7 +61,6 @@ describe("runtime config parsing", () => {
       DEFAULT_MAILBOX_TTL_MINUTES: "60",
       CLEANUP_BATCH_SIZE: "3",
       SUBDOMAIN_CLEANUP_BATCH_SIZE: "1",
-      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
       EMAIL_ROUTING_MANAGEMENT_ENABLED: "false",
       BOOTSTRAP_ADMIN_NAME: "Ivan",
       CF_ROUTE_RULESET_TAG: "kaisoumail",
@@ -146,40 +144,23 @@ describe("runtime config parsing", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
       SUBDOMAIN_CLEANUP_BATCH_SIZE: undefined,
-      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: undefined,
     } as never);
 
-    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(200);
-    expect(config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET).toBe(400);
+    expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(500);
   });
 
   it("accepts zero as the subdomain cleanup kill switch", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,
       SUBDOMAIN_CLEANUP_BATCH_SIZE: "0",
-      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "400",
     } as never);
 
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);
   });
 
-  it("rejects subdomain cleanup request budgets that cannot make forward progress", () => {
-    const result = safeParseRuntimeConfig({
-      ...baseEnv,
-      SUBDOMAIN_CLEANUP_REQUEST_BUDGET: "3",
-    } as never);
+  it("accepts runtime config without any separate Cloudflare request budget knob", () => {
+    const result = safeParseRuntimeConfig(baseEnv as never);
 
-    expect(result.success).toBe(false);
-    if (result.success) {
-      throw new Error("expected config parse to fail");
-    }
-
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: ["SUBDOMAIN_CLEANUP_REQUEST_BUDGET"],
-        }),
-      ]),
-    );
+    expect(result.success).toBe(true);
   });
 });

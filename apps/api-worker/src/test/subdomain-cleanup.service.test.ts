@@ -1,16 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
-const { nowIso } = vi.hoisted(() => ({
+const { nowIso, randomId } = vi.hoisted(() => ({
   nowIso: vi.fn(() => "2026-04-08T12:00:00.000Z"),
+  randomId: vi.fn(() => "lease_cleanup"),
 }));
-const { deleteSubdomainEmailRoutingDnsRecords, ensureSubdomainEnabled } =
-  vi.hoisted(() => ({
-    deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
-    ensureSubdomainEnabled: vi.fn(),
-  }));
+const {
+  deleteSubdomainEmailRoutingDnsRecords,
+  ensureSubdomainEnabled,
+  getCloudflareRateLimitState,
+} = vi.hoisted(() => ({
+  deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
+  ensureSubdomainEnabled: vi.fn(),
+  getCloudflareRateLimitState: vi.fn(),
+}));
+const { tryAcquireRuntimeLease, releaseRuntimeLease } = vi.hoisted(() => ({
+  tryAcquireRuntimeLease: vi.fn(),
+  releaseRuntimeLease: vi.fn(),
+}));
 
 vi.mock("../db/client", () => ({
   getDb,
@@ -22,8 +31,14 @@ vi.mock("../lib/crypto", async () => {
   return {
     ...actual,
     nowIso,
+    randomId,
   };
 });
+
+vi.mock("../services/runtime-state", () => ({
+  tryAcquireRuntimeLease,
+  releaseRuntimeLease,
+}));
 
 vi.mock("../services/emailRouting", async () => {
   const actual = await vi.importActual<
@@ -33,11 +48,13 @@ vi.mock("../services/emailRouting", async () => {
     ...actual,
     deleteSubdomainEmailRoutingDnsRecords,
     ensureSubdomainEnabled,
+    getCloudflareRateLimitState,
   };
 });
 
 import { mailboxes, subdomains } from "../db/schema";
 import { ApiError } from "../lib/errors";
+import { CloudflareRequestExecutionAbortedError } from "../services/emailRouting";
 import {
   listSubdomainsPendingCleanup,
   runSubdomainCleanup,
@@ -48,7 +65,6 @@ const runtimeConfig = {
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
   SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
-  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "cf-token",
   EMAIL_WORKER_NAME: "mail-worker",
@@ -71,9 +87,7 @@ const pendingRow = {
 } as const;
 
 const createDb = (liveReferenceSequence: boolean[]) => {
-  const deleteWhere = vi.fn(
-    async (_values?: Record<string, unknown>) => undefined,
-  );
+  const deleteWhere = vi.fn(async () => undefined);
   const updateWhere = vi.fn(
     async (_values?: Record<string, unknown>) => undefined,
   );
@@ -116,24 +130,40 @@ const createDb = (liveReferenceSequence: boolean[]) => {
   };
 };
 
+const createPrepare = (rows: unknown[]) =>
+  vi.fn(() => ({
+    bind: vi.fn(() => ({
+      all: vi.fn(async () => ({ results: rows })),
+    })),
+  }));
+
 describe("subdomain cleanup service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
+    vi.setSystemTime(new Date("2026-04-08T12:00:00.000Z"));
     nowIso.mockReturnValue("2026-04-08T12:00:00.000Z");
+    randomId.mockReturnValue("lease_cleanup");
+    getCloudflareRateLimitState.mockResolvedValue(null);
+    tryAcquireRuntimeLease.mockResolvedValue({
+      owner: "lease_cleanup",
+      leaseUntil: "2026-04-08T12:13:00.000Z",
+    });
+    releaseRuntimeLease.mockResolvedValue(undefined);
     deleteSubdomainEmailRoutingDnsRecords.mockResolvedValue({
       matchedRecordCount: 4,
-      requestCount: 5,
+      requestCount: 4,
       completed: true,
     });
     ensureSubdomainEnabled.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("queries the oldest orphaned subdomains that are ready for cleanup", async () => {
-    const all = vi.fn(async () => ({
-      results: [pendingRow],
-    }));
-    const bind = vi.fn(() => ({ all }));
-    const prepare = vi.fn(() => ({ bind }));
+    const prepare = createPrepare([pendingRow]);
 
     await expect(
       listSubdomainsPendingCleanup(
@@ -154,7 +184,6 @@ describe("subdomain cleanup service", () => {
     expect(prepare).toHaveBeenCalledWith(
       expect.stringContaining("d.zone_id IS NOT NULL"),
     );
-    expect(bind).toHaveBeenCalledWith("2026-04-08T12:00:00.000Z", 1);
   });
 
   it("honors the kill switch by skipping candidate selection entirely", async () => {
@@ -168,7 +197,6 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 0,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
     ).resolves.toEqual([]);
@@ -176,15 +204,48 @@ describe("subdomain cleanup service", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
-  it("deletes the local subdomain row after Cloudflare cleanup succeeds", async () => {
+  it("skips the pass when Cloudflare cooldown is still active", async () => {
+    getCloudflareRateLimitState.mockResolvedValueOnce({
+      retryAfter: "2026-04-08T12:05:00.000Z",
+      retryAfterSeconds: 300,
+      rateLimitContext: null,
+    });
+    const prepare = createPrepare([pendingRow]);
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBe(0);
+
+    expect(tryAcquireRuntimeLease).not.toHaveBeenCalled();
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+  });
+
+  it("skips the pass when another cleanup invocation already holds the lease", async () => {
+    tryAcquireRuntimeLease.mockResolvedValueOnce(null);
+    const prepare = createPrepare([pendingRow]);
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBe(0);
+
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(releaseRuntimeLease).not.toHaveBeenCalled();
+  });
+
+  it("marks the row pending, deletes DNS, and then removes the local row", async () => {
     const db = createDb([false, false]);
     getDb.mockReturnValue(db);
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({ results: [pendingRow] })),
-      })),
-    }));
+    const prepare = createPrepare([pendingRow]);
 
     await expect(
       runSubdomainCleanup(
@@ -195,6 +256,12 @@ describe("subdomain cleanup service", () => {
       ),
     ).resolves.toBe(1);
 
+    expect(tryAcquireRuntimeLease).toHaveBeenCalledWith(
+      expect.any(Object),
+      "subdomain_cleanup_lease",
+      "lease_cleanup",
+      "2026-04-08T12:13:00.000Z",
+    );
     expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledWith(
       expect.any(Object),
       runtimeConfig,
@@ -207,12 +274,23 @@ describe("subdomain cleanup service", () => {
         projectOperation: "subdomains.cleanup",
         projectRoute: "scheduled mailbox cleanup",
       },
-      {
-        requestBudget: 399,
-      },
+      expect.objectContaining({
+        beforeRequest: expect.any(Function),
+        shouldContinue: expect.any(Function),
+      }),
+    );
+    expect(db.updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cleanupNextAttemptAt: "2026-04-08T12:00:00.000Z",
+        cleanupLastError: null,
+      }),
     );
     expect(db.delete).toHaveBeenCalledWith(subdomains);
-    expect(db.update).not.toHaveBeenCalledWith(subdomains);
+    expect(releaseRuntimeLease).toHaveBeenCalledWith(
+      expect.any(Object),
+      "subdomain_cleanup_lease",
+      "lease_cleanup",
+    );
   });
 
   it("writes a one-hour backoff for non-429 failures and continues draining backlog", async () => {
@@ -222,24 +300,17 @@ describe("subdomain cleanup service", () => {
       .mockRejectedValueOnce(new Error("DNS unavailable"))
       .mockResolvedValueOnce({
         matchedRecordCount: 4,
-        requestCount: 5,
+        requestCount: 4,
         completed: true,
       });
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            pendingRow,
-            {
-              ...pendingRow,
-              id: "sub_beta",
-              name: "beta",
-            },
-          ],
-        })),
-      })),
-    }));
+    const prepare = createPrepare([
+      pendingRow,
+      {
+        ...pendingRow,
+        id: "sub_beta",
+        name: "beta",
+      },
+    ]);
 
     await expect(
       runSubdomainCleanup(
@@ -249,12 +320,11 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
     ).resolves.toBe(1);
 
-    expect(db.update).toHaveBeenCalledWith(subdomains);
+    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
     expect(db.updateWhere).toHaveBeenCalledWith(
       expect.objectContaining({
         cleanupNextAttemptAt: "2026-04-08T13:00:00.000Z",
@@ -264,27 +334,20 @@ describe("subdomain cleanup service", () => {
     expect(db.delete).toHaveBeenCalledWith(subdomains);
   });
 
-  it("stops the batch immediately when Cloudflare returns 429", async () => {
+  it("aborts the current pass on 429 and leaves the row pending for next time", async () => {
     const db = createDb([false]);
     getDb.mockReturnValue(db);
     deleteSubdomainEmailRoutingDnsRecords.mockRejectedValueOnce(
       new ApiError(429, "Cloudflare API rate limit reached; retry later"),
     );
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            pendingRow,
-            {
-              ...pendingRow,
-              id: "sub_beta",
-              name: "beta",
-            },
-          ],
-        })),
-      })),
-    }));
+    const prepare = createPrepare([
+      pendingRow,
+      {
+        ...pendingRow,
+        id: "sub_beta",
+        name: "beta",
+      },
+    ]);
 
     await expect(
       runSubdomainCleanup(
@@ -294,28 +357,24 @@ describe("subdomain cleanup service", () => {
         {
           ...runtimeConfig,
           SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
         },
       ),
-    ).rejects.toMatchObject({
-      status: 429,
-      message: "Cloudflare API rate limit reached; retry later",
-    });
+    ).resolves.toBe(0);
 
     expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
-    expect(db.update).not.toHaveBeenCalledWith(subdomains);
+    expect(
+      db.updateWhere.mock.calls.some(
+        ([values]) =>
+          values?.cleanupNextAttemptAt === "2026-04-08T13:00:00.000Z",
+      ),
+    ).toBe(false);
     expect(db.delete).not.toHaveBeenCalledWith(subdomains);
   });
 
   it("re-enables DNS instead of deleting the row when a mailbox reappears mid-cleanup", async () => {
     const db = createDb([false, true]);
     getDb.mockReturnValue(db);
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({ results: [pendingRow] })),
-      })),
-    }));
+    const prepare = createPrepare([pendingRow]);
 
     await expect(
       runSubdomainCleanup(
@@ -338,9 +397,9 @@ describe("subdomain cleanup service", () => {
         projectOperation: "subdomains.cleanup",
         projectRoute: "scheduled mailbox cleanup",
       },
-      {
-        onRequestAttempted: expect.any(Function),
-      },
+      expect.objectContaining({
+        beforeRequest: expect.any(Function),
+      }),
     );
     expect(db.updateWhere).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -352,68 +411,23 @@ describe("subdomain cleanup service", () => {
     expect(db.delete).not.toHaveBeenCalledWith(subdomains);
   });
 
-  it("stops after the configured Cloudflare request budget is exhausted", async () => {
-    const db = createDb([false, false]);
-    getDb.mockReturnValue(db);
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            pendingRow,
-            {
-              ...pendingRow,
-              id: "sub_beta",
-              name: "beta",
-            },
-          ],
-        })),
-      })),
-    }));
-
-    await expect(
-      runSubdomainCleanup(
-        {
-          DB: { prepare },
-        } as never,
-        {
-          ...runtimeConfig,
-          SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
-        },
-      ),
-    ).resolves.toBe(1);
-
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
-  });
-
-  it("re-enables DNS when a pending-cleanup subdomain is live again", async () => {
+  it("re-enables DNS when a pending-cleanup subdomain is already live again", async () => {
     const db = createDb([true]);
     getDb.mockReturnValue(db);
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            {
-              ...pendingRow,
-              cleanupNextAttemptAt: "2026-04-08T11:30:00.000Z",
-              cleanupLastError: "partial cleanup",
-            },
-          ],
-        })),
-      })),
-    }));
+    const prepare = createPrepare([
+      {
+        ...pendingRow,
+        cleanupNextAttemptAt: "2026-04-08T11:30:00.000Z",
+        cleanupLastError: "partial cleanup",
+      },
+    ]);
 
     await expect(
       runSubdomainCleanup(
         {
           DB: { prepare },
         } as never,
-        {
-          ...runtimeConfig,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
-        },
+        runtimeConfig,
       ),
     ).resolves.toBe(0);
 
@@ -427,144 +441,112 @@ describe("subdomain cleanup service", () => {
     );
   });
 
-  it("reserves one Cloudflare request for DNS re-enable when a mailbox revives mid-pass", async () => {
-    const db = createDb([false, true, false, false]);
-    getDb.mockReturnValue(db);
-    deleteSubdomainEmailRoutingDnsRecords.mockResolvedValueOnce({
-      matchedRecordCount: 4,
-      requestCount: 4,
-      completed: true,
-    });
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            pendingRow,
-            {
-              ...pendingRow,
-              id: "sub_beta",
-              name: "beta",
-            },
-          ],
-        })),
-      })),
-    }));
-
-    await expect(
-      runSubdomainCleanup(
-        {
-          DB: { prepare },
-        } as never,
-        {
-          ...runtimeConfig,
-          SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
-        },
-      ),
-    ).resolves.toBe(0);
-
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
-      }),
-      expect.any(Object),
-      "ops",
-      expect.any(Object),
-      {
-        requestBudget: 4,
-      },
-    );
-    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps the row pending when one host consumes the remaining request budget", async () => {
+  it("stops the pass without backoff when the helper reports the deadline is reached", async () => {
     const db = createDb([false]);
     getDb.mockReturnValue(db);
     deleteSubdomainEmailRoutingDnsRecords.mockResolvedValueOnce({
       matchedRecordCount: 4,
-      requestCount: 2,
+      requestCount: 1,
       completed: false,
     });
-
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({ results: [pendingRow] })),
-      })),
-    }));
+    const prepare = createPrepare([pendingRow]);
 
     await expect(
       runSubdomainCleanup(
         {
           DB: { prepare },
         } as never,
-        {
-          ...runtimeConfig,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 2,
-        },
+        runtimeConfig,
       ),
     ).resolves.toBe(0);
 
     expect(db.delete).not.toHaveBeenCalledWith(subdomains);
-    expect(db.updateWhere).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cleanupNextAttemptAt: "2026-04-08T12:00:00.000Z",
-        cleanupLastError: null,
-      }),
-    );
+    expect(
+      db.updateWhere.mock.calls.some(
+        ([values]) =>
+          values?.cleanupNextAttemptAt === "2026-04-08T13:00:00.000Z",
+      ),
+    ).toBe(false);
   });
 
-  it("debits Cloudflare request budget even when cleanup fails mid-host", async () => {
+  it("paces Cloudflare cleanup requests to one call per second", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-08T12:00:00.000Z"));
     const db = createDb([false, false]);
     getDb.mockReturnValue(db);
-    deleteSubdomainEmailRoutingDnsRecords
-      .mockRejectedValueOnce(
-        new ApiError(500, "delete failed", {
-          cloudflareRequestCount: 5,
-        }),
-      )
-      .mockResolvedValueOnce({
-        matchedRecordCount: 4,
-        requestCount: 5,
-        completed: true,
-      });
+    const prepare = createPrepare([pendingRow]);
 
-    const prepare = vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn(async () => ({
-          results: [
-            pendingRow,
-            {
-              ...pendingRow,
-              id: "sub_beta",
-              name: "beta",
-            },
-          ],
-        })),
-      })),
-    }));
+    deleteSubdomainEmailRoutingDnsRecords.mockImplementationOnce(
+      async (_env, _config, _domain, _subdomain, _requestSource, options) => {
+        if (!options?.beforeRequest) {
+          throw new Error("expected beforeRequest to be provided");
+        }
+
+        await options.beforeRequest();
+
+        let secondResolved = false;
+        const secondRequest = options.beforeRequest().then(() => {
+          secondResolved = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(999);
+        expect(secondResolved).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await secondRequest;
+        expect(secondResolved).toBe(true);
+
+        return {
+          matchedRecordCount: 1,
+          requestCount: 2,
+          completed: true,
+        };
+      },
+    );
 
     await expect(
       runSubdomainCleanup(
         {
           DB: { prepare },
         } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBe(1);
+  });
+
+  it("stops the pass when the pacer reaches the wall-clock deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-08T12:00:00.000Z"));
+    const db = createDb([false]);
+    getDb.mockReturnValue(db);
+    const prepare = createPrepare([pendingRow]);
+
+    deleteSubdomainEmailRoutingDnsRecords.mockImplementationOnce(
+      async (_env, _config, _domain, _subdomain, _requestSource, options) => {
+        if (!options?.beforeRequest) {
+          throw new Error("expected beforeRequest to be provided");
+        }
+
+        await vi.setSystemTime(new Date("2026-04-08T12:12:00.000Z"));
+        await expect(options.beforeRequest()).rejects.toBeInstanceOf(
+          CloudflareRequestExecutionAbortedError,
+        );
+
+        throw new CloudflareRequestExecutionAbortedError(
+          "deadline_reached",
+          "Subdomain cleanup request deadline reached",
+        );
+      },
+    );
+
+    await expect(
+      runSubdomainCleanup(
         {
-          ...runtimeConfig,
-          SUBDOMAIN_CLEANUP_BATCH_SIZE: 2,
-          SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 5,
-        },
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
       ),
     ).resolves.toBe(0);
 
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
-    expect(db.updateWhere).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cleanupNextAttemptAt: "2026-04-08T13:00:00.000Z",
-        cleanupLastError: "delete failed",
-      }),
-    );
+    expect(db.delete).not.toHaveBeenCalledWith(subdomains);
   });
 });

@@ -26,7 +26,6 @@ const baseConfig = {
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
   SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
-  SUBDOMAIN_CLEANUP_REQUEST_BUDGET: 400,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "token_123",
   SESSION_SECRET: "super-secret-session-key",
@@ -375,7 +374,7 @@ describe("email routing service", () => {
     });
   });
 
-  it("stops deleting once the remaining Cloudflare request budget is exhausted", async () => {
+  it("stops deleting once the caller tells the current pass to stop", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(
@@ -418,6 +417,12 @@ describe("email routing service", () => {
       ),
     );
 
+    const shouldContinue = vi
+      .fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+
     await expect(
       deleteSubdomainEmailRoutingDnsRecords(
         env,
@@ -429,7 +434,7 @@ describe("email routing service", () => {
         "ops",
         undefined,
         {
-          requestBudget: 2,
+          shouldContinue,
         },
       ),
     ).resolves.toEqual({
@@ -439,6 +444,7 @@ describe("email routing service", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(shouldContinue).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_mx_1",
     );

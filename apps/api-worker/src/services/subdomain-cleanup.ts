@@ -3,14 +3,16 @@ import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { mailboxes, subdomains } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
-import { nowIso } from "../lib/crypto";
+import { nowIso, randomId } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
 import { logOperationalEvent } from "../lib/observability";
 import {
+  CloudflareRequestExecutionAbortedError,
   deleteSubdomainEmailRoutingDnsRecords,
   ensureSubdomainEnabled,
-  getCloudflareRequestCountFromError,
+  getCloudflareRateLimitState,
 } from "./emailRouting";
+import { releaseRuntimeLease, tryAcquireRuntimeLease } from "./runtime-state";
 
 type SubdomainRow = typeof subdomains.$inferSelect;
 
@@ -25,13 +27,58 @@ const subdomainCleanupRequestSource = {
 } as const;
 
 const subdomainCleanupRetryDelayMs = 60 * 60 * 1000;
-const minimumCloudflareRequestsPerSubdomainAttempt = 2;
+const subdomainCleanupLeaseKey = "subdomain_cleanup_lease";
+const subdomainCleanupRequestIntervalMs = 1000;
+const subdomainCleanupRunDeadlineMs = 12 * 60 * 1000;
+const subdomainCleanupLeaseTtlMs = 13 * 60 * 1000;
 
 const formatCleanupError = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 const resolveNextCleanupAttemptAt = (now: string) =>
   new Date(Date.parse(now) + subdomainCleanupRetryDelayMs).toISOString();
+
+const resolveCleanupLeaseUntil = (now: string) =>
+  new Date(Date.parse(now) + subdomainCleanupLeaseTtlMs).toISOString();
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const createCloudflareRequestPacer = (deadlineAt: number) => {
+  let lastRequestStartedAt = 0;
+
+  return {
+    hasTimeRemaining: () => Date.now() < deadlineAt,
+    async beforeRequest() {
+      if (Date.now() >= deadlineAt) {
+        throw new CloudflareRequestExecutionAbortedError(
+          "deadline_reached",
+          "Subdomain cleanup request deadline reached",
+        );
+      }
+
+      if (lastRequestStartedAt > 0) {
+        const waitMs =
+          subdomainCleanupRequestIntervalMs -
+          (Date.now() - lastRequestStartedAt);
+        if (waitMs > 0) {
+          await sleep(waitMs);
+        }
+      }
+
+      if (Date.now() >= deadlineAt) {
+        throw new CloudflareRequestExecutionAbortedError(
+          "deadline_reached",
+          "Subdomain cleanup request deadline reached",
+        );
+      }
+
+      lastRequestStartedAt = Date.now();
+    },
+  };
+};
 
 const clearSubdomainCleanupState = async (
   db: ReturnType<typeof getDb>,
@@ -153,25 +200,122 @@ export const runSubdomainCleanup = async (
   env: WorkerEnv,
   config: RuntimeConfig,
 ) => {
+  const existingCooldown = await getCloudflareRateLimitState(env);
+  if (existingCooldown) {
+    logOperationalEvent("warn", "subdomains.cleanup.skipped.rate_limited", {
+      retryAfter: existingCooldown.retryAfter,
+      retryAfterSeconds: existingCooldown.retryAfterSeconds,
+      rateLimitContext: existingCooldown.rateLimitContext,
+    });
+    return 0;
+  }
+
+  const leaseOwner = randomId("lease");
+  const leaseAcquiredAt = nowIso();
+  const lease = await tryAcquireRuntimeLease(
+    env,
+    subdomainCleanupLeaseKey,
+    leaseOwner,
+    resolveCleanupLeaseUntil(leaseAcquiredAt),
+  );
+
+  if (!lease) {
+    logOperationalEvent("info", "subdomains.cleanup.skipped.lease_contended", {
+      leaseKey: subdomainCleanupLeaseKey,
+    });
+    return 0;
+  }
+
   const db = getDb(env);
   const pending = await listSubdomainsPendingCleanup(env, config);
   let cleanedCount = 0;
-  let requestBudgetUsed = 0;
   let retryScheduledCount = 0;
   let liveReferenceSkipCount = 0;
-  let requestBudgetExhausted = false;
+  let rateLimitAbortCount = 0;
+  let deadlineReached = false;
+  const deadlineAt = Date.now() + subdomainCleanupRunDeadlineMs;
+  const pacer = createCloudflareRequestPacer(deadlineAt);
 
-  for (const row of pending) {
-    if (await hasLiveMailboxReference(env, row)) {
-      if (row.cleanupNextAttemptAt || row.cleanupLastError) {
-        if (requestBudgetUsed + 1 > config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET) {
-          requestBudgetExhausted = true;
+  try {
+    for (const row of pending) {
+      if (!pacer.hasTimeRemaining()) {
+        deadlineReached = true;
+        break;
+      }
+
+      if (await hasLiveMailboxReference(env, row)) {
+        if (row.cleanupNextAttemptAt || row.cleanupLastError) {
+          const cleanupStartedAt = nowIso();
+
+          try {
+            await ensureSubdomainEnabled(
+              env,
+              config,
+              {
+                rootDomain: row.rootDomain,
+                zoneId: row.zoneId,
+              },
+              row.name,
+              subdomainCleanupRequestSource,
+              {
+                beforeRequest: () => pacer.beforeRequest(),
+              },
+            );
+            await clearSubdomainCleanupState(db, row.id);
+          } catch (error) {
+            if (error instanceof CloudflareRequestExecutionAbortedError) {
+              deadlineReached = true;
+              break;
+            }
+
+            if (error instanceof ApiError && error.status === 429) {
+              rateLimitAbortCount += 1;
+              break;
+            }
+
+            await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
+            retryScheduledCount += 1;
+            logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
+              subdomainId: row.id,
+              domainId: row.domainId,
+              rootDomain: row.rootDomain,
+              subdomain: row.name,
+              error: formatCleanupError(error),
+            });
+          }
+        } else {
+          await clearSubdomainCleanupState(db, row.id);
+        }
+
+        liveReferenceSkipCount += 1;
+        continue;
+      }
+
+      const cleanupStartedAt = nowIso();
+      await markSubdomainCleanupPending(db, row, cleanupStartedAt);
+
+      try {
+        const cleanupResult = await deleteSubdomainEmailRoutingDnsRecords(
+          env,
+          config,
+          {
+            rootDomain: row.rootDomain,
+            zoneId: row.zoneId,
+          },
+          row.name,
+          subdomainCleanupRequestSource,
+          {
+            beforeRequest: () => pacer.beforeRequest(),
+            shouldContinue: () => pacer.hasTimeRemaining(),
+          },
+        );
+
+        if (!cleanupResult.completed) {
+          deadlineReached = true;
           break;
         }
 
-        const cleanupStartedAt = nowIso();
-
-        try {
+        if (await hasLiveMailboxReference(env, row)) {
           await ensureSubdomainEnabled(
             env,
             config,
@@ -182,119 +326,52 @@ export const runSubdomainCleanup = async (
             row.name,
             subdomainCleanupRequestSource,
             {
-              onRequestAttempted: () => {
-                requestBudgetUsed += 1;
-              },
+              beforeRequest: () => pacer.beforeRequest(),
             },
           );
-          await clearSubdomainCleanupState(db, row.id);
-        } catch (error) {
-          if (error instanceof ApiError && error.status === 429) {
-            throw error;
-          }
-
-          await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
-          retryScheduledCount += 1;
-          logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
-            subdomainId: row.id,
-            domainId: row.domainId,
-            rootDomain: row.rootDomain,
-            subdomain: row.name,
-            error: formatCleanupError(error),
-          });
+          await clearSubdomainCleanupState(db, row.id, cleanupStartedAt);
+          continue;
         }
-      } else {
-        await clearSubdomainCleanupState(db, row.id);
-      }
 
-      liveReferenceSkipCount += 1;
-      continue;
-    }
+        await db.delete(subdomains).where(eq(subdomains.id, row.id));
+        cleanedCount += 1;
+      } catch (error) {
+        if (error instanceof CloudflareRequestExecutionAbortedError) {
+          deadlineReached = true;
+          break;
+        }
 
-    if (
-      requestBudgetUsed + minimumCloudflareRequestsPerSubdomainAttempt >
-      config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET
-    ) {
-      requestBudgetExhausted = true;
-      break;
-    }
+        if (error instanceof ApiError && error.status === 429) {
+          rateLimitAbortCount += 1;
+          break;
+        }
 
-    const cleanupStartedAt = nowIso();
-
-    try {
-      const cleanupResult = await deleteSubdomainEmailRoutingDnsRecords(
-        env,
-        config,
-        {
+        await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
+        retryScheduledCount += 1;
+        logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
+          subdomainId: row.id,
+          domainId: row.domainId,
           rootDomain: row.rootDomain,
-          zoneId: row.zoneId,
-        },
-        row.name,
-        subdomainCleanupRequestSource,
-        {
-          requestBudget:
-            config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET - requestBudgetUsed - 1,
-        },
-      );
-      requestBudgetUsed += cleanupResult.requestCount;
-
-      if (!cleanupResult.completed) {
-        await markSubdomainCleanupPending(db, row, cleanupStartedAt);
-        requestBudgetExhausted = true;
-        break;
+          subdomain: row.name,
+          error: formatCleanupError(error),
+        });
       }
-
-      if (await hasLiveMailboxReference(env, row)) {
-        await ensureSubdomainEnabled(
-          env,
-          config,
-          {
-            rootDomain: row.rootDomain,
-            zoneId: row.zoneId,
-          },
-          row.name,
-          subdomainCleanupRequestSource,
-          {
-            onRequestAttempted: () => {
-              requestBudgetUsed += 1;
-            },
-          },
-        );
-        await clearSubdomainCleanupState(db, row.id, cleanupStartedAt);
-        continue;
-      }
-
-      await db.delete(subdomains).where(eq(subdomains.id, row.id));
-      cleanedCount += 1;
-    } catch (error) {
-      requestBudgetUsed += getCloudflareRequestCountFromError(error);
-
-      if (error instanceof ApiError && error.status === 429) {
-        throw error;
-      }
-
-      await markSubdomainCleanupBackoff(db, row, cleanupStartedAt, error);
-      retryScheduledCount += 1;
-      logOperationalEvent("warn", "subdomains.cleanup.retry_scheduled", {
-        subdomainId: row.id,
-        domainId: row.domainId,
-        rootDomain: row.rootDomain,
-        subdomain: row.name,
-        error: formatCleanupError(error),
-      });
     }
+
+    logOperationalEvent("info", "subdomains.cleanup.completed", {
+      candidateCount: pending.length,
+      cleanedCount,
+      retryScheduledCount,
+      liveReferenceSkipCount,
+      rateLimitAbortCount,
+      deadlineReached,
+      hostWindowLimit: config.SUBDOMAIN_CLEANUP_BATCH_SIZE,
+      requestIntervalMs: subdomainCleanupRequestIntervalMs,
+      runDeadlineMs: subdomainCleanupRunDeadlineMs,
+    });
+
+    return cleanedCount;
+  } finally {
+    await releaseRuntimeLease(env, subdomainCleanupLeaseKey, leaseOwner);
   }
-
-  logOperationalEvent("info", "subdomains.cleanup.completed", {
-    candidateCount: pending.length,
-    cleanedCount,
-    retryScheduledCount,
-    liveReferenceSkipCount,
-    requestBudgetUsed,
-    requestBudgetLimit: config.SUBDOMAIN_CLEANUP_REQUEST_BUDGET,
-    requestBudgetExhausted,
-    hostBudgetLimit: config.SUBDOMAIN_CLEANUP_BATCH_SIZE,
-  });
-
-  return cleanedCount;
 };
