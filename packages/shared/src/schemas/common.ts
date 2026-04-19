@@ -9,6 +9,7 @@ import {
   mailboxSources,
   mailboxStatuses,
   recipientKinds,
+  subdomainDnsModes,
   userRoles,
 } from "../consts";
 import { withMailDomainAliases } from "./mail-domain";
@@ -20,6 +21,7 @@ export const mailboxSourceSchema = z.enum(mailboxSources);
 export const domainStatusSchema = z.enum(domainStatuses);
 export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
 export const domainBindingSourceSchema = z.enum(domainBindingSources);
+export const subdomainDnsModeSchema = z.enum(subdomainDnsModes);
 export const domainCatalogAvailabilitySchema = z.enum(
   domainCatalogAvailabilities,
 );
@@ -115,6 +117,9 @@ export const domainSchema = withMailDomainAliases(
     bindingSource: domainBindingSourceSchema,
     status: domainStatusSchema,
     catchAllEnabled: z.boolean(),
+    subdomainDnsMode: subdomainDnsModeSchema.optional(),
+    wildcardDnsVerifiedAt: isoDateSchema.nullable().optional(),
+    wildcardDnsLastError: z.string().nullable().optional(),
     lastProvisionError: z.string().nullable(),
     createdAt: isoDateSchema,
     updatedAt: isoDateSchema,
@@ -134,6 +139,9 @@ export const domainCatalogItemSchema = withMailDomainAliases(
     nameServers: z.array(z.string()),
     projectStatus: domainProjectStatusSchema,
     catchAllEnabled: z.boolean(),
+    subdomainDnsMode: subdomainDnsModeSchema.optional(),
+    wildcardDnsVerifiedAt: isoDateSchema.nullable().optional(),
+    wildcardDnsLastError: z.string().nullable().optional(),
     lastProvisionError: z.string().nullable(),
     createdAt: isoDateSchema.nullable(),
     updatedAt: isoDateSchema.nullable(),

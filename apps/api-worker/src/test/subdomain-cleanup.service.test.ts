@@ -463,6 +463,62 @@ describe("subdomain cleanup service", () => {
     );
   });
 
+  it("deletes wildcard-born orphan rows locally without calling per-host Cloudflare cleanup", async () => {
+    const db = createDb([false]);
+    getDb.mockReturnValue(db);
+    const prepare = createPrepare([
+      {
+        ...pendingRow,
+        metadata: '{"mode":"wildcard"}',
+      },
+    ]);
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBe(1);
+
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(db.delete).toHaveBeenCalledWith(subdomains);
+  });
+
+  it("clears wildcard cleanup state without re-enabling DNS when the hostname is live again", async () => {
+    const db = createDb([true]);
+    getDb.mockReturnValue(db);
+    const prepare = createPrepare([
+      {
+        ...pendingRow,
+        metadata: '{"mode":"wildcard"}',
+        cleanupNextAttemptAt: "2026-04-08T11:30:00.000Z",
+        cleanupLastError: "stale cleanup",
+      },
+    ]);
+
+    await expect(
+      runSubdomainCleanup(
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBe(0);
+
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(db.updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cleanupNextAttemptAt: null,
+        cleanupLastError: null,
+      }),
+    );
+    expect(db.delete).not.toHaveBeenCalledWith(subdomains);
+  });
+
   it("stops the pass without backoff when the helper reports the deadline is reached", async () => {
     const db = createDb([false]);
     getDb.mockReturnValue(db);

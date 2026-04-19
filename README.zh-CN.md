@@ -17,6 +17,7 @@
 - 直绑入口仅支持 apex：例如直接绑定 `example.com`；如果要 `user@mail.example.com` 这类地址，请绑定 apex 后在邮箱层使用 `subdomain=mail`
 - 随机或指定邮箱创建，支持多级子域；对外 API 以 `mailDomain` 为首选字段，`rootDomain` 保留兼容别名
 - 定时清理现在会额外渐进回收孤儿子域的 Email Routing DNS，避免历史 MX/SPF 记录长期堆积
+- 对已开启 Catch-all 的域名，现在可以通过 allowlist 控制把子域 DNS 从 explicit 切到 wildcard，并复用 apex 现有的 Email Routing MX/SPF 模板，而不是在代码里硬编码 Cloudflare 目标值
 - `GET /api/meta` 暴露 active 域名、TTL 和地址规则
 - 邮件原始内容入 R2，结构化索引入 D1
 - 域名目录支持启用、停用、重试接入
@@ -120,6 +121,8 @@ Worker 侧重点变量：
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `500`；它只是每轮候选扫描窗口，不是 Cloudflare 配额）
+- `WILDCARD_SUBDOMAIN_DNS_ENABLED`（开启 allowlist 域名的 wildcard 子域 DNS 对账）
+- `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST`（逗号分隔的 rootDomain 列表；只有这些已开启 Catch-all 的域名才允许切到 wildcard）
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
 - `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
@@ -135,6 +138,15 @@ Web 侧重点变量：
 `VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release；如果变量里有格式错误的域名项，workflow 现在会直接失败而不是静默跳过。
 deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Worker 的运行时配置里；只把它放进 GitHub Actions job 环境是不够的，否则 `/api/meta` 会继续返回 `cloudflareDomainBindingEnabled=false`。
 如果 `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`，应用仍可在 demo / 本地模式运行，但不会改动 Cloudflare 资源，孤儿子域 DNS 清理也会一起停用。
+V1 对 wildcard 子域 DNS 保持保守策略：只有已经 `catchAllEnabled=true` 且命中 `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` 的域名才会切到 wildcard；非 Catch-all 域名继续走 explicit。如果 wildcard DNS ensure 失败，域名会继续留在 `explicit`，并把最近一次错误写入 `wildcardDnsLastError` 供运维排查。
+
+## Wildcard 子域 DNS rollout
+
+- V1 只支持对已经开启 Catch-all 的域名做 wildcard rollout。
+- 当 root domain 命中 allowlist 时，重新执行 `POST /api/domains/:id/catch-all/enable` 会把该域名对账成 `subdomainDnsMode=wildcard`，并通过 Cloudflare 通用 DNS 记录 API 把 apex 的 Email Routing 模板复制到 `*.rootDomain`。
+- rollout 期间可以保留历史 exact host 记录，因为 Cloudflare 的精确 host 记录优先级高于 wildcard；定时 cleanup 会继续单独回收这些 legacy exact 记录。
+- 回退方式很简单：从 `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` 移除域名后再次对账 Catch-all，或者直接关闭该域名的 Catch-all；域名会退回 `explicit`，不依赖人工逐条修 DNS。
+- 推荐 canary：先挑一个低风险、已开启 Catch-all 的 active 域名进入 allowlist，给一个全新的深层子域地址发真实邮件，确认收信与入库成功，并确认 Cloudflare 没有为该 hostname 新增 exact `MX` / `TXT` 记录。
 
 ## 发布工作流门禁
 

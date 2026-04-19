@@ -103,6 +103,14 @@ interface CloudflareDnsRecordResult {
   priority?: number | null;
 }
 
+interface CloudflareEmailRoutingDnsTemplateRecord {
+  type: string;
+  name: string;
+  content: string;
+  ttl: number | null;
+  priority: number | null;
+}
+
 interface DeleteSubdomainEmailRoutingDnsRecordsOptions {
   beforeRequest?: () => Promise<void>;
   shouldContinue?: () => boolean;
@@ -117,6 +125,11 @@ interface DeleteSubdomainEmailRoutingDnsRecordsResult {
 interface CloudflareRequestExecutionOptions {
   beforeRequest?: () => Promise<void>;
   onRequestAttempted?: () => void;
+}
+
+interface EnsureWildcardEmailRoutingDnsRecordsResult {
+  createdRecordCount: number;
+  matchedRecordCount: number;
 }
 
 export class CloudflareRequestExecutionAbortedError extends Error {
@@ -247,6 +260,17 @@ const isEmailRoutingDnsRecord = (
   }
 
   return false;
+};
+
+const normalizeDnsRecordName = (
+  value: string | null | undefined,
+  rootDomain: string,
+) => {
+  const normalized = normalizeDnsValue(value);
+  if (!normalized || normalized === "@") {
+    return normalizeDnsValue(rootDomain);
+  }
+  return normalized;
 };
 
 const CLOUDFLARE_RATE_LIMITED_UNTIL_KEY = "cloudflare_api_rate_limited_until";
@@ -692,6 +716,231 @@ export const deleteZone = async (
 
   return {
     alreadyMissing: result === null,
+  };
+};
+
+const listDnsRecordsByName = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  name: string,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return [];
+  const zoneId = requireZoneId(domain);
+  const encodedName = encodeURIComponent(name);
+  const path = `/zones/${zoneId}/dns_records?per_page=100&name=${encodedName}`;
+  return (
+    (await cfRequest<CloudflareDnsRecordResult[]>(
+      env,
+      config,
+      path,
+      buildCloudflareRequestContext(requestSource, "GET", path),
+      undefined,
+      {
+        beforeRequest: options?.beforeRequest,
+        onRequestAttempted: options?.onRequestAttempted,
+      },
+    )) ?? []
+  );
+};
+
+const createDnsRecord = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  record: CloudflareEmailRoutingDnsTemplateRecord,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return null;
+  const zoneId = requireZoneId(domain);
+  return cfRequest<CloudflareDnsRecordResult>(
+    env,
+    config,
+    `/zones/${zoneId}/dns_records`,
+    buildCloudflareRequestContext(
+      requestSource,
+      "POST",
+      `/zones/${zoneId}/dns_records`,
+    ),
+    {
+      method: "POST",
+      body: JSON.stringify({
+        type: record.type,
+        name: record.name,
+        content: record.content,
+        ttl: record.ttl ?? 1,
+        ...(record.priority !== null ? { priority: record.priority } : {}),
+      }),
+    },
+    {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    },
+  );
+};
+
+const getEmailRoutingDnsTemplate = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return [];
+  const zoneId = requireZoneId(domain);
+  const path = `/zones/${zoneId}/email/routing/dns`;
+  const records =
+    (await cfRequest<CloudflareDnsRecordResult[]>(
+      env,
+      config,
+      path,
+      buildCloudflareRequestContext(requestSource, "GET", path),
+      undefined,
+      {
+        beforeRequest: options?.beforeRequest,
+        onRequestAttempted: options?.onRequestAttempted,
+      },
+    )) ?? [];
+
+  const templateRecords = records
+    .filter(
+      (record) =>
+        normalizeDnsRecordName(record.name, domain.rootDomain) ===
+          normalizeDnsValue(domain.rootDomain) &&
+        typeof record.content === "string" &&
+        record.content.trim().length > 0,
+    )
+    .map((record) => ({
+      type: record.type,
+      name: domain.rootDomain,
+      content: record.content?.trim() ?? "",
+      ttl: record.ttl ?? null,
+      priority: record.priority ?? null,
+    }));
+
+  if (templateRecords.length === 0) {
+    throw new ApiError(
+      500,
+      `Email Routing DNS template is unavailable for ${domain.rootDomain}`,
+    );
+  }
+
+  return templateRecords;
+};
+
+const isSameDnsRecord = (
+  left: CloudflareDnsRecordResult | CloudflareEmailRoutingDnsTemplateRecord,
+  right: CloudflareDnsRecordResult | CloudflareEmailRoutingDnsTemplateRecord,
+  rootDomain: string,
+) =>
+  normalizeDnsRecordName(left.name, rootDomain) ===
+    normalizeDnsRecordName(right.name, rootDomain) &&
+  left.type === right.type &&
+  normalizeDnsValue(left.content ?? null) ===
+    normalizeDnsValue(right.content ?? null) &&
+  (left.priority ?? null) === (right.priority ?? null);
+
+const hasConflictingDnsRecord = (
+  record: CloudflareDnsRecordResult,
+  desiredRecords: CloudflareEmailRoutingDnsTemplateRecord[],
+  rootDomain: string,
+) =>
+  (record.type === "MX" || record.type === "TXT") &&
+  !desiredRecords.some((desiredRecord) =>
+    isSameDnsRecord(record, desiredRecord, rootDomain),
+  );
+
+export const ensureWildcardEmailRoutingDnsRecords = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+): Promise<EnsureWildcardEmailRoutingDnsRecordsResult> => {
+  if (!ensureManagementEnabled(config)) {
+    return {
+      createdRecordCount: 0,
+      matchedRecordCount: 0,
+    };
+  }
+
+  const wildcardName = `*.${domain.rootDomain}`;
+  const templateRecords = (
+    await getEmailRoutingDnsTemplate(env, config, domain, requestSource, {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    })
+  ).map((record) => ({
+    ...record,
+    name: wildcardName,
+  }));
+
+  const existingRecords = await listDnsRecordsByName(
+    env,
+    config,
+    domain,
+    wildcardName,
+    requestSource,
+    {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    },
+  );
+
+  const conflictingRecord = existingRecords.find((record) =>
+    hasConflictingDnsRecord(record, templateRecords, domain.rootDomain),
+  );
+  if (conflictingRecord) {
+    throw new ApiError(
+      409,
+      "Wildcard Email Routing DNS conflicts with existing records",
+      {
+        rootDomain: domain.rootDomain,
+        wildcardName,
+        conflict: {
+          id: conflictingRecord.id,
+          type: conflictingRecord.type,
+          name: conflictingRecord.name,
+          content: conflictingRecord.content ?? null,
+          priority: conflictingRecord.priority ?? null,
+        },
+      },
+    );
+  }
+
+  let createdRecordCount = 0;
+  let matchedRecordCount = 0;
+
+  for (const templateRecord of templateRecords) {
+    const alreadyExists = existingRecords.some((record) =>
+      isSameDnsRecord(record, templateRecord, domain.rootDomain),
+    );
+    if (alreadyExists) {
+      matchedRecordCount += 1;
+      continue;
+    }
+
+    await createDnsRecord(env, config, domain, templateRecord, requestSource, {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    });
+    createdRecordCount += 1;
+  }
+
+  logOperationalEvent("info", "domains.wildcard_dns.ensured", {
+    rootDomain: domain.rootDomain,
+    wildcardName,
+    templateRecordCount: templateRecords.length,
+    matchedRecordCount,
+    createdRecordCount,
+  });
+
+  return {
+    createdRecordCount,
+    matchedRecordCount,
   };
 };
 

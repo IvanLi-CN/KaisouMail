@@ -37,6 +37,7 @@ import {
   pickRandomActiveDomain,
   requireActiveDomainByRootDomain,
   resolveMailboxDomain,
+  shouldUseWildcardSubdomainDnsForDomain,
 } from "./domains";
 import {
   type CloudflareRequestSource,
@@ -455,6 +456,10 @@ const upsertSubdomainUsage = async (
   now: string,
   requestSource: CloudflareRequestSource,
 ) => {
+  const useWildcardSubdomainDns = shouldUseWildcardSubdomainDnsForDomain(
+    config,
+    domain,
+  );
   const knownSubdomain = await db
     .select()
     .from(subdomains)
@@ -469,7 +474,10 @@ const upsertSubdomainUsage = async (
       existingSubdomain?.cleanupLastError,
   );
 
-  if (!existingSubdomain || shouldRepairKnownSubdomain) {
+  if (
+    !useWildcardSubdomainDns &&
+    (!existingSubdomain || shouldRepairKnownSubdomain)
+  ) {
     await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
   }
 
@@ -480,6 +488,9 @@ const upsertSubdomainUsage = async (
         lastUsedAt: now,
         cleanupNextAttemptAt: null,
         cleanupLastError: null,
+        metadata: JSON.stringify({
+          mode: useWildcardSubdomainDns ? "wildcard" : "explicit",
+        }),
       })
       .where(eq(subdomains.id, existingSubdomain.id));
   } else {
@@ -492,11 +503,7 @@ const upsertSubdomainUsage = async (
       cleanupNextAttemptAt: null,
       cleanupLastError: null,
       metadata: JSON.stringify({
-        mode: shouldUseCatchAllDelivery(domain)
-          ? "catch_all"
-          : config.EMAIL_ROUTING_MANAGEMENT_ENABLED
-            ? "live"
-            : "disabled",
+        mode: useWildcardSubdomainDns ? "wildcard" : "explicit",
       }),
     });
   }
@@ -750,11 +757,15 @@ export const createMailboxForUser = async (
   const currentDomainRows = await db
     .select({
       id: domains.id,
+      rootDomain: domains.rootDomain,
       status: domains.status,
       zoneId: domains.zoneId,
       deletedAt: domains.deletedAt,
       catchAllEnabled: domains.catchAllEnabled,
       catchAllOwnerUserId: domains.catchAllOwnerUserId,
+      subdomainDnsMode: domains.subdomainDnsMode,
+      wildcardDnsVerifiedAt: domains.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: domains.wildcardDnsLastError,
     })
     .from(domains)
     .where(eq(domains.id, domain.id))
@@ -773,6 +784,9 @@ export const createMailboxForUser = async (
     ...domain,
     catchAllEnabled: currentDomain.catchAllEnabled,
     catchAllOwnerUserId: currentDomain.catchAllOwnerUserId,
+    subdomainDnsMode: currentDomain.subdomainDnsMode,
+    wildcardDnsVerifiedAt: currentDomain.wildcardDnsVerifiedAt,
+    wildcardDnsLastError: currentDomain.wildcardDnsLastError,
   } satisfies DomainRow;
 
   if (input.localPart && input.subdomain) {

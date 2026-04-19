@@ -12,6 +12,7 @@ const {
   deleteZone,
   enableDomainRouting,
   ensureSubdomainEnabled,
+  ensureWildcardEmailRoutingDnsRecords,
   getCatchAllRule,
   listZones,
   updateCatchAllRule,
@@ -23,6 +24,7 @@ const {
   deleteZone: vi.fn(),
   enableDomainRouting: vi.fn(),
   ensureSubdomainEnabled: vi.fn(),
+  ensureWildcardEmailRoutingDnsRecords: vi.fn(),
   getCatchAllRule: vi.fn(),
   listZones: vi.fn(),
   updateCatchAllRule: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock("../services/emailRouting", async () => {
     deleteZone,
     enableDomainRouting,
     ensureSubdomainEnabled,
+    ensureWildcardEmailRoutingDnsRecords,
     getCatchAllRule,
     listZones,
     updateCatchAllRule,
@@ -74,6 +77,9 @@ const baseDomain = {
   catchAllOwnerUserId: null,
   catchAllRestoreStateJson: null,
   catchAllUpdatedAt: null,
+  subdomainDnsMode: "explicit",
+  wildcardDnsVerifiedAt: null,
+  wildcardDnsLastError: null,
   lastProvisionError: null,
   createdAt: "2026-04-03T12:00:00.000Z",
   updatedAt: "2026-04-03T12:00:00.000Z",
@@ -121,7 +127,9 @@ const createDb = (options?: {
       })),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn(async () => undefined),
+      values: vi.fn((_values?: unknown) => ({
+        onConflictDoUpdate: vi.fn(async () => undefined),
+      })),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
@@ -161,7 +169,9 @@ const createSequencedDb = (options?: {
       })),
     })),
     insert: vi.fn(() => ({
-      values: vi.fn(async () => undefined),
+      values: vi.fn((_values?: unknown) => ({
+        onConflictDoUpdate: vi.fn(async () => undefined),
+      })),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({
@@ -1295,6 +1305,134 @@ describe("domain catalog", () => {
       id: baseDomain.id,
       catchAllEnabled: true,
     });
+  });
+
+  it("switches allowlisted catch-all domains into wildcard DNS mode", async () => {
+    const db = createDb({
+      domainRows: [baseDomain],
+    });
+    getDb.mockReturnValue(db);
+    getCatchAllRule.mockResolvedValue({
+      enabled: false,
+      name: "Catch all",
+      matchers: [{ type: "all" }],
+      actions: [{ type: "forward", value: ["owner@example.com"] }],
+    });
+    updateCatchAllRule.mockResolvedValue(undefined);
+    ensureWildcardEmailRoutingDnsRecords.mockResolvedValue(undefined);
+
+    const result = await enableDomainCatchAll(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      baseDomain.id,
+      { id: "usr_admin" },
+    );
+
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      }),
+      expect.objectContaining({
+        id: baseDomain.id,
+        rootDomain: baseDomain.rootDomain,
+      }),
+      {
+        projectOperation: "domains.catch_all.enable",
+        projectRoute: "POST /api/domains/:id/catch-all/enable",
+      },
+    );
+    expect(result).toMatchObject({
+      id: baseDomain.id,
+      catchAllEnabled: true,
+      subdomainDnsMode: "wildcard",
+      wildcardDnsLastError: null,
+    });
+    expect(result.wildcardDnsVerifiedAt).toEqual(expect.any(String));
+  });
+
+  it("keeps catch-all enabled but falls back to explicit mode when wildcard DNS ensure fails", async () => {
+    const db = createDb({
+      domainRows: [baseDomain],
+    });
+    getDb.mockReturnValue(db);
+    getCatchAllRule.mockResolvedValue({
+      enabled: false,
+      name: "Catch all",
+      matchers: [{ type: "all" }],
+      actions: [{ type: "forward", value: ["owner@example.com"] }],
+    });
+    updateCatchAllRule.mockResolvedValue(undefined);
+    ensureWildcardEmailRoutingDnsRecords.mockRejectedValue(
+      new Error("Wildcard MX conflict"),
+    );
+
+    const result = await enableDomainCatchAll(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      baseDomain.id,
+      { id: "usr_admin" },
+    );
+
+    expect(result).toMatchObject({
+      id: baseDomain.id,
+      catchAllEnabled: true,
+      subdomainDnsMode: "explicit",
+      wildcardDnsLastError: "Wildcard MX conflict",
+    });
+    expect(updateCatchAllRule).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles existing catch-all domains into wildcard mode when rollout is enabled later", async () => {
+    const catchAllDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "forward", value: ["owner@example.com"] }],
+      }),
+      catchAllUpdatedAt: "2026-04-03T12:30:00.000Z",
+      subdomainDnsMode: "explicit" as const,
+    };
+    const db = createDb({
+      domainRows: [catchAllDomain],
+    });
+    getDb.mockReturnValue(db);
+    ensureWildcardEmailRoutingDnsRecords.mockResolvedValue(undefined);
+
+    const result = await enableDomainCatchAll(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [catchAllDomain.rootDomain],
+      },
+      catchAllDomain.id,
+      { id: "usr_admin" },
+    );
+
+    expect(getCatchAllRule).not.toHaveBeenCalled();
+    expect(updateCatchAllRule).not.toHaveBeenCalled();
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      id: catchAllDomain.id,
+      catchAllEnabled: true,
+      subdomainDnsMode: "wildcard",
+      wildcardDnsLastError: null,
+    });
+    expect(result.wildcardDnsVerifiedAt).toEqual(expect.any(String));
   });
 
   it("disables catch-all by restoring the saved Cloudflare rule snapshot", async () => {

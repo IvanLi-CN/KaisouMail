@@ -1,6 +1,8 @@
 import { maxMailboxTtlMinutes, minMailboxTtlMinutes } from "@kaisoumail/shared";
 import { z } from "zod";
 
+import { normalizeRootDomain } from "./lib/email";
+
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
 export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 
@@ -30,6 +32,8 @@ const runtimeConfigSchema = z.object({
     .min(0)
     .max(500)
     .default(500),
+  WILDCARD_SUBDOMAIN_DNS_ENABLED: envBooleanSchema.default(false),
+  WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: z.string().optional(),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
   CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
   CLOUDFLARE_ZONE_ID: z.string().optional(),
@@ -55,6 +59,8 @@ export interface WorkerEnv {
   DEFAULT_MAILBOX_TTL_MINUTES: string;
   CLEANUP_BATCH_SIZE: string;
   SUBDOMAIN_CLEANUP_BATCH_SIZE: string;
+  WILDCARD_SUBDOMAIN_DNS_ENABLED: string;
+  WILDCARD_SUBDOMAIN_DNS_ALLOWLIST?: string;
   EMAIL_ROUTING_MANAGEMENT_ENABLED: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_ZONE_ID?: string;
@@ -73,11 +79,17 @@ export interface WorkerEnv {
 export interface RuntimeConfig
   extends Omit<
     z.output<typeof runtimeConfigSchema>,
-    "WEB_APP_ORIGIN" | "WEB_APP_ORIGINS" | "WORKERS_AI_MODEL"
+    | "WEB_APP_ORIGIN"
+    | "WEB_APP_ORIGINS"
+    | "WORKERS_AI_MODEL"
+    | "WILDCARD_SUBDOMAIN_DNS_ENABLED"
+    | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
   > {
   WEB_APP_ORIGIN?: string;
   WEB_APP_ORIGINS?: string[];
   WORKERS_AI_MODEL?: string;
+  WILDCARD_SUBDOMAIN_DNS_ENABLED?: boolean;
+  WILDCARD_SUBDOMAIN_DNS_ALLOWLIST?: string[];
 }
 
 export type RuntimeConfigParseResult =
@@ -106,6 +118,22 @@ const parseConfiguredWebAppOrigins = (value: string | undefined) => {
     .split(",")
     .map((origin) => toWebAppOrigin(origin))
     .filter((origin): origin is string => Boolean(origin));
+};
+
+const parseConfiguredRootDomains = (value: string | undefined) => {
+  if (!value) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((rootDomain) => rootDomain.trim())
+        .filter((rootDomain) => rootDomain.length > 0)
+        .map((rootDomain) => normalizeRootDomain(rootDomain)),
+    ),
+  ];
 };
 
 export const resolveConfiguredWebAppOrigins = (
@@ -139,6 +167,9 @@ const normalizeRuntimeConfig = (
     // quickstart-compatible fallback.
     CLOUDFLARE_API_TOKEN:
       config.CLOUDFLARE_RUNTIME_API_TOKEN ?? config.CLOUDFLARE_API_TOKEN,
+    WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: parseConfiguredRootDomains(
+      config.WILDCARD_SUBDOMAIN_DNS_ALLOWLIST,
+    ),
     WEB_APP_ORIGIN: webAppOrigins[0],
     WEB_APP_ORIGINS: webAppOrigins,
   };
