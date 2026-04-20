@@ -505,7 +505,6 @@ const processSubdomainCleanupMessage = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   message: Message<SubdomainCleanupQueueMessage>,
-  unlockedZoneIds: Set<string>,
 ) => {
   if (
     config.SUBDOMAIN_CLEANUP_BATCH_SIZE === 0 ||
@@ -625,18 +624,18 @@ const processSubdomainCleanupMessage = async (
   await markSubdomainCleanupPending(db, row, cleanupStartedAt);
 
   try {
-    if (row.zoneId && !unlockedZoneIds.has(row.zoneId)) {
-      await unlockEmailRoutingDnsRecords(
-        env,
-        config,
-        {
-          rootDomain: row.rootDomain,
-          zoneId: row.zoneId,
-        },
-        subdomainCleanupRequestSource,
-      );
-      unlockedZoneIds.add(row.zoneId);
-    }
+    await unlockEmailRoutingDnsRecords(
+      env,
+      config,
+      {
+        rootDomain: row.rootDomain,
+        zoneId: row.zoneId,
+      },
+      subdomainCleanupRequestSource,
+      {
+        name: `${row.name}.${row.rootDomain}`,
+      },
+    );
 
     await deleteSubdomainEmailRoutingDnsRecords(
       env,
@@ -685,8 +684,7 @@ export const consumeSubdomainCleanupQueue = async (
   env: WorkerEnv,
   config: RuntimeConfig,
 ) => {
-  const unlockedZoneIds = new Set<string>();
   for (const message of batch.messages) {
-    await processSubdomainCleanupMessage(env, config, message, unlockedZoneIds);
+    await processSubdomainCleanupMessage(env, config, message);
   }
 };
