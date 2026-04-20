@@ -32,7 +32,7 @@ const runtimeConfigSchema = z.object({
     .int()
     .min(0)
     .max(500)
-    .default(500),
+    .default(50),
   SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE: z.coerce
     .number()
     .int()
