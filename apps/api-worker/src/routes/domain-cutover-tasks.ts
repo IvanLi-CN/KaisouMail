@@ -12,9 +12,11 @@ import {
 import type { AppBindings } from "../types";
 
 const resolveExecutionContext = (c: unknown) =>
-  (c as {
-    executionCtx?: { waitUntil?: (promise: Promise<unknown>) => void };
-  }).executionCtx;
+  (
+    c as {
+      executionCtx?: { waitUntil?: (promise: Promise<unknown>) => void };
+    }
+  ).executionCtx;
 
 const scheduleDomainCutoverResume = (
   c: unknown,

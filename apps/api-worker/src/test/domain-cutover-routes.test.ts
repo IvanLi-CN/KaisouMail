@@ -118,7 +118,7 @@ describe("domain cutover task routes", () => {
     const response = await app.fetch(
       new Request("http://localhost/api/domain-cutover-tasks/task_pending"),
       env,
-      { waitUntil } as ExecutionContext,
+      { waitUntil } as unknown as ExecutionContext,
     );
 
     expect(response.status).toBe(200);
@@ -152,9 +152,11 @@ describe("domain cutover task routes", () => {
 
     const app = createApp();
     const response = await app.fetch(
-      new Request("http://localhost/api/domain-cutover-tasks/task_pending/events"),
+      new Request(
+        "http://localhost/api/domain-cutover-tasks/task_pending/events",
+      ),
       env,
-      { waitUntil } as ExecutionContext,
+      { waitUntil } as unknown as ExecutionContext,
     );
 
     expect(response.status).toBe(200);

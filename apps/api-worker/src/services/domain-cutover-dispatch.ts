@@ -42,10 +42,7 @@ const getStoredTaskById = async (
   return rows[0] ?? null;
 };
 
-const listOpenTasks = async (
-  db: ReturnType<typeof getDb>,
-  limit: number,
-) => {
+const listOpenTasks = async (db: ReturnType<typeof getDb>, limit: number) => {
   const rows = await db
     .select()
     .from(domainCutoverTasks)
@@ -105,7 +102,10 @@ export const resumeDomainCutoverTasks = async (
   },
 ) => {
   const db = getDb(env);
-  const limit = Math.max(options?.limit ?? defaultDomainCutoverResumeBatchSize, 1);
+  const limit = Math.max(
+    options?.limit ?? defaultDomainCutoverResumeBatchSize,
+    1,
+  );
   const openTasks = await listOpenTasks(db, limit * 2);
   const resumableTasks = openTasks
     .filter((task) => isDomainCutoverTaskResumable(task))

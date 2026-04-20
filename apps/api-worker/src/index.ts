@@ -1,6 +1,6 @@
 import { createApp } from "./app";
-import { parseRuntimeConfig } from "./env";
 import type { WorkerEnv } from "./env";
+import { parseRuntimeConfig } from "./env";
 import { runMailboxCleanup } from "./services/cleanup";
 import { resumeDomainCutoverTasks } from "./services/domain-cutover-dispatch";
 import { storeIncomingMessage } from "./services/messages";

@@ -311,7 +311,7 @@ describe("domain routes", () => {
         method: "POST",
       }),
       env,
-      { waitUntil } as ExecutionContext,
+      { waitUntil } as unknown as ExecutionContext,
     );
 
     expect(createDomainCutoverTask).toHaveBeenCalledWith(
@@ -344,7 +344,7 @@ describe("domain routes", () => {
         method: "POST",
       }),
       env,
-      { waitUntil } as ExecutionContext,
+      { waitUntil } as unknown as ExecutionContext,
     );
 
     expect(createDomainCutoverTask).toHaveBeenCalledWith(
