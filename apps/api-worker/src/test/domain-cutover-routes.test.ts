@@ -94,11 +94,7 @@ describe("domain cutover task routes", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toContain(
-      "text/event-stream",
-    );
-    await expect(response.text()).resolves.toContain(
-      '"status":"completed"',
-    );
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    await expect(response.text()).resolves.toContain('"status":"completed"');
   });
 });

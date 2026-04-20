@@ -26,6 +26,18 @@ import {
 } from "../services/domains";
 import type { AppBindings } from "../types";
 
+const resolveExecutionContext = (
+  c: Pick<AppBindings["Variables"], never> & {
+    executionCtx: { waitUntil?: (promise: Promise<unknown>) => void };
+  },
+) => {
+  try {
+    return c.executionCtx as { waitUntil?: (promise: Promise<unknown>) => void };
+  } catch {
+    return null;
+  }
+};
+
 export const domainRoutes = new Hono<AppBindings>()
   .use("*", requireAuth({ admin: true }))
   .get("/", async (c) =>
@@ -71,9 +83,7 @@ export const domainRoutes = new Hono<AppBindings>()
     });
 
     const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
-    const executionContext = (c.executionCtx ?? null) as
-      | { waitUntil?: (promise: Promise<unknown>) => void }
-      | null;
+    const executionContext = resolveExecutionContext(c as never);
     if (executionContext?.waitUntil) {
       executionContext.waitUntil(runPromise);
     } else {
@@ -94,9 +104,7 @@ export const domainRoutes = new Hono<AppBindings>()
     });
 
     const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
-    const executionContext = (c.executionCtx ?? null) as
-      | { waitUntil?: (promise: Promise<unknown>) => void }
-      | null;
+    const executionContext = resolveExecutionContext(c as never);
     if (executionContext?.waitUntil) {
       executionContext.waitUntil(runPromise);
     } else {

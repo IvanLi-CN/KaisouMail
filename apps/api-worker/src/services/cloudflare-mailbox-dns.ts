@@ -1,6 +1,9 @@
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { ApiError } from "../lib/errors";
-import type { CloudflareRequestSource, EmailRoutingDomain } from "./emailRouting";
+import type {
+  CloudflareRequestSource,
+  EmailRoutingDomain,
+} from "./emailRouting";
 import {
   deleteSubdomainEmailRoutingDnsRecords,
   unlockEmailRoutingDnsRecords,
@@ -72,7 +75,10 @@ const isEmailRoutingDnsRecord = (
     return false;
   }
 
-  if (record.meta?.email_routing === true && (record.type === "MX" || record.type === "TXT")) {
+  if (
+    record.meta?.email_routing === true &&
+    (record.type === "MX" || record.type === "TXT")
+  ) {
     return true;
   }
 
@@ -196,11 +202,9 @@ const deleteDnsRecordById = async (
   const zoneId = requireZoneId(domain);
 
   try {
-    await cfRequest(
-      config,
-      `/zones/${zoneId}/dns_records/${recordId}`,
-      { method: "DELETE" },
-    );
+    await cfRequest(config, `/zones/${zoneId}/dns_records/${recordId}`, {
+      method: "DELETE",
+    });
   } catch (error) {
     if (
       error instanceof ApiError &&

@@ -35,9 +35,8 @@ vi.mock("../db/client", () => ({
 }));
 
 vi.mock("../lib/crypto", async () => {
-  const actual = await vi.importActual<typeof import("../lib/crypto")>(
-    "../lib/crypto",
-  );
+  const actual =
+    await vi.importActual<typeof import("../lib/crypto")>("../lib/crypto");
   return {
     ...actual,
     nowIso,
@@ -71,7 +70,12 @@ vi.mock("../services/cloudflare-mailbox-dns", async () => {
   };
 });
 
-import { domainCutoverTasks, domains, mailboxes, subdomains } from "../db/schema";
+import {
+  domainCutoverTasks,
+  domains,
+  mailboxes,
+  subdomains,
+} from "../db/schema";
 import { runDomainCutoverTaskById } from "../services/domain-cutover";
 
 const env = {} as never;
@@ -146,7 +150,8 @@ const createDb = (options: {
   const taskRows = [...options.taskRows];
   const domainRows = [...options.domainRows];
   const mailboxRows = [...options.mailboxRows];
-  const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+  const updates: Array<{ table: unknown; values: Record<string, unknown> }> =
+    [];
   const insertedSubdomains: unknown[] = [];
   const deletedTables: unknown[] = [];
 
@@ -173,7 +178,9 @@ const createDb = (options: {
     insert: vi.fn((table: unknown) => ({
       values: vi.fn(async (values: unknown) => {
         if (table === subdomains) {
-          insertedSubdomains.push(...(Array.isArray(values) ? values : [values]));
+          insertedSubdomains.push(
+            ...(Array.isArray(values) ? values : [values]),
+          );
         }
       }),
     })),
@@ -247,7 +254,9 @@ describe("domain cutover service", () => {
     expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
     expect(
       purgeProjectMailboxExactDnsHosts.mock.invocationCallOrder[0],
-    ).toBeLessThan(ensureWildcardEmailRoutingDnsRecords.mock.invocationCallOrder[0]);
+    ).toBeLessThan(
+      ensureWildcardEmailRoutingDnsRecords.mock.invocationCallOrder[0],
+    );
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       status: "completed",

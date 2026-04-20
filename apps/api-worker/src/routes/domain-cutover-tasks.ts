@@ -24,6 +24,7 @@ export const domainCutoverTaskRoutes = new Hono<AppBindings>()
 
     return streamSSE(c, async (stream) => {
       let lastUpdatedAt = "";
+
       const sendTask = async (
         task: Awaited<ReturnType<typeof getDomainCutoverTaskById>>,
       ) => {
@@ -35,15 +36,16 @@ export const domainCutoverTaskRoutes = new Hono<AppBindings>()
               : "progress";
         await stream.writeSSE({
           event,
-          data: JSON.stringify(
-            domainCutoverTaskResponseSchema.parse({ task }),
-          ),
+          data: JSON.stringify(domainCutoverTaskResponseSchema.parse({ task })),
         });
         lastUpdatedAt = task.updatedAt;
       };
 
       await sendTask(initialTask);
-      if (initialTask.status === "completed" || initialTask.status === "failed") {
+      if (
+        initialTask.status === "completed" ||
+        initialTask.status === "failed"
+      ) {
         return;
       }
 

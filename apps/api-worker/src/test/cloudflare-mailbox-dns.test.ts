@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  deleteSubdomainEmailRoutingDnsRecords,
-  unlockEmailRoutingDnsRecords,
-} = vi.hoisted(() => ({
-  deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
-  unlockEmailRoutingDnsRecords: vi.fn(),
-}));
+const { deleteSubdomainEmailRoutingDnsRecords, unlockEmailRoutingDnsRecords } =
+  vi.hoisted(() => ({
+    deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
+    unlockEmailRoutingDnsRecords: vi.fn(),
+  }));
 
 vi.mock("../services/emailRouting", async () => {
   const actual = await vi.importActual<
@@ -219,12 +217,22 @@ describe("cloudflare mailbox dns helper", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
       )
-      .mockResolvedValue(
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             success: true,
             errors: [],
-            result: { id: "deleted" },
+            result: { id: "deleted_mx" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "deleted_txt" },
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
