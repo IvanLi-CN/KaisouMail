@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.26.2",
+  "base_stable_version": "0.26.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T05:19:23Z",
+  "next_stable_version": "0.26.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "3e2c81fb7a751694187a16904e2d8de01a450694",
+  "pr_number": 59,
+  "pr_title": "fix(ci): remove deploy workflow inline node heredocs",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.26.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.26.2",
+  "target_sha": "810b5f670bee218b100db8a10135ab26da641fc1",
+  "type_label": "type:patch"
+}
