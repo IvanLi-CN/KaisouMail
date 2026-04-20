@@ -11,6 +11,7 @@ import {
 import {
   apiKeySchema,
   domainCatalogItemSchema,
+  domainCutoverTaskSchema,
   domainSchema,
   mailboxSchema,
   messageDetailSchema,
@@ -136,6 +137,14 @@ export const listMailboxesResponseSchema = z.object({
 
 export const listDomainsResponseSchema = z.object({
   domains: z.array(domainSchema),
+});
+
+export const domainCutoverTaskAcceptedResponseSchema = z.object({
+  taskId: z.string(),
+});
+
+export const domainCutoverTaskResponseSchema = z.object({
+  task: domainCutoverTaskSchema,
 });
 
 export const cloudflareRateLimitContextSchema = z.object({
