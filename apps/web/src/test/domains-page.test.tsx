@@ -294,7 +294,7 @@ describe("domains page view", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText("确认删除", { selector: "button" }));
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith("dom_secondary"));
-  }, 30_000);
+  });
 
   it("enables an existing catalog zone without recreating the zone", async () => {
     const onEnable = vi.fn();
