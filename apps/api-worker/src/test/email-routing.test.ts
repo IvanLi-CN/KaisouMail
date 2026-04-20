@@ -366,7 +366,7 @@ describe("email routing service", () => {
     );
   });
 
-  it("unlocks zone-level Email Routing DNS records before legacy exact cleanup", async () => {
+  it("sends the exact fqdn when unlocking Email Routing DNS records for cleanup", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -379,10 +379,18 @@ describe("email routing service", () => {
     );
 
     await expect(
-      unlockEmailRoutingDnsRecords(env, baseConfig, {
-        rootDomain: "707979.xyz",
-        zoneId: "zone_123",
-      }),
+      unlockEmailRoutingDnsRecords(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        undefined,
+        {
+          name: "ops.707979.xyz",
+        },
+      ),
     ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -391,6 +399,7 @@ describe("email routing service", () => {
     );
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: "PATCH",
+      body: '{"name":"ops.707979.xyz"}',
     });
   });
 
