@@ -238,17 +238,38 @@ jobs:
             exit 0
           fi
 
-          existing_queues_json="$(
-            CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" \
-              "${WRANGLER_BIN}" queues list --config "${API_WORKER_CONFIG_PATH}" --json
-          )"
-          export EXISTING_QUEUES_JSON="${existing_queues_json}"
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            echo "Missing CLOUDFLARE_ACCOUNT_ID; queue provisioning requires the account-scoped Queues API." >&2
+            exit 1
+          fi
 
           while IFS= read -r queue_name; do
             [ -n "${queue_name}" ] || continue
 
             export TARGET_QUEUE_NAME="${queue_name}"
-            if node "${helper_script}" queue-exists; then
+            queue_exists=0
+            page=1
+            total_pages=1
+
+            while [ "${page}" -le "${total_pages}" ]; do
+              existing_queues_json="$(
+                curl -fsS \
+                  --get \
+                  --url "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/queues" \
+                  --header "Authorization: Bearer ${CF_MAIL_DEPLOY_API_TOKEN}" \
+                  --header "Content-Type: application/json" \
+                  --data-urlencode "page=${page}"
+              )"
+              export EXISTING_QUEUES_JSON="${existing_queues_json}"
+              total_pages="$(node "${helper_script}" queue-total-pages)"
+              if node "${helper_script}" queue-exists; then
+                queue_exists=1
+                break
+              fi
+              page="$((page + 1))"
+            done
+
+            if [ "${queue_exists}" -eq 1 ]; then
               echo "Queue ${queue_name} already exists."
               continue
             fi
