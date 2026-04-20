@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   bindDomainRequestSchema,
   createDomainRequestSchema,
+  domainCutoverTaskAcceptedResponseSchema,
   domainSchema,
   listDomainCatalogResponseSchema,
   listDomainsResponseSchema,
@@ -11,12 +12,14 @@ import { Hono } from "hono";
 import { parseRuntimeConfig } from "../env";
 import { requireAuth } from "../services/auth";
 import {
+  createDomainCutoverTask,
+  runDomainCutoverTaskById,
+} from "../services/domain-cutover";
+import {
   bindDomain,
   createDomain,
   deleteDomain,
   disableDomain,
-  disableDomainCatchAll,
-  enableDomainCatchAll,
   listDomainCatalog,
   listDomains,
   retryDomainProvision,
@@ -59,29 +62,52 @@ export const domainRoutes = new Hono<AppBindings>()
       result.created ? 201 : 200,
     );
   })
-  .post("/:id/catch-all/enable", async (c) =>
-    c.json(
-      domainSchema.parse(
-        await enableDomainCatchAll(
-          c.env,
-          parseRuntimeConfig(c.env),
-          c.req.param("id"),
-          c.get("authUser"),
-        ),
-      ),
-    ),
-  )
-  .post("/:id/catch-all/disable", async (c) =>
-    c.json(
-      domainSchema.parse(
-        await disableDomainCatchAll(
-          c.env,
-          parseRuntimeConfig(c.env),
-          c.req.param("id"),
-        ),
-      ),
-    ),
-  )
+  .post("/:id/catch-all/enable", async (c) => {
+    const runtimeConfig = parseRuntimeConfig(c.env);
+    const task = await createDomainCutoverTask(c.env, runtimeConfig, {
+      action: "enable",
+      domainId: c.req.param("id"),
+      requestedByUserId: c.get("authUser")?.id ?? null,
+    });
+
+    const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
+    const executionContext = (c.executionCtx ?? null) as
+      | { waitUntil?: (promise: Promise<unknown>) => void }
+      | null;
+    if (executionContext?.waitUntil) {
+      executionContext.waitUntil(runPromise);
+    } else {
+      void runPromise.catch(() => undefined);
+    }
+
+    return c.json(
+      domainCutoverTaskAcceptedResponseSchema.parse({ taskId: task.id }),
+      202,
+    );
+  })
+  .post("/:id/catch-all/disable", async (c) => {
+    const runtimeConfig = parseRuntimeConfig(c.env);
+    const task = await createDomainCutoverTask(c.env, runtimeConfig, {
+      action: "disable",
+      domainId: c.req.param("id"),
+      requestedByUserId: c.get("authUser")?.id ?? null,
+    });
+
+    const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
+    const executionContext = (c.executionCtx ?? null) as
+      | { waitUntil?: (promise: Promise<unknown>) => void }
+      | null;
+    if (executionContext?.waitUntil) {
+      executionContext.waitUntil(runPromise);
+    } else {
+      void runPromise.catch(() => undefined);
+    }
+
+    return c.json(
+      domainCutoverTaskAcceptedResponseSchema.parse({ taskId: task.id }),
+      202,
+    );
+  })
   .post("/:id/disable", async (c) =>
     c.json(
       domainSchema.parse(
