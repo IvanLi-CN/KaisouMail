@@ -10,11 +10,10 @@ import {
 import { Hono } from "hono";
 
 import { parseRuntimeConfig } from "../env";
+import { logOperationalEvent } from "../lib/observability";
 import { requireAuth } from "../services/auth";
-import {
-  createDomainCutoverTask,
-  runDomainCutoverTaskById,
-} from "../services/domain-cutover";
+import { createDomainCutoverTask } from "../services/domain-cutover";
+import { resumeDomainCutoverTaskById } from "../services/domain-cutover-dispatch";
 import {
   bindDomain,
   createDomain,
@@ -26,18 +25,37 @@ import {
 } from "../services/domains";
 import type { AppBindings } from "../types";
 
-const resolveExecutionContext = (
-  c: Pick<AppBindings["Variables"], never> & {
-    executionCtx: { waitUntil?: (promise: Promise<unknown>) => void };
-  },
+const resolveExecutionContext = (c: unknown) =>
+  (
+    c as {
+      executionCtx?: { waitUntil?: (promise: Promise<unknown>) => void };
+    }
+  ).executionCtx;
+
+const scheduleDomainCutoverTask = (
+  c: unknown,
+  env: AppBindings["Bindings"],
+  runtimeConfig: ReturnType<typeof parseRuntimeConfig>,
+  taskId: string,
 ) => {
-  try {
-    return c.executionCtx as {
-      waitUntil?: (promise: Promise<unknown>) => void;
-    };
-  } catch {
-    return null;
+  const runPromise = resumeDomainCutoverTaskById(
+    env,
+    runtimeConfig,
+    taskId,
+  ).catch((error) => {
+    logOperationalEvent("warn", "domains.cutover.dispatch.failed", {
+      taskId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+
+  const executionContext = resolveExecutionContext(c);
+  if (executionContext?.waitUntil) {
+    executionContext.waitUntil(runPromise);
+    return;
   }
+
+  void runPromise;
 };
 
 export const domainRoutes = new Hono<AppBindings>()
@@ -84,13 +102,7 @@ export const domainRoutes = new Hono<AppBindings>()
       requestedByUserId: c.get("authUser")?.id ?? null,
     });
 
-    const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
-    const executionContext = resolveExecutionContext(c as never);
-    if (executionContext?.waitUntil) {
-      executionContext.waitUntil(runPromise);
-    } else {
-      void runPromise.catch(() => undefined);
-    }
+    scheduleDomainCutoverTask(c, c.env, runtimeConfig, task.id);
 
     return c.json(
       domainCutoverTaskAcceptedResponseSchema.parse({ taskId: task.id }),
@@ -105,13 +117,7 @@ export const domainRoutes = new Hono<AppBindings>()
       requestedByUserId: c.get("authUser")?.id ?? null,
     });
 
-    const runPromise = runDomainCutoverTaskById(c.env, runtimeConfig, task.id);
-    const executionContext = resolveExecutionContext(c as never);
-    if (executionContext?.waitUntil) {
-      executionContext.waitUntil(runPromise);
-    } else {
-      void runPromise.catch(() => undefined);
-    }
+    scheduleDomainCutoverTask(c, c.env, runtimeConfig, task.id);
 
     return c.json(
       domainCutoverTaskAcceptedResponseSchema.parse({ taskId: task.id }),

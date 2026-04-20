@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { getDomainCutoverTaskById } = vi.hoisted(() => ({
   getDomainCutoverTaskById: vi.fn(),
 }));
+const { resumeDomainCutoverTaskById } = vi.hoisted(() => ({
+  resumeDomainCutoverTaskById: vi.fn(),
+}));
 
 vi.mock("../services/bootstrap", () => ({
   ensureBootstrapAdmin: vi.fn(),
@@ -26,6 +29,16 @@ vi.mock("../services/domain-cutover", async () => {
   return {
     ...actual,
     getDomainCutoverTaskById,
+  };
+});
+
+vi.mock("../services/domain-cutover-dispatch", async () => {
+  const actual = await vi.importActual<
+    typeof import("../services/domain-cutover-dispatch")
+  >("../services/domain-cutover-dispatch");
+  return {
+    ...actual,
+    resumeDomainCutoverTaskById,
   };
 });
 
@@ -64,6 +77,17 @@ const completedTask = {
   failedAt: null,
 };
 
+const pendingTask = {
+  ...completedTask,
+  id: "task_pending",
+  status: "pending",
+  phase: "queued",
+  deletedCount: 0,
+  totalCount: 0,
+  updatedAt: "2026-04-21T10:00:00.000Z",
+  completedAt: null,
+};
+
 describe("domain cutover task routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,9 +103,31 @@ describe("domain cutover task routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(resumeDomainCutoverTaskById).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toEqual({
       task: completedTask,
     });
+  });
+
+  it("re-dispatches resumable tasks when fetching task snapshots", async () => {
+    getDomainCutoverTaskById.mockResolvedValue(pendingTask);
+    resumeDomainCutoverTaskById.mockResolvedValue(pendingTask);
+    const waitUntil = vi.fn();
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/domain-cutover-tasks/task_pending"),
+      env,
+      { waitUntil } as unknown as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    expect(resumeDomainCutoverTaskById).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      pendingTask.id,
+    );
+    expect(waitUntil).toHaveBeenCalledTimes(1);
   });
 
   it("streams terminal snapshots from /api/domain-cutover-tasks/:taskId/events", async () => {
@@ -96,5 +142,25 @@ describe("domain cutover task routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
     await expect(response.text()).resolves.toContain('"status":"completed"');
+    expect(resumeDomainCutoverTaskById).not.toHaveBeenCalled();
+  });
+
+  it("kicks resumable tasks when opening the SSE stream", async () => {
+    getDomainCutoverTaskById.mockResolvedValue(pendingTask);
+    resumeDomainCutoverTaskById.mockResolvedValue(pendingTask);
+    const waitUntil = vi.fn();
+
+    const app = createApp();
+    const response = await app.fetch(
+      new Request(
+        "http://localhost/api/domain-cutover-tasks/task_pending/events",
+      ),
+      env,
+      { waitUntil } as unknown as ExecutionContext,
+    );
+
+    expect(response.status).toBe(200);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
   });
 });

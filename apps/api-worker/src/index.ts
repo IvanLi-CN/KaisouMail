@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import type { WorkerEnv } from "./env";
 import { parseRuntimeConfig } from "./env";
 import { runMailboxCleanup } from "./services/cleanup";
+import { resumeDomainCutoverTasks } from "./services/domain-cutover-dispatch";
 import { storeIncomingMessage } from "./services/messages";
 import {
   consumeSubdomainCleanupQueue,
@@ -35,11 +36,15 @@ export default {
     env: WorkerEnv,
     _ctx: ExecutionContext,
   ) {
+    const runtimeConfig = parseRuntimeConfig(env);
+
     if (controller.cron === SUBDOMAIN_CLEANUP_DISPATCH_CRON) {
-      await runSubdomainCleanupDispatcher(env, parseRuntimeConfig(env));
+      await resumeDomainCutoverTasks(env, runtimeConfig);
+      await runSubdomainCleanupDispatcher(env, runtimeConfig);
       return;
     }
 
+    await resumeDomainCutoverTasks(env, runtimeConfig);
     await runMailboxCleanup(env);
   },
 } satisfies ExportedHandler<WorkerEnv>;
