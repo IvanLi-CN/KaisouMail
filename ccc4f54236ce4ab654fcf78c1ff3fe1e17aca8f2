@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.28.1",
+  "base_stable_version": "0.28.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T21:43:52Z",
+  "next_stable_version": "0.28.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "2ef70f8843e181e490bd79a8882285a4f32cfbc2",
+  "pr_number": 67,
+  "pr_title": "fix: recover stalled domain cutover tasks",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.28.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.28.1",
+  "target_sha": "ccc4f54236ce4ab654fcf78c1ff3fe1e17aca8f2",
+  "type_label": "type:patch"
+}
