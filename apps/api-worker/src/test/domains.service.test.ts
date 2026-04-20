@@ -103,7 +103,8 @@ const createDb = (options?: {
 }) => {
   const domainRows = options?.domainRows ?? [];
   const mailboxRows = options?.mailboxRows ?? [];
-  const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+  const updates: Array<{ table: unknown; values: Record<string, unknown> }> =
+    [];
 
   const rowsForTable = (table: unknown) => {
     if (table === domains) return domainRows;

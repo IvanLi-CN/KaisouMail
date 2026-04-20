@@ -1396,7 +1396,11 @@ export const enableDomainCatchAll = async (
       const wildcardDnsLastError =
         error instanceof Error ? error.message : String(error);
       logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
-      await persistWildcardDnsCutoverFailure(db, existing, wildcardDnsLastError);
+      await persistWildcardDnsCutoverFailure(
+        db,
+        existing,
+        wildcardDnsLastError,
+      );
       throw toWildcardDnsCutoverApiError(existing, error);
     }
   }
@@ -1426,7 +1430,11 @@ export const enableDomainCatchAll = async (
       const wildcardDnsLastError =
         error instanceof Error ? error.message : String(error);
       logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
-      await persistWildcardDnsCutoverFailure(db, existing, wildcardDnsLastError);
+      await persistWildcardDnsCutoverFailure(
+        db,
+        existing,
+        wildcardDnsLastError,
+      );
       throw toWildcardDnsCutoverApiError(existing, error);
     }
   } else {

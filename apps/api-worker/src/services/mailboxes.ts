@@ -479,7 +479,8 @@ const upsertSubdomainUsage = async (
   now: string,
   requestSource: CloudflareRequestSource,
 ) => {
-  const useWildcardSubdomainDns = shouldUseWildcardSubdomainDnsForDomain(domain);
+  const useWildcardSubdomainDns =
+    shouldUseWildcardSubdomainDnsForDomain(domain);
 
   if (
     !useWildcardSubdomainDns &&
