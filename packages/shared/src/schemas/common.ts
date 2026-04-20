@@ -30,6 +30,13 @@ export const recipientKindSchema = z.enum(recipientKinds);
 export const attachmentDispositionSchema = z.enum(attachmentDispositions);
 export const verificationSourceSchema = z.enum(["subject", "body"]);
 export const verificationMethodSchema = z.enum(["rules", "ai"]);
+export const domainCutoverTaskActionSchema = z.enum(["enable", "disable"]);
+export const domainCutoverTaskStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
 
 export const addressLabelSchema = z.object({
   name: z.string().nullable(),
@@ -150,6 +157,28 @@ export const domainCatalogItemSchema = withMailDomainAliases(
   },
   { required: true },
 );
+
+export const domainCutoverTaskSchema = z.object({
+  id: z.string(),
+  domainId: z.string(),
+  rootDomain: z.string(),
+  requestedByUserId: z.string().nullable(),
+  action: domainCutoverTaskActionSchema,
+  targetMode: subdomainDnsModeSchema,
+  status: domainCutoverTaskStatusSchema,
+  phase: z.string().min(1),
+  currentHost: z.string().nullable(),
+  deletedCount: z.number().int().nonnegative(),
+  rebuiltCount: z.number().int().nonnegative(),
+  totalCount: z.number().int().nonnegative(),
+  rollbackPhase: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: isoDateSchema,
+  startedAt: isoDateSchema.nullable(),
+  updatedAt: isoDateSchema,
+  completedAt: isoDateSchema.nullable(),
+  failedAt: isoDateSchema.nullable(),
+});
 
 export const messageSummarySchema = z.object({
   id: z.string(),

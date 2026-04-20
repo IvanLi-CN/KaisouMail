@@ -6,6 +6,8 @@ import {
   createDomainRequestSchema,
   createMailboxRequestSchema,
   createUserResponseSchema,
+  domainCutoverTaskAcceptedResponseSchema,
+  domainCutoverTaskResponseSchema,
   domainSchema,
   ensureMailboxRequestSchema,
   listApiKeysResponseSchema,
@@ -120,6 +122,11 @@ const appendScopeParam = (
   }
 };
 
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 const requestJson = async <T>(
   path: string,
   init: RequestInit,
@@ -163,6 +170,32 @@ const requestJson = async <T>(
     );
   }
   return parser(payload);
+};
+
+const getDomainCutoverTask = async (taskId: string) =>
+  requestJson(
+    `/api/domain-cutover-tasks/${taskId}`,
+    { method: "GET" },
+    (value) => domainCutoverTaskResponseSchema.parse(value).task,
+  );
+
+const waitForDomainCutoverTask = async (taskId: string) => {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const task = await getDomainCutoverTask(taskId);
+    if (task.status === "completed") {
+      return task;
+    }
+    if (task.status === "failed") {
+      throw new ApiClientError(
+        task.error ?? "Domain cutover failed",
+        { task },
+        409,
+      );
+    }
+    await sleep(attempt < 10 ? 500 : 1_000);
+  }
+
+  throw new ApiClientError("Domain cutover timed out", { taskId }, 504);
 };
 
 export const apiClient = {
@@ -460,19 +493,39 @@ export const apiClient = {
   },
   async enableDomainCatchAll(id: string) {
     if (DEMO_MODE) return demoApi.enableDomainCatchAll(id);
-    return requestJson(
+    const accepted = await requestJson(
       `/api/domains/${id}/catch-all/enable`,
       { method: "POST" },
-      (value) => domainSchema.parse(value),
+      (value) => domainCutoverTaskAcceptedResponseSchema.parse(value),
     );
+    await waitForDomainCutoverTask(accepted.taskId);
+    const domains = await apiClient.listDomains();
+    const domain = domains.find((candidate) => candidate.id === id);
+    if (!domain) {
+      throw new ApiClientError("Mailbox domain not found after cutover", {
+        domainId: id,
+        taskId: accepted.taskId,
+      });
+    }
+    return domain;
   },
   async disableDomainCatchAll(id: string) {
     if (DEMO_MODE) return demoApi.disableDomainCatchAll(id);
-    return requestJson(
+    const accepted = await requestJson(
       `/api/domains/${id}/catch-all/disable`,
       { method: "POST" },
-      (value) => domainSchema.parse(value),
+      (value) => domainCutoverTaskAcceptedResponseSchema.parse(value),
     );
+    await waitForDomainCutoverTask(accepted.taskId);
+    const domains = await apiClient.listDomains();
+    const domain = domains.find((candidate) => candidate.id === id);
+    if (!domain) {
+      throw new ApiClientError("Mailbox domain not found after cutover", {
+        domainId: id,
+        taskId: accepted.taskId,
+      });
+    }
+    return domain;
   },
   async retryDomain(id: string) {
     if (DEMO_MODE) return demoApi.retryDomain(id);

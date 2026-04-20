@@ -3,23 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   bindDomain,
   createDomain,
+  createDomainCutoverTask,
   deleteDomain,
   disableDomain,
-  disableDomainCatchAll,
-  enableDomainCatchAll,
   listDomainCatalog,
   listDomains,
   retryDomainProvision,
+  runDomainCutoverTaskById,
 } = vi.hoisted(() => ({
   bindDomain: vi.fn(),
   createDomain: vi.fn(),
+  createDomainCutoverTask: vi.fn(),
   deleteDomain: vi.fn(),
   disableDomain: vi.fn(),
-  disableDomainCatchAll: vi.fn(),
-  enableDomainCatchAll: vi.fn(),
   listDomainCatalog: vi.fn(),
   listDomains: vi.fn(),
   retryDomainProvision: vi.fn(),
+  runDomainCutoverTaskById: vi.fn(),
 }));
 
 vi.mock("../services/bootstrap", () => ({
@@ -47,11 +47,20 @@ vi.mock("../services/domains", async () => {
     createDomain,
     deleteDomain,
     disableDomain,
-    disableDomainCatchAll,
-    enableDomainCatchAll,
     listDomainCatalog,
     listDomains,
     retryDomainProvision,
+  };
+});
+
+vi.mock("../services/domain-cutover", async () => {
+  const actual = await vi.importActual<
+    typeof import("../services/domain-cutover")
+  >("../services/domain-cutover");
+  return {
+    ...actual,
+    createDomainCutoverTask,
+    runDomainCutoverTaskById,
   };
 });
 
@@ -281,20 +290,9 @@ describe("domain routes", () => {
     expect(response.status).toBe(204);
   });
 
-  it("enables catch-all from /api/domains/:id/catch-all/enable", async () => {
-    enableDomainCatchAll.mockResolvedValue({
-      id: "dom_bound",
-      rootDomain: "example.org",
-      zoneId: "zone_bound",
-      bindingSource: "project_bind",
-      status: "active",
-      catchAllEnabled: true,
-      lastProvisionError: null,
-      createdAt: "2026-04-06T07:00:00.000Z",
-      updatedAt: "2026-04-06T07:05:00.000Z",
-      lastProvisionedAt: "2026-04-06T07:00:00.000Z",
-      disabledAt: null,
-    });
+  it("enqueues async catch-all enable tasks from /api/domains/:id/catch-all/enable", async () => {
+    createDomainCutoverTask.mockResolvedValue({ id: "task_enable" });
+    runDomainCutoverTaskById.mockResolvedValue({ id: "task_enable" });
 
     const app = createApp();
     const response = await app.fetch(
@@ -304,34 +302,27 @@ describe("domain routes", () => {
       env,
     );
 
-    expect(enableDomainCatchAll).toHaveBeenCalledWith(
+    expect(createDomainCutoverTask).toHaveBeenCalledWith(
       env,
       expect.any(Object),
-      "dom_bound",
-      undefined,
+      {
+        action: "enable",
+        domainId: "dom_bound",
+        requestedByUserId: null,
+      },
     );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      id: "dom_bound",
-      mailDomain: "example.org",
-      catchAllEnabled: true,
-    });
+    expect(runDomainCutoverTaskById).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      "task_enable",
+    );
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ taskId: "task_enable" });
   });
 
-  it("disables catch-all from /api/domains/:id/catch-all/disable", async () => {
-    disableDomainCatchAll.mockResolvedValue({
-      id: "dom_bound",
-      rootDomain: "example.org",
-      zoneId: "zone_bound",
-      bindingSource: "project_bind",
-      status: "active",
-      catchAllEnabled: false,
-      lastProvisionError: null,
-      createdAt: "2026-04-06T07:00:00.000Z",
-      updatedAt: "2026-04-06T07:06:00.000Z",
-      lastProvisionedAt: "2026-04-06T07:00:00.000Z",
-      disabledAt: null,
-    });
+  it("enqueues async catch-all disable tasks from /api/domains/:id/catch-all/disable", async () => {
+    createDomainCutoverTask.mockResolvedValue({ id: "task_disable" });
+    runDomainCutoverTaskById.mockResolvedValue({ id: "task_disable" });
 
     const app = createApp();
     const response = await app.fetch(
@@ -341,16 +332,21 @@ describe("domain routes", () => {
       env,
     );
 
-    expect(disableDomainCatchAll).toHaveBeenCalledWith(
+    expect(createDomainCutoverTask).toHaveBeenCalledWith(
       env,
       expect.any(Object),
-      "dom_bound",
+      {
+        action: "disable",
+        domainId: "dom_bound",
+        requestedByUserId: null,
+      },
     );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      id: "dom_bound",
-      mailDomain: "example.org",
-      catchAllEnabled: false,
-    });
+    expect(runDomainCutoverTaskById).toHaveBeenCalledWith(
+      env,
+      expect.any(Object),
+      "task_disable",
+    );
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ taskId: "task_disable" });
   });
 });

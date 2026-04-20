@@ -14,6 +14,7 @@ import { ApiError, buildApiErrorPayload } from "./lib/errors";
 import { logOperationalEvent } from "./lib/observability";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
+import { domainCutoverTaskRoutes } from "./routes/domain-cutover-tasks";
 import { domainRoutes } from "./routes/domains";
 import { mailboxRoutes } from "./routes/mailboxes";
 import { messageRoutes } from "./routes/messages";
@@ -140,6 +141,7 @@ export const createApp = () => {
   app.route("/api/api-keys", apiKeyRoutes);
   app.route("/api/passkeys", passkeyRoutes);
   app.route("/api/domains", domainRoutes);
+  app.route("/api/domain-cutover-tasks", domainCutoverTaskRoutes);
   app.route("/api/meta", metaRoutes);
   app.route("/api/mailboxes", mailboxRoutes);
   app.route("/api/messages", messageRoutes);

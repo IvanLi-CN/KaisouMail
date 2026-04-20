@@ -106,6 +106,49 @@ export const domains = sqliteTable(
   ],
 );
 
+export const domainCutoverTasks = sqliteTable(
+  "domain_cutover_tasks",
+  {
+    id: text("id").primaryKey(),
+    domainId: text("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    rootDomain: text("root_domain").notNull(),
+    requestedByUserId: text("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    targetMode: text("target_mode").notNull(),
+    status: text("status").notNull(),
+    phase: text("phase").notNull(),
+    currentHost: text("current_host"),
+    deletedCount: integer("deleted_count").notNull().default(0),
+    rebuiltCount: integer("rebuilt_count").notNull().default(0),
+    totalCount: integer("total_count").notNull().default(0),
+    rollbackPhase: text("rollback_phase"),
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    startedAt: text("started_at"),
+    updatedAt: text("updated_at").notNull(),
+    completedAt: text("completed_at"),
+    failedAt: text("failed_at"),
+  },
+  (table) => [
+    index("domain_cutover_tasks_domain_status_idx").on(
+      table.domainId,
+      table.status,
+    ),
+    index("domain_cutover_tasks_status_updated_idx").on(
+      table.status,
+      table.updatedAt,
+    ),
+    index("domain_cutover_tasks_root_domain_idx").on(
+      table.rootDomain,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const subdomains = sqliteTable(
   "subdomains",
   {
