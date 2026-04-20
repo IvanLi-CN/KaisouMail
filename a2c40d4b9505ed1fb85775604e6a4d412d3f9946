@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.27.0",
+  "base_stable_version": "0.26.6",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T16:06:17Z",
+  "next_stable_version": "0.27.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "b52fbeebfa22bdb59dde8ff63348eddd9cf4674d",
+  "pr_number": 65,
+  "pr_title": "feat: harden wildcard-only catch-all cutover",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.27.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.27.0",
+  "target_sha": "a2c40d4b9505ed1fb85775604e6a4d412d3f9946",
+  "type_label": "type:minor"
+}
