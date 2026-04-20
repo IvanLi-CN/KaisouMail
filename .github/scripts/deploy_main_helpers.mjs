@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -30,15 +31,185 @@ const findFirstString = (value, keys) => {
   return "";
 };
 
+const readConfig = (configPath, commandName) => {
+  if (!configPath) {
+    console.error(`${commandName} requires <configPath>`);
+    process.exit(1);
+  }
+
+  return readJsonFile(configPath);
+};
+
+const toOptionalString = (value) => {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return "";
+};
+
+const appendStepSummary = (heading, lines) => {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY?.trim() ?? "";
+  if (!summaryPath || lines.length === 0) {
+    return;
+  }
+
+  appendFileSync(
+    summaryPath,
+    `## ${heading}\n\n${lines.map((line) => `- ${line}`).join("\n")}\n`,
+    "utf8",
+  );
+};
+
+const syncQueueConsumersIfConfigured = (configPath, config) => {
+  const consumers = Array.isArray(config?.queues?.consumers)
+    ? config.queues.consumers.filter(
+        (consumer) =>
+          typeof consumer?.queue === "string" &&
+          consumer.queue.trim().length > 0,
+      )
+    : [];
+
+  if (consumers.length === 0) {
+    return [];
+  }
+
+  const scriptName = toOptionalString(config?.name);
+  if (!scriptName) {
+    throw new Error(
+      `${configPath} must declare Worker name before queue consumer sync can run.`,
+    );
+  }
+
+  const wranglerBin = process.env.WRANGLER_BIN?.trim() ?? "";
+  const deployToken =
+    process.env.CF_MAIL_DEPLOY_API_TOKEN?.trim() ??
+    process.env.CLOUDFLARE_API_TOKEN?.trim() ??
+    "";
+
+  const missingEnv = [
+    !wranglerBin ? "WRANGLER_BIN" : "",
+    !deployToken ? "CF_MAIL_DEPLOY_API_TOKEN/CLOUDFLARE_API_TOKEN" : "",
+  ].filter(Boolean);
+
+  if (missingEnv.length > 0) {
+    throw new Error(
+      `Queue consumer sync requires ${missingEnv.join(", ")} when queues.consumers is declared in ${configPath}.`,
+    );
+  }
+
+  const wranglerEnv = {
+    ...process.env,
+    CLOUDFLARE_API_TOKEN: deployToken,
+  };
+
+  const summaryLines = [];
+
+  for (const consumer of consumers) {
+    const queueName = consumer.queue.trim();
+    const batchSize = toOptionalString(consumer.max_batch_size);
+    const batchTimeout = toOptionalString(consumer.max_batch_timeout);
+    const maxConcurrency = toOptionalString(consumer.max_concurrency);
+    const retryDelay = toOptionalString(consumer.retry_delay);
+    const messageRetries = toOptionalString(consumer.max_retries);
+    const deadLetterQueue = toOptionalString(consumer.dead_letter_queue);
+
+    const removeArgs = [
+      "queues",
+      "consumer",
+      "worker",
+      "remove",
+      queueName,
+      scriptName,
+      "--config",
+      configPath,
+    ];
+
+    try {
+      execFileSync(wranglerBin, removeArgs, {
+        encoding: "utf8",
+        env: wranglerEnv,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      const stderr =
+        typeof error?.stderr === "string"
+          ? error.stderr
+          : Buffer.isBuffer(error?.stderr)
+            ? error.stderr.toString("utf8")
+            : "";
+      const stdout =
+        typeof error?.stdout === "string"
+          ? error.stdout
+          : Buffer.isBuffer(error?.stdout)
+            ? error.stdout.toString("utf8")
+            : "";
+      const combinedOutput = `${stdout}\n${stderr}`;
+
+      if (
+        !/not found|does not exist|no consumer|not configured/i.test(
+          combinedOutput,
+        )
+      ) {
+        throw new Error(
+          `Failed to remove existing queue consumer ${queueName}/${scriptName} before sync.\n${combinedOutput.trim()}`,
+        );
+      }
+    }
+
+    const addArgs = [
+      "queues",
+      "consumer",
+      "worker",
+      "add",
+      queueName,
+      scriptName,
+      "--config",
+      configPath,
+    ];
+
+    if (batchSize) {
+      addArgs.push("--batch-size", batchSize);
+    }
+    if (batchTimeout) {
+      addArgs.push("--batch-timeout", batchTimeout);
+    }
+    if (maxConcurrency) {
+      addArgs.push("--max-concurrency", maxConcurrency);
+    }
+    if (retryDelay) {
+      addArgs.push("--retry-delay-secs", retryDelay);
+    }
+    if (messageRetries) {
+      addArgs.push("--message-retries", messageRetries);
+    }
+    if (deadLetterQueue) {
+      addArgs.push("--dead-letter-queue", deadLetterQueue);
+    }
+
+    execFileSync(wranglerBin, addArgs, {
+      encoding: "utf8",
+      env: wranglerEnv,
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+
+    summaryLines.push(
+      `${queueName} -> ${scriptName} (batch_size=${batchSize || "<default>"}, batch_timeout=${batchTimeout || "<default>"}, max_concurrency=${maxConcurrency || "<default>"}, retry_delay=${retryDelay || "<default>"}, message_retries=${messageRetries || "<default>"}, dead_letter_queue=${deadLetterQueue || "<none>"})`,
+    );
+  }
+
+  appendStepSummary("API queue consumer sync", summaryLines);
+  return summaryLines;
+};
+
 switch (command) {
   case "queue-names": {
     const [configPath] = args;
-    if (!configPath) {
-      console.error("queue-names requires <configPath>");
-      process.exit(1);
-    }
-
-    const config = readJsonFile(configPath);
+    const config = readConfig(configPath, "queue-names");
     const names = new Set();
 
     for (const producer of config?.queues?.producers ?? []) {
@@ -54,6 +225,52 @@ switch (command) {
     }
 
     process.stdout.write([...names].join("\n"));
+    break;
+  }
+
+  case "queue-consumer-script-name": {
+    const [configPath] = args;
+    const config = readConfig(configPath, "queue-consumer-script-name");
+    const scriptName =
+      typeof config?.name === "string" ? config.name.trim() : "";
+
+    if (!scriptName) {
+      console.error(
+        `${configPath} must declare Worker name before queue consumer sync can run.`,
+      );
+      process.exit(1);
+    }
+
+    process.stdout.write(scriptName);
+    break;
+  }
+
+  case "queue-consumer-lines": {
+    const [configPath] = args;
+    const config = readConfig(configPath, "queue-consumer-lines");
+    const consumers = Array.isArray(config?.queues?.consumers)
+      ? config.queues.consumers
+      : [];
+
+    const lines = consumers
+      .filter(
+        (consumer) =>
+          typeof consumer?.queue === "string" &&
+          consumer.queue.trim().length > 0,
+      )
+      .map((consumer) =>
+        [
+          consumer.queue.trim(),
+          toOptionalString(consumer.max_batch_size),
+          toOptionalString(consumer.max_batch_timeout),
+          toOptionalString(consumer.max_concurrency),
+          toOptionalString(consumer.retry_delay),
+          toOptionalString(consumer.max_retries),
+          toOptionalString(consumer.dead_letter_queue),
+        ].join("\t"),
+      );
+
+    process.stdout.write(lines.join("\n"));
     break;
   }
 
@@ -88,12 +305,7 @@ switch (command) {
 
   case "verify-runtime-config": {
     const [configPath] = args;
-    if (!configPath) {
-      console.error("verify-runtime-config requires <configPath>");
-      process.exit(1);
-    }
-
-    const config = readJsonFile(configPath);
+    const config = readConfig(configPath, "verify-runtime-config");
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
     const runtimeAccountId =
       typeof config?.vars?.CLOUDFLARE_ACCOUNT_ID === "string"
@@ -103,6 +315,16 @@ switch (command) {
       String(config?.vars?.EMAIL_ROUTING_MANAGEMENT_ENABLED ?? "")
         .trim()
         .toLowerCase() === "true";
+
+    const consumerSummaryLines = syncQueueConsumersIfConfigured(
+      configPath,
+      config,
+    );
+    if (consumerSummaryLines.length > 0) {
+      console.log(
+        `Synced API Worker queue consumers: ${consumerSummaryLines.join("; ")}`,
+      );
+    }
 
     if (!managementEnabled) {
       console.log(
