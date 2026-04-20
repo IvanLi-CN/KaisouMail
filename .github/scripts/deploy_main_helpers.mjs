@@ -69,7 +69,8 @@ const syncQueueConsumersIfConfigured = (configPath, config) => {
   const consumers = Array.isArray(config?.queues?.consumers)
     ? config.queues.consumers.filter(
         (consumer) =>
-          typeof consumer?.queue === "string" && consumer.queue.trim().length > 0,
+          typeof consumer?.queue === "string" &&
+          consumer.queue.trim().length > 0,
       )
     : [];
 
@@ -149,7 +150,11 @@ const syncQueueConsumersIfConfigured = (configPath, config) => {
             : "";
       const combinedOutput = `${stdout}\n${stderr}`;
 
-      if (!/not found|does not exist|no consumer|not configured/i.test(combinedOutput)) {
+      if (
+        !/not found|does not exist|no consumer|not configured/i.test(
+          combinedOutput,
+        )
+      ) {
         throw new Error(
           `Failed to remove existing queue consumer ${queueName}/${scriptName} before sync.\n${combinedOutput.trim()}`,
         );
@@ -250,7 +255,8 @@ switch (command) {
     const lines = consumers
       .filter(
         (consumer) =>
-          typeof consumer?.queue === "string" && consumer.queue.trim().length > 0,
+          typeof consumer?.queue === "string" &&
+          consumer.queue.trim().length > 0,
       )
       .map((consumer) =>
         [
@@ -271,7 +277,7 @@ switch (command) {
   case "queue-exists": {
     const queueName = process.env.TARGET_QUEUE_NAME ?? "";
     const payload = readJsonEnv("EXISTING_QUEUES_JSON", "[]");
-    const queues = Array.isArray(payload) ? payload : payload?.result ?? [];
+    const queues = Array.isArray(payload) ? payload : (payload?.result ?? []);
     const exists = queues.some((queue) => {
       const name =
         typeof queue?.queue_name === "string"
@@ -310,7 +316,10 @@ switch (command) {
         .trim()
         .toLowerCase() === "true";
 
-    const consumerSummaryLines = syncQueueConsumersIfConfigured(configPath, config);
+    const consumerSummaryLines = syncQueueConsumersIfConfigured(
+      configPath,
+      config,
+    );
     if (consumerSummaryLines.length > 0) {
       console.log(
         `Synced API Worker queue consumers: ${consumerSummaryLines.join("; ")}`,
@@ -403,7 +412,9 @@ switch (command) {
 
     const missing = required.filter((name) => !names.has(name));
     if (missing.length > 0) {
-      console.error(`Missing required API Worker secrets: ${missing.join(", ")}`);
+      console.error(
+        `Missing required API Worker secrets: ${missing.join(", ")}`,
+      );
       console.error(
         "Set them in Cloudflare before deploying, for example with `wrangler secret put <NAME>`.",
       );
