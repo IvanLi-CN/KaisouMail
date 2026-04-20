@@ -32,6 +32,23 @@
       "preview_bucket_name": "kaisoumail-bucket-preview"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "SUBDOMAIN_CLEANUP_QUEUE",
+        "queue": "kaisoumail-subdomain-cleanup",
+        "remote": false
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "kaisoumail-subdomain-cleanup",
+        "max_batch_size": 4,
+        "max_concurrency": 4,
+        "retry_delay": 60
+      }
+    ]
+  },
   "secrets": {
     "required": ["SESSION_SECRET"]
   },
@@ -43,7 +60,8 @@
     "EMAIL_WORKER_NAME": "email-receiver-worker",
     "DEFAULT_MAILBOX_TTL_MINUTES": "60",
     "CLEANUP_BATCH_SIZE": "3",
-    "SUBDOMAIN_CLEANUP_BATCH_SIZE": "500",
+    "SUBDOMAIN_CLEANUP_BATCH_SIZE": "50",
+    "SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE": "48",
     "EMAIL_ROUTING_MANAGEMENT_ENABLED": "true",
     "BOOTSTRAP_ADMIN_EMAIL": "owner@707979.xyz",
     "BOOTSTRAP_ADMIN_NAME": "Ivan",
@@ -51,7 +69,7 @@
     "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    "crons": ["*/15 * * * *", "* * * * *"]
   },
   "observability": {
     "enabled": true

@@ -4,10 +4,17 @@ const { getRuntimeStateValue, setRuntimeStateValue } = vi.hoisted(() => ({
   getRuntimeStateValue: vi.fn(),
   setRuntimeStateValue: vi.fn(),
 }));
+const { acquireCloudflareRequestPermit } = vi.hoisted(() => ({
+  acquireCloudflareRequestPermit: vi.fn(),
+}));
 
 vi.mock("../services/runtime-state", () => ({
   getRuntimeStateValue,
   setRuntimeStateValue,
+}));
+
+vi.mock("../services/cloudflare-request-gate", () => ({
+  acquireCloudflareRequestPermit,
 }));
 
 import {
@@ -18,6 +25,7 @@ import {
   deleteZone,
   ensureWildcardEmailRoutingDnsRecords,
   listZones,
+  unlockEmailRoutingDnsRecords,
 } from "../services/emailRouting";
 
 const baseConfig = {
@@ -42,6 +50,7 @@ afterEach(() => {
 
 describe("email routing service", () => {
   beforeEach(() => {
+    acquireCloudflareRequestPermit.mockResolvedValue(undefined);
     getRuntimeStateValue.mockResolvedValue(null);
     setRuntimeStateValue.mockResolvedValue(undefined);
   });
@@ -73,6 +82,35 @@ describe("email routing service", () => {
         nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
       },
     ]);
+    expect(acquireCloudflareRequestPermit).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared cleanup gate only for subdomain cleanup traffic", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: null,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await unlockEmailRoutingDnsRecords(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      {
+        projectOperation: "subdomains.cleanup",
+        projectRoute: "subdomain cleanup queue",
+      },
+    );
+
+    expect(acquireCloudflareRequestPermit).toHaveBeenCalledTimes(1);
   });
 
   it("creates a full Cloudflare zone inside the configured account", async () => {
@@ -326,6 +364,34 @@ describe("email routing service", () => {
     expect(fetchMock.mock.calls[3]?.[0]).toBe(
       "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/rec_txt_1",
     );
+  });
+
+  it("unlocks zone-level Email Routing DNS records before legacy exact cleanup", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: {},
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      unlockEmailRoutingDnsRecords(env, baseConfig, {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/email/routing/dns",
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      method: "PATCH",
+    });
   });
 
   it("clones apex Email Routing DNS into a wildcard hostname without hardcoded targets", async () => {

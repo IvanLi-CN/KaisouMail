@@ -7,6 +7,7 @@ import {
   resolveRetryAfterIso,
   resolveRetryAfterSeconds,
 } from "../lib/rate-limit";
+import { acquireCloudflareRequestPermit } from "./cloudflare-request-gate";
 import { getRuntimeStateValue, setRuntimeStateValue } from "./runtime-state";
 
 interface CloudflareError {
@@ -76,6 +77,18 @@ export interface CloudflareRateLimitState {
   retryAfter: string;
   retryAfterSeconds: number;
   rateLimitContext: CloudflareRateLimitContext | null;
+}
+
+export interface CloudflareAuthBlockContext extends CloudflareRequestContext {
+  triggeredAt: string;
+  responseStatus: number;
+  responseMessage: string | null;
+}
+
+export interface CloudflareAuthBlockState {
+  retryAfter: string;
+  retryAfterSeconds: number;
+  authBlockContext: CloudflareAuthBlockContext | null;
 }
 
 interface CloudflareZoneResult {
@@ -275,6 +288,9 @@ const normalizeDnsRecordName = (
 
 const CLOUDFLARE_RATE_LIMITED_UNTIL_KEY = "cloudflare_api_rate_limited_until";
 const CLOUDFLARE_RATE_LIMIT_CONTEXT_KEY = "cloudflare_api_rate_limit_context";
+const CLOUDFLARE_AUTH_BLOCKED_UNTIL_KEY = "cloudflare_api_auth_blocked_until";
+const CLOUDFLARE_AUTH_BLOCK_CONTEXT_KEY = "cloudflare_api_auth_block_context";
+const cloudflareAuthBlockDurationSeconds = 300;
 const defaultCloudflareRequestSource: CloudflareRequestSource = {
   projectOperation: "cloudflare.internal",
   projectRoute: "internal Cloudflare client",
@@ -379,6 +395,44 @@ const parseCloudflareRateLimitContext = (
   };
 };
 
+const parseCloudflareAuthBlockContext = (
+  value: string | null,
+): CloudflareAuthBlockContext | null => {
+  if (!value) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) return null;
+  if (
+    typeof parsed.triggeredAt !== "string" ||
+    typeof parsed.responseStatus !== "number" ||
+    typeof parsed.projectOperation !== "string" ||
+    typeof parsed.projectRoute !== "string" ||
+    typeof parsed.cloudflareMethod !== "string" ||
+    typeof parsed.cloudflarePath !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    triggeredAt: parsed.triggeredAt,
+    responseStatus: parsed.responseStatus,
+    responseMessage:
+      typeof parsed.responseMessage === "string"
+        ? parsed.responseMessage
+        : null,
+    projectOperation: parsed.projectOperation,
+    projectRoute: parsed.projectRoute,
+    cloudflareMethod: parsed.cloudflareMethod,
+    cloudflarePath: parsed.cloudflarePath,
+  };
+};
+
 const buildCloudflareRequestContext = (
   requestSource: CloudflareRequestSource,
   cloudflareMethod: string,
@@ -442,6 +496,36 @@ export const getCloudflareRateLimitState = async (
           retryAfterSeconds,
         }
       : null,
+  };
+};
+
+export const getCloudflareAuthBlockState = async (
+  env: WorkerEnv,
+): Promise<CloudflareAuthBlockState | null> => {
+  const value = await getRuntimeStateValue(
+    env,
+    CLOUDFLARE_AUTH_BLOCKED_UNTIL_KEY,
+  );
+  if (!value) return null;
+
+  const retryAfterTime = Date.parse(value);
+  if (Number.isNaN(retryAfterTime) || retryAfterTime <= Date.now()) {
+    return null;
+  }
+
+  const retryAfter = new Date(retryAfterTime).toISOString();
+  const retryAfterSeconds = Math.max(
+    0,
+    Math.ceil((retryAfterTime - Date.now()) / 1000),
+  );
+  const storedContext = parseCloudflareAuthBlockContext(
+    await getRuntimeStateValue(env, CLOUDFLARE_AUTH_BLOCK_CONTEXT_KEY),
+  );
+
+  return {
+    retryAfter,
+    retryAfterSeconds,
+    authBlockContext: storedContext,
   };
 };
 
@@ -538,6 +622,52 @@ const rememberCloudflareLocalBlock = async (
   };
 };
 
+const rememberCloudflareAuthBlock = async (
+  env: WorkerEnv,
+  response: Response,
+  requestContext: CloudflareRequestContext,
+  message: string | null,
+): Promise<CloudflareAuthBlockState> => {
+  const retryAfter = new Date(
+    Date.now() + cloudflareAuthBlockDurationSeconds * 1000,
+  ).toISOString();
+  const authBlockContext: CloudflareAuthBlockContext = {
+    ...requestContext,
+    triggeredAt: nowIso(),
+    responseStatus: response.status,
+    responseMessage: message,
+  };
+
+  await setRuntimeStateValue(
+    env,
+    CLOUDFLARE_AUTH_BLOCKED_UNTIL_KEY,
+    retryAfter,
+  );
+  await setRuntimeStateValue(
+    env,
+    CLOUDFLARE_AUTH_BLOCK_CONTEXT_KEY,
+    JSON.stringify(authBlockContext),
+  );
+
+  logOperationalEvent("error", "cloudflare.auth_block.upstream", {
+    projectOperation: requestContext.projectOperation,
+    projectRoute: requestContext.projectRoute,
+    cloudflareMethod: requestContext.cloudflareMethod,
+    cloudflarePath: requestContext.cloudflarePath,
+    responseStatus: response.status,
+    retryAfter,
+    retryAfterSeconds: cloudflareAuthBlockDurationSeconds,
+    responseHeaders: pickHeaders(response.headers, ["cf-ray"]),
+    responseMessage: message,
+  });
+
+  return {
+    retryAfter,
+    retryAfterSeconds: cloudflareAuthBlockDurationSeconds,
+    authBlockContext,
+  };
+};
+
 const ensureCloudflareRequestAllowed = async (
   env: WorkerEnv,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
@@ -570,6 +700,9 @@ const cfRequest = async <T>(
     await ensureCloudflareRequestAllowed(env, requestContext);
   }
 
+  if (requestContext.projectOperation === "subdomains.cleanup") {
+    await acquireCloudflareRequestPermit(env);
+  }
   await options?.beforeRequest?.();
   options?.onRequestAttempted?.();
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
@@ -599,6 +732,15 @@ const cfRequest = async <T>(
   if (response.status === 429) {
     throw createCloudflareRateLimitError(
       await rememberCloudflareRateLimit(env, response, requestContext),
+    );
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    await rememberCloudflareAuthBlock(
+      env,
+      response,
+      requestContext,
+      data?.errors?.[0]?.message ?? null,
     );
   }
 
@@ -973,6 +1115,36 @@ export const ensureSubdomainEnabled = async (
       onRequestAttempted: options?.onRequestAttempted,
     },
   );
+};
+
+export const unlockEmailRoutingDnsRecords = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return;
+  const zoneId = requireZoneId(domain);
+  const path = `/zones/${zoneId}/email/routing/dns`;
+  await cfRequest(
+    env,
+    config,
+    path,
+    buildCloudflareRequestContext(requestSource, "PATCH", path),
+    {
+      method: "PATCH",
+    },
+    {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    },
+  );
+
+  logOperationalEvent("info", "domains.email_routing_dns.unlocked", {
+    rootDomain: domain.rootDomain,
+    zoneId,
+  });
 };
 
 export const deleteSubdomainEmailRoutingDnsRecords = async (

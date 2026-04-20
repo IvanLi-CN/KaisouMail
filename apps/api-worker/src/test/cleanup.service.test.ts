@@ -10,9 +10,6 @@ const { destroyMailbox, listMailboxIdsPendingCleanup } = vi.hoisted(() => ({
 const { backfillMessageVerification } = vi.hoisted(() => ({
   backfillMessageVerification: vi.fn(),
 }));
-const { runSubdomainCleanup } = vi.hoisted(() => ({
-  runSubdomainCleanup: vi.fn(),
-}));
 
 vi.mock("../env", () => ({
   parseRuntimeConfig,
@@ -27,10 +24,6 @@ vi.mock("../services/message-verification", () => ({
   backfillMessageVerification,
 }));
 
-vi.mock("../services/subdomain-cleanup", () => ({
-  runSubdomainCleanup,
-}));
-
 import { runMailboxCleanup } from "../services/cleanup";
 
 describe("cleanup runner", () => {
@@ -43,7 +36,6 @@ describe("cleanup runner", () => {
     vi.clearAllMocks();
     parseRuntimeConfig.mockReturnValue(config);
     backfillMessageVerification.mockResolvedValue(0);
-    runSubdomainCleanup.mockResolvedValue(0);
   });
 
   it("continues later cleanup retries even when an earlier mailbox fails", async () => {
@@ -76,17 +68,13 @@ describe("cleanup runner", () => {
     );
   });
 
-  it("runs subdomain cleanup after mailbox cleanup and before message verification backfill", async () => {
+  it("runs message verification backfill after mailbox cleanup", async () => {
     listMailboxIdsPendingCleanup.mockResolvedValue(["mbx_expired"]);
     destroyMailbox.mockResolvedValue(undefined);
     const callOrder: string[] = [];
 
     destroyMailbox.mockImplementationOnce(async () => {
       callOrder.push("mailbox");
-    });
-    runSubdomainCleanup.mockImplementationOnce(async () => {
-      callOrder.push("subdomain");
-      return 0;
     });
     backfillMessageVerification.mockImplementationOnce(async () => {
       callOrder.push("backfill");
@@ -95,19 +83,13 @@ describe("cleanup runner", () => {
 
     await expect(runMailboxCleanup({} as never)).resolves.toBe(1);
 
-    expect(callOrder).toEqual(["mailbox", "subdomain", "backfill"]);
-    expect(runSubdomainCleanup).toHaveBeenCalledWith({} as never, config);
+    expect(callOrder).toEqual(["mailbox", "backfill"]);
   });
 
-  it("still runs message verification backfill when subdomain cleanup hits Cloudflare cooldown", async () => {
+  it("still runs message verification backfill when mailbox cleanup has nothing to do", async () => {
     listMailboxIdsPendingCleanup.mockResolvedValue([]);
-    runSubdomainCleanup.mockRejectedValueOnce(
-      new Error("Cloudflare API rate limit reached; retry later"),
-    );
 
-    await expect(runMailboxCleanup({} as never)).rejects.toThrow(
-      "Cloudflare API rate limit reached; retry later",
-    );
+    await expect(runMailboxCleanup({} as never)).resolves.toBe(0);
 
     expect(backfillMessageVerification).toHaveBeenCalledWith(
       {} as never,
