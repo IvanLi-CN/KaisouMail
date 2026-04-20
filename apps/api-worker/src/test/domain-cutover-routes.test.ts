@@ -159,6 +159,6 @@ describe("domain cutover task routes", () => {
 
     expect(response.status).toBe(200);
     expect(waitUntil).toHaveBeenCalledTimes(1);
-    await expect(response.text()).resolves.toContain('"status":"pending"');
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
   });
 });

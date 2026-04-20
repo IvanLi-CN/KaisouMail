@@ -25,7 +25,6 @@ vi.mock("../services/domain-cutover", async () => {
   };
 });
 
-import { domainCutoverTasks } from "../db/schema";
 import {
   isDomainCutoverTaskResumable,
   resumeDomainCutoverTaskById,
@@ -70,7 +69,7 @@ const baseTask = {
 
 const createDb = (rowsByQuery: unknown[][]) => ({
   select: vi.fn(() => ({
-    from: vi.fn((table: unknown) => ({
+    from: vi.fn(() => ({
       where: vi.fn(() => ({
         limit: vi.fn(async () => rowsByQuery.shift() ?? []),
         orderBy: vi.fn(() => ({
@@ -146,7 +145,10 @@ describe("domain cutover dispatch service", () => {
   it("reruns pending tasks by id", async () => {
     const db = createDb([[baseTask]]);
     getDb.mockReturnValue(db);
-    runDomainCutoverTaskById.mockResolvedValue({ id: baseTask.id, status: "completed" });
+    runDomainCutoverTaskById.mockResolvedValue({
+      id: baseTask.id,
+      status: "completed",
+    });
 
     const result = await resumeDomainCutoverTaskById(
       env,
@@ -211,9 +213,7 @@ describe("domain cutover dispatch service", () => {
       phase: "purging_exact_dns",
       updatedAt: "2999-04-21T10:00:00.000Z",
     } as const;
-    const db = createDb([
-      [baseTask, staleRunningTask, freshRunningTask],
-    ]);
+    const db = createDb([[baseTask, staleRunningTask, freshRunningTask]]);
     getDb.mockReturnValue(db);
     runDomainCutoverTaskById.mockResolvedValue({ status: "completed" });
 
