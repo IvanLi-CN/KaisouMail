@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.28.0",
+  "base_stable_version": "0.27.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T21:10:49Z",
+  "next_stable_version": "0.28.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "88ba2ed22f66e2ad1c129f2e221f30f50050df2b",
+  "pr_number": 66,
+  "pr_title": "feat: reconcile catch-all domains via async cutover tasks",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.28.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.28.0",
+  "target_sha": "bc444c578c8c5b48767b071a5f43ba6746f62741",
+  "type_label": "type:minor"
+}
