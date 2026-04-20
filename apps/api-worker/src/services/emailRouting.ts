@@ -140,6 +140,11 @@ interface CloudflareRequestExecutionOptions {
   onRequestAttempted?: () => void;
 }
 
+interface UnlockEmailRoutingDnsRecordsOptions
+  extends CloudflareRequestExecutionOptions {
+  name?: string;
+}
+
 interface EnsureWildcardEmailRoutingDnsRecordsResult {
   createdRecordCount: number;
   matchedRecordCount: number;
@@ -1122,11 +1127,12 @@ export const unlockEmailRoutingDnsRecords = async (
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
-  options?: CloudflareRequestExecutionOptions,
+  options?: UnlockEmailRoutingDnsRecordsOptions,
 ) => {
   if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
   const path = `/zones/${zoneId}/email/routing/dns`;
+  const name = options?.name?.trim() ? options.name.trim() : null;
   await cfRequest(
     env,
     config,
@@ -1134,6 +1140,7 @@ export const unlockEmailRoutingDnsRecords = async (
     buildCloudflareRequestContext(requestSource, "PATCH", path),
     {
       method: "PATCH",
+      ...(name ? { body: JSON.stringify({ name }) } : {}),
     },
     {
       beforeRequest: options?.beforeRequest,
@@ -1144,6 +1151,7 @@ export const unlockEmailRoutingDnsRecords = async (
   logOperationalEvent("info", "domains.email_routing_dns.unlocked", {
     rootDomain: domain.rootDomain,
     zoneId,
+    name,
   });
 };
 
