@@ -24,9 +24,11 @@ const {
 }));
 const {
   deleteWildcardEmailRoutingDnsRecords,
+  listProjectMailboxExactDnsHosts,
   purgeProjectMailboxExactDnsHosts,
 } = vi.hoisted(() => ({
   deleteWildcardEmailRoutingDnsRecords: vi.fn(),
+  listProjectMailboxExactDnsHosts: vi.fn(),
   purgeProjectMailboxExactDnsHosts: vi.fn(),
 }));
 
@@ -66,6 +68,7 @@ vi.mock("../services/cloudflare-mailbox-dns", async () => {
   return {
     ...actual,
     deleteWildcardEmailRoutingDnsRecords,
+    listProjectMailboxExactDnsHosts,
     purgeProjectMailboxExactDnsHosts,
   };
 });
@@ -206,8 +209,11 @@ describe("domain cutover service", () => {
     randomId.mockReturnValue("sub_generated");
     purgeProjectMailboxExactDnsHosts.mockResolvedValue({
       hosts: ["ops", "deep.ops"],
+      processedHosts: ["ops", "deep.ops"],
       deletedHostCount: 2,
+      completed: true,
     });
+    listProjectMailboxExactDnsHosts.mockResolvedValue([]);
     deleteWildcardEmailRoutingDnsRecords.mockResolvedValue({
       matchedRecordCount: 1,
     });
@@ -286,7 +292,20 @@ describe("domain cutover service", () => {
 
   it("rolls failed wildcard cutovers back to explicit DNS derived from live mailboxes", async () => {
     const db = createDb({
-      taskRows: [[baseTask]],
+      taskRows: [
+        [baseTask],
+        [
+          {
+            ...baseTask,
+            status: "running",
+            phase: "ensuring_wildcard_dns",
+            currentHost: "*.ivanli.asia",
+            deletedCount: 1,
+            totalCount: 1,
+            startedAt: "2026-04-21T10:00:00.000Z",
+          },
+        ],
+      ],
       domainRows: [[baseDomain]],
       mailboxRows: [
         [
@@ -307,11 +326,15 @@ describe("domain cutover service", () => {
     purgeProjectMailboxExactDnsHosts
       .mockResolvedValueOnce({
         hosts: ["ops"],
+        processedHosts: ["ops"],
         deletedHostCount: 1,
+        completed: true,
       })
       .mockResolvedValueOnce({
         hosts: [],
+        processedHosts: [],
         deletedHostCount: 0,
+        completed: true,
       });
     ensureWildcardEmailRoutingDnsRecords.mockRejectedValue(
       new Error("Record quota exceeded."),
@@ -464,5 +487,175 @@ describe("domain cutover service", () => {
         }),
       ]),
     );
+  });
+
+  it("accepts legacy catch-all restore states that omit action values", async () => {
+    const legacyDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: JSON.stringify({
+        enabled: false,
+        name: "Catch all",
+        matchers: [{ type: "all" }],
+        actions: [{ type: "drop" }],
+      }),
+    } as const;
+    const db = createDb({
+      taskRows: [[baseTask]],
+      domainRows: [[legacyDomain]],
+      mailboxRows: [[]],
+    });
+    getDb.mockReturnValue(db);
+    purgeProjectMailboxExactDnsHosts.mockResolvedValueOnce({
+      hosts: [],
+      processedHosts: [],
+      deletedHostCount: 0,
+      completed: true,
+    });
+
+    const result = await runDomainCutoverTaskById(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      baseTask.id,
+    );
+
+    expect(result).toMatchObject({
+      status: "completed",
+      targetMode: "wildcard",
+    });
+  });
+
+  it("yields pending wildcard purge batches and resumes without resetting phase", async () => {
+    const liveMailbox = {
+      id: "mbx_registered",
+      address: "build@ops.ivanli.asia",
+      subdomain: "ops",
+      source: "registered",
+      routingRuleId: "rule_existing",
+      status: "active",
+      domainId: baseDomain.id,
+      createdAt: "2026-04-21T09:55:00.000Z",
+    } as const;
+
+    const firstDb = createDb({
+      taskRows: [[baseTask]],
+      domainRows: [[baseDomain]],
+      mailboxRows: [[liveMailbox]],
+    });
+    getDb.mockReturnValueOnce(firstDb);
+    purgeProjectMailboxExactDnsHosts.mockResolvedValueOnce({
+      hosts: [
+        "ops",
+        "deep.ops",
+        "relay1",
+        "relay2",
+        "relay3",
+        "relay4",
+        "relay5",
+        "relay6",
+      ],
+      processedHosts: [
+        "ops",
+        "deep.ops",
+        "relay1",
+        "relay2",
+        "relay3",
+        "relay4",
+      ],
+      deletedHostCount: 6,
+      completed: false,
+    });
+
+    const firstResult = await runDomainCutoverTaskById(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      baseTask.id,
+    );
+
+    expect(firstResult).toMatchObject({
+      status: "pending",
+      phase: "purging_exact_dns",
+      deletedCount: 6,
+      totalCount: 8,
+    });
+    expect(ensureWildcardEmailRoutingDnsRecords).not.toHaveBeenCalled();
+
+    const resumedTask = {
+      ...baseTask,
+      status: "pending",
+      phase: "purging_exact_dns",
+      deletedCount: 6,
+      totalCount: 8,
+      startedAt: "2026-04-21T10:00:00.000Z",
+    } as const;
+    const secondDb = createDb({
+      taskRows: [[resumedTask]],
+      domainRows: [[baseDomain]],
+      mailboxRows: [[liveMailbox]],
+    });
+    getDb.mockReturnValueOnce(secondDb);
+    purgeProjectMailboxExactDnsHosts.mockResolvedValueOnce({
+      hosts: ["relay5", "relay6"],
+      processedHosts: ["relay5", "relay6"],
+      deletedHostCount: 2,
+      completed: true,
+    });
+
+    const secondResult = await runDomainCutoverTaskById(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      resumedTask.id,
+    );
+
+    expect(secondResult).toMatchObject({
+      status: "completed",
+      phase: "completed",
+      targetMode: "wildcard",
+    });
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails preflight restore-state validation instead of leaving tasks stuck in loading_state", async () => {
+    const invalidDomain = {
+      ...baseDomain,
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_admin",
+      catchAllRestoreStateJson: "{invalid",
+    } as const;
+    const db = createDb({
+      taskRows: [[baseTask]],
+      domainRows: [[invalidDomain]],
+      mailboxRows: [[]],
+    });
+    getDb.mockReturnValue(db);
+
+    const result = await runDomainCutoverTaskById(
+      env,
+      {
+        ...runtimeConfig,
+        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
+        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
+      },
+      baseTask.id,
+    );
+
+    expect(result).toMatchObject({
+      status: "failed",
+      phase: "failed",
+      error: "Domain catch-all restore state is invalid",
+    });
   });
 });

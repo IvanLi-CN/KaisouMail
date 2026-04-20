@@ -152,7 +152,9 @@ describe("cloudflare mailbox dns helper", () => {
       ),
     ).resolves.toEqual({
       hosts: ["ops", "deep.ops"],
+      processedHosts: ["ops", "deep.ops"],
       deletedHostCount: 2,
+      completed: true,
     });
 
     expect(unlockEmailRoutingDnsRecords).toHaveBeenNthCalledWith(
@@ -182,6 +184,71 @@ describe("cloudflare mailbox dns helper", () => {
         projectOperation: "domains.catch_all.enable",
         projectRoute: "POST /api/domains/:id/catch-all/enable",
       },
+    );
+  });
+
+  it("limits exact-host purges to a bounded batch without touching later hosts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: [
+            {
+              id: "mx_ops",
+              type: "MX",
+              name: "ops.707979.xyz",
+              content: "route1.mx.cloudflare.net",
+            },
+            {
+              id: "mx_deep",
+              type: "MX",
+              name: "deep.ops.707979.xyz",
+              content: "route2.mx.cloudflare.net",
+            },
+            {
+              id: "mx_relay",
+              type: "MX",
+              name: "relay.707979.xyz",
+              content: "route3.mx.cloudflare.net",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      purgeProjectMailboxExactDnsHosts(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        {
+          projectOperation: "domains.catch_all.enable",
+          projectRoute: "POST /api/domains/:id/catch-all/enable",
+        },
+        { maxHostCount: 2 },
+      ),
+    ).resolves.toEqual({
+      hosts: ["ops", "deep.ops", "relay"],
+      processedHosts: ["ops", "deep.ops"],
+      deletedHostCount: 2,
+      completed: false,
+    });
+
+    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalledWith(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      "relay",
+      expect.any(Object),
     );
   });
 
