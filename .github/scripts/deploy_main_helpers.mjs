@@ -77,6 +77,15 @@ switch (command) {
     break;
   }
 
+  case "queue-total-pages": {
+    const payload = readJsonEnv("EXISTING_QUEUES_JSON", "{}");
+    const totalPages = Number(payload?.result_info?.total_pages);
+    process.stdout.write(
+      Number.isFinite(totalPages) && totalPages > 0 ? String(totalPages) : "1",
+    );
+    break;
+  }
+
   case "verify-runtime-config": {
     const [configPath] = args;
     if (!configPath) {
