@@ -37,6 +37,7 @@ import {
   pickRandomActiveDomain,
   requireActiveDomainByRootDomain,
   resolveMailboxDomain,
+  shouldRequireWildcardSubdomainDnsMigration,
   shouldUseWildcardSubdomainDnsForDomain,
 } from "./domains";
 import {
@@ -71,6 +72,28 @@ const mailboxRouteContexts = {
 const shouldUseCatchAllDelivery = (
   domain: Pick<DomainRow, "catchAllEnabled" | "catchAllOwnerUserId">,
 ) => Boolean(domain.catchAllEnabled && domain.catchAllOwnerUserId);
+
+const buildWildcardMigrationRequiredError = (
+  domain: Pick<
+    DomainRow,
+    | "id"
+    | "rootDomain"
+    | "subdomainDnsMode"
+    | "wildcardDnsVerifiedAt"
+    | "wildcardDnsLastError"
+  >,
+) =>
+  new ApiError(
+    409,
+    "Catch-all domain must finish wildcard DNS migration before mailbox writes can continue",
+    {
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
+      subdomainDnsMode: domain.subdomainDnsMode,
+      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: domain.wildcardDnsLastError,
+    },
+  );
 
 const toMailboxApiExpiresAt = (expiresAt: string | null) =>
   expiresAt === longTermMailboxExpirySentinel ? null : expiresAt;
@@ -456,10 +479,15 @@ const upsertSubdomainUsage = async (
   now: string,
   requestSource: CloudflareRequestSource,
 ) => {
-  const useWildcardSubdomainDns = shouldUseWildcardSubdomainDnsForDomain(
-    config,
-    domain,
-  );
+  const useWildcardSubdomainDns = shouldUseWildcardSubdomainDnsForDomain(domain);
+
+  if (
+    !useWildcardSubdomainDns &&
+    shouldRequireWildcardSubdomainDnsMigration(config, domain)
+  ) {
+    throw buildWildcardMigrationRequiredError(domain);
+  }
+
   const knownSubdomain = await db
     .select()
     .from(subdomains)
