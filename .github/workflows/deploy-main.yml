@@ -217,6 +217,75 @@ jobs:
             "${generated_config_path}"
           echo "API_WORKER_CONFIG_PATH=${generated_config_path}" >> "${GITHUB_ENV}"
 
+      - name: Ensure API Worker queues exist
+        if: steps.operation.outputs.operation == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          queue_names="$(
+            node <<'NODE'
+            const fs = require("node:fs");
+
+            const config = JSON.parse(
+              fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
+            );
+            const names = new Set();
+            for (const producer of config?.queues?.producers ?? []) {
+              if (typeof producer?.queue === "string" && producer.queue.trim()) {
+                names.add(producer.queue.trim());
+              }
+            }
+            for (const consumer of config?.queues?.consumers ?? []) {
+              if (typeof consumer?.queue === "string" && consumer.queue.trim()) {
+                names.add(consumer.queue.trim());
+              }
+            }
+            process.stdout.write([...names].join("\n"));
+            NODE
+          )"
+
+          if [ -z "${queue_names}" ]; then
+            echo "No API Worker queues declared; skipping queue provisioning."
+            exit 0
+          fi
+
+          existing_queues_json="$(
+            CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" \
+              "${WRANGLER_BIN}" queues list --config "${API_WORKER_CONFIG_PATH}" --json
+          )"
+          export EXISTING_QUEUES_JSON="${existing_queues_json}"
+
+          while IFS= read -r queue_name; do
+            [ -n "${queue_name}" ] || continue
+
+            export TARGET_QUEUE_NAME="${queue_name}"
+            if node <<'NODE'
+            const payload = JSON.parse(process.env.EXISTING_QUEUES_JSON ?? "[]");
+            const queueName = process.env.TARGET_QUEUE_NAME ?? "";
+            const queues = Array.isArray(payload) ? payload : payload?.result ?? [];
+            const exists = queues.some((queue) => {
+              const name =
+                typeof queue?.queue_name === "string"
+                  ? queue.queue_name
+                  : typeof queue?.queueName === "string"
+                    ? queue.queueName
+                    : typeof queue?.name === "string"
+                      ? queue.name
+                      : "";
+              return name === queueName;
+            });
+            process.exit(exists ? 0 : 1);
+            NODE
+            then
+              echo "Queue ${queue_name} already exists."
+              continue
+            fi
+
+            echo "Creating missing queue ${queue_name}..."
+            CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" \
+              "${WRANGLER_BIN}" queues create "${queue_name}" --config "${API_WORKER_CONFIG_PATH}"
+          done <<< "${queue_names}"
+
       - name: Verify API Worker runtime config wiring
         if: steps.operation.outputs.operation == 'deploy'
         shell: bash

@@ -123,6 +123,7 @@ The Worker expects these bindings and variables:
 - `DEFAULT_MAILBOX_TTL_MINUTES`
 - `CLEANUP_BATCH_SIZE`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE` (`0` disables orphaned subdomain DNS cleanup; default `500`; this is only the per-run candidate scan window, not a Cloudflare quota)
+- `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE` (default `48`; caps how many orphaned hosts the minute dispatcher leases and enqueues per tick)
 - `WILDCARD_SUBDOMAIN_DNS_ENABLED` (enables wildcard subdomain DNS reconciliation for allowlisted catch-all domains)
 - `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` (comma-separated root domains that are allowed to switch from explicit to wildcard Email Routing DNS)
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
@@ -348,5 +349,5 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 - Email Routing single-message limit is 25 MiB
 - D1 stores structured indices only; raw/parsed payloads stay in R2
 - Expired mailbox cleanup is batched to stay within Worker execution limits
-- Cloudflare's REST API currently allows `1,200 requests / 5 minutes / API token`, so orphaned subdomain DNS cleanup now uses a fixed `1 request / second` pacer, aborts the current pass immediately on any upstream/local `429`, stops each scheduled run after a 12-minute wall-clock deadline, and uses `SUBDOMAIN_CLEANUP_BATCH_SIZE=500` only as the candidate scan window; unfinished exact-fqdn cleanup remains pending and resumes on a later scheduled pass
+- Cloudflare's REST API currently allows `1,200 requests / 5 minutes / API token`, so orphaned subdomain DNS cleanup now runs through a minute dispatcher plus queue consumer pipeline: the dispatcher only leases/enqueues orphaned hosts, the queue consumer cleans one host per message, a shared D1-backed request gate releases exactly `4 requests / second` globally, `429` retries are deferred to the next minute instead of writing row backoff, auth failures pause new dispatches briefly, and `SUBDOMAIN_CLEANUP_BATCH_SIZE=500` still only defines the candidate scan window
 - Active mailbox concurrency is still bounded by Cloudflare Email Routing rule limits

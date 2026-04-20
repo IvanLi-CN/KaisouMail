@@ -158,6 +158,15 @@ describe("runtime config parsing", () => {
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(0);
   });
 
+  it("defaults subdomain cleanup dispatch to one minute worth of queue fan-out", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE: undefined,
+    } as never);
+
+    expect(config.SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE).toBe(48);
+  });
+
   it("accepts runtime config without any separate Cloudflare request budget knob", () => {
     const result = safeParseRuntimeConfig(baseEnv as never);
 

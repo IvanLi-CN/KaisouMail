@@ -118,6 +118,8 @@ export const subdomains = sqliteTable(
     lastUsedAt: text("last_used_at").notNull(),
     cleanupNextAttemptAt: text("cleanup_next_attempt_at"),
     cleanupLastError: text("cleanup_last_error"),
+    cleanupLeaseOwner: text("cleanup_lease_owner"),
+    cleanupLeaseUntil: text("cleanup_lease_until"),
     metadata: text("metadata"),
   },
   (table) => [
@@ -126,6 +128,10 @@ export const subdomains = sqliteTable(
     index("subdomains_cleanup_idx").on(
       table.cleanupNextAttemptAt,
       table.lastUsedAt,
+    ),
+    index("subdomains_cleanup_lease_idx").on(
+      table.cleanupLeaseUntil,
+      table.cleanupLeaseOwner,
     ),
   ],
 );

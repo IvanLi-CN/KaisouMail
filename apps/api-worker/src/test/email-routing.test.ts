@@ -4,10 +4,17 @@ const { getRuntimeStateValue, setRuntimeStateValue } = vi.hoisted(() => ({
   getRuntimeStateValue: vi.fn(),
   setRuntimeStateValue: vi.fn(),
 }));
+const { acquireCloudflareRequestPermit } = vi.hoisted(() => ({
+  acquireCloudflareRequestPermit: vi.fn(),
+}));
 
 vi.mock("../services/runtime-state", () => ({
   getRuntimeStateValue,
   setRuntimeStateValue,
+}));
+
+vi.mock("../services/cloudflare-request-gate", () => ({
+  acquireCloudflareRequestPermit,
 }));
 
 import {
@@ -42,6 +49,7 @@ afterEach(() => {
 
 describe("email routing service", () => {
   beforeEach(() => {
+    acquireCloudflareRequestPermit.mockResolvedValue(undefined);
     getRuntimeStateValue.mockResolvedValue(null);
     setRuntimeStateValue.mockResolvedValue(undefined);
   });
@@ -73,6 +81,7 @@ describe("email routing service", () => {
         nameServers: ["amy.ns.cloudflare.com", "kai.ns.cloudflare.com"],
       },
     ]);
+    expect(acquireCloudflareRequestPermit).toHaveBeenCalledTimes(1);
   });
 
   it("creates a full Cloudflare zone inside the configured account", async () => {

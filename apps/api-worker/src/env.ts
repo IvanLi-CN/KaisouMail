@@ -5,6 +5,7 @@ import { normalizeRootDomain } from "./lib/email";
 
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
 export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+export const defaultSubdomainCleanupDispatchBatchSize = 48;
 
 const envBooleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -32,6 +33,12 @@ const runtimeConfigSchema = z.object({
     .min(0)
     .max(500)
     .default(500),
+  SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(defaultSubdomainCleanupDispatchBatchSize),
   WILDCARD_SUBDOMAIN_DNS_ENABLED: envBooleanSchema.default(false),
   WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: z.string().optional(),
   EMAIL_ROUTING_MANAGEMENT_ENABLED: envBooleanSchema.default(false),
@@ -59,6 +66,8 @@ export interface WorkerEnv {
   DEFAULT_MAILBOX_TTL_MINUTES: string;
   CLEANUP_BATCH_SIZE: string;
   SUBDOMAIN_CLEANUP_BATCH_SIZE: string;
+  SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE?: string;
+  SUBDOMAIN_CLEANUP_QUEUE?: Queue<unknown>;
   WILDCARD_SUBDOMAIN_DNS_ENABLED: string;
   WILDCARD_SUBDOMAIN_DNS_ALLOWLIST?: string;
   EMAIL_ROUTING_MANAGEMENT_ENABLED: string;
@@ -79,12 +88,14 @@ export interface WorkerEnv {
 export interface RuntimeConfig
   extends Omit<
     z.output<typeof runtimeConfigSchema>,
+    | "SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE"
     | "WEB_APP_ORIGIN"
     | "WEB_APP_ORIGINS"
     | "WORKERS_AI_MODEL"
     | "WILDCARD_SUBDOMAIN_DNS_ENABLED"
     | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
   > {
+  SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE?: number;
   WEB_APP_ORIGIN?: string;
   WEB_APP_ORIGINS?: string[];
   WORKERS_AI_MODEL?: string;
