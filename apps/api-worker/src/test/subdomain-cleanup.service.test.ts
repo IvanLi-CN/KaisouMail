@@ -298,7 +298,7 @@ describe("subdomain cleanup service", () => {
     expect(tryAcquireRuntimeLease).not.toHaveBeenCalled();
   });
 
-  it("marks the row pending, deletes DNS, and then removes the local row", async () => {
+  it("marks the row pending, unlocks the exact host, deletes DNS, and then removes the local row", async () => {
     const db = createDb([false, false]);
     getDb.mockReturnValue(db);
     const prepare = vi.fn((sql: string) => {
@@ -343,6 +343,9 @@ describe("subdomain cleanup service", () => {
         projectOperation: "subdomains.cleanup",
         projectRoute: "subdomain cleanup queue",
       },
+      {
+        name: "ops.707979.xyz",
+      },
     );
     expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledWith(
       expect.any(Object),
@@ -367,7 +370,7 @@ describe("subdomain cleanup service", () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
-  it("unlocks Email Routing DNS only once per zone across a queued batch", async () => {
+  it("unlocks each queued exact fqdn before deleting Email Routing DNS", async () => {
     const firstMessage = createQueueMessage({
       subdomainId: "sub_ops",
       leaseOwner: "row_lease_a",
@@ -415,7 +418,39 @@ describe("subdomain cleanup service", () => {
       ),
     ).resolves.toBeUndefined();
 
-    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object),
+      runtimeConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_primary",
+      },
+      {
+        projectOperation: "subdomains.cleanup",
+        projectRoute: "subdomain cleanup queue",
+      },
+      {
+        name: "ops.707979.xyz",
+      },
+    );
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      runtimeConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_primary",
+      },
+      {
+        projectOperation: "subdomains.cleanup",
+        projectRoute: "subdomain cleanup queue",
+      },
+      {
+        name: "beta.707979.xyz",
+      },
+    );
     expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
     expect(firstMessage.ack).toHaveBeenCalledTimes(1);
     expect(secondMessage.ack).toHaveBeenCalledTimes(1);

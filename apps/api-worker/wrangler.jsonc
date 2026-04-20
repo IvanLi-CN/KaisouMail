@@ -43,7 +43,7 @@
     "consumers": [
       {
         "queue": "kaisoumail-subdomain-cleanup",
-        "max_batch_size": 4,
+        "max_batch_size": 1,
         "max_concurrency": 4,
         "retry_delay": 60
       }
