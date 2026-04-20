@@ -206,7 +206,7 @@ const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
 const domainNotDeletedFilter = isNull(domains.deletedAt);
 
-const shouldAllowWildcardSubdomainDns = (
+const shouldAllowWildcardSubdomainDnsCutover = (
   config: Pick<
     RuntimeConfig,
     "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
@@ -219,18 +219,31 @@ const shouldAllowWildcardSubdomainDns = (
   );
 
 export const shouldUseWildcardSubdomainDnsForDomain = (
+  domain: Pick<
+    DomainRow,
+    "catchAllEnabled" | "subdomainDnsMode" | "wildcardDnsVerifiedAt"
+  >,
+) =>
+  domain.catchAllEnabled &&
+  domain.subdomainDnsMode === "wildcard" &&
+  Boolean(domain.wildcardDnsVerifiedAt);
+
+export const shouldRequireWildcardSubdomainDnsMigration = (
   config: Pick<
     RuntimeConfig,
     "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
   >,
   domain: Pick<
     DomainRow,
-    "catchAllEnabled" | "rootDomain" | "subdomainDnsMode"
+    | "catchAllEnabled"
+    | "rootDomain"
+    | "subdomainDnsMode"
+    | "wildcardDnsVerifiedAt"
   >,
 ) =>
   domain.catchAllEnabled &&
-  domain.subdomainDnsMode === "wildcard" &&
-  shouldAllowWildcardSubdomainDns(config, domain.rootDomain);
+  !shouldUseWildcardSubdomainDnsForDomain(domain) &&
+  shouldAllowWildcardSubdomainDnsCutover(config, domain.rootDomain);
 
 const persistExplicitSubdomainHost = async (
   db: ReturnType<typeof getDb>,
@@ -321,7 +334,10 @@ const resolveCatchAllSubdomainDnsState = async (
   updatedAt: string,
   requestSource: CloudflareRequestSource,
 ) => {
-  if (!shouldAllowWildcardSubdomainDns(config, domain.rootDomain)) {
+  if (
+    !shouldAllowWildcardSubdomainDnsCutover(config, domain.rootDomain) &&
+    domain.subdomainDnsMode !== "wildcard"
+  ) {
     return {
       subdomainDnsMode: "explicit" as const,
       wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
@@ -329,32 +345,68 @@ const resolveCatchAllSubdomainDnsState = async (
     };
   }
 
-  try {
-    await ensureWildcardEmailRoutingDnsRecords(
-      env,
-      config,
-      domain,
-      requestSource,
-    );
-    return {
-      subdomainDnsMode: "wildcard" as const,
-      wildcardDnsVerifiedAt: updatedAt,
-      wildcardDnsLastError: null,
-    };
-  } catch (error) {
-    const wildcardDnsLastError =
-      error instanceof Error ? error.message : String(error);
-    logOperationalEvent("warn", "domains.wildcard_dns.ensure_failed", {
-      domainId: domain.id,
-      rootDomain: domain.rootDomain,
-      error: wildcardDnsLastError,
-    });
-    return {
-      subdomainDnsMode: "explicit" as const,
-      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+  await ensureWildcardEmailRoutingDnsRecords(
+    env,
+    config,
+    domain,
+    requestSource,
+  );
+  return {
+    subdomainDnsMode: "wildcard" as const,
+    wildcardDnsVerifiedAt: updatedAt,
+    wildcardDnsLastError: null,
+  };
+};
+
+const logWildcardDnsCutoverFailure = (
+  domain: Pick<DomainRow, "id" | "rootDomain">,
+  wildcardDnsLastError: string,
+) => {
+  logOperationalEvent("warn", "domains.wildcard_dns.ensure_failed", {
+    domainId: domain.id,
+    rootDomain: domain.rootDomain,
+    error: wildcardDnsLastError,
+  });
+};
+
+const persistWildcardDnsCutoverFailure = async (
+  db: ReturnType<typeof getDb>,
+  domain: DomainRow,
+  wildcardDnsLastError: string,
+) => {
+  const updatedAt = nowIso();
+  await db
+    .update(domains)
+    .set({
       wildcardDnsLastError,
-    };
+      updatedAt,
+    })
+    .where(eq(domains.id, domain.id));
+  return updatedAt;
+};
+
+const toWildcardDnsCutoverApiError = (
+  domain: Pick<DomainRow, "id" | "rootDomain">,
+  error: unknown,
+) => {
+  const wildcardDnsLastError =
+    error instanceof Error ? error.message : String(error);
+  const details = {
+    ...(error instanceof ApiError &&
+    error.details &&
+    typeof error.details === "object" &&
+    !Array.isArray(error.details)
+      ? error.details
+      : {}),
+    domainId: domain.id,
+    rootDomain: domain.rootDomain,
+  };
+
+  if (error instanceof ApiError) {
+    return new ApiError(error.status, error.message, details, error.headers);
   }
+
+  return new ApiError(409, wildcardDnsLastError, details);
 };
 
 const domainRouteContexts = {
@@ -1306,38 +1358,83 @@ export const enableDomainCatchAll = async (
   if (existing.status !== "active") {
     throw new ApiError(409, "Only active mailbox domains can enable catch-all");
   }
+
   if (existing.catchAllEnabled) {
     const updatedAt = nowIso();
-    const dnsState = await resolveCatchAllSubdomainDnsState(
-      env,
-      config,
-      existing,
-      updatedAt,
-      domainRouteContexts.catchAllEnable,
-    );
-    const next: DomainRow = {
-      ...existing,
-      subdomainDnsMode: dnsState.subdomainDnsMode,
-      wildcardDnsVerifiedAt: dnsState.wildcardDnsVerifiedAt,
-      wildcardDnsLastError: dnsState.wildcardDnsLastError,
-      updatedAt:
-        existing.subdomainDnsMode !== dnsState.subdomainDnsMode ||
-        existing.wildcardDnsVerifiedAt !== dnsState.wildcardDnsVerifiedAt ||
-        existing.wildcardDnsLastError !== dnsState.wildcardDnsLastError
-          ? updatedAt
-          : existing.updatedAt,
-    };
+    try {
+      const dnsState = await resolveCatchAllSubdomainDnsState(
+        env,
+        config,
+        existing,
+        updatedAt,
+        domainRouteContexts.catchAllEnable,
+      );
+      const next: DomainRow = {
+        ...existing,
+        subdomainDnsMode: dnsState.subdomainDnsMode,
+        wildcardDnsVerifiedAt: dnsState.wildcardDnsVerifiedAt,
+        wildcardDnsLastError: dnsState.wildcardDnsLastError,
+        updatedAt:
+          existing.subdomainDnsMode !== dnsState.subdomainDnsMode ||
+          existing.wildcardDnsVerifiedAt !== dnsState.wildcardDnsVerifiedAt ||
+          existing.wildcardDnsLastError !== dnsState.wildcardDnsLastError
+            ? updatedAt
+            : existing.updatedAt,
+      };
 
-    await db
-      .update(domains)
-      .set({
-        subdomainDnsMode: next.subdomainDnsMode,
-        wildcardDnsVerifiedAt: next.wildcardDnsVerifiedAt,
-        wildcardDnsLastError: next.wildcardDnsLastError,
-        updatedAt: next.updatedAt,
-      })
-      .where(eq(domains.id, existing.id));
-    return toDomainDto(next);
+      await db
+        .update(domains)
+        .set({
+          subdomainDnsMode: next.subdomainDnsMode,
+          wildcardDnsVerifiedAt: next.wildcardDnsVerifiedAt,
+          wildcardDnsLastError: next.wildcardDnsLastError,
+          updatedAt: next.updatedAt,
+        })
+        .where(eq(domains.id, existing.id));
+      return toDomainDto(next);
+    } catch (error) {
+      const wildcardDnsLastError =
+        error instanceof Error ? error.message : String(error);
+      logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
+      await persistWildcardDnsCutoverFailure(db, existing, wildcardDnsLastError);
+      throw toWildcardDnsCutoverApiError(existing, error);
+    }
+  }
+
+  const updatedAt = nowIso();
+  const isWildcardCutoverTarget = shouldAllowWildcardSubdomainDnsCutover(
+    config,
+    existing.rootDomain,
+  );
+
+  let dnsState: {
+    subdomainDnsMode: "explicit" | "wildcard";
+    wildcardDnsVerifiedAt: string | null;
+    wildcardDnsLastError: string | null;
+  };
+
+  if (isWildcardCutoverTarget) {
+    try {
+      dnsState = await resolveCatchAllSubdomainDnsState(
+        env,
+        config,
+        existing,
+        updatedAt,
+        domainRouteContexts.catchAllEnable,
+      );
+    } catch (error) {
+      const wildcardDnsLastError =
+        error instanceof Error ? error.message : String(error);
+      logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
+      await persistWildcardDnsCutoverFailure(db, existing, wildcardDnsLastError);
+      throw toWildcardDnsCutoverApiError(existing, error);
+    }
+  } else {
+    dnsState = {
+      subdomainDnsMode: "explicit",
+      wildcardDnsVerifiedAt: existing.wildcardDnsVerifiedAt,
+      wildcardDnsLastError: null,
+    };
   }
 
   const currentRule = await getCatchAllRule(
@@ -1359,15 +1456,6 @@ export const enableDomainCatchAll = async (
     config,
     existing,
     buildManagedCatchAllRule(existing, currentRule, workerName),
-    domainRouteContexts.catchAllEnable,
-  );
-
-  const updatedAt = nowIso();
-  const dnsState = await resolveCatchAllSubdomainDnsState(
-    env,
-    config,
-    existing,
-    updatedAt,
     domainRouteContexts.catchAllEnable,
   );
 
