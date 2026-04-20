@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.26.6",
+  "base_stable_version": "0.26.5",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T08:34:00Z",
+  "next_stable_version": "0.26.6",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "db8d19ab414e6c33c72453839216ab43da883138",
+  "pr_number": 64,
+  "pr_title": "fix(ci): resync queue consumers during deploy",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.26.6",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.26.6",
+  "target_sha": "020166a63a5a833df5fc6dc27ec15b746cd447ad",
+  "type_label": "type:patch"
+}
