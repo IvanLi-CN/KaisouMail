@@ -12,11 +12,13 @@ const {
   ensureSubdomainEnabled,
   getCloudflareAuthBlockState,
   getCloudflareRateLimitState,
+  unlockEmailRoutingDnsRecords,
 } = vi.hoisted(() => ({
   deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
   ensureSubdomainEnabled: vi.fn(),
   getCloudflareAuthBlockState: vi.fn(),
   getCloudflareRateLimitState: vi.fn(),
+  unlockEmailRoutingDnsRecords: vi.fn(),
 }));
 const { acquireCloudflareRequestPermit } = vi.hoisted(() => ({
   acquireCloudflareRequestPermit: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock("../services/emailRouting", async () => {
     ensureSubdomainEnabled,
     getCloudflareAuthBlockState,
     getCloudflareRateLimitState,
+    unlockEmailRoutingDnsRecords,
   };
 });
 
@@ -184,6 +187,7 @@ describe("subdomain cleanup service", () => {
     releaseRuntimeLease.mockResolvedValue(undefined);
     deleteSubdomainEmailRoutingDnsRecords.mockResolvedValue(undefined);
     ensureSubdomainEnabled.mockResolvedValue(undefined);
+    unlockEmailRoutingDnsRecords.mockResolvedValue(undefined);
     acquireCloudflareRequestPermit.mockResolvedValue(undefined);
   });
 
@@ -328,6 +332,18 @@ describe("subdomain cleanup service", () => {
       ),
     ).resolves.toBeUndefined();
 
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledWith(
+      expect.any(Object),
+      runtimeConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_primary",
+      },
+      {
+        projectOperation: "subdomains.cleanup",
+        projectRoute: "subdomain cleanup queue",
+      },
+    );
     expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledWith(
       expect.any(Object),
       runtimeConfig,
@@ -348,6 +364,136 @@ describe("subdomain cleanup service", () => {
       }),
     );
     expect(db.delete).toHaveBeenCalledWith(subdomains);
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("unlocks Email Routing DNS only once per zone across a queued batch", async () => {
+    const firstMessage = createQueueMessage({
+      subdomainId: "sub_ops",
+      leaseOwner: "row_lease_a",
+      dispatchedAt: "2026-04-20T02:00:00.000Z",
+    });
+    const secondMessage = createQueueMessage({
+      subdomainId: "sub_beta",
+      leaseOwner: "row_lease_b",
+      dispatchedAt: "2026-04-20T02:00:00.000Z",
+    });
+    const batch = {
+      messages: [firstMessage, secondMessage],
+      queue: "kaisoumail-subdomain-cleanup",
+      ackAll: vi.fn(),
+      retryAll: vi.fn(),
+    } as never;
+    const db = createDb([false, false, false, false]);
+    getDb.mockReturnValue(db);
+    const prepare = vi.fn((sql: string) => {
+      if (sql.includes("WHERE s.id = ?")) {
+        return {
+          bind: vi.fn((subdomainId: string) => ({
+            first: vi.fn(async () => ({
+              ...pendingRow,
+              id: subdomainId,
+              name: subdomainId === "sub_ops" ? "ops" : "beta",
+              cleanupLeaseOwner:
+                subdomainId === "sub_ops" ? "row_lease_a" : "row_lease_b",
+              cleanupLeaseUntil: "2026-04-20T02:05:00.000Z",
+            })),
+          })),
+        };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+
+    await expect(
+      consumeSubdomainCleanupQueue(
+        batch,
+        {
+          DB: { prepare },
+        } as never,
+        runtimeConfig,
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
+    expect(firstMessage.ack).toHaveBeenCalledTimes(1);
+    expect(secondMessage.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("acks queued work when the domain no longer has a zone id", async () => {
+    const releaseLeaseRun = vi.fn(async () => ({ meta: { changes: 1 } }));
+    const prepare = vi.fn((sql: string) => {
+      if (sql.includes("WHERE s.id = ?")) {
+        return {
+          bind: vi.fn(() => ({
+            first: vi.fn(async () => null),
+          })),
+        };
+      }
+
+      if (sql.includes("SET cleanup_lease_owner = NULL")) {
+        return {
+          bind: vi.fn(() => ({
+            run: releaseLeaseRun,
+          })),
+        };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const message = createQueueMessage({
+      subdomainId: "sub_ops",
+      leaseOwner: "row_lease_a",
+      dispatchedAt: "2026-04-20T02:00:00.000Z",
+    });
+
+    await consumeSubdomainCleanupQueue(
+      createBatch(message),
+      {
+        DB: { prepare },
+      } as never,
+      runtimeConfig,
+    );
+
+    expect(releaseLeaseRun).toHaveBeenCalledTimes(1);
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("honors the cleanup kill switch for already-enqueued messages", async () => {
+    const releaseLeaseRun = vi.fn(async () => ({ meta: { changes: 1 } }));
+    const prepare = vi.fn((sql: string) => {
+      if (sql.includes("SET cleanup_lease_owner = NULL")) {
+        return {
+          bind: vi.fn(() => ({
+            run: releaseLeaseRun,
+          })),
+        };
+      }
+
+      throw new Error(`Unexpected SQL: ${sql}`);
+    });
+    const message = createQueueMessage({
+      subdomainId: "sub_ops",
+      leaseOwner: "row_lease_a",
+      dispatchedAt: "2026-04-20T02:00:00.000Z",
+    });
+
+    await consumeSubdomainCleanupQueue(
+      createBatch(message),
+      {
+        DB: { prepare },
+      } as never,
+      {
+        ...runtimeConfig,
+        EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+      },
+    );
+
+    expect(releaseLeaseRun).toHaveBeenCalledTimes(1);
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 

@@ -196,4 +196,4 @@ V1 对 wildcard 子域 DNS 保持保守策略：只有已经 `catchAllEnabled=tr
 - Email Routing 单封邮件上限是 25 MiB
 - D1 只存结构化索引，原始/解析后的正文仍放在 R2
 - 过期邮箱清理会按批次执行，避免超过 Worker 单次执行预算
-- Cloudflare REST API 目前按 token 提供 `5 分钟 1200 次请求` 的全局限额，所以孤儿子域 DNS 清理改成了“每分钟 dispatcher + queue consumer”两段式：dispatcher 只负责认领并入队孤儿 host，queue consumer 按“一条消息一个 host”执行精确 fqdn 清理，D1 驱动的全局请求闸门严格放行 **每秒 4 个 Cloudflare 请求**，`429` 只会把当前 host 延迟到下一分钟重试而不会写行级回退，认证失败会短暂暂停新派发，而 `SUBDOMAIN_CLEANUP_BATCH_SIZE=500` 仍然只是候选扫描窗口
+- Cloudflare REST API 目前按 token 提供 `5 分钟 1200 次请求` 的全局限额，所以孤儿子域 DNS 清理改成了“每分钟 dispatcher + queue consumer”两段式：dispatcher 只负责认领并入队仍然带 `zoneId` 的孤儿 host，queue consumer 每批最多处理 `4` 个 host，这样同 zone 的 Email Routing unlock 可以在批内去重；如果域名在消费前丢失 `zoneId`，这条队列任务会被安全丢弃；cleanup kill switch（`EMAIL_ROUTING_MANAGEMENT_ENABLED=false` 或 `SUBDOMAIN_CLEANUP_BATCH_SIZE=0`）会立刻同时停止新派发和已经入队的 host 任务；D1 驱动的全局请求闸门只对**子域 cleanup 流量**严格放行 **每秒 4 个 Cloudflare 请求**，`429` 只会把当前 host 延迟到下一分钟重试而不会写行级回退，认证失败会短暂暂停新派发，而 `SUBDOMAIN_CLEANUP_BATCH_SIZE=500` 仍然只是候选扫描窗口

@@ -700,7 +700,9 @@ const cfRequest = async <T>(
     await ensureCloudflareRequestAllowed(env, requestContext);
   }
 
-  await acquireCloudflareRequestPermit(env);
+  if (requestContext.projectOperation === "subdomains.cleanup") {
+    await acquireCloudflareRequestPermit(env);
+  }
   await options?.beforeRequest?.();
   options?.onRequestAttempted?.();
   const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
@@ -1113,6 +1115,36 @@ export const ensureSubdomainEnabled = async (
       onRequestAttempted: options?.onRequestAttempted,
     },
   );
+};
+
+export const unlockEmailRoutingDnsRecords = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return;
+  const zoneId = requireZoneId(domain);
+  const path = `/zones/${zoneId}/email/routing/dns`;
+  await cfRequest(
+    env,
+    config,
+    path,
+    buildCloudflareRequestContext(requestSource, "PATCH", path),
+    {
+      method: "PATCH",
+    },
+    {
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    },
+  );
+
+  logOperationalEvent("info", "domains.email_routing_dns.unlocked", {
+    rootDomain: domain.rootDomain,
+    zoneId,
+  });
 };
 
 export const deleteSubdomainEmailRoutingDnsRecords = async (

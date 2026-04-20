@@ -15,6 +15,7 @@ import {
   ensureSubdomainEnabled,
   getCloudflareAuthBlockState,
   getCloudflareRateLimitState,
+  unlockEmailRoutingDnsRecords,
 } from "./emailRouting";
 import { releaseRuntimeLease, tryAcquireRuntimeLease } from "./runtime-state";
 
@@ -149,6 +150,14 @@ const releaseSubdomainCleanupLease = async (
   row: Pick<PendingSubdomainCleanupRow, "id">,
   leaseOwner: string,
 ) => {
+  await releaseSubdomainCleanupLeaseById(env, row.id, leaseOwner);
+};
+
+const releaseSubdomainCleanupLeaseById = async (
+  env: WorkerEnv,
+  subdomainId: string,
+  leaseOwner: string,
+) => {
   await env.DB.prepare(
     `UPDATE subdomains
     SET cleanup_lease_owner = NULL,
@@ -156,7 +165,7 @@ const releaseSubdomainCleanupLease = async (
     WHERE id = ?
       AND cleanup_lease_owner = ?`,
   )
-    .bind(row.id, leaseOwner)
+    .bind(subdomainId, leaseOwner)
     .run();
 };
 
@@ -258,6 +267,7 @@ const loadSubdomainCleanupRow = async (
     INNER JOIN domains d ON d.id = s.domain_id
     WHERE s.id = ?
       AND d.deleted_at IS NULL
+      AND d.zone_id IS NOT NULL
     LIMIT 1`,
   )
     .bind(subdomainId)
@@ -495,9 +505,28 @@ const processSubdomainCleanupMessage = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   message: Message<SubdomainCleanupQueueMessage>,
+  unlockedZoneIds: Set<string>,
 ) => {
+  if (
+    config.SUBDOMAIN_CLEANUP_BATCH_SIZE === 0 ||
+    !config.EMAIL_ROUTING_MANAGEMENT_ENABLED
+  ) {
+    await releaseSubdomainCleanupLeaseById(
+      env,
+      message.body.subdomainId,
+      message.body.leaseOwner,
+    );
+    message.ack();
+    return;
+  }
+
   const row = await loadSubdomainCleanupRow(env, message.body.subdomainId);
   if (!row) {
+    await releaseSubdomainCleanupLeaseById(
+      env,
+      message.body.subdomainId,
+      message.body.leaseOwner,
+    );
     message.ack();
     return;
   }
@@ -596,6 +625,19 @@ const processSubdomainCleanupMessage = async (
   await markSubdomainCleanupPending(db, row, cleanupStartedAt);
 
   try {
+    if (row.zoneId && !unlockedZoneIds.has(row.zoneId)) {
+      await unlockEmailRoutingDnsRecords(
+        env,
+        config,
+        {
+          rootDomain: row.rootDomain,
+          zoneId: row.zoneId,
+        },
+        subdomainCleanupRequestSource,
+      );
+      unlockedZoneIds.add(row.zoneId);
+    }
+
     await deleteSubdomainEmailRoutingDnsRecords(
       env,
       config,
@@ -643,7 +685,8 @@ export const consumeSubdomainCleanupQueue = async (
   env: WorkerEnv,
   config: RuntimeConfig,
 ) => {
+  const unlockedZoneIds = new Set<string>();
   for (const message of batch.messages) {
-    await processSubdomainCleanupMessage(env, config, message);
+    await processSubdomainCleanupMessage(env, config, message, unlockedZoneIds);
   }
 };
