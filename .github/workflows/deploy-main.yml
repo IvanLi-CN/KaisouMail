@@ -222,27 +222,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          queue_names="$(
-            node <<'NODE'
-            const fs = require("node:fs");
-
-            const config = JSON.parse(
-              fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
-            );
-            const names = new Set();
-            for (const producer of config?.queues?.producers ?? []) {
-              if (typeof producer?.queue === "string" && producer.queue.trim()) {
-                names.add(producer.queue.trim());
-              }
-            }
-            for (const consumer of config?.queues?.consumers ?? []) {
-              if (typeof consumer?.queue === "string" && consumer.queue.trim()) {
-                names.add(consumer.queue.trim());
-              }
-            }
-            process.stdout.write([...names].join("\n"));
-            NODE
-          )"
+          queue_names="$(node .github/scripts/deploy_main_helpers.mjs queue-names "${API_WORKER_CONFIG_PATH}")"
 
           if [ -z "${queue_names}" ]; then
             echo "No API Worker queues declared; skipping queue provisioning."
@@ -259,24 +239,7 @@ jobs:
             [ -n "${queue_name}" ] || continue
 
             export TARGET_QUEUE_NAME="${queue_name}"
-            if node <<'NODE'
-            const payload = JSON.parse(process.env.EXISTING_QUEUES_JSON ?? "[]");
-            const queueName = process.env.TARGET_QUEUE_NAME ?? "";
-            const queues = Array.isArray(payload) ? payload : payload?.result ?? [];
-            const exists = queues.some((queue) => {
-              const name =
-                typeof queue?.queue_name === "string"
-                  ? queue.queue_name
-                  : typeof queue?.queueName === "string"
-                    ? queue.queueName
-                    : typeof queue?.name === "string"
-                      ? queue.name
-                      : "";
-              return name === queueName;
-            });
-            process.exit(exists ? 0 : 1);
-            NODE
-            then
+            if node .github/scripts/deploy_main_helpers.mjs queue-exists; then
               echo "Queue ${queue_name} already exists."
               continue
             fi
@@ -296,46 +259,7 @@ jobs:
             exit 1
           fi
 
-          render_check_output="$(node <<'NODE'
-          const fs = require("node:fs");
-
-          const config = JSON.parse(
-            fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
-          );
-          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? "";
-          const runtimeAccountId =
-            typeof config?.vars?.CLOUDFLARE_ACCOUNT_ID === "string"
-              ? config.vars.CLOUDFLARE_ACCOUNT_ID.trim()
-              : "";
-          const managementEnabled =
-            String(config?.vars?.EMAIL_ROUTING_MANAGEMENT_ENABLED ?? "")
-              .trim()
-              .toLowerCase() === "true";
-
-          if (managementEnabled) {
-            if (!accountId) {
-              console.error(
-                "Missing CLOUDFLARE_ACCOUNT_ID. Set the GitHub secret so deploy can inject the API Worker runtime binding.",
-              );
-              process.exit(1);
-            }
-
-            if (runtimeAccountId !== accountId) {
-              console.error(
-                `Generated runtime CLOUDFLARE_ACCOUNT_ID mismatch: expected ${accountId}, received ${runtimeAccountId || "<missing>"}`,
-              );
-              process.exit(1);
-            }
-
-            console.log(`Verified generated runtime CLOUDFLARE_ACCOUNT_ID=${runtimeAccountId}`);
-            process.exit(0);
-          }
-
-          console.log(
-            "Skipped CLOUDFLARE_ACCOUNT_ID hard requirement because EMAIL_ROUTING_MANAGEMENT_ENABLED=false in the generated API Worker runtime config.",
-          );
-          NODE
-          )"
+          render_check_output="$(node .github/scripts/deploy_main_helpers.mjs verify-runtime-config "${API_WORKER_CONFIG_PATH}")"
           printf '%s\n' "${render_check_output}"
           if ! printf '%s' "${render_check_output}" | grep -q "Verified generated runtime CLOUDFLARE_ACCOUNT_ID="; then
             echo "Skipping env.CLOUDFLARE_ACCOUNT_ID dry-run assertion because EMAIL_ROUTING_MANAGEMENT_ENABLED=false for this deployment."
@@ -365,40 +289,7 @@ jobs:
           fi
 
           export D1_RESTORE_OUTPUT="${restore_output}"
-          undo_bookmark="$(node <<'NODE'
-            const payload = JSON.parse(process.env.D1_RESTORE_OUTPUT ?? "{}");
-
-            const findFirstString = (value, keys) => {
-              if (!value || typeof value !== "object") {
-                return "";
-              }
-
-              for (const key of keys) {
-                if (typeof value[key] === "string" && value[key].trim()) {
-                  return value[key].trim();
-                }
-              }
-
-              for (const child of Object.values(value)) {
-                const nested = findFirstString(child, keys);
-                if (nested) {
-                  return nested;
-                }
-              }
-
-              return "";
-            };
-
-            const bookmark = findFirstString(payload, [
-              "previous_bookmark",
-              "previousBookmark",
-            ]);
-
-            if (bookmark) {
-              process.stdout.write(bookmark);
-            }
-            NODE
-          )"
+          undo_bookmark="$(node .github/scripts/deploy_main_helpers.mjs extract-undo-bookmark)"
 
           printf '%s\n' "${restore_output}"
           {
@@ -420,70 +311,7 @@ jobs:
           secrets_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" secret list --config "${API_WORKER_CONFIG_PATH}" --format json)"
           export SECRETS_JSON="${secrets_json}"
           runtime_contract_env_file="${RUNNER_TEMP}/api-worker-runtime-contract.env"
-          RUNTIME_CONTRACT_ENV_FILE="${runtime_contract_env_file}" node <<'NODE'
-          const fs = require("node:fs");
-
-          const secrets = JSON.parse(process.env.SECRETS_JSON ?? "[]");
-          const names = new Set(secrets.map((secret) => secret.name));
-          const wranglerConfig = JSON.parse(
-            fs.readFileSync(process.env.API_WORKER_CONFIG_PATH, "utf8"),
-          );
-          const required = Array.isArray(wranglerConfig?.secrets?.required)
-            ? wranglerConfig.secrets.required.filter(
-                (name) => typeof name === "string" && name.trim().length > 0,
-              )
-            : [];
-          const managementEnabled =
-            String(wranglerConfig?.vars?.EMAIL_ROUTING_MANAGEMENT_ENABLED ?? "")
-              .trim()
-              .toLowerCase() === "true";
-          const runtimeAccountId =
-            typeof wranglerConfig?.vars?.CLOUDFLARE_ACCOUNT_ID === "string"
-              ? wranglerConfig.vars.CLOUDFLARE_ACCOUNT_ID.trim()
-              : "";
-          const hasRuntimeCloudflareToken =
-            names.has("CLOUDFLARE_RUNTIME_API_TOKEN") ||
-            names.has("CLOUDFLARE_API_TOKEN") ||
-            (typeof wranglerConfig?.vars?.CLOUDFLARE_RUNTIME_API_TOKEN === "string" &&
-              wranglerConfig.vars.CLOUDFLARE_RUNTIME_API_TOKEN.trim().length > 0) ||
-            (typeof wranglerConfig?.vars?.CLOUDFLARE_API_TOKEN === "string" &&
-              wranglerConfig.vars.CLOUDFLARE_API_TOKEN.trim().length > 0);
-          const expectedLifecycleEnabled =
-            managementEnabled && hasRuntimeCloudflareToken;
-          const expectedBindingEnabled =
-            expectedLifecycleEnabled && Boolean(runtimeAccountId);
-
-          if (required.length === 0) {
-            console.error(
-              `${process.env.API_WORKER_CONFIG_PATH} must declare at least one required runtime secret in secrets.required.`,
-            );
-            process.exit(1);
-          }
-
-          const missing = required.filter((name) => !names.has(name));
-
-          if (missing.length > 0) {
-            console.error(
-              `Missing required API Worker secrets: ${missing.join(", ")}`,
-            );
-            console.error(
-              "Set them in Cloudflare before deploying, for example with `wrangler secret put <NAME>`.",
-            );
-            process.exit(1);
-          }
-
-          fs.writeFileSync(
-            process.env.RUNTIME_CONTRACT_ENV_FILE,
-            [
-              `API_EXPECTS_CLOUDFLARE_DOMAIN_LIFECYCLE_ENABLED=${expectedLifecycleEnabled}`,
-              `API_EXPECTS_CLOUDFLARE_DOMAIN_BINDING_ENABLED=${expectedBindingEnabled}`,
-            ].join("\n") + "\n",
-          );
-
-          console.log(
-            `Verified API Worker secrets: ${required.join(", ")} (hasRuntimeCloudflareToken=${hasRuntimeCloudflareToken})`,
-          );
-          NODE
+          node .github/scripts/deploy_main_helpers.mjs verify-required-secrets "${API_WORKER_CONFIG_PATH}" "${runtime_contract_env_file}"
           cat "${runtime_contract_env_file}" >> "${GITHUB_ENV}"
       - name: Capture D1 disaster-recovery timestamp
         if: steps.operation.outputs.operation == 'deploy'
@@ -603,29 +431,7 @@ jobs:
           set -euo pipefail
           deployments_json="$(CLOUDFLARE_API_TOKEN="${CF_MAIL_DEPLOY_API_TOKEN}" "${WRANGLER_BIN}" deployments list --config "${API_WORKER_CONFIG_PATH}" --json)"
           export DEPLOYMENTS_JSON="${deployments_json}"
-          node <<'NODE' | tee -a "${GITHUB_OUTPUT}"
-          const deployments = JSON.parse(process.env.DEPLOYMENTS_JSON ?? "[]");
-          const latest = [...deployments]
-            .sort((a, b) => a.created_on.localeCompare(b.created_on))
-            .at(-1);
-
-          if (!latest) {
-            console.error(
-              "Automated deploy requires an existing stable API deployment so the workflow can keep production traffic pinned while it smoke-tests a candidate version.",
-            );
-            process.exit(1);
-          }
-
-          const stable = latest.versions?.find((version) => version.percentage === 100);
-          if (!stable?.version_id) {
-            console.error(
-              "Current API deployment does not expose a single 100% stable version, so the workflow cannot capture the baseline needed for shadow smoke tests.",
-            );
-            process.exit(1);
-          }
-
-          console.log(`version_id=${stable.version_id}`);
-          NODE
+          node .github/scripts/deploy_main_helpers.mjs stable-baseline | tee -a "${GITHUB_OUTPUT}"
 
       - name: Record API Worker rollback availability
         if: steps.operation.outputs.operation == 'deploy'
@@ -663,28 +469,7 @@ jobs:
             --tag "${CF_MAIL_RELEASE_TAG}" \
             --message "Release ${CF_MAIL_RELEASE_TAG} (${CF_MAIL_RELEASE_SHA})"
 
-          export WRANGLER_OUTPUT_FILE_PATH="${output_file}"
-          export CANDIDATE_ENV_FILE="${candidate_env_file}"
-          node <<'NODE'
-          const fs = require("node:fs");
-
-          const outputPath = process.env.WRANGLER_OUTPUT_FILE_PATH;
-          const candidateEnvFile = process.env.CANDIDATE_ENV_FILE;
-          const lines = fs
-            .readFileSync(outputPath, "utf8")
-            .trim()
-            .split("\n")
-            .filter(Boolean)
-            .map((line) => JSON.parse(line));
-          const entry = [...lines].reverse().find((item) => item.type === "version-upload");
-
-          if (!entry?.version_id) {
-            console.error("Unable to resolve uploaded Worker version ID from Wrangler output.");
-            process.exit(1);
-          }
-
-          fs.writeFileSync(candidateEnvFile, `version_id=${entry.version_id}\n`);
-          NODE
+          node .github/scripts/deploy_main_helpers.mjs extract-version-upload "${output_file}" "${candidate_env_file}"
 
           cat "${candidate_env_file}" >> "${GITHUB_OUTPUT}"
           # shellcheck disable=SC1090
