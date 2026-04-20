@@ -204,7 +204,7 @@ describe("domain cutover dispatch service", () => {
       id: "dct_stale",
       status: "running",
       phase: "loading_state",
-      updatedAt: "2026-04-21T10:00:00.000Z",
+      updatedAt: "2000-01-01T00:00:00.000Z",
     } as const;
     const freshRunningTask = {
       ...baseTask,
