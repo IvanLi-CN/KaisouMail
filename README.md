@@ -323,9 +323,10 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 ## Wildcard subdomain DNS rollout
 
 - V1 only supports wildcard rollout for domains that already have Catch All enabled.
-- When a root domain is allowlisted, `POST /api/domains/:id/catch-all/enable` reconciles the domain into `subdomainDnsMode=wildcard` by cloning the apex Email Routing DNS template onto `*.rootDomain` through Cloudflare's generic DNS-record API.
-- Historical exact host records can stay in place during rollout because Cloudflare-specific host records take precedence over wildcard records; the scheduled cleanup job keeps reclaiming legacy exact hosts separately.
-- Roll back by removing the root domain from `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` and reconciling Catch All again, or by disabling Catch All for that domain. The domain falls back to `explicit` mode without requiring manual per-host DNS repair.
+- `POST /api/domains/:id/catch-all/enable` is the async reconcile entry and returns `202 { taskId }`; follow `GET /api/domain-cutover-tasks/:taskId` or `/events` to watch bounded DNS/route batches progress over SSE.
+- When a root domain is allowlisted, `POST /api/domains/:id/catch-all/enable` reconciles the domain into `subdomainDnsMode=wildcard` by deleting every project-created exact Email Routing mailbox host under that root, then cloning the apex Email Routing DNS template onto `*.rootDomain` through Cloudflare's generic DNS-record API.
+- If runtime target mode is `explicit`, the same entry removes project-created wildcard Email Routing DNS, then rebuilds exact DNS solely from the current live mailbox set. Historical DNS records and historical `subdomains` rows are never used as the truth source.
+- Roll back by removing the root domain from `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` and reconciling Catch All again, or by disabling Catch All for that domain. The domain falls back to `explicit` mode by rebuilding only the currently live mailbox hosts instead of restoring historical DNS snapshots.
 - Recommended canary: allowlist one low-risk active Catch All domain, send a message to a brand-new deep subdomain address, confirm mail ingestion succeeds, and verify Cloudflare did not create new exact `MX` / `TXT` records for that hostname.
 
 ## Domain topology example

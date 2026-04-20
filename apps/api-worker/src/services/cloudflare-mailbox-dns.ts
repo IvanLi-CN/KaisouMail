@@ -247,6 +247,7 @@ export const purgeProjectMailboxExactDnsHosts = async (
   domain: EmailRoutingDomain,
   requestSource: CloudflareRequestSource,
   options?: {
+    maxHostCount?: number;
     onHostDeleted?: (context: {
       host: string;
       deletedCount: number;
@@ -260,9 +261,11 @@ export const purgeProjectMailboxExactDnsHosts = async (
     domain,
     requestSource,
   );
+  const maxHostCount = Math.max(options?.maxHostCount ?? hosts.length, 0);
+  const hostsToDelete = maxHostCount > 0 ? hosts.slice(0, maxHostCount) : [];
   let deletedHostCount = 0;
 
-  for (const host of hosts) {
+  for (const host of hostsToDelete) {
     const fqdn = `${host}.${domain.rootDomain}`;
     await unlockEmailRoutingDnsRecords(env, config, domain, requestSource, {
       name: fqdn,
@@ -284,7 +287,9 @@ export const purgeProjectMailboxExactDnsHosts = async (
 
   return {
     hosts,
+    processedHosts: hostsToDelete,
     deletedHostCount,
+    completed: hostsToDelete.length >= hosts.length,
   };
 };
 

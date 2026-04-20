@@ -17,6 +17,7 @@ import { ApiError } from "../lib/errors";
 import { logOperationalEvent } from "../lib/observability";
 import {
   deleteWildcardEmailRoutingDnsRecords,
+  listProjectMailboxExactDnsHosts,
   purgeProjectMailboxExactDnsHosts,
 } from "./cloudflare-mailbox-dns";
 import {
@@ -48,6 +49,10 @@ type LiveMailboxRow = Pick<
 type DomainCutoverTaskDto = z.infer<typeof domainCutoverTaskSchema>;
 
 type DomainCutoverAction = DomainCutoverTaskRow["action"];
+type ReconcileStepResult = {
+  task: DomainCutoverTaskRow;
+  completed: boolean;
+};
 
 const catchAllRestoreStateSchema = z.object({
   enabled: z.boolean(),
@@ -62,7 +67,7 @@ const catchAllRestoreStateSchema = z.object({
   actions: z.array(
     z.object({
       type: z.string(),
-      value: z.array(z.string()),
+      value: z.array(z.string()).optional().default([]),
     }),
   ),
 });
@@ -71,6 +76,9 @@ type CatchAllRestoreState = z.infer<typeof catchAllRestoreStateSchema>;
 
 const managedCatchAllNamePrefix = "KaisouMail Catch All";
 const activeTaskStatuses = ["pending", "running"] as const;
+const exactDnsPurgeBatchSize = 6;
+const exactDnsRebuildBatchSize = 24;
+const routeRestoreBatchSize = 24;
 
 const domainCutoverRequestSources = {
   enable: {
@@ -342,6 +350,18 @@ const markTaskCompleted = async (
     failedAt: null,
   });
 
+const markTaskPending = async (
+  db: ReturnType<typeof getDb>,
+  task: DomainCutoverTaskRow,
+  patch?: Partial<DomainCutoverTaskRow>,
+) =>
+  patchTask(db, task, {
+    status: "pending",
+    completedAt: null,
+    failedAt: null,
+    ...patch,
+  });
+
 const markTaskFailed = async (
   db: ReturnType<typeof getDb>,
   task: DomainCutoverTaskRow,
@@ -383,40 +403,76 @@ const reconcileToWildcard = async (
   domain: DomainRow,
   liveMailboxes: LiveMailboxRow[],
   requestSource: CloudflareRequestSource,
-) => {
-  let nextTask = await patchTask(db, task, {
-    phase: "purging_exact_dns",
-    currentHost: null,
-    deletedCount: 0,
-    rebuiltCount: 0,
-    totalCount: 0,
-    rollbackPhase: null,
-    error: null,
-  });
+): Promise<ReconcileStepResult> => {
+  const desiredHosts = buildDesiredExactHosts(liveMailboxes);
+  const wildcardHost = `*.${domain.rootDomain}`;
+  let nextTask = task;
 
-  const purgeResult = await purgeProjectMailboxExactDnsHosts(
-    env,
-    config,
-    domain,
-    requestSource,
-    {
-      onHostDeleted: async ({ host, deletedCount, totalCount }) => {
-        nextTask = await patchTask(db, nextTask, {
-          phase: "purging_exact_dns",
-          currentHost: host,
-          deletedCount,
-          totalCount,
-        });
+  if (
+    task.phase === "queued" ||
+    task.phase === "loading_state" ||
+    task.phase === "purging_exact_dns"
+  ) {
+    const deletedCountOffset =
+      task.phase === "purging_exact_dns" ? task.deletedCount : 0;
+    if (task.phase !== "purging_exact_dns") {
+      nextTask = await patchTask(db, task, {
+        phase: "purging_exact_dns",
+        currentHost: null,
+        deletedCount: deletedCountOffset,
+        rebuiltCount: 0,
+        totalCount: 0,
+      });
+    }
+
+    const purgeResult = await purgeProjectMailboxExactDnsHosts(
+      env,
+      config,
+      domain,
+      requestSource,
+      {
+        maxHostCount: exactDnsPurgeBatchSize,
+        onHostDeleted: async ({ host, deletedCount, totalCount }) => {
+          nextTask = await patchTask(db, nextTask, {
+            phase: "purging_exact_dns",
+            currentHost: host,
+            deletedCount: deletedCountOffset + deletedCount,
+            totalCount: Math.max(
+              nextTask.totalCount,
+              deletedCountOffset + totalCount,
+            ),
+          });
+        },
       },
-    },
-  );
+    );
 
-  nextTask = await patchTask(db, nextTask, {
-    phase: "ensuring_wildcard_dns",
-    currentHost: `*.${domain.rootDomain}`,
-    deletedCount: purgeResult.deletedHostCount,
-    totalCount: purgeResult.hosts.length,
-  });
+    nextTask = await patchTask(db, nextTask, {
+      phase: "purging_exact_dns",
+      currentHost:
+        purgeResult.processedHosts.at(-1) === undefined
+          ? null
+          : `${purgeResult.processedHosts.at(-1)}.${domain.rootDomain}`,
+      deletedCount: deletedCountOffset + purgeResult.deletedHostCount,
+      totalCount: Math.max(
+        nextTask.totalCount,
+        deletedCountOffset + purgeResult.hosts.length,
+      ),
+    });
+
+    if (!purgeResult.completed) {
+      return {
+        completed: false,
+        task: await markTaskPending(db, nextTask, {
+          phase: "purging_exact_dns",
+        }),
+      };
+    }
+
+    nextTask = await patchTask(db, nextTask, {
+      phase: "ensuring_wildcard_dns",
+      currentHost: wildcardHost,
+    });
+  }
 
   await ensureWildcardEmailRoutingDnsRecords(
     env,
@@ -427,12 +483,15 @@ const reconcileToWildcard = async (
   await replaceSubdomainCacheForDomain(
     db,
     domain,
-    buildDesiredExactHosts(liveMailboxes),
+    desiredHosts,
     "wildcard",
     nowIso(),
   );
 
-  return nextTask;
+  return {
+    completed: true,
+    task: nextTask,
+  };
 };
 
 const reconcileToExplicit = async (
@@ -443,59 +502,127 @@ const reconcileToExplicit = async (
   domain: DomainRow,
   liveMailboxes: LiveMailboxRow[],
   requestSource: CloudflareRequestSource,
-) => {
-  let nextTask = await patchTask(db, task, {
-    phase: "deleting_wildcard_dns",
-    currentHost: `*.${domain.rootDomain}`,
-    deletedCount: 0,
-    rebuiltCount: 0,
-    totalCount: 0,
-    rollbackPhase: null,
-    error: null,
-  });
-
-  await deleteWildcardEmailRoutingDnsRecords(
-    env,
-    config,
-    domain,
-    requestSource,
-  );
-
-  const purgeResult = await purgeProjectMailboxExactDnsHosts(
-    env,
-    config,
-    domain,
-    requestSource,
-    {
-      onHostDeleted: async ({ host, deletedCount, totalCount }) => {
-        nextTask = await patchTask(db, nextTask, {
-          phase: "purging_exact_dns",
-          currentHost: host,
-          deletedCount,
-          totalCount,
-        });
-      },
-    },
-  );
-
+): Promise<ReconcileStepResult> => {
   const desiredHosts = buildDesiredExactHosts(liveMailboxes);
-  nextTask = await patchTask(db, nextTask, {
-    phase: "rebuilding_exact_dns",
-    currentHost: null,
-    deletedCount: purgeResult.deletedHostCount,
-    rebuiltCount: 0,
-    totalCount: desiredHosts.length,
-  });
+  const wildcardHost = `*.${domain.rootDomain}`;
+  let nextTask = task;
 
-  for (const [index, host] of desiredHosts.entries()) {
+  if (
+    task.phase !== "purging_exact_dns" &&
+    task.phase !== "rebuilding_exact_dns" &&
+    task.phase !== "restoring_registered_routes"
+  ) {
+    if (task.phase !== "deleting_wildcard_dns") {
+      nextTask = await patchTask(db, task, {
+        phase: "deleting_wildcard_dns",
+        currentHost: wildcardHost,
+        deletedCount: 0,
+        rebuiltCount: 0,
+        totalCount: 0,
+      });
+    }
+
+    await deleteWildcardEmailRoutingDnsRecords(
+      env,
+      config,
+      domain,
+      requestSource,
+    );
+    nextTask = await patchTask(db, nextTask, {
+      phase: "purging_exact_dns",
+      currentHost: null,
+    });
+  }
+
+  if (nextTask.phase === "purging_exact_dns") {
+    const deletedCountOffset = nextTask.deletedCount;
+    const purgeResult = await purgeProjectMailboxExactDnsHosts(
+      env,
+      config,
+      domain,
+      requestSource,
+      {
+        maxHostCount: exactDnsPurgeBatchSize,
+        onHostDeleted: async ({ host, deletedCount, totalCount }) => {
+          nextTask = await patchTask(db, nextTask, {
+            phase: "purging_exact_dns",
+            currentHost: host,
+            deletedCount: deletedCountOffset + deletedCount,
+            totalCount: Math.max(
+              nextTask.totalCount,
+              deletedCountOffset + totalCount,
+            ),
+          });
+        },
+      },
+    );
+
+    nextTask = await patchTask(db, nextTask, {
+      phase: "purging_exact_dns",
+      currentHost:
+        purgeResult.processedHosts.at(-1) === undefined
+          ? null
+          : `${purgeResult.processedHosts.at(-1)}.${domain.rootDomain}`,
+      deletedCount: deletedCountOffset + purgeResult.deletedHostCount,
+      totalCount: Math.max(
+        nextTask.totalCount,
+        deletedCountOffset + purgeResult.hosts.length,
+      ),
+    });
+
+    if (!purgeResult.completed) {
+      return {
+        completed: false,
+        task: await markTaskPending(db, nextTask, {
+          phase: "purging_exact_dns",
+        }),
+      };
+    }
+
+    nextTask = await patchTask(db, nextTask, {
+      phase: "rebuilding_exact_dns",
+      currentHost: null,
+      rebuiltCount: 0,
+      totalCount: desiredHosts.length,
+    });
+  }
+
+  const existingHosts = new Set(
+    await listProjectMailboxExactDnsHosts(env, config, domain, requestSource),
+  );
+  const missingHosts = desiredHosts.filter((host) => !existingHosts.has(host));
+  const rebuiltCountBase = desiredHosts.length - missingHosts.length;
+  const hostsToCreate = missingHosts.slice(0, exactDnsRebuildBatchSize);
+
+  for (const [index, host] of hostsToCreate.entries()) {
     await ensureSubdomainEnabled(env, config, domain, host, requestSource);
     nextTask = await patchTask(db, nextTask, {
       phase: "rebuilding_exact_dns",
       currentHost: `${host}.${domain.rootDomain}`,
-      rebuiltCount: index + 1,
+      rebuiltCount: rebuiltCountBase + index + 1,
       totalCount: desiredHosts.length,
     });
   }
+
+  if (hostsToCreate.length < missingHosts.length) {
+    return {
+      completed: false,
+      task: await markTaskPending(db, nextTask, {
+        phase: "rebuilding_exact_dns",
+        rebuiltCount: rebuiltCountBase + hostsToCreate.length,
+        totalCount: desiredHosts.length,
+      }),
+    };
+  }
+
+  nextTask = await patchTask(db, nextTask, {
+    phase: "rebuilding_exact_dns",
+    currentHost: hostsToCreate.at(-1)
+      ? `${hostsToCreate.at(-1)}.${domain.rootDomain}`
+      : null,
+    rebuiltCount: desiredHosts.length,
+    totalCount: desiredHosts.length,
+  });
 
   await replaceSubdomainCacheForDomain(
     db,
@@ -505,7 +632,10 @@ const reconcileToExplicit = async (
     nowIso(),
   );
 
-  return nextTask;
+  return {
+    completed: true,
+    task: nextTask,
+  };
 };
 
 const retireCatchAllMailboxes = async (
@@ -577,7 +707,7 @@ const backfillRegisteredMailboxRoutes = async (
   task: DomainCutoverTaskRow,
   domain: DomainRow,
   requestSource: CloudflareRequestSource,
-) => {
+): Promise<ReconcileStepResult> => {
   const registeredMailboxes = await listActiveMailboxesForDomain(
     db,
     domain.id,
@@ -586,17 +716,25 @@ const backfillRegisteredMailboxRoutes = async (
     },
   );
   const missingRoutes = registeredMailboxes.filter((row) => !row.routingRuleId);
-  let nextTask = await patchTask(db, task, {
-    phase: "restoring_registered_routes",
-    currentHost: null,
-    rebuiltCount: 0,
-    totalCount: missingRoutes.length,
-  });
+  const restoredCountBase = registeredMailboxes.length - missingRoutes.length;
+  const routesToCreate = missingRoutes.slice(0, routeRestoreBatchSize);
+  let nextTask =
+    task.phase === "restoring_registered_routes"
+      ? await patchTask(db, task, {
+          rebuiltCount: restoredCountBase,
+          totalCount: registeredMailboxes.length,
+        })
+      : await patchTask(db, task, {
+          phase: "restoring_registered_routes",
+          currentHost: null,
+          rebuiltCount: restoredCountBase,
+          totalCount: registeredMailboxes.length,
+        });
 
   const createdRoutes: Array<{ mailboxId: string; ruleId: string }> = [];
 
   try {
-    for (const [index, mailbox] of missingRoutes.entries()) {
+    for (const [index, mailbox] of routesToCreate.entries()) {
       const routingRuleId = await createRoutingRule(
         env,
         config,
@@ -619,8 +757,8 @@ const backfillRegisteredMailboxRoutes = async (
       nextTask = await patchTask(db, nextTask, {
         phase: "restoring_registered_routes",
         currentHost: mailbox.address,
-        rebuiltCount: index + 1,
-        totalCount: missingRoutes.length,
+        rebuiltCount: restoredCountBase + index + 1,
+        totalCount: registeredMailboxes.length,
       });
     }
   } catch (error) {
@@ -644,7 +782,21 @@ const backfillRegisteredMailboxRoutes = async (
     throw error;
   }
 
-  return nextTask;
+  if (routesToCreate.length < missingRoutes.length) {
+    return {
+      completed: false,
+      task: await markTaskPending(db, nextTask, {
+        phase: "restoring_registered_routes",
+        rebuiltCount: restoredCountBase + routesToCreate.length,
+        totalCount: registeredMailboxes.length,
+      }),
+    };
+  }
+
+  return {
+    completed: true,
+    task: nextTask,
+  };
 };
 
 const runEnableCutover = async (
@@ -665,25 +817,83 @@ const runEnableCutover = async (
     );
   }
 
-  const currentRule = await getCatchAllRule(env, config, domain, requestSource);
-  if (!currentRule) {
-    return markTaskFailed(db, task, "Catch-all rule is not available", null);
-  }
-
-  const restoreStateJson = serializeCatchAllRestoreState(
-    parseCatchAllRestoreState(domain.catchAllRestoreStateJson) ??
-      toCatchAllRestoreState(currentRule),
-  );
   const liveMailboxes = await listActiveMailboxesForDomain(db, domain.id, {
     includeCatchAll: domain.catchAllEnabled,
   });
+
+  if (task.rollbackPhase === "rolling_back_dns") {
+    try {
+      const rollbackResult = await reconcileToExplicit(
+        env,
+        config,
+        db,
+        task,
+        domain,
+        liveMailboxes,
+        requestSource,
+      );
+      if (!rollbackResult.completed) {
+        return rollbackResult.task;
+      }
+
+      const failedTask = await markTaskFailed(
+        db,
+        rollbackResult.task,
+        task.error ?? "Wildcard cutover failed",
+        "rollback_completed",
+      );
+      logOperationalEvent("warn", "domains.cutover.failed", {
+        taskId: failedTask.id,
+        domainId: domain.id,
+        rootDomain: domain.rootDomain,
+        action: task.action,
+        targetMode: task.targetMode,
+        rollbackPhase: "rollback_completed",
+        error: failedTask.error,
+      });
+      return failedTask;
+    } catch (rollbackError) {
+      const errorMessage = `${task.error ?? "Wildcard cutover failed"} (dns rollback failed: ${toErrorMessage(
+        rollbackError,
+      )})`;
+      await persistWildcardFailure(db, domain.id, errorMessage);
+      const failedTask = await markTaskFailed(
+        db,
+        task,
+        errorMessage,
+        "rollback_failed",
+      );
+      logOperationalEvent("warn", "domains.cutover.failed", {
+        taskId: failedTask.id,
+        domainId: domain.id,
+        rootDomain: domain.rootDomain,
+        action: task.action,
+        targetMode: task.targetMode,
+        rollbackPhase: "rollback_failed",
+        error: errorMessage,
+      });
+      return failedTask;
+    }
+  }
+
   let nextTask = task;
   let catchAllRuleChanged = false;
   let rollbackFailed = false;
   let rollbackPhase: string | null = null;
+  let currentRule: CloudflareCatchAllRule | null = null;
 
   try {
-    nextTask =
+    currentRule = await getCatchAllRule(env, config, domain, requestSource);
+    if (!currentRule) {
+      return markTaskFailed(db, task, "Catch-all rule is not available", null);
+    }
+
+    const restoreStateJson = serializeCatchAllRestoreState(
+      parseCatchAllRestoreState(domain.catchAllRestoreStateJson) ??
+        toCatchAllRestoreState(currentRule),
+    );
+
+    const reconcileResult =
       task.targetMode === "wildcard"
         ? await reconcileToWildcard(
             env,
@@ -703,6 +913,10 @@ const runEnableCutover = async (
             liveMailboxes,
             requestSource,
           );
+    nextTask = reconcileResult.task;
+    if (!reconcileResult.completed) {
+      return nextTask;
+    }
 
     nextTask = await patchTask(db, nextTask, {
       phase: "updating_catch_all_rule",
@@ -747,19 +961,27 @@ const runEnableCutover = async (
     });
     return nextTask;
   } catch (error) {
+    nextTask = (await getTaskRowById(db, nextTask.id)) ?? nextTask;
     let errorMessage = toErrorMessage(error);
+    const shouldRollbackDns =
+      task.targetMode === "wildcard" &&
+      (nextTask.phase === "purging_exact_dns" ||
+        nextTask.phase === "ensuring_wildcard_dns" ||
+        nextTask.phase === "updating_catch_all_rule");
 
     if (catchAllRuleChanged) {
       rollbackPhase = "restoring_catch_all_rule";
       nextTask = await patchTask(db, nextTask, { rollbackPhase });
       try {
-        await updateCatchAllRule(
-          env,
-          config,
-          domain,
-          currentRule,
-          requestSource,
-        );
+        if (currentRule) {
+          await updateCatchAllRule(
+            env,
+            config,
+            domain,
+            currentRule,
+            requestSource,
+          );
+        }
       } catch (restoreError) {
         rollbackFailed = true;
         errorMessage = `${errorMessage} (rule rollback failed: ${toErrorMessage(
@@ -768,11 +990,15 @@ const runEnableCutover = async (
       }
     }
 
-    if (task.targetMode === "wildcard") {
+    if (shouldRollbackDns) {
       rollbackPhase = "rolling_back_dns";
-      nextTask = await patchTask(db, nextTask, { rollbackPhase });
+      nextTask = await patchTask(db, nextTask, {
+        rollbackPhase,
+        error: errorMessage,
+      });
+
       try {
-        nextTask = await reconcileToExplicit(
+        const rollbackResult = await reconcileToExplicit(
           env,
           config,
           db,
@@ -781,12 +1007,24 @@ const runEnableCutover = async (
           liveMailboxes,
           requestSource,
         );
+        nextTask = rollbackResult.task;
+        await persistWildcardFailure(db, domain.id, errorMessage);
+
+        if (!rollbackResult.completed) {
+          return await markTaskPending(db, nextTask, {
+            rollbackPhase,
+            error: errorMessage,
+          });
+        }
       } catch (rollbackError) {
         rollbackFailed = true;
         errorMessage = `${errorMessage} (dns rollback failed: ${toErrorMessage(
           rollbackError,
         )})`;
       }
+    }
+
+    if (task.targetMode === "wildcard") {
       await persistWildcardFailure(db, domain.id, errorMessage);
     }
 
@@ -817,41 +1055,52 @@ const runDisableCutover = async (
   domain: DomainRow,
 ) => {
   const requestSource = domainCutoverRequestSources.disable;
-  const currentRule = domain.catchAllEnabled
-    ? await getCatchAllRule(env, config, domain, requestSource)
-    : null;
-  const restoreState = domain.catchAllEnabled
-    ? parseCatchAllRestoreState(domain.catchAllRestoreStateJson)
-    : null;
-  if (domain.catchAllEnabled && !currentRule) {
-    return markTaskFailed(db, task, "Catch-all rule is not available", null);
-  }
-  if (domain.catchAllEnabled && !restoreState) {
-    return markTaskFailed(
-      db,
-      task,
-      "Domain catch-all restore state is missing",
-      null,
-    );
-  }
-
   let nextTask = task;
   let retiredCatchAll = [] as Array<Pick<MailboxRow, "id">>;
   let catchAllRuleRestored = false;
   let rollbackFailed = false;
   let rollbackPhase: string | null = null;
+  let currentRule: CloudflareCatchAllRule | null = null;
+  let restoreState: CatchAllRestoreState | null = null;
 
   try {
-    nextTask = await patchTask(db, nextTask, {
-      phase: "retiring_catch_all_mailboxes",
-      currentHost: null,
-      deletedCount: 0,
-      rebuiltCount: 0,
-      totalCount: 0,
-      rollbackPhase: null,
-      error: null,
-    });
-    retiredCatchAll = await retireCatchAllMailboxes(db, domain.id);
+    currentRule = domain.catchAllEnabled
+      ? await getCatchAllRule(env, config, domain, requestSource)
+      : null;
+    restoreState = domain.catchAllEnabled
+      ? parseCatchAllRestoreState(domain.catchAllRestoreStateJson)
+      : null;
+    if (domain.catchAllEnabled && !currentRule) {
+      return markTaskFailed(db, task, "Catch-all rule is not available", null);
+    }
+    if (domain.catchAllEnabled && !restoreState) {
+      return markTaskFailed(
+        db,
+        task,
+        "Domain catch-all restore state is missing",
+        null,
+      );
+    }
+
+    if (
+      task.phase === "queued" ||
+      task.phase === "loading_state" ||
+      task.phase === "retiring_catch_all_mailboxes"
+    ) {
+      nextTask = await patchTask(db, nextTask, {
+        phase: "retiring_catch_all_mailboxes",
+        currentHost: null,
+        deletedCount:
+          task.phase === "retiring_catch_all_mailboxes" ? task.deletedCount : 0,
+        rebuiltCount:
+          task.phase === "retiring_catch_all_mailboxes" ? task.rebuiltCount : 0,
+        totalCount:
+          task.phase === "retiring_catch_all_mailboxes" ? task.totalCount : 0,
+        rollbackPhase: null,
+        error: null,
+      });
+      retiredCatchAll = await retireCatchAllMailboxes(db, domain.id);
+    }
 
     const registeredMailboxes = await listActiveMailboxesForDomain(
       db,
@@ -860,23 +1109,34 @@ const runDisableCutover = async (
         includeCatchAll: false,
       },
     );
-    nextTask = await reconcileToExplicit(
+    if (nextTask.phase !== "restoring_registered_routes") {
+      const reconcileResult = await reconcileToExplicit(
+        env,
+        config,
+        db,
+        nextTask,
+        domain,
+        registeredMailboxes,
+        requestSource,
+      );
+      nextTask = reconcileResult.task;
+      if (!reconcileResult.completed) {
+        return nextTask;
+      }
+    }
+
+    const backfillResult = await backfillRegisteredMailboxRoutes(
       env,
       config,
       db,
       nextTask,
       domain,
-      registeredMailboxes,
       requestSource,
     );
-    nextTask = await backfillRegisteredMailboxRoutes(
-      env,
-      config,
-      db,
-      nextTask,
-      domain,
-      requestSource,
-    );
+    nextTask = backfillResult.task;
+    if (!backfillResult.completed) {
+      return nextTask;
+    }
 
     if (restoreState) {
       nextTask = await patchTask(db, nextTask, {
@@ -1083,18 +1343,34 @@ export const runDomainCutoverTaskById = async (
 
   const task = await patchTask(db, currentTask, {
     status: "running",
-    phase: "loading_state",
-    error: null,
-    rollbackPhase: null,
+    phase: currentTask.phase === "queued" ? "loading_state" : currentTask.phase,
     startedAt: currentTask.startedAt ?? nowIso(),
     completedAt: null,
     failedAt: null,
   });
 
-  const finalTask =
-    task.action === "enable"
-      ? await runEnableCutover(env, config, db, task, domain)
-      : await runDisableCutover(env, config, db, task, domain);
+  try {
+    const finalTask =
+      task.action === "enable"
+        ? await runEnableCutover(env, config, db, task, domain)
+        : await runDisableCutover(env, config, db, task, domain);
 
-  return toTaskDto(finalTask);
+    return toTaskDto(finalTask);
+  } catch (error) {
+    const errorMessage = toErrorMessage(error);
+    if (task.action === "enable" && task.targetMode === "wildcard") {
+      await persistWildcardFailure(db, task.domainId, errorMessage);
+    }
+    const failedTask = await markTaskFailed(db, task, errorMessage, null);
+    logOperationalEvent("warn", "domains.cutover.failed", {
+      taskId: failedTask.id,
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
+      action: task.action,
+      targetMode: task.targetMode,
+      rollbackPhase: null,
+      error: errorMessage,
+    });
+    return toTaskDto(failedTask);
+  }
 };
