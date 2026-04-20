@@ -3,10 +3,15 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "../db/client";
-import { domainCutoverTasks, domains, mailboxes, subdomains } from "../db/schema";
+import {
+  domainCutoverTasks,
+  domains,
+  mailboxes,
+  subdomains,
+} from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
-import { chunkD1InValues, chunkD1InsertValues } from "../lib/d1-batches";
+import { chunkD1InsertValues, chunkD1InValues } from "../lib/d1-batches";
 import { normalizeRootDomain } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import { logOperationalEvent } from "../lib/observability";
@@ -186,10 +191,7 @@ const getDomainRowById = async (
   return rows[0] ?? null;
 };
 
-const getTaskRowById = async (
-  db: ReturnType<typeof getDb>,
-  taskId: string,
-) => {
+const getTaskRowById = async (db: ReturnType<typeof getDb>, taskId: string) => {
   const rows = await db
     .select()
     .from(domainCutoverTasks)
@@ -236,10 +238,7 @@ const listActiveMailboxesForDomain = async (
     .from(mailboxes)
     .where(
       includeCatchAll
-        ? and(
-            eq(mailboxes.domainId, domainId),
-            eq(mailboxes.status, "active"),
-          )
+        ? and(eq(mailboxes.domainId, domainId), eq(mailboxes.status, "active"))
         : and(
             eq(mailboxes.domainId, domainId),
             eq(mailboxes.status, "active"),
@@ -419,7 +418,12 @@ const reconcileToWildcard = async (
     totalCount: purgeResult.hosts.length,
   });
 
-  await ensureWildcardEmailRoutingDnsRecords(env, config, domain, requestSource);
+  await ensureWildcardEmailRoutingDnsRecords(
+    env,
+    config,
+    domain,
+    requestSource,
+  );
   await replaceSubdomainCacheForDomain(
     db,
     domain,
@@ -450,7 +454,12 @@ const reconcileToExplicit = async (
     error: null,
   });
 
-  await deleteWildcardEmailRoutingDnsRecords(env, config, domain, requestSource);
+  await deleteWildcardEmailRoutingDnsRecords(
+    env,
+    config,
+    domain,
+    requestSource,
+  );
 
   const purgeResult = await purgeProjectMailboxExactDnsHosts(
     env,
@@ -569,12 +578,14 @@ const backfillRegisteredMailboxRoutes = async (
   domain: DomainRow,
   requestSource: CloudflareRequestSource,
 ) => {
-  const registeredMailboxes = await listActiveMailboxesForDomain(db, domain.id, {
-    includeCatchAll: false,
-  });
-  const missingRoutes = registeredMailboxes.filter(
-    (row) => !row.routingRuleId,
+  const registeredMailboxes = await listActiveMailboxesForDomain(
+    db,
+    domain.id,
+    {
+      includeCatchAll: false,
+    },
   );
+  const missingRoutes = registeredMailboxes.filter((row) => !row.routingRuleId);
   let nextTask = await patchTask(db, task, {
     phase: "restoring_registered_routes",
     currentHost: null,
@@ -742,7 +753,13 @@ const runEnableCutover = async (
       rollbackPhase = "restoring_catch_all_rule";
       nextTask = await patchTask(db, nextTask, { rollbackPhase });
       try {
-        await updateCatchAllRule(env, config, domain, currentRule, requestSource);
+        await updateCatchAllRule(
+          env,
+          config,
+          domain,
+          currentRule,
+          requestSource,
+        );
       } catch (restoreError) {
         rollbackFailed = true;
         errorMessage = `${errorMessage} (rule rollback failed: ${toErrorMessage(
@@ -836,9 +853,13 @@ const runDisableCutover = async (
     });
     retiredCatchAll = await retireCatchAllMailboxes(db, domain.id);
 
-    const registeredMailboxes = await listActiveMailboxesForDomain(db, domain.id, {
-      includeCatchAll: false,
-    });
+    const registeredMailboxes = await listActiveMailboxesForDomain(
+      db,
+      domain.id,
+      {
+        includeCatchAll: false,
+      },
+    );
     nextTask = await reconcileToExplicit(
       env,
       config,
@@ -903,7 +924,13 @@ const runDisableCutover = async (
       rollbackPhase = "restoring_managed_catch_all_rule";
       nextTask = await patchTask(db, nextTask, { rollbackPhase });
       try {
-        await updateCatchAllRule(env, config, domain, currentRule, requestSource);
+        await updateCatchAllRule(
+          env,
+          config,
+          domain,
+          currentRule,
+          requestSource,
+        );
       } catch (restoreError) {
         rollbackFailed = true;
         errorMessage = `${errorMessage} (rule rollback failed: ${toErrorMessage(
@@ -965,7 +992,11 @@ export const createDomainCutoverTask = async (
       `Only active mailbox domains can ${input.action} catch-all`,
     );
   }
-  if (input.action === "enable" && !domain.catchAllEnabled && !input.requestedByUserId) {
+  if (
+    input.action === "enable" &&
+    !domain.catchAllEnabled &&
+    !input.requestedByUserId
+  ) {
     throw new ApiError(500, "Catch-all enable requires an owner user");
   }
 

@@ -66,10 +66,7 @@ const normalizeDnsValue = (value: string | null | undefined) =>
 const isEmailRoutingSpfRecord = (content: string | null | undefined) =>
   normalizeDnsValue(content).replace(/^"|"$/g, "") === emailRoutingSpfValue;
 
-const isEmailRoutingDnsRecord = (
-  record: CloudflareDnsRecord,
-  fqdn: string,
-) => {
+const isEmailRoutingDnsRecord = (record: CloudflareDnsRecord, fqdn: string) => {
   const normalizedName = normalizeDnsValue(record.name);
   if (normalizedName !== normalizeDnsValue(fqdn)) {
     return false;

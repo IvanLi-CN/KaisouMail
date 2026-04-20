@@ -32,7 +32,9 @@ const resolveExecutionContext = (
   },
 ) => {
   try {
-    return c.executionCtx as { waitUntil?: (promise: Promise<unknown>) => void };
+    return c.executionCtx as {
+      waitUntil?: (promise: Promise<unknown>) => void;
+    };
   } catch {
     return null;
   }
