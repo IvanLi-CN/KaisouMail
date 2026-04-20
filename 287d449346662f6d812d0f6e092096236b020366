@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.26.1",
+  "base_stable_version": "0.26.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-04-20T04:06:22Z",
+  "next_stable_version": "0.26.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "aa96ee285334babc86c0c6b702206818d8724cbe",
+  "pr_number": 58,
+  "pr_title": "fix(api-worker): harden queued subdomain cleanup",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.26.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.26.1",
+  "target_sha": "287d449346662f6d812d0f6e092096236b020366",
+  "type_label": "type:patch"
+}
