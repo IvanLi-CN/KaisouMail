@@ -216,7 +216,9 @@ describe("mailboxes wildcard migration guards", () => {
     });
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
-    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
+    expect(
+      ensureMailboxSubdomainOnboardedForWildcardDns,
+    ).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalledWith(mailboxes);
   });
@@ -282,7 +284,9 @@ describe("mailboxes wildcard migration guards", () => {
     });
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
-    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
+    expect(
+      ensureMailboxSubdomainOnboardedForWildcardDns,
+    ).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
   });
 
@@ -338,7 +342,9 @@ describe("mailboxes wildcard migration guards", () => {
     );
 
     expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
-    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
+    expect(
+      ensureMailboxSubdomainOnboardedForWildcardDns,
+    ).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(created).toMatchObject({
       address: "build@ops.707979.xyz",
@@ -400,7 +406,9 @@ describe("mailboxes wildcard migration guards", () => {
     );
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
-    expect(ensureMailboxSubdomainOnboardedForWildcardDns).toHaveBeenCalledTimes(1);
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).toHaveBeenCalledTimes(
+      1,
+    );
     expect(ensureMailboxSubdomainOnboardedForWildcardDns).toHaveBeenCalledWith(
       insertSuccessEnv,
       runtimeConfig,
@@ -493,7 +501,9 @@ describe("mailboxes wildcard migration guards", () => {
       },
     );
 
-    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
+    expect(
+      ensureMailboxSubdomainOnboardedForWildcardDns,
+    ).not.toHaveBeenCalled();
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(created).toMatchObject({
