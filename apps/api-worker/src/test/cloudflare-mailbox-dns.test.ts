@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { deleteSubdomainEmailRoutingDnsRecords, unlockEmailRoutingDnsRecords } =
-  vi.hoisted(() => ({
-    deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
-    unlockEmailRoutingDnsRecords: vi.fn(),
-  }));
+const {
+  deleteSubdomainEmailRoutingDnsRecords,
+  ensureSubdomainEnabled,
+  unlockEmailRoutingDnsRecords,
+} = vi.hoisted(() => ({
+  deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
+  ensureSubdomainEnabled: vi.fn(),
+  unlockEmailRoutingDnsRecords: vi.fn(),
+}));
 
 vi.mock("../services/emailRouting", async () => {
   const actual = await vi.importActual<
@@ -13,12 +17,14 @@ vi.mock("../services/emailRouting", async () => {
   return {
     ...actual,
     deleteSubdomainEmailRoutingDnsRecords,
+    ensureSubdomainEnabled,
     unlockEmailRoutingDnsRecords,
   };
 });
 
 import {
   deleteWildcardEmailRoutingDnsRecords,
+  ensureMailboxSubdomainOnboardedForWildcardDns,
   listProjectMailboxExactDnsHosts,
   purgeProjectMailboxExactDnsHosts,
 } from "../services/cloudflare-mailbox-dns";
@@ -44,6 +50,7 @@ afterEach(() => {
 describe("cloudflare mailbox dns helper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ensureSubdomainEnabled.mockResolvedValue(undefined);
     unlockEmailRoutingDnsRecords.mockResolvedValue(undefined);
     deleteSubdomainEmailRoutingDnsRecords.mockResolvedValue({
       matchedRecordCount: 3,
@@ -183,6 +190,66 @@ describe("cloudflare mailbox dns helper", () => {
       {
         projectOperation: "domains.catch_all.enable",
         projectRoute: "POST /api/domains/:id/catch-all/enable",
+      },
+    );
+  });
+
+  it("onboards wildcard mailbox subdomains through Cloudflare and then removes the exact dns records", async () => {
+    await expect(
+      ensureMailboxSubdomainOnboardedForWildcardDns(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        "ops",
+        {
+          projectOperation: "mailboxes.create",
+          projectRoute: "POST /api/mailboxes",
+        },
+      ),
+    ).resolves.toEqual({
+      fqdn: "ops.707979.xyz",
+    });
+
+    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledWith(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+      { name: "ops.707979.xyz" },
+    );
+    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledWith(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
       },
     );
   });

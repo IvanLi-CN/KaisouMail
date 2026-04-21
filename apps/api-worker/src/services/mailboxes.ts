@@ -31,6 +31,7 @@ import {
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
+import { ensureMailboxSubdomainOnboardedForWildcardDns } from "./cloudflare-mailbox-dns";
 import {
   type DomainRow,
   listActiveRootDomains,
@@ -51,6 +52,10 @@ type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type SubdomainProvisionMetadata = {
+  mode: "explicit" | "wildcard";
+  deliveryProvisioned: boolean;
+};
 
 const longTermMailboxExpirySentinel = "9999-12-31T23:59:59.999Z";
 
@@ -72,6 +77,45 @@ const mailboxRouteContexts = {
 const shouldUseCatchAllDelivery = (
   domain: Pick<DomainRow, "catchAllEnabled" | "catchAllOwnerUserId">,
 ) => Boolean(domain.catchAllEnabled && domain.catchAllOwnerUserId);
+
+const parseSubdomainProvisionMetadata = (
+  value: string | null,
+): SubdomainProvisionMetadata => {
+  if (!value) {
+    return {
+      mode: "explicit",
+      deliveryProvisioned: false,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(value) as {
+      mode?: unknown;
+      deliveryProvisioned?: unknown;
+    };
+    const mode = parsed.mode === "wildcard" ? "wildcard" : "explicit";
+    return {
+      mode,
+      deliveryProvisioned:
+        parsed.deliveryProvisioned === true ||
+        (mode === "explicit" && parsed.deliveryProvisioned !== false),
+    };
+  } catch {
+    return {
+      mode: "explicit",
+      deliveryProvisioned: false,
+    };
+  }
+};
+
+const buildSubdomainProvisionMetadata = (
+  mode: "explicit" | "wildcard",
+  options?: { deliveryProvisioned?: boolean },
+) =>
+  JSON.stringify({
+    mode,
+    deliveryProvisioned: options?.deliveryProvisioned ?? true,
+  });
 
 const buildWildcardMigrationRequiredError = (
   domain: Pick<
@@ -502,11 +546,25 @@ const upsertSubdomainUsage = async (
     existingSubdomain?.cleanupNextAttemptAt ||
       existingSubdomain?.cleanupLastError,
   );
+  const existingSubdomainMetadata = parseSubdomainProvisionMetadata(
+    existingSubdomain?.metadata ?? null,
+  );
 
-  if (
-    !useWildcardSubdomainDns &&
-    (!existingSubdomain || shouldRepairKnownSubdomain)
-  ) {
+  if (useWildcardSubdomainDns) {
+    if (
+      !existingSubdomain ||
+      shouldRepairKnownSubdomain ||
+      !existingSubdomainMetadata.deliveryProvisioned
+    ) {
+      await ensureMailboxSubdomainOnboardedForWildcardDns(
+        env,
+        config,
+        domain,
+        subdomain,
+        requestSource,
+      );
+    }
+  } else if (!existingSubdomain || shouldRepairKnownSubdomain) {
     await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
   }
 
@@ -517,9 +575,9 @@ const upsertSubdomainUsage = async (
         lastUsedAt: now,
         cleanupNextAttemptAt: null,
         cleanupLastError: null,
-        metadata: JSON.stringify({
-          mode: useWildcardSubdomainDns ? "wildcard" : "explicit",
-        }),
+        metadata: buildSubdomainProvisionMetadata(
+          useWildcardSubdomainDns ? "wildcard" : "explicit",
+        ),
       })
       .where(eq(subdomains.id, existingSubdomain.id));
   } else {
@@ -531,9 +589,9 @@ const upsertSubdomainUsage = async (
       lastUsedAt: now,
       cleanupNextAttemptAt: null,
       cleanupLastError: null,
-      metadata: JSON.stringify({
-        mode: useWildcardSubdomainDns ? "wildcard" : "explicit",
-      }),
+      metadata: buildSubdomainProvisionMetadata(
+        useWildcardSubdomainDns ? "wildcard" : "explicit",
+      ),
     });
   }
 };
