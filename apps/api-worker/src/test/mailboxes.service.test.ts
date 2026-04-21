@@ -9,6 +9,9 @@ const { createRoutingRule, deleteRoutingRule, ensureSubdomainEnabled } =
     deleteRoutingRule: vi.fn(),
     ensureSubdomainEnabled: vi.fn(),
   }));
+const { ensureMailboxSubdomainOnboardedForWildcardDns } = vi.hoisted(() => ({
+  ensureMailboxSubdomainOnboardedForWildcardDns: vi.fn(),
+}));
 const {
   listActiveRootDomains,
   pickRandomActiveDomain,
@@ -34,6 +37,16 @@ vi.mock("../services/emailRouting", async () => {
     createRoutingRule,
     deleteRoutingRule,
     ensureSubdomainEnabled,
+  };
+});
+
+vi.mock("../services/cloudflare-mailbox-dns", async () => {
+  const actual = await vi.importActual<
+    typeof import("../services/cloudflare-mailbox-dns")
+  >("../services/cloudflare-mailbox-dns");
+  return {
+    ...actual,
+    ensureMailboxSubdomainOnboardedForWildcardDns,
   };
 });
 
@@ -137,6 +150,9 @@ const createMailboxDb = (options?: {
 describe("mailboxes wildcard migration guards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ensureMailboxSubdomainOnboardedForWildcardDns.mockResolvedValue({
+      fqdn: "ops.707979.xyz",
+    });
   });
 
   it("blocks create on allowlisted catch-all domains that have not finished wildcard cutover", async () => {
@@ -200,6 +216,7 @@ describe("mailboxes wildcard migration guards", () => {
     });
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(db.delete).toHaveBeenCalledWith(mailboxes);
   });
@@ -265,6 +282,7 @@ describe("mailboxes wildcard migration guards", () => {
     });
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
   });
 
@@ -320,6 +338,7 @@ describe("mailboxes wildcard migration guards", () => {
     );
 
     expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(created).toMatchObject({
       address: "build@ops.707979.xyz",
@@ -328,7 +347,7 @@ describe("mailboxes wildcard migration guards", () => {
     });
   });
 
-  it("skips per-subdomain DNS writes for verified wildcard domains and stores wildcard metadata", async () => {
+  it("onboards fresh wildcard subdomains through Cloudflare while keeping wildcard metadata", async () => {
     const subdomainInsertValues: unknown[] = [];
     const domain = {
       id: "dom_primary",
@@ -381,16 +400,104 @@ describe("mailboxes wildcard migration guards", () => {
     );
 
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).toHaveBeenCalledTimes(1);
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).toHaveBeenCalledWith(
+      insertSuccessEnv,
+      runtimeConfig,
+      domain,
+      "ops",
+      {
+        projectOperation: "mailboxes.create",
+        projectRoute: "POST /api/mailboxes",
+      },
+    );
     expect(createRoutingRule).not.toHaveBeenCalled();
     expect(subdomainInsertValues).toEqual([
       expect.objectContaining({
         domainId: domain.id,
         name: "ops",
-        metadata: JSON.stringify({ mode: "wildcard" }),
+        metadata: JSON.stringify({
+          mode: "wildcard",
+          deliveryProvisioned: true,
+        }),
       }),
     ]);
     expect(created).toMatchObject({
       address: "build@ops.707979.xyz",
+      routingRuleId: null,
+      source: "registered",
+    });
+  });
+
+  it("reuses already-onboarded wildcard subdomains without re-running Cloudflare onboarding", async () => {
+    const domain = {
+      id: "dom_primary",
+      rootDomain: "707979.xyz",
+      zoneId: "zone_primary",
+      bindingSource: "catalog",
+      status: "active",
+      catchAllEnabled: true,
+      catchAllOwnerUserId: "usr_1",
+      subdomainDnsMode: "wildcard",
+      wildcardDnsVerifiedAt: "2026-04-03T12:05:00.000Z",
+      wildcardDnsLastError: null,
+      createdAt: "2026-04-03T12:00:00.000Z",
+      updatedAt: "2026-04-03T12:05:00.000Z",
+      lastProvisionedAt: "2026-04-03T12:00:00.000Z",
+      disabledAt: null,
+      deletedAt: null,
+    } as const;
+    const db = createMailboxDb({
+      domainRows: [
+        {
+          id: domain.id,
+          rootDomain: domain.rootDomain,
+          status: "active",
+          zoneId: domain.zoneId,
+          deletedAt: null,
+          catchAllEnabled: true,
+          catchAllOwnerUserId: "usr_1",
+          subdomainDnsMode: "wildcard",
+          wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
+          wildcardDnsLastError: null,
+        },
+      ],
+      mailboxRows: [],
+      subdomainRows: [
+        {
+          id: "sub_ops",
+          domainId: domain.id,
+          name: "ops",
+          enabledAt: "2026-04-03T12:05:00.000Z",
+          lastUsedAt: "2026-04-03T12:05:00.000Z",
+          cleanupNextAttemptAt: null,
+          cleanupLastError: null,
+          metadata: JSON.stringify({
+            mode: "wildcard",
+            deliveryProvisioned: true,
+          }),
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+    requireActiveDomainByRootDomain.mockResolvedValue(domain);
+
+    const created = await createMailboxForUser(
+      insertSuccessEnv,
+      runtimeConfig,
+      memberUser,
+      {
+        localPart: "alerts",
+        subdomain: "ops",
+        rootDomain: domain.rootDomain,
+      },
+    );
+
+    expect(ensureMailboxSubdomainOnboardedForWildcardDns).not.toHaveBeenCalled();
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
+    expect(createRoutingRule).not.toHaveBeenCalled();
+    expect(created).toMatchObject({
+      address: "alerts@ops.707979.xyz",
       routingRuleId: null,
       source: "registered",
     });
