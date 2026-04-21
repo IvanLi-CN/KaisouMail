@@ -31,6 +31,7 @@ import {
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
+import { ensureMailboxSubdomainOnboardedForWildcardDns } from "./cloudflare-mailbox-dns";
 import {
   type DomainRow,
   listActiveRootDomains,
@@ -40,7 +41,6 @@ import {
   shouldRequireWildcardSubdomainDnsMigration,
   shouldUseWildcardSubdomainDnsForDomain,
 } from "./domains";
-import { ensureMailboxSubdomainOnboardedForWildcardDns } from "./cloudflare-mailbox-dns";
 import {
   type CloudflareRequestSource,
   createRoutingRule,
