@@ -47,6 +47,28 @@ import {
 import { useReadMessageIds } from "@/lib/message-read-state";
 import { resolveLatestRefreshAt } from "@/lib/message-refresh";
 import { appRoutes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
+
+type MailboxStatusFilter = Mailbox["status"];
+
+const mailboxStatusFilters = [
+  { status: "active", label: "可用", description: "可继续收信和在工作台使用" },
+  {
+    status: "expired",
+    label: "已过期",
+    description: "回收站：可查看历史、延长 TTL 恢复或立即销毁",
+  },
+  {
+    status: "destroying",
+    label: "销毁中",
+    description: "正在清理路由与邮箱资源",
+  },
+  { status: "destroyed", label: "已销毁", description: "仅保留历史记录" },
+] satisfies Array<{
+  status: MailboxStatusFilter;
+  label: string;
+  description: string;
+}>;
 
 const buildMailboxMessageStats = (
   mailboxIds: string[],
@@ -109,6 +131,7 @@ type MailboxesPageViewProps = {
   onConfirmPrompt?: () => void;
   onClosePrompt?: () => void;
   onDestroy: (mailboxId: string) => void;
+  onRestoreTtl?: (mailbox: Mailbox) => void;
   rowRefBuilder?: (
     mailboxId: string,
   ) => (node: HTMLTableRowElement | null) => void;
@@ -133,139 +156,209 @@ export const MailboxesPageView = ({
   onConfirmPrompt,
   onClosePrompt,
   onDestroy,
+  onRestoreTtl,
   rowRefBuilder,
-}: MailboxesPageViewProps) => (
-  <div className="space-y-6">
-    <PageHeader
-      title="邮箱控制台"
-      description="管理邮箱地址、有效期和未读统计。"
-      eyebrow="Mailboxes"
-      action={
-        <div className="flex flex-wrap items-center gap-2">
-          {refreshAction}
-          <ActionButton
-            asChild
-            density="default"
-            icon={PanelsTopLeft}
-            label="打开邮件工作台"
-            priority="secondary"
-            variant="outline"
-          >
-            <Link to="/workspace">打开邮件工作台</Link>
-          </ActionButton>
-        </div>
-      }
-    />
+}: MailboxesPageViewProps) => {
+  const [statusFilter, setStatusFilter] =
+    useState<MailboxStatusFilter>("active");
+  const statusCounts = useMemo(
+    () =>
+      new Map(
+        mailboxStatusFilters.map(({ status }) => [
+          status,
+          mailboxes.filter((mailbox) => mailbox.status === status).length,
+        ]),
+      ),
+    [mailboxes],
+  );
+  const filteredMailboxes = useMemo(
+    () => mailboxes.filter((mailbox) => mailbox.status === statusFilter),
+    [mailboxes, statusFilter],
+  );
+  const activeFilterView =
+    mailboxStatusFilters.find((filter) => filter.status === statusFilter) ??
+    mailboxStatusFilters[0];
 
-    {createError ? (
-      <Card>
-        <CardHeader>
-          <CardTitle>创建邮箱</CardTitle>
-          <CardDescription>创建新的临时邮箱地址。</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ErrorState
-            variant={createError.variant}
-            title={createError.title}
-            description={createError.description}
-            details={createError.details}
-            primaryAction={
-              onRetryCreate ? (
-                <Button onClick={onRetryCreate}>重新加载邮箱规则</Button>
-              ) : undefined
-            }
-          />
-        </CardContent>
-      </Card>
-    ) : meta ? (
-      <MailboxCreateCard
-        domains={meta.domains}
-        defaultTtlMinutes={meta.defaultMailboxTtlMinutes}
-        maxTtlMinutes={meta.maxMailboxTtlMinutes}
-        isMetaLoading={isMetaLoading}
-        isPending={isCreatePending}
-        minTtlMinutes={meta.minMailboxTtlMinutes}
-        submitError={createSubmitError}
-        onSubmit={onCreate}
-        supportsUnlimitedTtl={meta.supportsUnlimitedMailboxTtl}
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="邮箱控制台"
+        description="管理邮箱地址、有效期和未读统计。"
+        eyebrow="Mailboxes"
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            {refreshAction}
+            <ActionButton
+              asChild
+              density="default"
+              icon={PanelsTopLeft}
+              label="打开邮件工作台"
+              priority="secondary"
+              variant="outline"
+            >
+              <Link to="/workspace">打开邮件工作台</Link>
+            </ActionButton>
+          </div>
+        }
       />
-    ) : (
+
+      {createError ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>创建邮箱</CardTitle>
+            <CardDescription>创建新的临时邮箱地址。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ErrorState
+              variant={createError.variant}
+              title={createError.title}
+              description={createError.description}
+              details={createError.details}
+              primaryAction={
+                onRetryCreate ? (
+                  <Button onClick={onRetryCreate}>重新加载邮箱规则</Button>
+                ) : undefined
+              }
+            />
+          </CardContent>
+        </Card>
+      ) : meta ? (
+        <MailboxCreateCard
+          domains={meta.domains}
+          defaultTtlMinutes={meta.defaultMailboxTtlMinutes}
+          maxTtlMinutes={meta.maxMailboxTtlMinutes}
+          isMetaLoading={isMetaLoading}
+          isPending={isCreatePending}
+          minTtlMinutes={meta.minMailboxTtlMinutes}
+          submitError={createSubmitError}
+          onSubmit={onCreate}
+          supportsUnlimitedTtl={meta.supportsUnlimitedMailboxTtl}
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>创建邮箱</CardTitle>
+            <CardDescription>创建新的临时邮箱地址。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EmptyState
+              title="正在加载邮箱规则"
+              description="正在读取可用域名和有效期设置。"
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>创建邮箱</CardTitle>
-          <CardDescription>创建新的临时邮箱地址。</CardDescription>
+          <CardTitle>邮箱列表</CardTitle>
+          <CardDescription>查看地址状态、有效期和未读统计。</CardDescription>
         </CardHeader>
-        <CardContent>
-          <EmptyState
-            title="正在加载邮箱规则"
-            description="正在读取可用域名和有效期设置。"
-          />
+        <CardContent className="space-y-4">
+          {!listError ? (
+            <div className="space-y-3">
+              <div
+                aria-label="邮箱状态筛选"
+                className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+                role="tablist"
+              >
+                {mailboxStatusFilters.map((filter) => {
+                  const isActive = statusFilter === filter.status;
+
+                  return (
+                    <button
+                      key={filter.status}
+                      aria-selected={isActive}
+                      className={cn(
+                        "rounded-xl border px-3 py-3 text-left transition-colors",
+                        isActive
+                          ? "border-primary/50 bg-primary/10 text-foreground"
+                          : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20 hover:text-foreground",
+                      )}
+                      role="tab"
+                      type="button"
+                      onClick={() => setStatusFilter(filter.status)}
+                    >
+                      <span className="flex items-center justify-between gap-3 text-sm font-semibold">
+                        {filter.label}
+                        <span className="rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-xs">
+                          {statusCounts.get(filter.status) ?? 0}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs leading-5">
+                        {filter.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {listError ? (
+            <ErrorState
+              variant={listError.variant}
+              title={listError.title}
+              description={listError.description}
+              details={listError.details}
+              primaryAction={
+                onRetryList ? (
+                  <Button onClick={onRetryList}>重新加载邮箱列表</Button>
+                ) : undefined
+              }
+              secondaryAction={
+                <Button asChild variant="outline">
+                  <Link to={appRoutes.workspace}>打开邮件工作台</Link>
+                </Button>
+              }
+            />
+          ) : filteredMailboxes.length > 0 ? (
+            <MailboxList
+              highlightedMailboxId={highlightedMailboxId}
+              mailboxes={filteredMailboxes}
+              messageStatsByMailbox={messageStatsByMailbox}
+              onDestroy={onDestroy}
+              onRestoreTtl={onRestoreTtl}
+              rowPopover={
+                mailboxPrompt && onConfirmPrompt && onClosePrompt
+                  ? {
+                      mailboxId: mailboxPrompt.mailbox.id,
+                      content: (
+                        <ExistingMailboxPopover
+                          error={mailboxPrompt.error}
+                          isPending={isCreatePending}
+                          mailbox={mailboxPrompt.mailbox}
+                          requestedExpiresInMinutes={
+                            mailboxPrompt.requestedExpiresInMinutes
+                          }
+                          result={mailboxPrompt.result}
+                          onClose={onClosePrompt}
+                          onConfirm={onConfirmPrompt}
+                        />
+                      ),
+                    }
+                  : null
+              }
+              rowRefBuilder={rowRefBuilder}
+              selectedMailboxId={selectedMailboxId}
+            />
+          ) : (
+            <EmptyState
+              title={`${activeFilterView.label}列表为空`}
+              description={
+                statusFilter === "expired"
+                  ? "回收站里暂时没有已过期邮箱。"
+                  : mailboxes.length === 0
+                    ? "当前还没有可管理的邮箱地址。"
+                    : `当前没有${activeFilterView.label}状态的邮箱。`
+              }
+            />
+          )}
         </CardContent>
       </Card>
-    )}
-
-    <Card>
-      <CardHeader>
-        <CardTitle>邮箱列表</CardTitle>
-        <CardDescription>查看地址状态、有效期和未读统计。</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {listError ? (
-          <ErrorState
-            variant={listError.variant}
-            title={listError.title}
-            description={listError.description}
-            details={listError.details}
-            primaryAction={
-              onRetryList ? (
-                <Button onClick={onRetryList}>重新加载邮箱列表</Button>
-              ) : undefined
-            }
-            secondaryAction={
-              <Button asChild variant="outline">
-                <Link to={appRoutes.workspace}>打开邮件工作台</Link>
-              </Button>
-            }
-          />
-        ) : mailboxes.length > 0 ? (
-          <MailboxList
-            highlightedMailboxId={highlightedMailboxId}
-            mailboxes={mailboxes}
-            messageStatsByMailbox={messageStatsByMailbox}
-            onDestroy={onDestroy}
-            rowPopover={
-              mailboxPrompt && onConfirmPrompt && onClosePrompt
-                ? {
-                    mailboxId: mailboxPrompt.mailbox.id,
-                    content: (
-                      <ExistingMailboxPopover
-                        error={mailboxPrompt.error}
-                        isPending={isCreatePending}
-                        mailbox={mailboxPrompt.mailbox}
-                        requestedExpiresInMinutes={
-                          mailboxPrompt.requestedExpiresInMinutes
-                        }
-                        result={mailboxPrompt.result}
-                        onClose={onClosePrompt}
-                        onConfirm={onConfirmPrompt}
-                      />
-                    ),
-                  }
-                : null
-            }
-            rowRefBuilder={rowRefBuilder}
-            selectedMailboxId={selectedMailboxId}
-          />
-        ) : (
-          <EmptyState
-            title="暂无邮箱"
-            description="当前还没有可管理的邮箱地址。"
-          />
-        )}
-      </CardContent>
-    </Card>
-  </div>
-);
+    </div>
+  );
+};
 
 export const MailboxesPage = () => {
   const metaQuery = useMetaQuery();
@@ -429,6 +522,24 @@ export const MailboxesPage = () => {
     }
   }, [ensureMailboxMutation, mailboxPrompt]);
 
+  const handleRestoreTtl = useCallback(
+    (mailbox: Mailbox) => {
+      const defaultExpiresInMinutes =
+        metaQuery.data?.defaultMailboxTtlMinutes ?? null;
+
+      setCreateSubmitError(null);
+      setSelectedMailboxId(mailbox.id);
+      setHighlightedMailboxId(mailbox.id);
+      setMailboxPrompt({
+        mailbox,
+        requestedExpiresInMinutes: defaultExpiresInMinutes,
+        result: null,
+        error: null,
+      });
+    },
+    [metaQuery.data?.defaultMailboxTtlMinutes],
+  );
+
   const handleDestroy = useCallback(
     (mailboxId: string) => {
       if (mailboxPrompt?.mailbox.id === mailboxId) {
@@ -513,6 +624,7 @@ export const MailboxesPage = () => {
       }}
       onCreate={handleCreate}
       onDestroy={handleDestroy}
+      onRestoreTtl={handleRestoreTtl}
     />
   );
 };

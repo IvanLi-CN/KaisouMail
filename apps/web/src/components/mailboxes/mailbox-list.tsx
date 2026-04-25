@@ -1,4 +1,4 @@
-import { Eye, Trash2 } from "lucide-react";
+import { Eye, History, RotateCcw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -19,13 +19,34 @@ import {
 } from "@/components/ui/table";
 import type { Mailbox } from "@/lib/contracts";
 import { formatDateTime, formatMailboxExpiry } from "@/lib/format";
+import { appRoutes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { buildWorkspaceSearch } from "@/lib/workspace";
+
+const mailboxStatusView = {
+  active: {
+    label: "可用",
+    className: "border-emerald-500/35 bg-emerald-500/12 text-emerald-100",
+  },
+  expired: {
+    label: "已过期 · 回收站",
+    className: "border-amber-500/35 bg-amber-500/12 text-amber-100",
+  },
+  destroying: {
+    label: "销毁中",
+    className: "border-sky-500/35 bg-sky-500/12 text-sky-100",
+  },
+  destroyed: {
+    label: "已销毁",
+    className: "border-border bg-muted/20 text-muted-foreground",
+  },
+} satisfies Record<Mailbox["status"], { label: string; className: string }>;
 
 export const MailboxList = ({
   mailboxes,
   messageStatsByMailbox,
   onDestroy,
+  onRestoreTtl,
   itemHrefBuilder,
   selectedMailboxId = null,
   highlightedMailboxId = null,
@@ -35,6 +56,7 @@ export const MailboxList = ({
   mailboxes: Mailbox[];
   messageStatsByMailbox?: Map<string, { unread: number; total: number }>;
   onDestroy?: (mailboxId: string) => void;
+  onRestoreTtl?: (mailbox: Mailbox) => void;
   itemHrefBuilder?: (mailbox: Mailbox) => string;
   selectedMailboxId?: string | null;
   highlightedMailboxId?: string | null;
@@ -64,7 +86,19 @@ export const MailboxList = ({
     </TableHead>
     <TableBody>
       {mailboxes.map((mailbox) => {
+        const isExpired = mailbox.status === "expired";
+        const isDestroying = mailbox.status === "destroying";
         const isDestroyed = mailbox.status === "destroyed";
+        const isInactive = isExpired || isDestroying || isDestroyed;
+        const statusView = mailboxStatusView[mailbox.status];
+        const workspaceHref = itemHrefBuilder
+          ? itemHrefBuilder(mailbox)
+          : `/workspace${buildWorkspaceSearch({
+              mailbox: mailbox.id,
+            })}`;
+        const historyHref = appRoutes.mailboxDetail(mailbox.id);
+        const primaryViewHref =
+          isExpired || isDestroyed ? historyHref : workspaceHref;
         const isSelected = selectedMailboxId === mailbox.id;
         const isHighlighted = highlightedMailboxId === mailbox.id;
         const isPopoverOpen = rowPopover?.mailboxId === mailbox.id;
@@ -75,6 +109,8 @@ export const MailboxList = ({
             ref={rowRefBuilder ? rowRefBuilder(mailbox.id) : undefined}
             className={cn(
               isDestroyed ? "opacity-55" : undefined,
+              isExpired ? "bg-amber-500/[0.03]" : undefined,
+              isDestroying ? "opacity-75" : undefined,
               isSelected
                 ? "bg-primary/10 shadow-[inset_0_0_0_1px_rgba(111,168,255,0.3)]"
                 : undefined,
@@ -90,21 +126,18 @@ export const MailboxList = ({
                 <Link
                   className={cn(
                     "font-medium transition-colors",
-                    isDestroyed
-                      ? "text-muted-foreground"
+                    isInactive
+                      ? "text-muted-foreground hover:text-foreground"
                       : "text-foreground hover:text-primary",
                   )}
-                  to={
-                    itemHrefBuilder
-                      ? itemHrefBuilder(mailbox)
-                      : `/workspace${buildWorkspaceSearch({
-                          mailbox: mailbox.id,
-                        })}`
-                  }
+                  to={primaryViewHref}
                 >
                   {mailbox.address}
                 </Link>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge className={cn("border", statusView.className)}>
+                    {statusView.label}
+                  </Badge>
                   <Badge
                     className={cn(
                       "border",
@@ -125,7 +158,7 @@ export const MailboxList = ({
               <span
                 className={cn(
                   "inline-flex whitespace-nowrap font-mono text-sm",
-                  isDestroyed ? "text-muted-foreground" : "text-foreground",
+                  isInactive ? "text-muted-foreground" : "text-foreground",
                 )}
               >
                 {messageStatsByMailbox?.get(mailbox.id)?.unread ?? 0}
@@ -141,7 +174,9 @@ export const MailboxList = ({
                     <span className="inline-flex min-h-6 items-center rounded-md px-0.5">
                       {mailbox.source === "catch_all"
                         ? "长期"
-                        : formatMailboxExpiry(mailbox.expiresAt)}
+                        : isExpired
+                          ? `回收站 · ${formatMailboxExpiry(mailbox.expiresAt)}`
+                          : formatMailboxExpiry(mailbox.expiresAt)}
                     </span>
                   </PopoverAnchor>
                   <PopoverContent
@@ -158,7 +193,9 @@ export const MailboxList = ({
                 <span>
                   {mailbox.source === "catch_all"
                     ? "长期"
-                    : formatMailboxExpiry(mailbox.expiresAt)}
+                    : isExpired
+                      ? `回收站 · ${formatMailboxExpiry(mailbox.expiresAt)}`
+                      : formatMailboxExpiry(mailbox.expiresAt)}
                 </span>
               )}
             </TableCell>
@@ -168,35 +205,46 @@ export const MailboxList = ({
                 <ActionButton
                   asChild
                   density="dense"
-                  icon={Eye}
-                  label="在工作台查看"
+                  icon={isExpired || isDestroyed ? History : Eye}
+                  label={isExpired || isDestroyed ? "查看历史" : "在工作台查看"}
                   priority="secondary"
                   size="sm"
-                  tooltip={`在工作台查看 ${mailbox.address}`}
+                  tooltip={
+                    isExpired || isDestroyed
+                      ? `查看 ${mailbox.address} 的历史`
+                      : `在工作台查看 ${mailbox.address}`
+                  }
                   variant="outline"
                 >
-                  <Link
-                    to={
-                      itemHrefBuilder
-                        ? itemHrefBuilder(mailbox)
-                        : `/workspace${buildWorkspaceSearch({
-                            mailbox: mailbox.id,
-                          })}`
-                    }
-                  >
-                    在工作台查看
+                  <Link to={primaryViewHref}>
+                    {isExpired || isDestroyed ? "查看历史" : "在工作台查看"}
                   </Link>
                 </ActionButton>
+                {isExpired && onRestoreTtl ? (
+                  <ActionButton
+                    density="dense"
+                    icon={RotateCcw}
+                    label="延长 TTL"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRestoreTtl(mailbox)}
+                    tooltip={`延长 ${mailbox.address} 的 TTL 并恢复使用`}
+                  />
+                ) : null}
                 {onDestroy ? (
                   <ActionButton
                     density="dense"
                     icon={Trash2}
-                    label="销毁邮箱"
+                    label={isExpired ? "立即销毁" : "销毁邮箱"}
                     size="sm"
                     variant="destructive"
                     onClick={() => onDestroy(mailbox.id)}
                     disabled={mailbox.status === "destroyed"}
-                    tooltip={`销毁 ${mailbox.address}`}
+                    tooltip={
+                      isExpired
+                        ? `立即销毁 ${mailbox.address}`
+                        : `销毁 ${mailbox.address}`
+                    }
                   />
                 ) : null}
               </div>

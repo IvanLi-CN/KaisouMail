@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   mailboxListScopes,
   mailboxLocalPartRegex,
+  mailboxStatuses,
   mailboxSubdomainRegex,
   maxMailboxTtlMinutes,
   minMailboxTtlMinutes,
@@ -98,8 +99,13 @@ export const resolveMailboxQuerySchema = z.object({
 
 export const listQueryScopeSchema = z.enum(mailboxListScopes);
 
+export const listMailboxStatusSchema = z.enum(mailboxStatuses);
+
 export const listMailboxesQuerySchema = z.object({
   scope: listQueryScopeSchema.optional(),
+  status: z
+    .union([listMailboxStatusSchema, z.array(listMailboxStatusSchema)])
+    .optional(),
 });
 
 export const listMessagesQuerySchema = z.object({

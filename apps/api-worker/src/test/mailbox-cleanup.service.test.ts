@@ -78,6 +78,11 @@ describe("mailbox cleanup service", () => {
 
   it("retries destroying mailboxes after expired active rows", async () => {
     const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
       select: vi
         .fn()
         .mockReturnValueOnce({
@@ -111,6 +116,11 @@ describe("mailbox cleanup service", () => {
 
   it("always reserves one cleanup slot for destroying mailboxes", async () => {
     const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
       select: vi
         .fn()
         .mockReturnValueOnce({
@@ -169,6 +179,11 @@ describe("mailbox cleanup service", () => {
       })),
     };
     const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
       select: vi
         .fn()
         .mockReturnValueOnce(destroyingQuery)

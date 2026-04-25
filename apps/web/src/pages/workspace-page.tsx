@@ -148,12 +148,14 @@ export const WorkspacePage = () => {
   >(null);
   const [mailboxPrompt, setMailboxPrompt] =
     useState<ExistingMailboxPromptState | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const metaQuery = useMetaQuery();
   const mailboxesQuery = useMailboxesQuery({
     scope: "workspace",
   });
   const createMailboxMutation = useCreateMailboxMutation();
   const ensureMailboxMutation = useEnsureMailboxMutation();
+  const hasMailboxesData = mailboxesQuery.data !== undefined;
   const mailboxes = mailboxesQuery.data ?? [];
 
   const selectedMailboxId = searchParams.get("mailbox") ?? "all";
@@ -205,14 +207,29 @@ export const WorkspacePage = () => {
   });
 
   useEffect(() => {
-    if (selectedMailboxId === "all") return;
-    if (selectedMailbox) return;
+    if (selectedMailboxId === "all") {
+      setWorkspaceNotice(null);
+      return;
+    }
+    if (selectedMailbox) {
+      setWorkspaceNotice(null);
+      return;
+    }
+    if (!hasMailboxesData) return;
 
+    setWorkspaceNotice(
+      "该邮箱已不在工作台中，可能已过期并移入邮箱管理的回收站。",
+    );
     updateSearchParams((draft) => {
       draft.set("mailbox", "all");
       draft.delete("message");
     }, true);
-  }, [selectedMailbox, selectedMailboxId, updateSearchParams]);
+  }, [
+    hasMailboxesData,
+    selectedMailbox,
+    selectedMailboxId,
+    updateSearchParams,
+  ]);
 
   const messagesQuery = useMessagesQuery([], undefined, {
     mailboxIds: selectedMailbox ? [selectedMailbox.id] : [],
@@ -339,7 +356,6 @@ export const WorkspacePage = () => {
     messagesQuery.isFetching ||
     messageDetailQuery.isFetching;
   const hasMetaData = metaQuery.data !== undefined;
-  const hasMailboxesData = mailboxesQuery.data !== undefined;
   const hasMessagesData = messagesQuery.data !== undefined;
   const hasMessageDetailData = messageDetailQuery.data !== undefined;
 
@@ -558,6 +574,11 @@ export const WorkspacePage = () => {
 
   return (
     <div className="flex flex-1 flex-col xl:min-h-0">
+      {workspaceNotice ? (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 md:mx-6">
+          {workspaceNotice}
+        </div>
+      ) : null}
       <MailWorkspace
         createMailboxAction={{
           defaultTtlMinutes:

@@ -27,6 +27,7 @@ import type { AuthUser } from "../types";
 import { resolveCatchAllDomainForAddress } from "./domains";
 import {
   ensureCatchAllMailboxForAddress,
+  expireDueMailboxes,
   listScopedMailboxRowsForUser,
 } from "./mailboxes";
 import {
@@ -325,6 +326,7 @@ export const storeIncomingMessage = async (
   env: WorkerEnv,
   forwardable: ForwardableEmailMessage,
 ) => {
+  await expireDueMailboxes(env);
   const db = getDb(env);
   const normalizedEnvelopeTo = normalizeMailboxAddress(forwardable.to);
   const mailboxRows = await db

@@ -188,6 +188,23 @@ const createWorkspaceScopeMailboxes = () => {
     source: "registered",
     routingRuleId: "rule_scope_destroying",
   };
+  const expiredMailbox: Mailbox = {
+    ...demoMailboxes[1],
+    id: "mbx_scope_expired",
+    address: "expired@trash.mail.example.net",
+    localPart: "expired",
+    subdomain: "trash",
+    mailDomain: "mail.example.net",
+    rootDomain: "mail.example.net",
+    status: "expired",
+    createdAt: "2026-04-08T09:30:00.000Z",
+    lastReceivedAt: "2026-04-08T10:20:00.000Z",
+    expiresAt: "2026-04-08T11:30:00.000Z",
+    destroyedAt: null,
+    source: "registered",
+    routingRuleId: "rule_scope_expired",
+  };
+
   const recentDestroyedMailboxes: Mailbox[] = Array.from(
     { length: 55 },
     (_, index) => ({
@@ -243,6 +260,7 @@ const createWorkspaceScopeMailboxes = () => {
   const allMailboxes = [
     activeMailbox,
     destroyingMailbox,
+    expiredMailbox,
     ...recentDestroyedMailboxes,
     staleDestroyedMailbox,
     missingDestroyedAtMailbox,
@@ -1433,7 +1451,7 @@ export const WorkspaceScopeTrimmedDestroyedHistory: Story = {
     docs: {
       description: {
         story:
-          "Workspace scope keeps active/destroying mailboxes, retains only the latest 50 destroyed rows from the last seven days, and hides older or malformed destroyed history.",
+          "Workspace scope keeps active/destroying mailboxes, excludes expired mailboxes from the main workbench so URL fallback can return to all mailboxes, retains only the latest 50 destroyed rows from the last seven days, and hides older or malformed destroyed history.",
       },
     },
   },
@@ -1449,6 +1467,11 @@ export const WorkspaceScopeTrimmedDestroyedHistory: Story = {
     await expect(
       canvas.queryByRole("button", {
         name: /destroyed-000@archive\.mail\.example\.net/i,
+      }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /expired@trash\.mail\.example\.net/i,
       }),
     ).not.toBeInTheDocument();
     await expect(
