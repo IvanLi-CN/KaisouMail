@@ -66,7 +66,7 @@ export const WorkspaceViewSwitch: Story = {
               className={cn(
                 "h-9 cursor-pointer text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200",
                 selected &&
-                  "z-10 border-primary/55 bg-secondary text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.14),0_0_0_1px_hsl(var(--primary)/0.18)] hover:bg-secondary/90",
+                  "z-10 border-primary/70 bg-primary/12 text-primary shadow-[inset_3px_0_0_0_hsl(var(--primary)),inset_0_0_0_1px_hsl(var(--primary)/0.16),0_0_0_1px_hsl(var(--primary)/0.22)] hover:bg-primary/18",
               )}
               key={option.value}
               onClick={() => setView(option.value)}
