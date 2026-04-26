@@ -119,10 +119,12 @@ vi.mock("@/hooks/use-mailboxes", () => ({
     all: ["mailboxes"],
     list: (scope = "default") => ["mailboxes", { scope }],
   },
-  useMailboxesQuery: (options?: { scope?: string }) => {
-    workspacePropsState.mailboxScope = options?.scope ?? "default";
+  useMailboxesQuery: (options?: { scope?: string; status?: string }) => {
+    if (options?.scope === "workspace") {
+      workspacePropsState.mailboxScope = options.scope;
+    }
     return {
-      data: workspacePageState.mailboxes,
+      data: options?.status === "expired" ? [] : workspacePageState.mailboxes,
       error: workspacePageState.mailboxesError,
       isLoading: false,
       isFetching: false,
@@ -136,6 +138,10 @@ vi.mock("@/hooks/use-mailboxes", () => ({
   useEnsureMailboxMutation: () => ({
     isPending: false,
     mutateAsync: workspacePageState.ensureMailbox,
+  }),
+  useDestroyMailboxMutation: () => ({
+    isPending: false,
+    mutate: vi.fn(),
   }),
 }));
 

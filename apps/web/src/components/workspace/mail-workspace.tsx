@@ -8,7 +8,9 @@ import {
   MailOpen,
   PanelRightOpen,
   Plus,
+  RotateCcw,
   Search,
+  Trash2,
 } from "lucide-react";
 import {
   type FocusEvent,
@@ -68,6 +70,7 @@ const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
 const buildMailboxRowLabel = (input: {
   address: string;
   isDestroyed: boolean;
+  isExpired: boolean;
   isHighlighted: boolean;
   source: Mailbox["source"];
   expiresAt: string | null;
@@ -78,6 +81,10 @@ const buildMailboxRowLabel = (input: {
 
   if (input.isDestroyed) {
     parts.push("已销毁");
+  }
+
+  if (input.isExpired) {
+    parts.push("已过期");
   }
 
   if (input.isHighlighted) {
@@ -154,6 +161,8 @@ type MailWorkspaceProps = {
   } | null;
   visibleMailboxes: Mailbox[];
   totalMailboxCount: number;
+  trashMailboxCount?: number;
+  mailboxView?: "active" | "trash";
   totalMessageCount: number;
   totalAggregatedMessageCount: number;
   mailboxMessageCounts: Map<string, number>;
@@ -173,6 +182,9 @@ type MailWorkspaceProps = {
   messageDetailHref: string | null;
   onSearchQueryChange: (value: string) => void;
   onSortModeChange: (mode: MailboxSortMode) => void;
+  onMailboxViewChange?: (view: "active" | "trash") => void;
+  onRestoreMailbox?: (mailbox: Mailbox) => void;
+  onDestroyMailbox?: (mailboxId: string) => void;
   onSelectMailbox: (mailboxId: string) => void;
   onSelectMessage: (messageId: string) => void;
 };
@@ -186,6 +198,8 @@ export const MailWorkspace = ({
   mailboxPrompt = null,
   visibleMailboxes,
   totalMailboxCount,
+  trashMailboxCount = 0,
+  mailboxView = "active",
   totalMessageCount,
   totalAggregatedMessageCount,
   mailboxMessageCounts,
@@ -205,6 +219,9 @@ export const MailWorkspace = ({
   messageDetailHref,
   onSearchQueryChange,
   onSortModeChange,
+  onMailboxViewChange,
+  onRestoreMailbox,
+  onDestroyMailbox,
   onSelectMailbox,
   onSelectMessage,
 }: MailWorkspaceProps) => {
@@ -222,6 +239,7 @@ export const MailWorkspace = ({
   });
   const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
+  const isTrashView = mailboxView === "trash";
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
       mailbox.id === highlightedMailboxId || mailbox.id === selectedMailboxId,
@@ -572,7 +590,9 @@ export const MailWorkspace = ({
                     邮箱列表
                   </p>
                   <p className="text-xs leading-5 text-muted-foreground">
-                    {totalMailboxCount} 个邮箱 · {totalMessageCount} 封邮件
+                    {isTrashView
+                      ? `${trashMailboxCount} 个过期邮箱 · ${totalMessageCount} 封历史邮件`
+                      : `${totalMailboxCount} 个邮箱 · ${totalMessageCount} 封邮件`}
                   </p>
                 </div>
                 <Badge className="border-primary/30 bg-primary/15 text-primary">
@@ -596,6 +616,34 @@ export const MailWorkspace = ({
                     }
                   />
                 </div>
+
+                <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
+                  <legend className="sr-only">邮箱视图</legend>
+                  {[
+                    { value: "active" as const, label: "工作区" },
+                    {
+                      value: "trash" as const,
+                      label: `回收站 ${trashMailboxCount}`,
+                    },
+                  ].map((option) => {
+                    const active = mailboxView === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={cn(
+                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          active
+                            ? "bg-secondary text-foreground"
+                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                        )}
+                        onClick={() => onMailboxViewChange?.(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </fieldset>
 
                 <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
                   <legend className="sr-only">邮箱排序</legend>
@@ -641,7 +689,9 @@ export const MailWorkspace = ({
                   <Badge>{totalAggregatedMessageCount}</Badge>
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  聚合显示所有邮箱的最新邮件，适合日常巡检与快速切换。
+                  {isTrashView
+                    ? "聚合显示回收站中过期邮箱的历史邮件，适合清理前复查。"
+                    : "聚合显示所有邮箱的最新邮件，适合日常巡检与快速切换。"}
                 </p>
               </button>
 
@@ -675,6 +725,7 @@ export const MailWorkspace = ({
                     scrollTestId="workspace-mailbox-scroll"
                     renderItem={(mailbox) => {
                       const isActive = selectedMailboxId === mailbox.id;
+                      const isExpired = mailbox.status === "expired";
                       const isDestroyed = mailbox.status === "destroyed";
                       const isHighlighted = highlightedMailboxId === mailbox.id;
                       const isPromptOpen =
@@ -686,6 +737,7 @@ export const MailWorkspace = ({
                       const mailboxRowLabel = buildMailboxRowLabel({
                         address: mailbox.address,
                         isDestroyed,
+                        isExpired,
                         isHighlighted,
                         source: mailbox.source,
                         expiresAt: mailbox.expiresAt,
@@ -837,14 +889,38 @@ export const MailWorkspace = ({
                                   <span className="truncate">已销毁</span>
                                 ) : null}
                               </div>
-                              {verificationCode && !isDestroyed ? (
-                                <div className="pointer-events-auto shrink-0">
+                              <div className="pointer-events-auto flex shrink-0 items-center gap-1">
+                                {verificationCode && !isDestroyed ? (
                                   <VerificationCopyButton
                                     code={verificationCode}
                                     variant="compact"
                                   />
-                                </div>
-                              ) : null}
+                                ) : null}
+                                {isExpired && onRestoreMailbox ? (
+                                  <ActionButton
+                                    density="dense"
+                                    forceIconOnly
+                                    icon={RotateCcw}
+                                    label="恢复邮箱"
+                                    size="sm"
+                                    tooltip={`延长 ${mailbox.address} 的 TTL 并恢复使用`}
+                                    variant="outline"
+                                    onClick={() => onRestoreMailbox(mailbox)}
+                                  />
+                                ) : null}
+                                {isExpired && onDestroyMailbox ? (
+                                  <ActionButton
+                                    density="dense"
+                                    forceIconOnly
+                                    icon={Trash2}
+                                    label="销毁邮箱"
+                                    size="sm"
+                                    tooltip={`销毁 ${mailbox.address}`}
+                                    variant="destructive"
+                                    onClick={() => onDestroyMailbox(mailbox.id)}
+                                  />
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -855,15 +931,21 @@ export const MailWorkspace = ({
               ) : (
                 <div className="mx-3 mt-2">
                   <EmptyState
-                    title="没有匹配邮箱"
-                    description="试试清空搜索词，或者直接在这里新建一个地址。"
+                    title={isTrashView ? "回收站为空" : "没有匹配邮箱"}
+                    description={
+                      isTrashView
+                        ? "过期邮箱会移入这里，可在清理前恢复或销毁。"
+                        : "试试清空搜索词，或者直接在这里新建一个地址。"
+                    }
                     action={
-                      <Button
-                        variant="outline"
-                        onClick={createMailboxAction.onOpen}
-                      >
-                        新建邮箱
-                      </Button>
+                      isTrashView ? undefined : (
+                        <Button
+                          variant="outline"
+                          onClick={createMailboxAction.onOpen}
+                        >
+                          新建邮箱
+                        </Button>
+                      )
                     }
                   />
                 </div>
@@ -1031,7 +1113,11 @@ export const MailWorkspace = ({
                 <div className="mx-3">
                   <EmptyState
                     title="当前范围内还没有邮件"
-                    description="可以先创建邮箱并发送测试邮件，或者切回全部邮箱视图查看聚合列表。"
+                    description={
+                      isTrashView
+                        ? "回收站里的历史邮件会在选中过期邮箱后显示。"
+                        : "可以先创建邮箱并发送测试邮件，或者切回全部邮箱视图查看聚合列表。"
+                    }
                   />
                 </div>
               )}
