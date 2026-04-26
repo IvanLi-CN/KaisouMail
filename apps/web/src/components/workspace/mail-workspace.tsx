@@ -623,7 +623,8 @@ export const MailWorkspace = ({
                     { value: "active" as const, label: "工作区" },
                     {
                       value: "trash" as const,
-                      label: `回收站 ${trashMailboxCount}`,
+                      label: "回收站",
+                      count: trashMailboxCount,
                     },
                   ].map((option) => {
                     const active = mailboxView === option.value;
@@ -639,7 +640,19 @@ export const MailWorkspace = ({
                         )}
                         onClick={() => onMailboxViewChange?.(option.value)}
                       >
-                        {option.label}
+                        <span>{option.label}</span>
+                        {"count" in option ? (
+                          <Badge
+                            className={cn(
+                              "min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4",
+                              active
+                                ? "border-primary/40 bg-primary/20 text-primary"
+                                : "border-border bg-background/60 text-muted-foreground",
+                            )}
+                          >
+                            {option.count}
+                          </Badge>
+                        ) : null}
                       </button>
                     );
                   })}
