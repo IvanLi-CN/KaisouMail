@@ -626,7 +626,7 @@ export const MailWorkspace = ({
 
                 <fieldset
                   aria-label="邮箱视图"
-                  className="flex flex-wrap gap-2"
+                  className="inline-flex w-fit overflow-hidden rounded-full border border-border bg-background/35 p-1"
                 >
                   <legend className="sr-only">邮箱视图</legend>
                   {[
@@ -643,10 +643,10 @@ export const MailWorkspace = ({
                         key={option.value}
                         data-active={active ? "true" : undefined}
                         className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-ring",
                           active
                             ? "border-[#93c5fd] bg-[#60a5fa] text-[#07111f] shadow-[0_0_0_1px_rgba(147,197,253,0.5),0_0_18px_rgba(96,165,250,0.32)]"
-                            : "border-border/80 bg-background/35 text-muted-foreground hover:border-primary/45 hover:bg-primary/10 hover:text-foreground",
+                            : "border-transparent text-muted-foreground hover:bg-primary/10 hover:text-foreground",
                         )}
                       >
                         <input
