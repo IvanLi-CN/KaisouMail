@@ -1,6 +1,5 @@
 import {
   ArrowDownUp,
-  Check,
   CircleAlert,
   CircleHelp,
   Copy,
@@ -45,7 +44,6 @@ import { VerificationCopyButton } from "@/components/shared/verification-copy-bu
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -53,6 +51,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -626,55 +625,36 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <ButtonGroup aria-label="邮箱视图">
-                  {[
-                    { value: "active" as const, label: "工作区" },
-                    {
-                      value: "trash" as const,
-                      label: "回收站",
-                      badge: trashMailboxCount,
-                    },
-                  ].map((option) => {
-                    const selected = mailboxView === option.value;
-
-                    return (
-                      <Button
-                        aria-pressed={selected}
-                        className={cn(
-                          "h-9 cursor-pointer px-3.5 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200",
-                          selected
-                            ? "z-10 border-primary/70 bg-primary/20 text-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.24)]"
-                            : "bg-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                        )}
-                        key={option.value}
-                        onClick={() => onMailboxViewChange?.(option.value)}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        {selected ? (
-                          <Check
-                            className="h-3.5 w-3.5 shrink-0"
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        <span>{option.label}</span>
-                        {"badge" in option ? (
-                          <Badge
-                            className={cn(
-                              "ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal",
-                              selected
-                                ? "border-primary/45 bg-primary/20 text-primary"
-                                : "bg-background/60 text-muted-foreground",
-                            )}
-                          >
-                            {option.badge}
-                          </Badge>
-                        ) : null}
-                      </Button>
-                    );
-                  })}
-                </ButtonGroup>
+                <Tabs
+                  className="w-fit"
+                  onValueChange={(nextView) => {
+                    if (nextView === "active" || nextView === "trash") {
+                      onMailboxViewChange?.(nextView);
+                    }
+                  }}
+                  value={mailboxView}
+                >
+                  <TabsList
+                    aria-label="邮箱视图"
+                    className="h-9 rounded-lg border border-border bg-muted p-1"
+                  >
+                    <TabsTrigger
+                      className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
+                      value="active"
+                    >
+                      工作区
+                    </TabsTrigger>
+                    <TabsTrigger
+                      className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
+                      value="trash"
+                    >
+                      回收站
+                      <Badge className="ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal">
+                        {trashMailboxCount}
+                      </Badge>
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
 
                 <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
                   <legend className="sr-only">邮箱排序</legend>

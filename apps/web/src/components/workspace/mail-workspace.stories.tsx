@@ -1668,9 +1668,10 @@ export const WorkspaceTrashView: Story = {
     await expect(
       canvas.getByText("1 个过期邮箱 · 1 封历史邮件"),
     ).toBeInTheDocument();
-    await expect(
-      canvas.getByRole("button", { name: "回收站 1" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas.getByRole("tab", { name: "回收站 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(
       canvas.getByRole("button", {
         name: /expired@trash\.mail\.example\.net/i,
@@ -1686,10 +1687,11 @@ export const WorkspaceTrashView: Story = {
       canvas.getByText("Expired mailbox history remains readable"),
     ).toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole("button", { name: "工作区" }));
-    await expect(
-      canvas.getByRole("button", { name: "工作区" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("tab", { name: "工作区" }));
+    await expect(canvas.getByRole("tab", { name: "工作区" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(canvas.getByText("52 个邮箱 · 1 封邮件")).toBeInTheDocument();
     await expect(
       canvas.getByRole("button", {
@@ -1702,10 +1704,11 @@ export const WorkspaceTrashView: Story = {
       }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole("button", { name: "回收站 1" }));
-    await expect(
-      canvas.getByRole("button", { name: "回收站 1" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(canvas.getByRole("tab", { name: "回收站 1" }));
+    await expect(canvas.getByRole("tab", { name: "回收站 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(
       canvas.getByText("1 个过期邮箱 · 1 封历史邮件"),
     ).toBeInTheDocument();
