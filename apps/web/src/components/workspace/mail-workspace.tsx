@@ -624,7 +624,10 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <fieldset className="flex flex-wrap gap-2">
+                <fieldset
+                  aria-label="邮箱视图"
+                  className="flex flex-wrap gap-2"
+                >
                   <legend className="sr-only">邮箱视图</legend>
                   {[
                     { value: "active" as const, label: "工作区" },
@@ -636,33 +639,54 @@ export const MailWorkspace = ({
                   ].map((option) => {
                     const active = mailboxView === option.value;
                     return (
-                      <button
+                      <label
                         key={option.value}
-                        type="button"
-                        aria-pressed={active}
                         data-active={active ? "true" : undefined}
                         className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           active
-                            ? "border-primary/45 bg-primary/15 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.25)]"
-                            : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/5 hover:text-foreground",
+                            ? "border-[#93c5fd] bg-[#60a5fa] text-[#07111f] shadow-[0_0_0_1px_rgba(147,197,253,0.5),0_0_18px_rgba(96,165,250,0.32)]"
+                            : "border-border/80 bg-background/35 text-muted-foreground hover:border-primary/45 hover:bg-primary/10 hover:text-foreground",
                         )}
-                        onClick={() => onMailboxViewChange?.(option.value)}
                       >
+                        <input
+                          type="radio"
+                          checked={active}
+                          className="sr-only"
+                          name="workspace-mailbox-view"
+                          value={option.value}
+                          onChange={() => onMailboxViewChange?.(option.value)}
+                        />
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-200",
+                            active
+                              ? "border-[#07111f] bg-[#07111f]"
+                              : "border-muted-foreground/55 bg-transparent",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full bg-[#60a5fa] transition-opacity duration-200",
+                              active ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                        </span>
                         <span>{option.label}</span>
                         {"count" in option ? (
                           <Badge
                             className={cn(
                               "min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4",
                               active
-                                ? "border-primary/40 bg-primary/20 text-primary"
+                                ? "border-[#07111f]/25 bg-[#07111f]/10 text-[#07111f]"
                                 : "border-border bg-background/60 text-muted-foreground",
                             )}
                           >
                             {option.count}
                           </Badge>
                         ) : null}
-                      </button>
+                      </label>
                     );
                   })}
                 </fieldset>
