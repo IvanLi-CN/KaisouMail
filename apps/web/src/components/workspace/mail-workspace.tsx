@@ -51,7 +51,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { RadioButtonGroup } from "@/components/ui/radio-button-group";
+import { SegmentedButtonGroup } from "@/components/ui/segmented-button-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -625,9 +625,8 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <RadioButtonGroup
+                <SegmentedButtonGroup
                   ariaLabel="邮箱视图"
-                  name="workspace-mailbox-view"
                   onValueChange={onMailboxViewChange}
                   options={[
                     { value: "active", label: "工作区" },

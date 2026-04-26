@@ -2,11 +2,11 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import * as React from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-import { RadioButtonGroup } from "@/components/ui/radio-button-group";
+import { SegmentedButtonGroup } from "@/components/ui/segmented-button-group";
 
 const meta = {
-  title: "UI/RadioButtonGroup",
-  component: RadioButtonGroup,
+  title: "UI/SegmentedButtonGroup",
+  component: SegmentedButtonGroup,
   tags: ["autodocs"],
   parameters: {
     layout: "centered",
@@ -20,7 +20,6 @@ const meta = {
   ],
   args: {
     ariaLabel: "邮箱视图",
-    name: "mailbox-view-story",
     onValueChange: fn(),
     options: [
       { value: "active", label: "工作区" },
@@ -28,7 +27,7 @@ const meta = {
     ],
     value: "trash",
   },
-} satisfies Meta<typeof RadioButtonGroup>;
+} satisfies Meta<typeof SegmentedButtonGroup>;
 
 export default meta;
 
@@ -38,10 +37,13 @@ export const SelectedWithBadge: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole("radio", { name: "回收站 1" })).toBeChecked();
     await expect(
-      canvas.getByRole("radio", { name: "工作区" }),
-    ).not.toBeChecked();
+      canvas.getByRole("radio", { name: "回收站 1" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await expect(canvas.getByRole("radio", { name: "工作区" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   },
 };
 
@@ -50,7 +52,7 @@ export const Switchable: Story = {
     const [value, setValue] = React.useState<"active" | "trash">("active");
 
     return (
-      <RadioButtonGroup
+      <SegmentedButtonGroup
         {...args}
         onValueChange={(nextValue) => {
           setValue(nextValue as "active" | "trash");
@@ -63,8 +65,13 @@ export const Switchable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByRole("radio", { name: "工作区" })).toBeChecked();
+    await expect(canvas.getByRole("radio", { name: "工作区" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     await userEvent.click(canvas.getByRole("radio", { name: "回收站 1" }));
-    await expect(canvas.getByRole("radio", { name: "回收站 1" })).toBeChecked();
+    await expect(
+      canvas.getByRole("radio", { name: "回收站 1" }),
+    ).toHaveAttribute("aria-checked", "true");
   },
 };
