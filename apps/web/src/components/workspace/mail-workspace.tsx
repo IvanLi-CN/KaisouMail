@@ -1,5 +1,6 @@
 import {
   ArrowDownUp,
+  Check,
   CircleAlert,
   CircleHelp,
   Copy,
@@ -642,7 +643,7 @@ export const MailWorkspace = ({
                         className={cn(
                           "h-9 cursor-pointer px-3.5 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200",
                           selected
-                            ? "z-10 border-primary/40 bg-primary/10 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.16)]"
+                            ? "z-10 border-primary/70 bg-primary/20 text-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.24)]"
                             : "bg-transparent text-muted-foreground hover:bg-white/5 hover:text-foreground",
                         )}
                         key={option.value}
@@ -651,13 +652,19 @@ export const MailWorkspace = ({
                         type="button"
                         variant="outline"
                       >
+                        {selected ? (
+                          <Check
+                            className="h-3.5 w-3.5 shrink-0"
+                            aria-hidden="true"
+                          />
+                        ) : null}
                         <span>{option.label}</span>
                         {"badge" in option ? (
                           <Badge
                             className={cn(
                               "ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal",
                               selected
-                                ? "border-primary/35 bg-primary/15 text-primary"
+                                ? "border-primary/45 bg-primary/20 text-primary"
                                 : "bg-background/60 text-muted-foreground",
                             )}
                           >
