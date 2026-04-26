@@ -69,9 +69,8 @@ const sortOptions: Array<{ label: string; value: MailboxSortMode }> = [
 
 const buildMailboxRowLabel = (input: {
   address: string;
-  isDestroyed: boolean;
-  isExpired: boolean;
   isHighlighted: boolean;
+  status: Mailbox["status"];
   source: Mailbox["source"];
   expiresAt: string | null;
   messageCount: number;
@@ -79,11 +78,11 @@ const buildMailboxRowLabel = (input: {
 }) => {
   const parts = [input.address];
 
-  if (input.isDestroyed) {
+  if (input.status === "destroyed") {
     parts.push("已销毁");
-  }
-
-  if (input.isExpired) {
+  } else if (input.status === "destroying") {
+    parts.push("销毁中");
+  } else if (input.status === "expired") {
     parts.push("已过期");
   }
 
@@ -93,7 +92,7 @@ const buildMailboxRowLabel = (input: {
 
   if (input.source === "catch_all") {
     parts.push("Catch All");
-  } else {
+  } else if (input.status === "active") {
     parts.push(formatMailboxExpiry(input.expiresAt));
   }
 
@@ -104,6 +103,14 @@ const buildMailboxRowLabel = (input: {
   }
 
   return parts.join("，");
+};
+
+const resolveMailboxStatusLabel = (mailbox: Mailbox) => {
+  if (mailbox.status === "destroyed") return "已销毁";
+  if (mailbox.status === "destroying") return "销毁中";
+  if (mailbox.status === "expired") return "已过期";
+  if (mailbox.source !== "registered") return null;
+  return formatMailboxExpiry(mailbox.expiresAt);
 };
 
 const buildMessageRowLabel = (message: MessageSummary) => {
@@ -749,18 +756,14 @@ export const MailWorkspace = ({
                         mailboxLatestVerificationCodes.get(mailbox.id) ?? null;
                       const mailboxRowLabel = buildMailboxRowLabel({
                         address: mailbox.address,
-                        isDestroyed,
-                        isExpired,
                         isHighlighted,
+                        status: mailbox.status,
                         source: mailbox.source,
                         expiresAt: mailbox.expiresAt,
                         messageCount,
                         verificationCode,
                       });
-                      const expiryLabel =
-                        mailbox.source === "registered"
-                          ? formatMailboxExpiry(mailbox.expiresAt)
-                          : null;
+                      const statusLabel = resolveMailboxStatusLabel(mailbox);
 
                       const mailboxAddressCopyStateForRow =
                         getMailboxAddressCopyState(mailbox.address);
@@ -874,12 +877,12 @@ export const MailWorkspace = ({
                                     Catch All
                                   </Badge>
                                 ) : null}
-                                {expiryLabel && !isDestroyed ? (
+                                {statusLabel && !isDestroyed ? (
                                   isPromptOpen ? (
                                     <Popover open>
                                       <PopoverAnchor asChild>
                                         <span className="truncate rounded-md px-0.5">
-                                          {expiryLabel}
+                                          {statusLabel}
                                         </span>
                                       </PopoverAnchor>
                                       <PopoverContent
@@ -894,7 +897,7 @@ export const MailWorkspace = ({
                                     </Popover>
                                   ) : (
                                     <span className="truncate">
-                                      {expiryLabel}
+                                      {statusLabel}
                                     </span>
                                   )
                                 ) : null}

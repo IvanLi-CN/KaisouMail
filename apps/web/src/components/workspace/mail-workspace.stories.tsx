@@ -167,7 +167,7 @@ const createWorkspaceScopeMailboxes = () => {
     status: "active",
     createdAt: "2026-04-08T11:05:00.000Z",
     lastReceivedAt: "2026-04-08T11:58:00.000Z",
-    expiresAt: "2026-04-08T13:00:00.000Z",
+    expiresAt: "2099-04-08T13:00:00.000Z",
     destroyedAt: null,
     source: "registered",
     routingRuleId: "rule_scope_active",
@@ -1558,6 +1558,11 @@ export const WorkspaceScopeTrimmedDestroyedHistory: Story = {
         name: /expired@trash\.mail\.example\.net/i,
       }),
     ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", {
+        name: /retry@ops\.mail\.example\.net，销毁中/i,
+      }),
+    ).toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", {
         name: /destroyed-stale@archive\.mail\.example\.net/i,
