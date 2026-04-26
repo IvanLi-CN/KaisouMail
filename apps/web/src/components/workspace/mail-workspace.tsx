@@ -624,7 +624,7 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
+                <fieldset className="flex flex-wrap gap-2">
                   <legend className="sr-only">邮箱视图</legend>
                   {[
                     { value: "active" as const, label: "工作区" },

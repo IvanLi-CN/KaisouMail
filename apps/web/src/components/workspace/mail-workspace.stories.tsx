@@ -268,6 +268,7 @@ const createWorkspaceScopeMailboxes = () => {
 
   return {
     activeMailbox,
+    destroyingMailbox,
     expiredMailbox,
     allMailboxes,
     visibleMailboxes: filterMailboxesForWorkspaceScope(
@@ -813,9 +814,45 @@ const WorkspaceScopeHistoryHarness = () => {
 };
 
 const WorkspaceTrashHarness = () => {
-  const { expiredMailbox } = useMemo(() => createWorkspaceScopeMailboxes(), []);
+  const { activeMailbox, expiredMailbox, visibleMailboxes } = useMemo(
+    () => createWorkspaceScopeMailboxes(),
+    [],
+  );
+  const [mailboxView, setMailboxView] = useState<"active" | "trash">("trash");
+  const [selectedMailboxId, setSelectedMailboxId] = useState("all");
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    "msg_scope_expired",
+  );
   const restoreMailbox = fn();
   const destroyMailbox = fn();
+  const activeMessages = useMemo<MessageSummary[]>(
+    () => [
+      {
+        ...demoMessages[0],
+        id: "msg_scope_active",
+        mailboxId: activeMailbox.id,
+        mailboxAddress: activeMailbox.address,
+        subject: "Workspace scope keeps only recent destroyed rows",
+        previewText: "Recent destroyed mailboxes stay visible for seven days.",
+        receivedAt: "2026-04-08T11:58:00.000Z",
+      },
+    ],
+    [activeMailbox],
+  );
+  const activeDetail = useMemo<MessageDetail>(
+    () => ({
+      ...demoMessageDetails.msg_alpha,
+      id: "msg_scope_active",
+      mailboxId: activeMailbox.id,
+      mailboxAddress: activeMailbox.address,
+      subject: "Workspace scope keeps only recent destroyed rows",
+      previewText: "Recent destroyed mailboxes stay visible for seven days.",
+      receivedAt: "2026-04-08T11:58:00.000Z",
+      envelopeTo: activeMailbox.address,
+      rawDownloadPath: "/api/messages/msg_scope_active/raw",
+    }),
+    [activeMailbox],
+  );
   const trashMessages = useMemo<MessageSummary[]>(
     () => [
       {
@@ -846,6 +883,25 @@ const WorkspaceTrashHarness = () => {
     }),
     [expiredMailbox],
   );
+  const isTrashView = mailboxView === "trash";
+  const currentMailboxes = isTrashView ? [expiredMailbox] : visibleMailboxes;
+  const currentMessages = isTrashView ? trashMessages : activeMessages;
+  const selectedMailbox =
+    selectedMailboxId === "all"
+      ? null
+      : (currentMailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ??
+        null);
+  const visibleMessages = selectedMailbox
+    ? currentMessages.filter(
+        (message) => message.mailboxId === selectedMailbox.id,
+      )
+    : currentMessages;
+  const selectedMessage =
+    selectedMessageId === "msg_scope_expired"
+      ? trashDetail
+      : selectedMessageId === "msg_scope_active"
+        ? activeDetail
+        : null;
 
   return (
     <MailWorkspace
@@ -859,18 +915,37 @@ const WorkspaceTrashHarness = () => {
         trashMessages,
       )}
       mailboxMessageCounts={buildMailboxMessageCounts(
-        [expiredMailbox],
-        trashMessages,
+        currentMailboxes,
+        currentMessages,
       )}
-      mailboxView="trash"
-      messageDetailHref="/messages/msg_scope_expired?mailbox=mbx_scope_expired&view=trash&sort=recent"
-      messages={trashMessages}
+      mailboxView={mailboxView}
+      messageDetailHref={
+        selectedMessageId
+          ? `/messages/${selectedMessageId}?mailbox=${selectedMailboxId}&${isTrashView ? "view=trash&" : ""}sort=recent`
+          : null
+      }
+      messages={visibleMessages}
       onDestroyMailbox={destroyMailbox}
-      onMailboxViewChange={fn()}
+      onMailboxViewChange={(view) => {
+        setMailboxView(view);
+        setSelectedMailboxId("all");
+        setSelectedMessageId(
+          view === "trash" ? "msg_scope_expired" : "msg_scope_active",
+        );
+      }}
       onRestoreMailbox={restoreMailbox}
       onSearchQueryChange={fn()}
-      onSelectMailbox={fn()}
-      onSelectMessage={fn()}
+      onSelectMailbox={(mailboxId) => {
+        setSelectedMailboxId(mailboxId);
+        const nextMessages =
+          mailboxId === "all"
+            ? currentMessages
+            : currentMessages.filter(
+                (message) => message.mailboxId === mailboxId,
+              );
+        setSelectedMessageId(nextMessages[0]?.id ?? null);
+      }}
+      onSelectMessage={setSelectedMessageId}
       onSortModeChange={fn()}
       refreshAction={
         <MessageRefreshControl
@@ -881,16 +956,16 @@ const WorkspaceTrashHarness = () => {
         />
       }
       searchQuery=""
-      selectedMailbox={expiredMailbox}
-      selectedMailboxId={expiredMailbox.id}
-      selectedMessage={trashDetail}
-      selectedMessageId={trashDetail.id}
+      selectedMailbox={selectedMailbox}
+      selectedMailboxId={selectedMailboxId}
+      selectedMessage={selectedMessage}
+      selectedMessageId={selectedMessageId}
       sortMode="recent"
-      totalAggregatedMessageCount={trashMessages.length}
-      totalMailboxCount={1}
-      totalMessageCount={trashMessages.length}
+      totalAggregatedMessageCount={currentMessages.length}
+      totalMailboxCount={visibleMailboxes.length}
+      totalMessageCount={visibleMessages.length}
       trashMailboxCount={1}
-      visibleMailboxes={[expiredMailbox]}
+      visibleMailboxes={currentMailboxes}
     />
   );
 };
@@ -1595,7 +1670,7 @@ export const WorkspaceTrashView: Story = {
     ).toBeInTheDocument();
     await expect(
       canvas.getByRole("button", { name: "回收站 1" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("aria-pressed", "true");
     await expect(
       canvas.getByRole("button", {
         name: /expired@trash\.mail\.example\.net/i,
@@ -1609,6 +1684,35 @@ export const WorkspaceTrashView: Story = {
     ).toBeInTheDocument();
     await expect(
       canvas.getByText("Expired mailbox history remains readable"),
+    ).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("button", { name: "工作区" }));
+    await expect(
+      canvas.getByRole("button", { name: "工作区" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(canvas.getByText("52 个邮箱 · 1 封邮件")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", {
+        name: /active@ops\.mail\.example\.net/i,
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /expired@trash\.mail\.example\.net/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("button", { name: "回收站 1" }));
+    await expect(
+      canvas.getByRole("button", { name: "回收站 1" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      canvas.getByText("1 个过期邮箱 · 1 封历史邮件"),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", {
+        name: /expired@trash\.mail\.example\.net/i,
+      }),
     ).toBeInTheDocument();
   },
 };
