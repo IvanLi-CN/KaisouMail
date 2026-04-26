@@ -640,9 +640,9 @@ export const MailWorkspace = ({
                       <Button
                         aria-pressed={selected}
                         className={cn(
-                          "h-9 cursor-pointer px-3.5 text-xs font-semibold",
+                          "h-9 cursor-pointer px-3.5 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200",
                           selected &&
-                            "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+                            "z-10 border-[#93c5fd] bg-[#60a5fa] text-[#07111f] shadow-[inset_0_0_0_1px_rgba(7,17,31,0.14),0_0_0_1px_rgba(147,197,253,0.42),0_0_14px_rgba(96,165,250,0.24)] hover:bg-[#60a5fa]",
                         )}
                         key={option.value}
                         onClick={() => onMailboxViewChange?.(option.value)}
@@ -656,7 +656,7 @@ export const MailWorkspace = ({
                             className={cn(
                               "ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal",
                               selected
-                                ? "border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground"
+                                ? "border-[#07111f]/20 bg-[#07111f]/10 text-[#07111f]"
                                 : "bg-background/60 text-muted-foreground",
                             )}
                           >
