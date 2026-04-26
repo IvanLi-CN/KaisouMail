@@ -51,6 +51,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { RadioButtonGroup } from "@/components/ui/radio-button-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -624,72 +625,20 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <fieldset
-                  aria-label="邮箱视图"
-                  className="inline-flex w-fit overflow-hidden rounded-full border border-border bg-background/35 p-1"
-                >
-                  <legend className="sr-only">邮箱视图</legend>
-                  {[
-                    { value: "active" as const, label: "工作区" },
+                <RadioButtonGroup
+                  ariaLabel="邮箱视图"
+                  name="workspace-mailbox-view"
+                  onValueChange={onMailboxViewChange}
+                  options={[
+                    { value: "active", label: "工作区" },
                     {
-                      value: "trash" as const,
+                      value: "trash",
                       label: "回收站",
-                      count: trashMailboxCount,
+                      badge: trashMailboxCount,
                     },
-                  ].map((option) => {
-                    const active = mailboxView === option.value;
-                    return (
-                      <label
-                        key={option.value}
-                        data-active={active ? "true" : undefined}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-semibold transition-[background-color,border-color,color,box-shadow] duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-ring",
-                          active
-                            ? "border-[#93c5fd] bg-[#60a5fa] text-[#07111f] shadow-[0_0_0_1px_rgba(147,197,253,0.5),0_0_18px_rgba(96,165,250,0.32)]"
-                            : "border-transparent text-muted-foreground hover:bg-primary/10 hover:text-foreground",
-                        )}
-                      >
-                        <input
-                          type="radio"
-                          checked={active}
-                          className="sr-only"
-                          name="workspace-mailbox-view"
-                          value={option.value}
-                          onChange={() => onMailboxViewChange?.(option.value)}
-                        />
-                        <span
-                          aria-hidden
-                          className={cn(
-                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors duration-200",
-                            active
-                              ? "border-[#07111f] bg-[#07111f]"
-                              : "border-muted-foreground/55 bg-transparent",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full bg-[#60a5fa] transition-opacity duration-200",
-                              active ? "opacity-100" : "opacity-0",
-                            )}
-                          />
-                        </span>
-                        <span>{option.label}</span>
-                        {"count" in option ? (
-                          <Badge
-                            className={cn(
-                              "min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4",
-                              active
-                                ? "border-[#07111f]/25 bg-[#07111f]/10 text-[#07111f]"
-                                : "border-border bg-background/60 text-muted-foreground",
-                            )}
-                          >
-                            {option.count}
-                          </Badge>
-                        ) : null}
-                      </label>
-                    );
-                  })}
-                </fieldset>
+                  ]}
+                  value={mailboxView}
+                />
 
                 <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
                   <legend className="sr-only">邮箱排序</legend>
