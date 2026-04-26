@@ -639,11 +639,13 @@ export const MailWorkspace = ({
                       <button
                         key={option.value}
                         type="button"
+                        aria-pressed={active}
+                        data-active={active ? "true" : undefined}
                         className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-medium transition-[background-color,border-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           active
-                            ? "bg-secondary text-foreground"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                            ? "border-primary/45 bg-primary/15 text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.25)]"
+                            : "border-transparent text-muted-foreground hover:border-border/70 hover:bg-white/5 hover:text-foreground",
                         )}
                         onClick={() => onMailboxViewChange?.(option.value)}
                       >
