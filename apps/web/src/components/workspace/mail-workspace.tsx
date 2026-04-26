@@ -44,6 +44,7 @@ import { VerificationCopyButton } from "@/components/shared/verification-copy-bu
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -51,7 +52,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { SegmentedButtonGroup } from "@/components/ui/segmented-button-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -625,19 +625,48 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <SegmentedButtonGroup
-                  ariaLabel="邮箱视图"
-                  onValueChange={onMailboxViewChange}
-                  options={[
-                    { value: "active", label: "工作区" },
+                <ButtonGroup aria-label="邮箱视图">
+                  {[
+                    { value: "active" as const, label: "工作区" },
                     {
-                      value: "trash",
+                      value: "trash" as const,
                       label: "回收站",
                       badge: trashMailboxCount,
                     },
-                  ]}
-                  value={mailboxView}
-                />
+                  ].map((option) => {
+                    const selected = mailboxView === option.value;
+
+                    return (
+                      <Button
+                        aria-pressed={selected}
+                        className={cn(
+                          "h-9 cursor-pointer px-3.5 text-xs font-semibold",
+                          selected &&
+                            "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+                        )}
+                        key={option.value}
+                        onClick={() => onMailboxViewChange?.(option.value)}
+                        size="sm"
+                        type="button"
+                        variant={selected ? "default" : "outline"}
+                      >
+                        <span>{option.label}</span>
+                        {"badge" in option ? (
+                          <Badge
+                            className={cn(
+                              "ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal",
+                              selected
+                                ? "border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground"
+                                : "bg-background/60 text-muted-foreground",
+                            )}
+                          >
+                            {option.badge}
+                          </Badge>
+                        ) : null}
+                      </Button>
+                    );
+                  })}
+                </ButtonGroup>
 
                 <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
                   <legend className="sr-only">邮箱排序</legend>
