@@ -894,6 +894,17 @@ const WorkspaceTrashHarness = () => {
     [expiredMailbox, isTrashView, searchQuery, visibleMailboxes],
   );
   const currentMessages = isTrashView ? trashMessages : activeMessages;
+  const currentMailboxIds = useMemo(
+    () => new Set(currentMailboxes.map((mailbox) => mailbox.id)),
+    [currentMailboxes],
+  );
+  const filteredAggregateMessages = useMemo(() => {
+    if (!searchQuery.trim()) return currentMessages;
+
+    return currentMessages.filter((message) =>
+      currentMailboxIds.has(message.mailboxId),
+    );
+  }, [currentMailboxIds, currentMessages, searchQuery]);
   const selectedMailbox =
     selectedMailboxId === "all"
       ? null
@@ -903,11 +914,19 @@ const WorkspaceTrashHarness = () => {
     ? currentMessages.filter(
         (message) => message.mailboxId === selectedMailbox.id,
       )
-    : currentMessages;
+    : filteredAggregateMessages;
+  useEffect(() => {
+    if (!visibleMessages.some((message) => message.id === selectedMessageId)) {
+      setSelectedMessageId(visibleMessages[0]?.id ?? null);
+    }
+  }, [selectedMessageId, visibleMessages]);
+
   const selectedMessage =
-    selectedMessageId === "msg_scope_expired"
+    selectedMessageId === "msg_scope_expired" &&
+    visibleMessages.some((message) => message.id === selectedMessageId)
       ? trashDetail
-      : selectedMessageId === "msg_scope_active"
+      : selectedMessageId === "msg_scope_active" &&
+          visibleMessages.some((message) => message.id === selectedMessageId)
         ? activeDetail
         : null;
 
@@ -970,7 +989,7 @@ const WorkspaceTrashHarness = () => {
       selectedMessage={selectedMessage}
       selectedMessageId={selectedMessageId}
       sortMode="recent"
-      totalAggregatedMessageCount={currentMessages.length}
+      totalAggregatedMessageCount={filteredAggregateMessages.length}
       totalMailboxCount={visibleMailboxes.length}
       totalMessageCount={visibleMessages.length}
       trashMailboxCount={1}
@@ -1708,6 +1727,7 @@ export const WorkspaceTrashView: Story = {
     await userEvent.clear(searchInput);
     await userEvent.type(searchInput, "nomatch");
     await expect(canvas.getByText("没有匹配邮箱")).toBeInTheDocument();
+    await expect(canvas.getByText("当前范围内还没有邮件")).toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", {
         name: /expired@trash\.mail\.example\.net，已过期/i,

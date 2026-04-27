@@ -261,7 +261,6 @@ export const WorkspacePage = () => {
     scope: isTrashView ? "default" : "workspace",
   });
   const allMessages = allMessagesQuery.data ?? [];
-  const messages = selectedMailbox ? (messagesQuery.data ?? []) : allMessages;
   const selectedMessageId = searchParams.get("message");
   const workspaceMessages = useMemo(
     () =>
@@ -302,6 +301,20 @@ export const WorkspacePage = () => {
       ),
     [deferredQuery, mailboxesWithLiveRecency, resolvedSortMode],
   );
+  const visibleMailboxIdSet = useMemo(
+    () => new Set(visibleMailboxes.map((mailbox) => mailbox.id)),
+    [visibleMailboxes],
+  );
+  const filteredAggregateMessages = useMemo(() => {
+    if (!deferredQuery.trim()) return allMessages;
+
+    return allMessages.filter((message) =>
+      visibleMailboxIdSet.has(message.mailboxId),
+    );
+  }, [allMessages, deferredQuery, visibleMailboxIdSet]);
+  const messages = selectedMailbox
+    ? (messagesQuery.data ?? [])
+    : filteredAggregateMessages;
   const mailboxMessageCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -347,7 +360,17 @@ export const WorkspacePage = () => {
     updateSearchParams,
   ]);
 
-  const messageDetailQuery = useMessageDetailQuery(selectedMessageId ?? "");
+  const selectedMessageIsVisible = Boolean(
+    selectedMessageId &&
+      messages.some((message) => message.id === selectedMessageId),
+  );
+  const messageDetailQuery = useMessageDetailQuery(
+    selectedMessageIsVisible ? (selectedMessageId ?? "") : "",
+    { enabled: selectedMessageIsVisible },
+  );
+  const selectedMessageDetail = selectedMessageIsVisible
+    ? (messageDetailQuery.data ?? null)
+    : null;
   const refreshTargets = useMemo(
     () => [
       { queryKey: mailboxKeys.all },
@@ -664,14 +687,14 @@ export const WorkspacePage = () => {
         trashMailboxCount={expiredMailboxCount}
         mailboxView={mailboxView}
         totalMessageCount={messages.length}
-        totalAggregatedMessageCount={allMessages.length}
+        totalAggregatedMessageCount={filteredAggregateMessages.length}
         mailboxMessageCounts={mailboxMessageCounts}
         mailboxLatestVerificationCodes={mailboxLatestVerificationCodes}
         selectedMailboxId={selectedMailboxId}
         selectedMailbox={selectedMailbox}
         messages={messages}
         selectedMessageId={selectedMessageId}
-        selectedMessage={messageDetailQuery.data ?? null}
+        selectedMessage={selectedMessageDetail}
         searchQuery={searchQuery}
         sortMode={resolvedSortMode}
         refreshAction={
@@ -694,7 +717,7 @@ export const WorkspacePage = () => {
         isMessageLoading={messageDetailQuery.isLoading}
         mailboxManagementHref="/mailboxes"
         messageDetailHref={
-          selectedMessageId
+          selectedMessageIsVisible && selectedMessageId
             ? `/messages/${selectedMessageId}${buildWorkspaceSearch({
                 mailbox: selectedMailboxId,
                 message: selectedMessageId,
