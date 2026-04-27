@@ -145,7 +145,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace mailbox creation uses a collision-aware anchored popover; outside click and focus changes do not dismiss it, while explicit cancel or `Esc` can close it before submit starts
 - Mailbox creation guidance stays mode-aware: segmented mode can still promise random active-domain allocation, while full-address mode instead explains supported-domain validation and keeps the current normalized address preview visible
 - Mailbox lifetime control now keeps the dense dialog compact: a log-scale slider covers short-lived to long-lived finite mailboxes up to one year, the current resolved TTL is shown inline at the right edge, double-click inline editing accepts common human units, and the terminal slider slot exposes explicit long-term lifetime
-- Mailbox presentation keeps explicit lifecycle segmentation in management views, while the active workspace rail omits expired rows entirely and the trash aggregate message stream is resolved by server-side mailbox status filtering; Catch All remains an explicit operator-facing badge, the workspace rail keeps right-aligned numeric badges, and mailbox tables show unread / total counts
+- Mailbox presentation keeps explicit lifecycle segmentation in management views, while the active workspace rail omits expired rows entirely and the trash aggregate message stream is resolved by server-side mailbox status filtering; Catch All remains an explicit operator-facing badge, mailbox management tables render routing state as badges for per-address rules, domain-level delivery, and removed inactive rules, the workspace rail keeps right-aligned numeric badges, and mailbox tables show unread / total counts
 - Workspace mailbox rail rows use a two-line dense layout: the first line holds address + copy affordance + count, while the second line carries Catch All / expiry / destroyed metadata plus the inline verification-code action
 - Destroyed mailboxes stay in the same two-line dense rhythm as active rows instead of collapsing back to a single-line variant
 - Table-first detail and management pages remain available as compatibility surfaces
@@ -291,6 +291,8 @@ PR: include
 ![Mailboxes page refreshing state](./assets/mailboxes-refreshing.png)
 
 ![Mailboxes inventory with Catch All / pre-registered badges and friendly expiry labels](./assets/mailboxes-catch-all-badge.png)
+
+![Mailboxes inventory routing state badges for per-address rules, domain-level delivery, Catch All, and removed inactive rules](./assets/mailboxes-rule-badges.png)
 
 ### Domains
 

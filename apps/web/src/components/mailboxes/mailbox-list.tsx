@@ -42,6 +42,30 @@ const mailboxStatusView = {
   },
 } satisfies Record<Mailbox["status"], { label: string; className: string }>;
 
+const getMailboxRuleBadge = (mailbox: Mailbox) => {
+  if (
+    !mailbox.routingRuleId &&
+    (mailbox.status === "destroying" || mailbox.status === "destroyed")
+  ) {
+    return {
+      label: "已移除",
+      className: "border-border bg-muted/20 text-muted-foreground",
+    };
+  }
+  if (mailbox.source === "catch_all") return null;
+  if (mailbox.routingRuleId) {
+    return {
+      label: mailbox.routingRuleId,
+      className:
+        "border-border bg-muted/20 font-mono normal-case tracking-normal text-muted-foreground",
+    };
+  }
+  return {
+    label: "域名级接管",
+    className: "border-primary/35 bg-primary/10 text-primary",
+  };
+};
+
 export const MailboxList = ({
   mailboxes,
   messageStatsByMailbox,
@@ -102,6 +126,7 @@ export const MailboxList = ({
         const isSelected = selectedMailboxId === mailbox.id;
         const isHighlighted = highlightedMailboxId === mailbox.id;
         const isPopoverOpen = rowPopover?.mailboxId === mailbox.id;
+        const ruleBadge = getMailboxRuleBadge(mailbox);
 
         return (
           <TableRow
@@ -148,9 +173,11 @@ export const MailboxList = ({
                   >
                     {mailbox.source === "catch_all" ? "Catch All" : "预注册"}
                   </Badge>
-                  <span className="font-mono">
-                    Rule: {mailbox.routingRuleId ?? "已清理"}
-                  </span>
+                  {ruleBadge ? (
+                    <Badge className={cn("border", ruleBadge.className)}>
+                      {ruleBadge.label}
+                    </Badge>
+                  ) : null}
                 </div>
               </div>
             </TableCell>

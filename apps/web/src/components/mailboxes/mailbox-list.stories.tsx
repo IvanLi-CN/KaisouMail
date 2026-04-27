@@ -44,6 +44,56 @@ const statusDemoStats = new Map([
   ["mbx_status_destroyed", { unread: 0, total: 8 }],
 ]);
 
+const routingRuleModeMailboxes = [
+  {
+    ...demoMailboxes[0],
+    id: "mbx_rule_single",
+    address: "single@rules.relay.example.test",
+    source: "registered" as const,
+    routingRuleId: "rule_single_address",
+  },
+  {
+    ...demoMailboxes[1],
+    id: "mbx_rule_domain",
+    address: "domain@managed.relay.example.test",
+    source: "registered" as const,
+    routingRuleId: null,
+  },
+  {
+    ...demoMailboxes[2],
+    id: "mbx_rule_catch_all",
+    address: "catchall@wild.relay.example.test",
+    source: "catch_all" as const,
+    routingRuleId: null,
+  },
+  {
+    ...demoMailboxes[3],
+    id: "mbx_rule_removed",
+    address: "destroyed@history.relay.example.test",
+    source: "registered" as const,
+    status: "destroyed" as const,
+    destroyedAt: "2026-04-01T08:20:00.000Z",
+    routingRuleId: null,
+  },
+  {
+    ...demoMailboxes[2],
+    id: "mbx_rule_removed_catch_all",
+    address: "removed-catchall@history.relay.example.test",
+    source: "catch_all" as const,
+    status: "destroyed" as const,
+    destroyedAt: "2026-04-01T08:20:00.000Z",
+    routingRuleId: null,
+  },
+];
+
+const routingRuleModeStats = new Map([
+  ["mbx_rule_single", { unread: 0, total: 2 }],
+  ["mbx_rule_domain", { unread: 0, total: 0 }],
+  ["mbx_rule_catch_all", { unread: 1, total: 1 }],
+  ["mbx_rule_removed", { unread: 0, total: 4 }],
+  ["mbx_rule_removed_catch_all", { unread: 0, total: 0 }],
+]);
+
 const meta = {
   title: "Mailboxes/MailboxList",
   component: MailboxList,
@@ -95,6 +145,31 @@ export const CatchAllBadge: Story = {
     await expect(canvas.getByText("Catch All")).toBeInTheDocument();
     await expect(canvas.getByText("预注册")).toBeInTheDocument();
     await expect(canvas.getByText("长期")).toBeInTheDocument();
+  },
+};
+
+export const RoutingRuleModes: Story = {
+  args: {
+    mailboxes: routingRuleModeMailboxes,
+    messageStatsByMailbox: routingRuleModeStats,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Shows mailbox routing badges for a concrete per-address rule, domain-level delivery, Catch All delivery, and removed inactive rules.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("rule_single_address")).toBeInTheDocument();
+    await expect(canvas.getByText("域名级接管")).toBeInTheDocument();
+    await expect(canvas.getAllByText("Catch All")).toHaveLength(2);
+    await expect(canvas.getAllByText("已移除")).toHaveLength(2);
+    await expect(canvas.queryByText(/Rule:/)).not.toBeInTheDocument();
+    await expect(canvas.queryByText(/已清理/)).not.toBeInTheDocument();
   },
 };
 

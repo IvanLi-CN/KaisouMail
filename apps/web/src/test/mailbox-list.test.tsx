@@ -6,6 +6,61 @@ import { MailboxList } from "@/components/mailboxes/mailbox-list";
 import { demoMailboxes } from "@/mocks/data";
 
 describe("MailboxList", () => {
+  it("describes mailboxes without per-address rules as domain managed", () => {
+    render(
+      <MemoryRouter>
+        <MailboxList
+          mailboxes={[
+            {
+              ...demoMailboxes[0],
+              id: "mbx_domain_managed",
+              address: "kai25@support.fkoai.asia",
+              source: "registered",
+              routingRuleId: null,
+            },
+            {
+              ...demoMailboxes[2],
+              id: "mbx_catch_all_rule",
+              address: "ops@wild.mail.example.net",
+              source: "catch_all",
+              routingRuleId: null,
+            },
+            {
+              ...demoMailboxes[1],
+              id: "mbx_single_rule",
+              address: "alerts@ops.beta.mail.example.net",
+              source: "registered",
+              routingRuleId: "rule_beta",
+            },
+            {
+              ...demoMailboxes[3],
+              id: "mbx_removed_rule",
+              address: "destroyed@history.mail.example.net",
+              source: "registered",
+              status: "destroyed",
+              routingRuleId: null,
+            },
+            {
+              ...demoMailboxes[2],
+              id: "mbx_removed_catch_all",
+              address: "removed@wild.mail.example.net",
+              source: "catch_all",
+              status: "destroyed",
+              routingRuleId: null,
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("域名级接管")).toBeInTheDocument();
+    expect(screen.getAllByText("Catch All")).toHaveLength(2);
+    expect(screen.getByText("rule_beta")).toBeInTheDocument();
+    expect(screen.getAllByText("已移除")).toHaveLength(2);
+    expect(screen.queryByText(/Rule:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
+  });
+
   it("keeps destroy available for mailboxes that are still destroying", () => {
     render(
       <MemoryRouter>
