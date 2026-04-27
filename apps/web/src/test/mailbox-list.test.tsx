@@ -32,6 +32,14 @@ describe("MailboxList", () => {
               source: "registered",
               routingRuleId: "rule_beta",
             },
+            {
+              ...demoMailboxes[3],
+              id: "mbx_removed_rule",
+              address: "destroyed@history.mail.example.net",
+              source: "registered",
+              status: "destroyed",
+              routingRuleId: null,
+            },
           ]}
         />
       </MemoryRouter>,
@@ -40,6 +48,7 @@ describe("MailboxList", () => {
     expect(screen.getByText("Rule: 域名级接管")).toBeInTheDocument();
     expect(screen.getByText("Rule: Catch All")).toBeInTheDocument();
     expect(screen.getByText("Rule: rule_beta")).toBeInTheDocument();
+    expect(screen.getByText("Rule: 已移除")).toBeInTheDocument();
     expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
   });
 

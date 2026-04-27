@@ -66,12 +66,22 @@ const routingRuleModeMailboxes = [
     source: "catch_all" as const,
     routingRuleId: null,
   },
+  {
+    ...demoMailboxes[3],
+    id: "mbx_rule_removed",
+    address: "destroyed@history.relay.example.test",
+    source: "registered" as const,
+    status: "destroyed" as const,
+    destroyedAt: "2026-04-01T08:20:00.000Z",
+    routingRuleId: null,
+  },
 ];
 
 const routingRuleModeStats = new Map([
   ["mbx_rule_single", { unread: 0, total: 2 }],
   ["mbx_rule_domain", { unread: 0, total: 0 }],
   ["mbx_rule_catch_all", { unread: 1, total: 1 }],
+  ["mbx_rule_removed", { unread: 0, total: 4 }],
 ]);
 
 const meta = {
@@ -137,7 +147,7 @@ export const RoutingRuleModes: Story = {
     docs: {
       description: {
         story:
-          "Shows the three mailbox routing states: a concrete per-address rule, a registered mailbox managed by domain-level delivery, and a Catch All mailbox.",
+          "Shows mailbox routing labels for a concrete per-address rule, domain-level delivery, Catch All delivery, and a removed inactive rule.",
       },
     },
   },
@@ -149,6 +159,7 @@ export const RoutingRuleModes: Story = {
     ).toBeInTheDocument();
     await expect(canvas.getByText("Rule: 域名级接管")).toBeInTheDocument();
     await expect(canvas.getByText("Rule: Catch All")).toBeInTheDocument();
+    await expect(canvas.getByText("Rule: 已移除")).toBeInTheDocument();
     await expect(canvas.queryByText(/已清理/)).not.toBeInTheDocument();
   },
 };

@@ -44,6 +44,12 @@ const mailboxStatusView = {
 
 const formatMailboxRuleLabel = (mailbox: Mailbox) => {
   if (mailbox.source === "catch_all") return "Catch All";
+  if (
+    !mailbox.routingRuleId &&
+    (mailbox.status === "destroying" || mailbox.status === "destroyed")
+  ) {
+    return "已移除";
+  }
   return mailbox.routingRuleId ?? "域名级接管";
 };
 
