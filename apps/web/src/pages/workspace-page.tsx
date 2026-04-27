@@ -220,7 +220,7 @@ export const WorkspacePage = () => {
 
   const allMessagesQuery = useMessagesQuery([], undefined, {
     enabled: !isTrashView || visibleMailboxIds.length > 0,
-    mailboxIds: isTrashView ? visibleMailboxIds : [],
+    mailboxStatuses: isTrashView ? ["expired"] : [],
     pollingIntervalMs: selectedMailbox ? 60_000 : 15_000,
     scope: isTrashView ? "default" : "workspace",
   });

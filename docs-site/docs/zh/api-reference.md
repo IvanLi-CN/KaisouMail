@@ -61,6 +61,10 @@
 | `GET /api/messages/:id` | 读取结构化消息详情 |
 | `GET /api/messages/:id/raw` | 下载原始 `.eml` |
 
+`GET /api/messages` 支持重复的 `mailbox`、`mailboxId` 与 `mailboxStatus`
+查询参数。回收站/历史聚合应使用 `mailboxStatus=expired`，不要把每个过期邮箱
+ID 都拼进 URL。
+
 ## Users
 
 | 接口 | 用途 |

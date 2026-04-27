@@ -1,4 +1,4 @@
-import type { mailboxListScopes } from "@kaisoumail/shared";
+import type { mailboxListScopes, mailboxStatuses } from "@kaisoumail/shared";
 import { useQuery } from "@tanstack/react-query";
 
 import { usePageActivity } from "@/hooks/use-page-activity";
@@ -7,9 +7,11 @@ import { resolveAutoRefreshInterval } from "@/lib/message-refresh";
 
 type MessageQueryFilters = { after?: string; since?: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 type MessageQueryOptions = {
   enabled?: boolean;
   mailboxIds?: string[];
+  mailboxStatuses?: MailboxStatus[];
   pollingIntervalMs?: number;
   scope?: MailboxListScope;
 };
@@ -21,12 +23,14 @@ export const messageKeys = {
     filters?: MessageQueryFilters,
     scope: MailboxListScope = "default",
     mailboxIds: string[] = [],
+    mailboxStatuses: MailboxStatus[] = [],
   ) =>
     [
       "messages",
       {
         mailboxes,
         mailboxIds,
+        mailboxStatuses,
         after: filters?.after ?? null,
         since: filters?.since ?? null,
         scope,
@@ -48,11 +52,13 @@ export const useMessagesQuery = (
       filters,
       options?.scope,
       options?.mailboxIds,
+      options?.mailboxStatuses,
     ),
     queryFn: () =>
       apiClient.listMessages(mailboxes, filters, {
         scope: options?.scope,
         mailboxIds: options?.mailboxIds,
+        mailboxStatuses: options?.mailboxStatuses,
       }),
     enabled: options?.enabled ?? true,
     refetchInterval: resolveAutoRefreshInterval({

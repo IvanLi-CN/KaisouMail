@@ -373,7 +373,11 @@ export const demoApi = {
   async listMessages(
     mailboxAddresses: string[],
     input?: { after?: string; since?: string },
-    options?: { mailboxIds?: string[]; scope?: MailboxListScope },
+    options?: {
+      mailboxIds?: string[];
+      mailboxStatuses?: MailboxStatus[];
+      scope?: MailboxListScope;
+    },
   ) {
     const receivedAfter = [input?.after, input?.since]
       .map((value) => {
@@ -384,9 +388,19 @@ export const demoApi = {
       .filter((value): value is string => Boolean(value))
       .sort((left, right) => left.localeCompare(right))
       .at(-1);
+    const normalizedMailboxStatuses = [
+      ...new Set(options?.mailboxStatuses ?? []),
+    ];
     const scopedMailboxes =
-      options?.scope === "workspace"
-        ? filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO)
+      options?.scope === "workspace" || normalizedMailboxStatuses.length > 0
+        ? (options?.scope === "workspace"
+            ? filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO)
+            : state.mailboxes
+          ).filter(
+            (mailbox) =>
+              normalizedMailboxStatuses.length === 0 ||
+              normalizedMailboxStatuses.includes(mailbox.status),
+          )
         : null;
     const normalizedMailboxIds = [...new Set(options?.mailboxIds ?? [])];
     const normalizedMailboxAddresses = mailboxAddresses.map(normalizeAddress);

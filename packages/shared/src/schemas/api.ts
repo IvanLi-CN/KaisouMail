@@ -110,6 +110,9 @@ export const listMailboxesQuerySchema = z.object({
 
 export const listMessagesQuerySchema = z.object({
   after: z.string().datetime({ offset: true }).optional(),
+  mailboxStatus: z
+    .union([listMailboxStatusSchema, z.array(listMailboxStatusSchema)])
+    .optional(),
   since: z.string().datetime({ offset: true }).optional(),
   scope: listQueryScopeSchema.optional(),
 });

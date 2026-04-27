@@ -73,10 +73,11 @@ const buildMessageRow = (
     source: "subject" | "body";
     method: "rules" | "ai";
   } | null,
+  mailboxId = `mbx_${id}`,
 ) => ({
   id,
   userId: adminUser.id,
-  mailboxId: `mbx_${id}`,
+  mailboxId,
   mailboxAddress,
   envelopeFrom: null,
   envelopeTo: mailboxAddress,
@@ -243,6 +244,8 @@ describe("message service", () => {
             "msg_visible",
             visibleAddress,
             "2026-04-08T11:59:00.000Z",
+            null,
+            "mbx_visible",
           ),
         ),
       ]);
@@ -262,6 +265,7 @@ describe("message service", () => {
       {} as never,
       adminUser,
       "workspace",
+      undefined,
     );
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toHaveLength(1);
@@ -294,6 +298,8 @@ describe("message service", () => {
             "msg_visible",
             reusedAddress,
             "2026-04-08T11:59:00.000Z",
+            null,
+            "mbx_visible",
           ),
         ),
       ]);
@@ -313,6 +319,7 @@ describe("message service", () => {
       {} as never,
       adminUser,
       "workspace",
+      undefined,
     );
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toHaveLength(1);
@@ -334,6 +341,70 @@ describe("message service", () => {
 
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toEqual([]);
+  });
+
+  it("resolves mailbox status filters server-side before querying messages", async () => {
+    const expiredAddress = "expired@trash.707979.xyz";
+    const activeAddress = "active@ops.707979.xyz";
+    listScopedMailboxRowsForUser.mockResolvedValue([
+      {
+        id: "mbx_expired",
+        userId: adminUser.id,
+        domainId: null,
+        localPart: "expired",
+        subdomain: "trash",
+        address: expiredAddress,
+        source: "registered",
+        routingRuleId: null,
+        status: "expired",
+        createdAt: "2026-04-08T10:00:00.000Z",
+        expiresAt: "2026-04-08T11:00:00.000Z",
+        destroyedAt: null,
+      },
+    ]);
+    const orderBy = vi
+      .fn()
+      .mockResolvedValue([
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_expired",
+            expiredAddress,
+            "2026-04-08T11:59:00.000Z",
+            null,
+            "mbx_expired",
+          ),
+        ),
+        asJoinedMessage(
+          buildMessageRow(
+            "msg_active",
+            activeAddress,
+            "2026-04-08T11:58:00.000Z",
+            null,
+            "mbx_active",
+          ),
+        ),
+      ]);
+    const db = buildMessageDb(orderBy);
+    getDb.mockReturnValue(db);
+
+    const listed = await listMessagesForUser(
+      {} as never,
+      adminUser,
+      [],
+      [],
+      null,
+      "default",
+      ["expired"],
+    );
+
+    expect(listScopedMailboxRowsForUser).toHaveBeenCalledWith(
+      {} as never,
+      adminUser,
+      "default",
+      ["expired"],
+    );
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    expect(listed.map((message) => message.id)).toEqual(["msg_expired"]);
   });
 
   it("filters workspace messages by explicit mailbox ids when an address is reused", async () => {
@@ -376,6 +447,8 @@ describe("message service", () => {
             "msg_visible_new",
             reusedAddress,
             "2026-04-08T11:59:00.000Z",
+            null,
+            "mbx_visible_new",
           ),
         ),
       ]);
@@ -395,6 +468,7 @@ describe("message service", () => {
       {} as never,
       adminUser,
       "workspace",
+      undefined,
     );
     expect(orderBy).toHaveBeenCalledTimes(1);
     expect(listed).toHaveLength(1);

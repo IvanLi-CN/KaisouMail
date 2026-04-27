@@ -11,6 +11,7 @@ const workspacePageState: {
   meta: typeof demoMeta | undefined;
   metaError: Error | null;
   mailboxes: typeof demoMailboxes | undefined;
+  expiredMailboxes: typeof demoMailboxes | undefined;
   mailboxesError: Error | null;
   allMessages: typeof demoMessages | undefined;
   allMessagesError: Error | null;
@@ -26,6 +27,14 @@ const workspacePageState: {
   meta: demoMeta,
   metaError: null,
   mailboxes: demoMailboxes,
+  expiredMailboxes: [
+    {
+      ...demoMailboxes[0],
+      id: "mbx_expired",
+      address: "expired@trash.example.test",
+      status: "expired",
+    },
+  ],
   mailboxesError: null,
   allMessages: demoMessages,
   allMessagesError: null,
@@ -56,6 +65,7 @@ const workspacePropsState = {
   mailboxLatestVerificationCodes: new Map<string, string>(),
   mailboxScope: null as string | null,
   allMessagesScope: null as string | null,
+  allMessagesMailboxStatuses: [] as string[],
   selectedMailboxIds: [] as string[],
   selectedMessagesScope: null as string | null,
 };
@@ -124,7 +134,10 @@ vi.mock("@/hooks/use-mailboxes", () => ({
       workspacePropsState.mailboxScope = options.scope;
     }
     return {
-      data: options?.status === "expired" ? [] : workspacePageState.mailboxes,
+      data:
+        options?.status === "expired"
+          ? workspacePageState.expiredMailboxes
+          : workspacePageState.mailboxes,
       error: workspacePageState.mailboxesError,
       isLoading: false,
       isFetching: false,
@@ -158,8 +171,23 @@ vi.mock("@/hooks/use-messages", () => ({
   useMessagesQuery: (
     mailboxes: string[] = [],
     _filters?: unknown,
-    options?: { mailboxIds?: string[]; scope?: string },
+    options?: {
+      enabled?: boolean;
+      mailboxIds?: string[];
+      mailboxStatuses?: string[];
+      scope?: string;
+    },
   ) => {
+    if (options?.enabled === false) {
+      return {
+        data: undefined,
+        error: null,
+        isLoading: false,
+        isFetching: false,
+        dataUpdatedAt: 0,
+      };
+    }
+
     if ((options?.mailboxIds?.length ?? 0) > 0) {
       workspacePropsState.selectedMessagesScope = options?.scope ?? "default";
       workspacePropsState.selectedMailboxIds = options?.mailboxIds ?? [];
@@ -174,6 +202,8 @@ vi.mock("@/hooks/use-messages", () => ({
 
     if (mailboxes.length === 0) {
       workspacePropsState.allMessagesScope = options?.scope ?? "default";
+      workspacePropsState.allMessagesMailboxStatuses =
+        options?.mailboxStatuses ?? [];
       return {
         data: workspacePageState.allMessages,
         error: workspacePageState.allMessagesError,
@@ -223,6 +253,14 @@ afterEach(() => {
   workspacePageState.meta = demoMeta;
   workspacePageState.metaError = null;
   workspacePageState.mailboxes = demoMailboxes;
+  workspacePageState.expiredMailboxes = [
+    {
+      ...demoMailboxes[0],
+      id: "mbx_expired",
+      address: "expired@trash.example.test",
+      status: "expired",
+    },
+  ];
   workspacePageState.mailboxesError = null;
   workspacePageState.allMessages = demoMessages;
   workspacePageState.allMessagesError = null;
@@ -243,6 +281,7 @@ afterEach(() => {
   workspacePropsState.mailboxLatestVerificationCodes = new Map();
   workspacePropsState.mailboxScope = null;
   workspacePropsState.allMessagesScope = null;
+  workspacePropsState.allMessagesMailboxStatuses = [];
   workspacePropsState.selectedMailboxIds = [];
   workspacePropsState.selectedMessagesScope = null;
   localStorageState.getItem = vi.fn(() => null);
@@ -295,6 +334,27 @@ describe("workspace page", () => {
 
     expect(workspacePropsState.mailboxScope).toBe("workspace");
     expect(workspacePropsState.allMessagesScope).toBe("workspace");
+  });
+
+  it("uses a server-side mailbox status filter for trash aggregate messages", () => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={["/workspace?view=trash&mailbox=all&sort=recent"]}
+      >
+        <Routes>
+          <Route path="/workspace" element={<WorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(workspacePropsState.allMessagesScope).toBe("default");
+    expect(workspacePropsState.allMessagesMailboxStatuses).toEqual(["expired"]);
+    expect(workspacePropsState.selectedMailboxIds).toEqual([]);
   });
 
   it("derives the latest verification code for each mailbox from aggregate messages", () => {
