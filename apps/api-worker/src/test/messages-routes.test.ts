@@ -62,6 +62,7 @@ describe("message routes", () => {
       [],
       "2026-04-03T12:05:00.000Z",
       "default",
+      [],
     );
   });
 
@@ -80,6 +81,7 @@ describe("message routes", () => {
       [],
       "2026-04-03T06:30:00.000Z",
       "default",
+      [],
     );
   });
 
@@ -96,6 +98,26 @@ describe("message routes", () => {
       [],
       null,
       "workspace",
+      [],
+    );
+  });
+
+  it("passes mailbox status filters through to the service", async () => {
+    await messageRoutes.fetch(
+      new Request(
+        "http://localhost/?mailboxStatus=expired&mailboxStatus=destroyed",
+      ),
+      env,
+    );
+
+    expect(listMessagesForUser).toHaveBeenCalledWith(
+      env,
+      authUser,
+      [],
+      [],
+      null,
+      "default",
+      ["expired", "destroyed"],
     );
   });
 
@@ -154,6 +176,7 @@ describe("message routes", () => {
       ["mbx_alpha"],
       null,
       "workspace",
+      [],
     );
   });
 

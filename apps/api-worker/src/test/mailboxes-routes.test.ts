@@ -109,6 +109,24 @@ describe("mailbox routes", () => {
       env,
       expect.objectContaining({ id: "usr_1" }),
       "workspace",
+      undefined,
+    );
+  });
+
+  it("passes status filters to mailbox listing", async () => {
+    listMailboxesForUser.mockResolvedValue([activeMailbox]);
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/?status=expired&status=destroying"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listMailboxesForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "default",
+      ["expired", "destroying"],
     );
   });
 

@@ -63,6 +63,10 @@ the normal message persistence path.
 | `GET /api/messages/:id` | read structured message detail |
 | `GET /api/messages/:id/raw` | download the raw `.eml` |
 
+`GET /api/messages` accepts repeated `mailbox`, `mailboxId`, and `mailboxStatus`
+query parameters. Use `mailboxStatus=expired` for trash/history aggregation
+instead of sending every expired mailbox ID in the URL.
+
 ## Users
 
 | Endpoint | Purpose |

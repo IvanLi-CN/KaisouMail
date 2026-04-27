@@ -1,5 +1,6 @@
 import {
   type mailboxListScopes,
+  type mailboxStatuses,
   messageDetailSchema,
   messageSummarySchema,
 } from "@kaisoumail/shared";
@@ -38,6 +39,7 @@ import {
 } from "./message-verification";
 
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 
 const normalizePeople = (value: unknown) => {
   if (!value) return [] as Array<{ name: string | null; address: string }>;
@@ -152,17 +154,26 @@ export const listMessagesForUser = async (
   mailboxIds: string[],
   after?: string | null,
   scope: MailboxListScope = "default",
+  mailboxStatuses: MailboxStatus[] = [],
 ) => {
   const db = getDb(env);
   const normalizedMailboxIds = [...new Set(mailboxIds)];
+  const normalizedMailboxStatuses = [...new Set(mailboxStatuses)];
   const normalizedMailboxAddresses = [
     ...new Set(
       mailboxAddresses.map((address) => normalizeMailboxAddress(address)),
     ),
   ];
   const scopedMailboxRows =
-    scope === "workspace"
-      ? await listScopedMailboxRowsForUser(env, user, "workspace")
+    scope === "workspace" || normalizedMailboxStatuses.length > 0
+      ? await listScopedMailboxRowsForUser(
+          env,
+          user,
+          scope,
+          normalizedMailboxStatuses.length > 0
+            ? normalizedMailboxStatuses
+            : undefined,
+        )
       : null;
   const candidateMailboxIds =
     scopedMailboxRows === null
@@ -178,11 +189,15 @@ export const listMessagesForUser = async (
               )
               .map((mailbox) => mailbox.id)
           : scopedMailboxRows.map((mailbox) => mailbox.id);
+  const usesCandidateMailboxFilter =
+    scope === "workspace" || normalizedMailboxStatuses.length > 0;
+  const candidateMailboxIdSet = new Set(candidateMailboxIds);
   if (
     (normalizedMailboxIds.length > 0 ||
       normalizedMailboxAddresses.length > 0 ||
+      normalizedMailboxStatuses.length > 0 ||
       scope === "workspace") &&
-    (scope === "workspace"
+    (usesCandidateMailboxFilter
       ? candidateMailboxIds.length === 0
       : normalizedMailboxIds.length === 0 &&
         normalizedMailboxAddresses.length === 0)
@@ -198,7 +213,7 @@ export const listMessagesForUser = async (
   }
 
   const rows =
-    scope === "workspace" && candidateMailboxIds.length > 0
+    usesCandidateMailboxFilter && candidateMailboxIds.length > 0
       ? (
           await Promise.all(
             chunkD1InValues(candidateMailboxIds).map((mailboxIdChunk) =>
@@ -248,7 +263,11 @@ export const listMessagesForUser = async (
                 right.receivedAt.localeCompare(left.receivedAt),
               )
           : await queryMessageRows(db, filters);
-  return rows.map(mapSummary);
+  return (
+    usesCandidateMailboxFilter
+      ? rows.filter((row) => candidateMailboxIdSet.has(row.mailboxId))
+      : rows
+  ).map(mapSummary);
 };
 
 export const getMessageDetailForUser = async (

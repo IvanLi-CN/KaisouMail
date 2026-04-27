@@ -1944,7 +1944,7 @@ export const WorkspaceTrashView: Story = {
     docs: {
       description: {
         story:
-          "The workbench has an explicit trash view: expired mailboxes are kept out of the active workbench, but remain reviewable with restore and destroy actions before cleanup removes them.",
+          "The workbench has an explicit trash view: expired mailboxes are kept out of the active workbench, but remain reviewable with restore and destroy actions before cleanup removes them. The aggregate message pane represents the server-side expired-mailbox status stream rather than a client-side list of every mailbox ID.",
       },
     },
   },
@@ -1969,9 +1969,11 @@ export const WorkspaceTrashView: Story = {
     await expect(
       canvas.getByRole("button", { name: "销毁邮箱" }),
     ).toBeInTheDocument();
-    await expect(
-      canvas.getByText("Expired mailbox history remains readable"),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        canvas.getAllByText("Expired mailbox history remains readable").length,
+      ).toBeGreaterThan(0),
+    );
 
     const searchInput = canvas.getByLabelText("搜索邮箱");
     await userEvent.type(searchInput, "trash");
@@ -1999,11 +2001,13 @@ export const WorkspaceTrashView: Story = {
       "true",
     );
     await expect(canvas.getByText("2 个邮箱 · 1 封邮件")).toBeInTheDocument();
-    await expect(
-      canvas.getByRole("button", {
-        name: /active@ops\.mail\.example\.net/i,
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        canvas.getAllByRole("button", {
+          name: /active@ops\.mail\.example\.net/i,
+        }).length,
+      ).toBeGreaterThan(0),
+    );
     await expect(
       canvas.queryByRole("button", {
         name: /expired@trash\.mail\.example\.net，已过期/i,
