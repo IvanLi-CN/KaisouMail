@@ -248,6 +248,10 @@ export const MailWorkspace = ({
   const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const isTrashView = mailboxView === "trash";
+  const currentSortOption =
+    sortOptions.find((option) => option.value === sortMode) ?? sortOptions[0];
+  const nextSortOption =
+    sortOptions.find((option) => option.value !== sortMode) ?? sortOptions[1];
   const hasMailboxSearchQuery = searchQuery.trim().length > 0;
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
@@ -626,59 +630,49 @@ export const MailWorkspace = ({
                   />
                 </div>
 
-                <Tabs
-                  className="w-fit"
-                  onValueChange={(nextView) => {
-                    if (nextView === "active" || nextView === "trash") {
-                      onMailboxViewChange?.(nextView);
-                    }
-                  }}
-                  value={mailboxView}
-                >
-                  <TabsList
-                    aria-label="邮箱视图"
-                    className="h-9 rounded-lg border border-border bg-muted p-1"
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Tabs
+                    className="w-fit"
+                    onValueChange={(nextView) => {
+                      if (nextView === "active" || nextView === "trash") {
+                        onMailboxViewChange?.(nextView);
+                      }
+                    }}
+                    value={mailboxView}
                   >
-                    <TabsTrigger
-                      className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
-                      value="active"
+                    <TabsList
+                      aria-label="邮箱视图"
+                      className="h-9 rounded-lg border border-border bg-muted p-1"
                     >
-                      工作区
-                    </TabsTrigger>
-                    <TabsTrigger
-                      className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
-                      value="trash"
-                    >
-                      回收站
-                      <Badge className="ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal">
-                        {trashMailboxCount}
-                      </Badge>
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
-                <fieldset className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-1">
-                  <legend className="sr-only">邮箱排序</legend>
-                  {sortOptions.map((option) => {
-                    const active = sortMode === option.value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "bg-secondary text-foreground"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
-                        )}
-                        onClick={() => onSortModeChange(option.value)}
+                      <TabsTrigger
+                        className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
+                        value="active"
                       >
-                        <ArrowDownUp className="h-3.5 w-3.5" />
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </fieldset>
+                        工作区
+                      </TabsTrigger>
+                      <TabsTrigger
+                        className="h-7 rounded-md px-3 text-xs font-semibold data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
+                        value="trash"
+                      >
+                        回收站
+                        <Badge className="ml-1 min-w-5 justify-center px-1.5 py-0 text-[0.625rem] leading-4 tracking-normal">
+                          {trashMailboxCount}
+                        </Badge>
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+
+                  <button
+                    type="button"
+                    className="ml-auto inline-flex h-9 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-muted/20 px-3 text-xs font-semibold text-muted-foreground transition-colors duration-200 hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`邮箱排序：${currentSortOption.label}，点击切换为${nextSortOption.label}`}
+                    title={`邮箱排序：${currentSortOption.label}，点击切换为${nextSortOption.label}`}
+                    onClick={() => onSortModeChange(nextSortOption.value)}
+                  >
+                    <ArrowDownUp className="h-3.5 w-3.5" />
+                    {currentSortOption.label}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -687,7 +681,7 @@ export const MailWorkspace = ({
                 type="button"
                 data-active={selectedMailboxId === "all" ? "true" : undefined}
                 className={cn(
-                  "workspace-mailbox-item mx-3 flex w-auto cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
+                  "workspace-mailbox-item mx-3 flex w-[calc(100%-1.5rem)] cursor-pointer flex-col gap-2 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-none",
                 )}
                 onClick={() => onSelectMailbox("all")}
               >
@@ -732,8 +726,8 @@ export const MailWorkspace = ({
                     getItemKey={(mailbox) => mailbox.id}
                     items={visibleMailboxes}
                     overscan={8}
-                    scrollContainerClassName="h-full px-3 xl:px-0"
-                    scrollContentClassName="pb-2 pl-3"
+                    scrollContainerClassName="h-full px-3"
+                    scrollContentClassName="pb-2"
                     scrollTestId="workspace-mailbox-scroll"
                     renderItem={(mailbox) => {
                       const isActive = selectedMailboxId === mailbox.id;

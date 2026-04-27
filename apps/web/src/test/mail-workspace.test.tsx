@@ -475,6 +475,54 @@ describe("MailWorkspace", () => {
     expect(onSelectMailbox).toHaveBeenCalledWith("mbx_alpha");
   });
 
+  it("toggles mailbox sorting from the compact header control", () => {
+    const onSortModeChange = vi.fn();
+    const { rerender } = render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSortModeChange={onSortModeChange}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("group", { name: "邮箱排序" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "邮箱排序：最近收信，点击切换为创建时间",
+      }),
+    );
+    expect(onSortModeChange).toHaveBeenCalledWith("created");
+
+    rerender(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSortModeChange={onSortModeChange}
+          sortMode="created"
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "邮箱排序：创建时间，点击切换为最近收信",
+      }),
+    );
+    expect(onSortModeChange).toHaveBeenCalledWith("recent");
+  });
+
   it("renders pane-specific errors instead of empty placeholders", () => {
     render(
       <MemoryRouter>
