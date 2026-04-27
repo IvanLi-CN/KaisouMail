@@ -6,6 +6,43 @@ import { MailboxList } from "@/components/mailboxes/mailbox-list";
 import { demoMailboxes } from "@/mocks/data";
 
 describe("MailboxList", () => {
+  it("describes mailboxes without per-address rules as domain managed", () => {
+    render(
+      <MemoryRouter>
+        <MailboxList
+          mailboxes={[
+            {
+              ...demoMailboxes[0],
+              id: "mbx_domain_managed",
+              address: "kai25@support.fkoai.asia",
+              source: "registered",
+              routingRuleId: null,
+            },
+            {
+              ...demoMailboxes[2],
+              id: "mbx_catch_all_rule",
+              address: "ops@wild.mail.example.net",
+              source: "catch_all",
+              routingRuleId: null,
+            },
+            {
+              ...demoMailboxes[1],
+              id: "mbx_single_rule",
+              address: "alerts@ops.beta.mail.example.net",
+              source: "registered",
+              routingRuleId: "rule_beta",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Rule: 域名级接管")).toBeInTheDocument();
+    expect(screen.getByText("Rule: Catch All")).toBeInTheDocument();
+    expect(screen.getByText("Rule: rule_beta")).toBeInTheDocument();
+    expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
+  });
+
   it("keeps destroy available for mailboxes that are still destroying", () => {
     render(
       <MemoryRouter>

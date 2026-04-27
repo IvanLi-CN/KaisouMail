@@ -42,6 +42,11 @@ const mailboxStatusView = {
   },
 } satisfies Record<Mailbox["status"], { label: string; className: string }>;
 
+const formatMailboxRuleLabel = (mailbox: Mailbox) => {
+  if (mailbox.source === "catch_all") return "Catch All";
+  return mailbox.routingRuleId ?? "域名级接管";
+};
+
 export const MailboxList = ({
   mailboxes,
   messageStatsByMailbox,
@@ -149,7 +154,7 @@ export const MailboxList = ({
                     {mailbox.source === "catch_all" ? "Catch All" : "预注册"}
                   </Badge>
                   <span className="font-mono">
-                    Rule: {mailbox.routingRuleId ?? "已清理"}
+                    Rule: {formatMailboxRuleLabel(mailbox)}
                   </span>
                 </div>
               </div>
