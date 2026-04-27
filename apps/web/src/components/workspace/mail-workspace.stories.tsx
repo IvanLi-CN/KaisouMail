@@ -748,8 +748,8 @@ const WorkspaceScopeHistoryHarness = () => {
         id: "msg_scope_active",
         mailboxId: activeMailbox.id,
         mailboxAddress: activeMailbox.address,
-        subject: "Workspace scope keeps only recent destroyed rows",
-        previewText: "Recent destroyed mailboxes stay visible for seven days.",
+        subject: "Workspace scope excludes destroyed rows",
+        previewText: "Destroyed mailboxes stay out of the active workbench.",
         receivedAt: "2026-04-08T11:58:00.000Z",
       },
     ],
@@ -761,8 +761,8 @@ const WorkspaceScopeHistoryHarness = () => {
       id: "msg_scope_active",
       mailboxId: activeMailbox.id,
       mailboxAddress: activeMailbox.address,
-      subject: "Workspace scope keeps only recent destroyed rows",
-      previewText: "Recent destroyed mailboxes stay visible for seven days.",
+      subject: "Workspace scope excludes destroyed rows",
+      previewText: "Destroyed mailboxes stay out of the active workbench.",
       receivedAt: "2026-04-08T11:58:00.000Z",
       envelopeTo: activeMailbox.address,
       rawDownloadPath: "/api/messages/msg_scope_active/raw",
@@ -832,8 +832,8 @@ const WorkspaceTrashHarness = () => {
         id: "msg_scope_active",
         mailboxId: activeMailbox.id,
         mailboxAddress: activeMailbox.address,
-        subject: "Workspace scope keeps only recent destroyed rows",
-        previewText: "Recent destroyed mailboxes stay visible for seven days.",
+        subject: "Workspace scope excludes destroyed rows",
+        previewText: "Destroyed mailboxes stay out of the active workbench.",
         receivedAt: "2026-04-08T11:58:00.000Z",
       },
     ],
@@ -845,8 +845,8 @@ const WorkspaceTrashHarness = () => {
       id: "msg_scope_active",
       mailboxId: activeMailbox.id,
       mailboxAddress: activeMailbox.address,
-      subject: "Workspace scope keeps only recent destroyed rows",
-      previewText: "Recent destroyed mailboxes stay visible for seven days.",
+      subject: "Workspace scope excludes destroyed rows",
+      previewText: "Destroyed mailboxes stay out of the active workbench.",
       receivedAt: "2026-04-08T11:58:00.000Z",
       envelopeTo: activeMailbox.address,
       rawDownloadPath: "/api/messages/msg_scope_active/raw",
@@ -1603,26 +1603,26 @@ export const DesktopVirtualizedLongLists: Story = {
   },
 };
 
-export const WorkspaceScopeTrimmedDestroyedHistory: Story = {
+export const WorkspaceScopeExcludesDestroyedHistory: Story = {
   globals: projectViewportGlobals.tablet,
   render: () => <WorkspaceScopeHistoryHarness />,
   parameters: {
     docs: {
       description: {
         story:
-          "Workspace scope keeps active/destroying mailboxes, excludes expired mailboxes from the main workbench so URL fallback can return to all mailboxes, retains only the latest 50 destroyed rows from the last seven days, and hides older or malformed destroyed history.",
+          "Workspace scope keeps only active/destroying mailboxes. Expired and destroyed rows are kept out of the main workbench so cleanup/history states do not look actionable.",
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(canvas.getByText("52 个邮箱 · 1 封邮件")).toBeInTheDocument();
+    await expect(canvas.getByText("2 个邮箱 · 1 封邮件")).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", {
+      canvas.queryByRole("button", {
         name: /destroyed-054@archive\.mail\.example\.net/i,
       }),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", {
         name: /destroyed-000@archive\.mail\.example\.net/i,
@@ -1692,7 +1692,7 @@ export const WorkspaceTrashView: Story = {
       "aria-selected",
       "true",
     );
-    await expect(canvas.getByText("52 个邮箱 · 1 封邮件")).toBeInTheDocument();
+    await expect(canvas.getByText("2 个邮箱 · 1 封邮件")).toBeInTheDocument();
     await expect(
       canvas.getByRole("button", {
         name: /active@ops\.mail\.example\.net/i,

@@ -43,22 +43,16 @@ describe("mailbox listing helpers", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps active and destroying mailboxes, excludes expired, and limits destroyed workspace history", () => {
+  it("keeps active and destroying mailboxes and excludes expired or destroyed rows from workspace scope", () => {
     const rows = [
       buildMailbox(0, { status: "active" }),
       buildMailbox(1, { status: "destroying" }),
       buildMailbox(2, { status: "expired" }),
-      ...Array.from({ length: 55 }, (_, index) =>
-        buildMailbox(index + 10, {
-          status: "destroyed",
-          destroyedAt: `2026-04-08T11:${String(index).padStart(2, "0")}:00.000Z`,
-        }),
-      ),
-      buildMailbox(999, {
+      buildMailbox(3, {
         status: "destroyed",
-        destroyedAt: "2026-03-28T12:00:00.000Z",
+        destroyedAt: "2026-04-08T11:00:00.000Z",
       }),
-      buildMailbox(1000, {
+      buildMailbox(4, {
         status: "destroyed",
         destroyedAt: null,
       }),
@@ -69,39 +63,16 @@ describe("mailbox listing helpers", () => {
       "2026-04-08T12:00:00.000Z",
     );
 
+    expect(visible.map((row: (typeof rows)[number]) => row.id)).toEqual([
+      "mbx_000",
+      "mbx_001",
+    ]);
     expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_000"),
-    ).toBe(true);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_001"),
-    ).toBe(true);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_002"),
+      visible.some((row: (typeof rows)[number]) => row.status === "expired"),
     ).toBe(false);
     expect(
-      visible.filter(
-        (row: (typeof rows)[number]) => row.status === "destroyed",
-      ),
-    ).toHaveLength(50);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_999"),
+      visible.some((row: (typeof rows)[number]) => row.status === "destroyed"),
     ).toBe(false);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_1000"),
-    ).toBe(false);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_064"),
-    ).toBe(true);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_010"),
-    ).toBe(false);
-    expect(
-      visible
-        .filter((row: (typeof rows)[number]) => row.status === "destroyed")
-        .map((row: (typeof rows)[number]) => row.id)
-        .slice(0, 3),
-    ).toEqual(["mbx_064", "mbx_063", "mbx_062"]);
-    expect(visible.at(-1)?.id).toBe("mbx_015");
   });
 
   it("can filter the full mailbox list by expired status", async () => {
