@@ -153,6 +153,64 @@ const createLongMessages = (
     receivedAt: `2026-04-05T10:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
   }));
 
+const createSearchStressMailboxes = (
+  status: Mailbox["status"],
+  count: number,
+) =>
+  Array.from({ length: count }, (_, index) => {
+    const bucket =
+      index % 5 === 0
+        ? "billing"
+        : index % 5 === 1
+          ? "ops"
+          : index % 5 === 2
+            ? "qa"
+            : index % 5 === 3
+              ? "release"
+              : "support";
+
+    return {
+      ...demoMailboxes[index % demoMailboxes.length],
+      id: `mbx_search_${status}_${index.toString().padStart(3, "0")}`,
+      address: `${bucket}-${index.toString().padStart(3, "0")}@${status === "expired" ? "trash" : "workspace"}.search.mail.example.net`,
+      localPart: `${bucket}-${index.toString().padStart(3, "0")}`,
+      subdomain: status === "expired" ? "trash.search" : "workspace.search",
+      mailDomain: "mail.example.net",
+      rootDomain: "mail.example.net",
+      source: "registered" as const,
+      status,
+      createdAt: `2026-04-09T08:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+      lastReceivedAt: `2026-04-09T09:${(index % 60).toString().padStart(2, "0")}:00.000Z`,
+      expiresAt:
+        status === "expired"
+          ? "2026-04-09T07:30:00.000Z"
+          : "2099-04-09T12:00:00.000Z",
+      destroyedAt: null,
+      routingRuleId: `rule_search_${status}_${index}`,
+    } satisfies Mailbox;
+  });
+
+const createSearchStressMessages = (mailboxes: Mailbox[]) =>
+  mailboxes.flatMap((mailbox, mailboxIndex) =>
+    Array.from({ length: mailboxIndex % 3 === 0 ? 2 : 1 }, (_, index) => ({
+      ...demoMessages[0],
+      id: `msg_search_${mailbox.id}_${index}`,
+      mailboxId: mailbox.id,
+      mailboxAddress: mailbox.address,
+      subject: `Search stress ${mailbox.localPart} message ${index + 1}`,
+      previewText: `Message belongs to ${mailbox.address}`,
+      receivedAt: `2026-04-09T10:${((mailboxIndex + index) % 60).toString().padStart(2, "0")}:00.000Z`,
+      verification:
+        index === 0
+          ? {
+              code: `${840000 + mailboxIndex}`,
+              source: "body" as const,
+              method: "rules" as const,
+            }
+          : null,
+    })),
+  );
+
 const WORKSPACE_SCOPE_DEMO_NOW = "2026-04-08T12:00:00.000Z";
 
 const createWorkspaceScopeMailboxes = () => {
@@ -996,6 +1054,185 @@ const WorkspaceTrashHarness = () => {
       visibleMailboxes={currentMailboxes}
     />
   );
+};
+
+const WorkspaceSearchStressHarness = () => {
+  const activeMailboxes = useMemo(
+    () => createSearchStressMailboxes("active", 42),
+    [],
+  );
+  const trashMailboxes = useMemo(
+    () => createSearchStressMailboxes("expired", 36),
+    [],
+  );
+  const [mailboxView, setMailboxView] = useState<"active" | "trash">("trash");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedMailboxId, setSelectedMailboxId] = useState("all");
+  const baseMailboxes =
+    mailboxView === "trash" ? trashMailboxes : activeMailboxes;
+  const allMessages = useMemo(
+    () => createSearchStressMessages(baseMailboxes),
+    [baseMailboxes],
+  );
+  const visibleMailboxes = useMemo(
+    () => filterMailboxes(sortMailboxes(baseMailboxes, "recent"), searchQuery),
+    [baseMailboxes, searchQuery],
+  );
+  const visibleMailboxIds = useMemo(
+    () => new Set(visibleMailboxes.map((mailbox) => mailbox.id)),
+    [visibleMailboxes],
+  );
+  const selectedMailbox =
+    selectedMailboxId === "all"
+      ? null
+      : (visibleMailboxes.find((mailbox) => mailbox.id === selectedMailboxId) ??
+        null);
+  const visibleMessages = selectedMailbox
+    ? allMessages.filter((message) => message.mailboxId === selectedMailbox.id)
+    : searchQuery.trim()
+      ? allMessages.filter((message) =>
+          visibleMailboxIds.has(message.mailboxId),
+        )
+      : allMessages;
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!visibleMessages.some((message) => message.id === selectedMessageId)) {
+      setSelectedMessageId(visibleMessages[0]?.id ?? null);
+    }
+  }, [selectedMessageId, visibleMessages]);
+
+  const selectedMessageSummary =
+    visibleMessages.find((message) => message.id === selectedMessageId) ?? null;
+  const selectedMessage = selectedMessageSummary
+    ? ({
+        ...demoMessageDetails.msg_alpha,
+        id: selectedMessageSummary.id,
+        mailboxId: selectedMessageSummary.mailboxId,
+        mailboxAddress: selectedMessageSummary.mailboxAddress,
+        subject: selectedMessageSummary.subject,
+        previewText: selectedMessageSummary.previewText,
+        receivedAt: selectedMessageSummary.receivedAt,
+        envelopeTo: selectedMessageSummary.mailboxAddress,
+        rawDownloadPath: `/api/messages/${selectedMessageSummary.id}/raw`,
+        html: `<p>Message belongs to <strong>${selectedMessageSummary.mailboxAddress}</strong>.</p>`,
+        text: `Message belongs to ${selectedMessageSummary.mailboxAddress}.`,
+        verification: selectedMessageSummary.verification,
+      } satisfies MessageDetail)
+    : null;
+
+  return (
+    <MailWorkspace
+      createMailboxAction={buildCreateMailboxAction()}
+      highlightedMailboxId={null}
+      isMailboxesLoading={false}
+      isMessageLoading={false}
+      isMessagesLoading={false}
+      mailboxManagementHref="/mailboxes"
+      mailboxLatestVerificationCodes={buildMailboxLatestVerificationCodes(
+        allMessages,
+      )}
+      mailboxMessageCounts={buildMailboxMessageCounts(
+        baseMailboxes,
+        allMessages,
+      )}
+      mailboxView={mailboxView}
+      messageDetailHref={
+        selectedMessageId ? `/messages/${selectedMessageId}` : null
+      }
+      messages={visibleMessages}
+      onDestroyMailbox={fn()}
+      onMailboxViewChange={(view) => {
+        setMailboxView(view);
+        setSearchQuery("");
+        setSelectedMailboxId("all");
+        setSelectedMessageId(null);
+      }}
+      onRestoreMailbox={fn()}
+      onSearchQueryChange={setSearchQuery}
+      onSelectMailbox={(mailboxId) => {
+        setSelectedMailboxId(mailboxId);
+        const nextMessages =
+          mailboxId === "all"
+            ? visibleMessages
+            : allMessages.filter((message) => message.mailboxId === mailboxId);
+        setSelectedMessageId(nextMessages[0]?.id ?? null);
+      }}
+      onSelectMessage={setSelectedMessageId}
+      onSortModeChange={fn()}
+      refreshAction={
+        <MessageRefreshControl
+          isRefreshing={false}
+          labelVisibility="desktop"
+          lastRefreshedAt={new Date(WORKSPACE_SCOPE_DEMO_NOW).getTime()}
+          onRefresh={fn()}
+        />
+      }
+      searchQuery={searchQuery}
+      selectedMailbox={selectedMailbox}
+      selectedMailboxId={selectedMailboxId}
+      selectedMessage={selectedMessage}
+      selectedMessageId={selectedMessageId}
+      sortMode="recent"
+      totalAggregatedMessageCount={visibleMessages.length}
+      totalMailboxCount={activeMailboxes.length}
+      totalMessageCount={visibleMessages.length}
+      trashMailboxCount={trashMailboxes.length}
+      visibleMailboxes={visibleMailboxes}
+    />
+  );
+};
+
+export const WorkspaceSearchStress: Story = {
+  globals: projectViewportGlobals.tablet,
+  render: () => <WorkspaceSearchStressHarness />,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "High-volume workspace search fixture with 42 active mailboxes and 36 expired trash mailboxes. Search filters the mailbox rail, aggregate message stream, and detail pane together.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("36 个过期邮箱")).toBeInTheDocument();
+
+    const searchInput = canvas.getByLabelText("搜索邮箱");
+    await userEvent.type(searchInput, "billing");
+    await expect(searchInput).toHaveValue("billing");
+    await expect(
+      canvas.getByRole("button", {
+        name: /billing-000@trash\.search\.mail\.example\.net，已过期/i,
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /ops-001@trash\.search\.mail\.example\.net，已过期/i,
+      }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, "support-014");
+    await expect(
+      canvas.getByRole("button", {
+        name: /support-014@trash\.search\.mail\.example\.net，已过期/i,
+      }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("heading", {
+        name: /Search stress support-014 message/i,
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, "no-such-mailbox");
+    await expect(canvas.getByText("没有匹配邮箱")).toBeInTheDocument();
+    await expect(canvas.getByText("当前范围内还没有邮件")).toBeInTheDocument();
+  },
 };
 
 export const MobileSingleColumn: Story = {
