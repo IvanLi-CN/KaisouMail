@@ -157,19 +157,18 @@ export const RoutingRuleModes: Story = {
     docs: {
       description: {
         story:
-          "Shows mailbox routing labels for a concrete per-address rule, domain-level delivery, Catch All delivery, and removed inactive rules.",
+          "Shows mailbox routing badges for a concrete per-address rule, domain-level delivery, Catch All delivery, and removed inactive rules.",
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    await expect(
-      canvas.getByText("Rule: rule_single_address"),
-    ).toBeInTheDocument();
-    await expect(canvas.getByText("Rule: 域名级接管")).toBeInTheDocument();
-    await expect(canvas.getByText("Rule: Catch All")).toBeInTheDocument();
-    await expect(canvas.getAllByText("Rule: 已移除")).toHaveLength(2);
+    await expect(canvas.getByText("rule_single_address")).toBeInTheDocument();
+    await expect(canvas.getByText("域名级接管")).toBeInTheDocument();
+    await expect(canvas.getAllByText("Catch All")).toHaveLength(2);
+    await expect(canvas.getAllByText("已移除")).toHaveLength(2);
+    await expect(canvas.queryByText(/Rule:/)).not.toBeInTheDocument();
     await expect(canvas.queryByText(/已清理/)).not.toBeInTheDocument();
   },
 };

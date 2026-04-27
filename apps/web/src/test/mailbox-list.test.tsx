@@ -53,10 +53,11 @@ describe("MailboxList", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Rule: 域名级接管")).toBeInTheDocument();
-    expect(screen.getByText("Rule: Catch All")).toBeInTheDocument();
-    expect(screen.getByText("Rule: rule_beta")).toBeInTheDocument();
-    expect(screen.getAllByText("Rule: 已移除")).toHaveLength(2);
+    expect(screen.getByText("域名级接管")).toBeInTheDocument();
+    expect(screen.getAllByText("Catch All")).toHaveLength(2);
+    expect(screen.getByText("rule_beta")).toBeInTheDocument();
+    expect(screen.getAllByText("已移除")).toHaveLength(2);
+    expect(screen.queryByText(/Rule:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
   });
 
