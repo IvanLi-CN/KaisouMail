@@ -25,6 +25,11 @@ export const messageRoutes = new Hono<AppBindings>()
       const mailboxAddresses = c.req.queries("mailbox") ?? [];
       const mailboxIds = c.req.queries("mailboxId") ?? [];
       const query = c.req.valid("query");
+      const mailboxStatuses = query.mailboxStatus
+        ? Array.isArray(query.mailboxStatus)
+          ? query.mailboxStatus
+          : [query.mailboxStatus]
+        : [];
       const messages = await listMessagesForUser(
         c.env,
         user,
@@ -32,6 +37,7 @@ export const messageRoutes = new Hono<AppBindings>()
         mailboxIds,
         resolveReceivedAfter(query),
         query.scope ?? "default",
+        mailboxStatuses,
       );
       return c.json(listMessagesResponseSchema.parse({ messages }));
     },

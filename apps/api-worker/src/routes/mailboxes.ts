@@ -36,6 +36,11 @@ export const mailboxRoutes = new Hono<AppBindings>()
             c.env,
             user,
             query.scope ?? "default",
+            query.status
+              ? Array.isArray(query.status)
+                ? query.status
+                : [query.status]
+              : undefined,
           ),
         }),
       );

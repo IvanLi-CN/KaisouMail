@@ -334,13 +334,20 @@ export const apiClient = {
   async listMessages(
     mailboxes: string[] = [],
     filters?: { after?: string; since?: string },
-    options?: { mailboxIds?: string[]; scope?: MailboxListScope },
+    options?: {
+      mailboxIds?: string[];
+      mailboxStatuses?: MailboxStatus[];
+      scope?: MailboxListScope;
+    },
   ) {
     if (DEMO_MODE) return demoApi.listMessages(mailboxes, filters, options);
     const params = new URLSearchParams();
     for (const mailbox of mailboxes) params.append("mailbox", mailbox);
     for (const mailboxId of options?.mailboxIds ?? []) {
       params.append("mailboxId", mailboxId);
+    }
+    for (const mailboxStatus of options?.mailboxStatuses ?? []) {
+      params.append("mailboxStatus", mailboxStatus);
     }
     if (filters?.after) params.set("after", filters.after);
     if (filters?.since) params.set("since", filters.since);

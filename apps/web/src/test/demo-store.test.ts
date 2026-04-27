@@ -105,6 +105,20 @@ describe("demoApi", () => {
     ]);
   });
 
+  it("intersects demo message mailbox id and status filters", async () => {
+    const activeMessages = await demoApi.listMessages([], undefined, {
+      mailboxIds: ["mbx_alpha"],
+      mailboxStatuses: ["active"],
+    });
+    expect(activeMessages.map((message) => message.id)).toEqual(["msg_alpha"]);
+
+    const expiredMessages = await demoApi.listMessages([], undefined, {
+      mailboxIds: ["mbx_alpha"],
+      mailboxStatuses: ["expired"],
+    });
+    expect(expiredMessages).toEqual([]);
+  });
+
   it("hides stale destroyed mailboxes from workspace-scoped lists", async () => {
     const mailboxes = await demoApi.listMailboxes({
       scope: "workspace",
