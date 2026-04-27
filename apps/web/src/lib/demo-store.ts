@@ -429,7 +429,7 @@ export const demoApi = {
               .map((mailbox) => mailbox.address)
           : scopedMailboxes.map((mailbox) => mailbox.address);
     const messages =
-      options?.scope === "workspace"
+      scopedMailboxes !== null
         ? visibleMailboxIds.length > 0
           ? state.messages.filter((message) =>
               visibleMailboxIds.includes(message.mailboxId),
