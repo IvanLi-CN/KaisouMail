@@ -26,6 +26,46 @@ const messageStatsByMailbox = new Map<
   ]),
 );
 
+const statusSegmentMailboxes = [
+  ...demoMailboxes.slice(0, 2),
+  {
+    ...demoMailboxes[1],
+    id: "mbx_page_expired",
+    address: "expired@trash.relay.example.test",
+    status: "expired" as const,
+    expiresAt: "2026-04-01T07:15:00.000Z",
+    routingRuleId: "rule_page_expired",
+  },
+  {
+    ...demoMailboxes[1],
+    id: "mbx_page_destroying",
+    address: "destroying@ops.relay.example.test",
+    status: "destroying" as const,
+    routingRuleId: "rule_page_destroying",
+  },
+  {
+    ...demoMailboxes[1],
+    id: "mbx_page_destroyed",
+    address: "destroyed@history.relay.example.test",
+    status: "destroyed" as const,
+    destroyedAt: "2026-04-08T08:20:00.000Z",
+    routingRuleId: null,
+  },
+  ...(demoMailboxes[3] ? [demoMailboxes[3]] : []),
+];
+
+const statusSegmentMessageStats = new Map(
+  statusSegmentMailboxes.map((mailbox) => [
+    mailbox.id,
+    {
+      unread: demoMessages.filter((message) => message.mailboxId === mailbox.id)
+        .length,
+      total: demoMessages.filter((message) => message.mailboxId === mailbox.id)
+        .length,
+    },
+  ]),
+);
+
 const meta = {
   title: "Pages/Mailboxes",
   component: MailboxesPageView,
@@ -46,6 +86,7 @@ const meta = {
     ),
     onCreate: fn(),
     onDestroy: fn(),
+    onRestoreTtl: fn(),
   },
   render: (args) => (
     <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
@@ -83,6 +124,60 @@ const existingMailboxConflictMessageStatsByMailbox = new Map(
 );
 
 export const Overview: Story = {};
+
+export const StatusSegmentedRecycleBin: Story = {
+  args: {
+    mailboxes: statusSegmentMailboxes,
+    messageStatsByMailbox: statusSegmentMessageStats,
+    onRestoreTtl: fn(),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Page-level mailbox status filters. Expired rows are the recycle-bin queue; destroyed rows remain in the management history segment with read-only history access.",
+      },
+    },
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByRole("tab", { name: /可用/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(
+      canvas.queryByText("expired@trash.relay.example.test"),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("tab", { name: /已过期/ }));
+    await expect(
+      canvas.getByText("expired@trash.relay.example.test"),
+    ).toBeInTheDocument();
+    await expect(canvas.getByText("已过期 · 回收站")).toBeInTheDocument();
+    await expect(canvas.getByText(/回收站 ·/)).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: "查看历史" }),
+    ).toHaveAttribute("href", "/mailboxes/mbx_page_expired");
+
+    await userEvent.click(canvas.getByRole("button", { name: "延长 TTL" }));
+    await expect(args.onRestoreTtl).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "mbx_page_expired" }),
+    );
+
+    await userEvent.click(canvas.getByRole("tab", { name: /已销毁/ }));
+    await expect(
+      canvas.getByText("destroyed@history.relay.example.test"),
+    ).toBeInTheDocument();
+    await expect(canvas.getByText("已销毁")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: "查看历史" }),
+    ).toHaveAttribute("href", "/mailboxes/mbx_page_destroyed");
+    await expect(
+      canvas.queryByRole("button", { name: "销毁邮箱" }),
+    ).not.toBeInTheDocument();
+  },
+};
 
 export const LoadingMeta: Story = {
   args: {

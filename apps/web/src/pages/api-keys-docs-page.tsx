@@ -459,7 +459,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           notes: [
             "列表响应包装在 `{ mailboxes: [...] }` 下。",
             "字段集合由 `mailboxSchema` 定义，包含 `source`、`lastReceivedAt`、`expiresAt` 与 `routingRuleId`；Catch All 自动物化邮箱的 `source=catch_all`，长期邮箱的 `expiresAt` 会是 null。",
-            "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条。",
+            "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，排除 `expired`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条；可选 `status` 可按生命周期过滤。",
             "服务端会把大批量 D1 `IN (...)` 查询拆成每批最多 50 条，避免 admin 工作区因为历史邮箱过多而触发参数上限。",
           ],
         },
@@ -495,7 +495,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
             "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续使用，二者同时传入时必须一致。",
             "如果同时省略 `mailDomain` / `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
             `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
-            '若当前用户已经拥有同地址的 active 邮箱，接口会返回 `409`，并在 `details` 里附带 `{ code: "mailbox_exists", mailbox }` 供 Web 直接选中现有邮箱。',
+            '若当前用户已经拥有同地址的 active 或 expired 邮箱，接口会返回 `409`，并在 `details` 里附带 `{ code: "mailbox_exists", mailbox }` 供 Web 直接选中现有邮箱。',
             "若目标域名已启用 Catch All，服务端仍会在首次使用该子域时补齐 Cloudflare Email Routing DNS，但不会再为单个邮箱创建额外的 per-address routing rule；此时响应中的 `routingRuleId` 可能为 null。",
           ],
         },
@@ -503,7 +503,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           method: "POST",
           path: "/api/mailboxes/ensure",
           summary:
-            "按 address 或 localPart+subdomain 幂等获取 active mailbox，不存在时创建。",
+            "按 address 或 localPart+subdomain 幂等获取 active / expired mailbox，不存在时创建。",
           auth: "Bearer 或 `kaisoumail_session` cookie",
           requestBody: `{
   "address": "${addressExample}",
@@ -527,8 +527,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `mailDomain` 可选，`rootDomain` 仍是兼容别名。",
-            "命中现有 active mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
-            "命中已有 active mailbox 且携带 `expiresInMinutes` 时，只会延长有效期，不会缩短；已有长期邮箱也不会被有限 TTL 改短。",
+            "命中现有 active / expired mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
+            "命中已有 active / expired mailbox 且携带 `expiresInMinutes` 时，只会延长有效期，不会缩短；延长 expired mailbox 会恢复为 active。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
             "若要创建长期邮箱，可显式传 `expiresInMinutes: null`。",
             "若命中新建的 Catch-all 域名子域，服务端会先确保该子域具备 Email Routing DNS，再复用 Catch All 收信；不会额外创建单邮箱 routing rule。",
@@ -537,7 +537,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
         {
           method: "GET",
           path: "/api/mailboxes/resolve?address=<mailbox>",
-          summary: "按邮箱地址直接解析当前用户可见的 active mailbox。",
+          summary:
+            "按邮箱地址直接解析当前用户可见的 active / expired mailbox。",
           auth: "Bearer 或 `kaisoumail_session` cookie",
           responseBody: `{
       "id": "mbx_alpha",
@@ -557,7 +558,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "适合客户端先拿到邮箱地址，再回查 mailbox id，而不是先全量 list 再本地筛。",
-            "只返回 active mailbox；不存在时返回统一 `{ error, details }`。",
+            "只返回当前可见的 active / expired mailbox；不存在时返回统一 `{ error, details }`。",
           ],
         },
         {

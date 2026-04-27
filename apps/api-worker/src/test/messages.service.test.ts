@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
-const { ensureCatchAllMailboxForAddress, listScopedMailboxRowsForUser } =
-  vi.hoisted(() => ({
-    ensureCatchAllMailboxForAddress: vi.fn(),
-    listScopedMailboxRowsForUser: vi.fn(),
-  }));
+const {
+  ensureCatchAllMailboxForAddress,
+  expireDueMailboxes,
+  listScopedMailboxRowsForUser,
+} = vi.hoisted(() => ({
+  ensureCatchAllMailboxForAddress: vi.fn(),
+  expireDueMailboxes: vi.fn(),
+  listScopedMailboxRowsForUser: vi.fn(),
+}));
 const { resolveCatchAllDomainForAddress } = vi.hoisted(() => ({
   resolveCatchAllDomainForAddress: vi.fn(),
 }));
@@ -25,6 +29,7 @@ vi.mock("../db/client", () => ({
 
 vi.mock("../services/mailboxes", () => ({
   ensureCatchAllMailboxForAddress,
+  expireDueMailboxes,
   listScopedMailboxRowsForUser,
 }));
 
@@ -105,6 +110,7 @@ describe("message service", () => {
     listScopedMailboxRowsForUser.mockResolvedValue([]);
     resolveCatchAllDomainForAddress.mockResolvedValue(null);
     ensureCatchAllMailboxForAddress.mockResolvedValue(null);
+    expireDueMailboxes.mockResolvedValue(undefined);
     createRetryableVerificationFallback.mockReturnValue({
       verification: null,
       shouldRetry: true,
@@ -606,6 +612,41 @@ describe("message service", () => {
         verificationRetryAfter: "2099-01-01T00:00:00.000Z",
       }),
     );
+  });
+
+  it("rejects incoming mail after a mailbox has expired", async () => {
+    const setReject = vi.fn();
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table !== mailboxes) throw new Error("Unexpected table");
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => []),
+            })),
+          };
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+    resolveCatchAllDomainForAddress.mockResolvedValue(null);
+
+    await storeIncomingMessage(
+      {
+        MAIL_BUCKET: {
+          put: vi.fn(async () => undefined),
+        },
+      } as never,
+      {
+        from: "sender@example.com",
+        to: "expired@ops.707979.xyz",
+        raw: new TextEncoder().encode("Subject: expired\r\n\r\nhello"),
+        setReject,
+      } as never,
+    );
+
+    expect(expireDueMailboxes).toHaveBeenCalledTimes(1);
+    expect(setReject).toHaveBeenCalledWith("Mailbox unavailable");
   });
 
   it("materializes a catch-all mailbox before storing the message", async () => {

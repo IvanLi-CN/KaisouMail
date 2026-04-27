@@ -14,6 +14,14 @@ test("demo console login and workspace mail flow", async ({ page }) => {
     `${mailboxLocalPart}@ops\\.alpha\\.(relay\\.example\\.test|mail\\.example\\.net)`,
   );
   const manualMailboxAddress = `${manualMailboxLocalPart}@ops.alpha.mail.example.net`;
+  const searchMailbox = async (query: string) => {
+    const searchInput = page.getByLabel("搜索邮箱");
+    await searchInput.fill(query);
+    await expect(searchInput).toHaveValue(query);
+  };
+  const clearMailboxSearch = async () => {
+    await page.getByLabel("搜索邮箱").fill("");
+  };
   const getMailboxRowByTriggerName = (name: RegExp | string) =>
     page.locator(".workspace-mailbox-item").filter({
       has: page.getByRole("button", { name }),
@@ -48,12 +56,14 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await page.getByLabel("子域名").fill("ops.alpha");
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
+  await searchMailbox(mailboxLocalPart);
   const randomMailboxRow = getMailboxRowByTriggerName(randomMailboxAddress);
   await expect(randomMailboxRow).toBeVisible();
   await expect(randomMailboxRow.getByText("新建")).toBeVisible();
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
   await expect(randomMailboxRow.getByText("新建")).toHaveCount(0);
+  await clearMailboxSearch();
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByLabel("用户名").fill(manualMailboxLocalPart);
@@ -64,6 +74,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
+  await searchMailbox(manualMailboxLocalPart);
   const mailboxRow = getMailboxRowByTriggerName(
     new RegExp(manualMailboxAddress),
   );
@@ -72,6 +83,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
   await expect(mailboxRow.getByText("新建")).toHaveCount(0);
+  await clearMailboxSearch();
 
   await page.getByRole("button", { name: "新建邮箱" }).click();
   await page.getByRole("button", { name: "完整" }).click();
@@ -85,6 +97,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
   await createHelpButton.click();
   await page.getByRole("button", { name: "创建邮箱" }).click();
 
+  await searchMailbox(fullAddressMailboxLocalPart);
   const fullAddressMailboxRow = getMailboxRowByTriggerName(
     new RegExp(fullAddressPreview),
   );
@@ -93,6 +106,7 @@ test("demo console login and workspace mail flow", async ({ page }) => {
 
   await page.getByRole("heading", { name: "邮件工作台", level: 1 }).click();
   await expect(fullAddressMailboxRow.getByText("新建")).toHaveCount(0);
+  await clearMailboxSearch();
 
   await page.getByRole("button", { name: /全部邮箱/i }).click();
   await page.getByRole("button", { name: /Build artifacts ready/ }).click();

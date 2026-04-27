@@ -5,6 +5,7 @@ import {
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
   type mailboxListScopes,
+  type mailboxStatuses,
   recommendApexMailboxBinding,
 } from "@kaisoumail/shared";
 
@@ -44,6 +45,7 @@ const normalizeAddress = (value: string) => value.trim().toLowerCase();
 const normalizeLabel = (value: string) => value.trim().toLowerCase();
 const DEMO_NOW_ISO = "2026-04-08T12:00:00.000Z";
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 const buildAddress = (
   localPart: string,
   subdomain: string,
@@ -203,15 +205,23 @@ export const demoApi = {
   async getMeta() {
     return clone(state.meta);
   },
-  async listMailboxes(options?: { scope?: MailboxListScope }) {
+  async listMailboxes(options?: {
+    scope?: MailboxListScope;
+    status?: MailboxStatus | MailboxStatus[];
+  }) {
     const visibleMailboxes =
       options?.scope === "workspace"
         ? filterMailboxesForWorkspaceScope(state.mailboxes, DEMO_NOW_ISO)
         : state.mailboxes;
+    const statuses = options?.status
+      ? new Set(
+          Array.isArray(options.status) ? options.status : [options.status],
+        )
+      : null;
     return clone(
-      [...visibleMailboxes].sort((a, b) =>
-        b.createdAt.localeCompare(a.createdAt),
-      ),
+      [...visibleMailboxes]
+        .filter((mailbox) => !statuses || statuses.has(mailbox.status))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     );
   },
   async getMailbox(id: string) {
@@ -291,9 +301,25 @@ export const demoApi = {
             )?.toLowerCase() ?? "",
           );
     const existing = state.mailboxes.find(
-      (mailbox) => mailbox.address === address && mailbox.status === "active",
+      (mailbox) =>
+        mailbox.address === address &&
+        (mailbox.status === "active" || mailbox.status === "expired"),
     );
-    if (existing) return clone(existing);
+    if (existing) {
+      const expiresInMinutes =
+        input.expiresInMinutes === undefined
+          ? state.meta.defaultMailboxTtlMinutes
+          : input.expiresInMinutes;
+      if (expiresInMinutes !== undefined) {
+        existing.expiresAt =
+          expiresInMinutes === null
+            ? null
+            : new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
+        existing.status = "active";
+        existing.destroyedAt = null;
+      }
+      return clone(existing);
+    }
 
     if (
       state.mailboxes.some(
@@ -325,7 +351,7 @@ export const demoApi = {
     const mailbox = state.mailboxes.find(
       (entry) =>
         entry.address === normalizeAddress(address) &&
-        entry.status === "active",
+        (entry.status === "active" || entry.status === "expired"),
     );
     if (!mailbox) throw new Error("Mailbox not found");
     return clone(mailbox);

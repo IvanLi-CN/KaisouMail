@@ -1,4 +1,4 @@
-import type { mailboxListScopes } from "@kaisoumail/shared";
+import type { mailboxListScopes, mailboxStatuses } from "@kaisoumail/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { messageKeys } from "@/hooks/use-messages";
@@ -14,19 +14,28 @@ export const mailboxKeys = {
   detail: (id: string) => ["mailboxes", id] as const,
 };
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 
 type MailboxQueryOptions = {
   enabled?: boolean;
   pollingIntervalMs?: number;
   scope?: MailboxListScope;
+  status?: MailboxStatus | MailboxStatus[];
 };
 
 export const useMailboxesQuery = (options?: MailboxQueryOptions) => {
   const { isDocumentVisible, isOnline } = usePageActivity();
 
   return useQuery({
-    queryKey: mailboxKeys.list(options?.scope),
-    queryFn: () => apiClient.listMailboxes({ scope: options?.scope }),
+    queryKey: [
+      ...mailboxKeys.list(options?.scope),
+      { status: options?.status ?? null },
+    ] as const,
+    queryFn: () =>
+      apiClient.listMailboxes({
+        scope: options?.scope,
+        status: options?.status,
+      }),
     enabled: options?.enabled ?? true,
     refetchInterval: resolveAutoRefreshInterval({
       requestedIntervalMs: options?.pollingIntervalMs,

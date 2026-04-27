@@ -19,6 +19,7 @@ import {
   listUsersResponseSchema,
   type mailboxListScopes,
   mailboxSchema,
+  type mailboxStatuses,
   messageDetailResponseSchema,
   passkeySchema,
   sessionResponseSchema,
@@ -89,6 +90,7 @@ export const resolveApiOrigin = ({
 const API_BASE = resolveApiBase();
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 
 const toCanonicalMailDomainPayload = <
   T extends {
@@ -248,10 +250,19 @@ export const apiClient = {
       apiMetaResponseSchema.parse(value),
     );
   },
-  async listMailboxes(options?: { scope?: MailboxListScope }) {
+  async listMailboxes(options?: {
+    scope?: MailboxListScope;
+    status?: MailboxStatus | MailboxStatus[];
+  }) {
     if (DEMO_MODE) return demoApi.listMailboxes(options);
     const params = new URLSearchParams();
     appendScopeParam(params, options?.scope);
+    if (options?.status) {
+      const statuses = Array.isArray(options.status)
+        ? options.status
+        : [options.status];
+      for (const status of statuses) params.append("status", status);
+    }
     const payload = await requestJson(
       `/api/mailboxes${params.size > 0 ? `?${params.toString()}` : ""}`,
       { method: "GET" },

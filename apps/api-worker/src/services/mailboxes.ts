@@ -1,10 +1,12 @@
 import {
+  expiredMailboxRetentionHours,
   filterMailboxesForWorkspaceScope,
   generatedMailboxMaxAttempts,
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
   type mailboxListScopes,
   mailboxSchema,
+  type mailboxStatuses,
   mergeMailboxExpiryByExtension,
 } from "@kaisoumail/shared";
 import { and, desc, eq, inArray, isNotNull, lte } from "drizzle-orm";
@@ -52,12 +54,38 @@ type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
 type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
 type MailboxListScope = (typeof mailboxListScopes)[number];
+type MailboxStatus = (typeof mailboxStatuses)[number];
 type SubdomainProvisionMetadata = {
   mode: "explicit" | "wildcard";
   deliveryProvisioned: boolean;
 };
 
 const longTermMailboxExpirySentinel = "9999-12-31T23:59:59.999Z";
+const expiredMailboxRetentionMs = expiredMailboxRetentionHours * 60 * 60 * 1000;
+
+const resolveExpiredMailboxCleanupCutoff = (now: string) =>
+  new Date(new Date(now).getTime() - expiredMailboxRetentionMs).toISOString();
+
+const isMailboxExpiredAt = (expiresAt: string | null, now: string) =>
+  Boolean(
+    expiresAt &&
+      expiresAt !== longTermMailboxExpirySentinel &&
+      expiresAt.localeCompare(now) <= 0,
+  );
+
+export const expireDueMailboxes = async (env: WorkerEnv, now = nowIso()) => {
+  const db = getDb(env);
+  await db
+    .update(mailboxes)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(mailboxes.status, "active"),
+        isNotNull(mailboxes.expiresAt),
+        lte(mailboxes.expiresAt, now),
+      ),
+    );
+};
 
 const mailboxRouteContexts = {
   create: {
@@ -195,23 +223,33 @@ export const listScopedMailboxRowsForUser = async (
   env: WorkerEnv,
   user: AuthUser,
   scope: MailboxListScope = "default",
+  statuses?: MailboxStatus[],
 ) => {
+  await expireDueMailboxes(env);
   const rows = await listMailboxRowsForUser(env, user);
-  if (scope !== "workspace") return rows;
-  return filterMailboxesForWorkspaceScope(rows, nowIso());
+  const scopedRows =
+    scope === "workspace"
+      ? filterMailboxesForWorkspaceScope(rows, nowIso())
+      : rows;
+  if (!statuses || statuses.length === 0) return scopedRows;
+
+  const statusSet = new Set(statuses);
+  return scopedRows.filter((row) => statusSet.has(row.status as MailboxStatus));
 };
 
 export const classifyMailboxAddressState = (
   rows: MailboxLookupRow[],
   user: AuthUser,
 ) => {
-  const visibleActive = rows.find(
-    (row) => row.status === "active" && isVisibleMailbox(row, user),
+  const reusable = rows.find(
+    (row) =>
+      (row.status === "active" || row.status === "expired") &&
+      isVisibleMailbox(row, user),
   );
-  if (visibleActive) {
+  if (reusable) {
     return {
       kind: "reuse" as const,
-      row: visibleActive,
+      row: reusable,
     };
   }
 
@@ -447,10 +485,11 @@ const updateMailboxExpiry = async (
   db: ReturnType<typeof getDb>,
   mailboxId: string,
   expiresAt: string,
+  status?: MailboxStatus,
 ) => {
   await db
     .update(mailboxes)
-    .set({ expiresAt })
+    .set(status ? { expiresAt, status } : { expiresAt })
     .where(eq(mailboxes.id, mailboxId));
 };
 
@@ -695,11 +734,15 @@ const extendExistingMailboxExpiry = async (
     return currentMailbox;
   }
 
-  await updateMailboxExpiry(db, mailbox.id, nextExpiresAt);
+  const nextStatus: MailboxStatus = isMailboxExpiredAt(nextExpiresAt, nowIso())
+    ? "expired"
+    : "active";
+  await updateMailboxExpiry(db, mailbox.id, nextExpiresAt, nextStatus);
   const [updatedMailbox] = await attachLastReceivedAt(env, [
     {
       ...mailbox,
       expiresAt: nextExpiresAt,
+      status: nextStatus,
     },
   ]);
   return updatedMailbox;
@@ -784,8 +827,9 @@ export const listMailboxesForUser = async (
   env: WorkerEnv,
   user: AuthUser,
   scope: MailboxListScope = "default",
+  statuses?: MailboxStatus[],
 ) => {
-  const rows = await listScopedMailboxRowsForUser(env, user, scope);
+  const rows = await listScopedMailboxRowsForUser(env, user, scope, statuses);
   return attachLastReceivedAt(env, rows);
 };
 
@@ -794,6 +838,7 @@ export const getMailboxForUser = async (
   user: AuthUser,
   mailboxId: string,
 ) => {
+  await expireDueMailboxes(env);
   const db = getDb(env);
   const rows = await db
     .select()
@@ -1092,6 +1137,7 @@ export const ensureMailboxForUser = async (
         expiresInMinutes?: number | null;
       },
 ) => {
+  await expireDueMailboxes(env);
   const activeRootDomains = await listActiveRootDomains(env);
   const expiresInMinutes =
     input.expiresInMinutes === undefined
@@ -1152,6 +1198,7 @@ export const resolveMailboxForUser = async (
   user: AuthUser,
   address: string,
 ) => {
+  await expireDueMailboxes(env);
   const classification = classifyMailboxAddressState(
     await listMailboxesByAddress(env, normalizeMailboxAddress(address)),
     user,
@@ -1340,6 +1387,8 @@ export const listMailboxIdsPendingCleanup = async (
 ) => {
   const db = getDb(env);
   const now = nowIso();
+  await expireDueMailboxes(env, now);
+  const expiredCleanupCutoff = resolveExpiredMailboxCleanupCutoff(now);
   const destroyingRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
@@ -1350,32 +1399,32 @@ export const listMailboxIdsPendingCleanup = async (
     config.CLEANUP_BATCH_SIZE === 1 && destroyingRows.length > 0;
   const reservedDestroyingCount =
     destroyingRows.length > 0 && config.CLEANUP_BATCH_SIZE > 1 ? 1 : 0;
-  const activeRows = await db
+  const expiredRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
     .where(
       and(
-        eq(mailboxes.status, "active"),
+        eq(mailboxes.status, "expired"),
         isNotNull(mailboxes.expiresAt),
-        lte(mailboxes.expiresAt, now),
+        lte(mailboxes.expiresAt, expiredCleanupCutoff),
       ),
     )
     .orderBy(mailboxes.expiresAt)
     .limit(Math.max(config.CLEANUP_BATCH_SIZE - reservedDestroyingCount, 0));
-  if (shouldAlternateSingleSlotCleanup && activeRows.length > 0) {
+  if (shouldAlternateSingleSlotCleanup && expiredRows.length > 0) {
     const shouldRetryDestroyingFirst =
       Math.floor(new Date(now).getTime() / (60 * 1000)) % 2 === 0;
     const selectedRow = shouldRetryDestroyingFirst
       ? destroyingRows[0]
-      : activeRows[0];
+      : expiredRows[0];
     return selectedRow?.id ? [selectedRow.id] : [];
   }
   const additionalDestroyingRows = destroyingRows.slice(
     0,
-    Math.max(config.CLEANUP_BATCH_SIZE - activeRows.length, 0),
+    Math.max(config.CLEANUP_BATCH_SIZE - expiredRows.length, 0),
   );
 
-  return [...additionalDestroyingRows, ...activeRows]
+  return [...additionalDestroyingRows, ...expiredRows]
     .filter((row) => row.id && row.id.length > 0)
     .map((row) => row.id);
 };

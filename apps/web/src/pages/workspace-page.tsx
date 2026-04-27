@@ -15,6 +15,7 @@ import { MailWorkspace } from "@/components/workspace/mail-workspace";
 import {
   mailboxKeys,
   useCreateMailboxMutation,
+  useDestroyMailboxMutation,
   useEnsureMailboxMutation,
   useMailboxesQuery,
 } from "@/hooks/use-mailboxes";
@@ -148,13 +149,27 @@ export const WorkspacePage = () => {
   >(null);
   const [mailboxPrompt, setMailboxPrompt] =
     useState<ExistingMailboxPromptState | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const metaQuery = useMetaQuery();
   const mailboxesQuery = useMailboxesQuery({
     scope: "workspace",
   });
+  const expiredMailboxesQuery = useMailboxesQuery({
+    status: "expired",
+    pollingIntervalMs: 60_000,
+  });
   const createMailboxMutation = useCreateMailboxMutation();
+  const destroyMailboxMutation = useDestroyMailboxMutation();
   const ensureMailboxMutation = useEnsureMailboxMutation();
-  const mailboxes = mailboxesQuery.data ?? [];
+  const hasMailboxesData = mailboxesQuery.data !== undefined;
+  const hasExpiredMailboxesData = expiredMailboxesQuery.data !== undefined;
+  const mailboxView = searchParams.get("view") === "trash" ? "trash" : "active";
+  const isTrashView = mailboxView === "trash";
+  const mailboxes = isTrashView
+    ? (expiredMailboxesQuery.data ?? [])
+    : (mailboxesQuery.data ?? []);
+  const activeMailboxCount = mailboxesQuery.data?.length ?? 0;
+  const expiredMailboxCount = expiredMailboxesQuery.data?.length ?? 0;
 
   const selectedMailboxId = searchParams.get("mailbox") ?? "all";
   const searchQuery = searchParams.get("q") ?? "";
@@ -198,28 +213,53 @@ export const WorkspacePage = () => {
   }, [resolvedSortMode]);
 
   const selectedMailbox = resolveSelectedMailbox(selectedMailboxId, mailboxes);
+  const visibleMailboxIds = useMemo(
+    () => mailboxes.map((mailbox) => mailbox.id),
+    [mailboxes],
+  );
 
   const allMessagesQuery = useMessagesQuery([], undefined, {
+    enabled: !isTrashView || visibleMailboxIds.length > 0,
+    mailboxIds: isTrashView ? visibleMailboxIds : [],
     pollingIntervalMs: selectedMailbox ? 60_000 : 15_000,
-    scope: "workspace",
+    scope: isTrashView ? "default" : "workspace",
   });
 
   useEffect(() => {
-    if (selectedMailboxId === "all") return;
-    if (selectedMailbox) return;
+    if (selectedMailboxId === "all") {
+      setWorkspaceNotice(null);
+      return;
+    }
+    if (selectedMailbox) {
+      setWorkspaceNotice(null);
+      return;
+    }
+    if (isTrashView ? !hasExpiredMailboxesData : !hasMailboxesData) return;
 
+    setWorkspaceNotice(
+      isTrashView
+        ? "该邮箱已不在回收站中，可能已经恢复或销毁。"
+        : "该邮箱已不在工作台中，可能已过期并移入回收站。",
+    );
     updateSearchParams((draft) => {
       draft.set("mailbox", "all");
       draft.delete("message");
     }, true);
-  }, [selectedMailbox, selectedMailboxId, updateSearchParams]);
+  }, [
+    hasExpiredMailboxesData,
+    hasMailboxesData,
+    isTrashView,
+    selectedMailbox,
+    selectedMailboxId,
+    updateSearchParams,
+  ]);
 
   const messagesQuery = useMessagesQuery([], undefined, {
+    enabled: Boolean(selectedMailbox),
     mailboxIds: selectedMailbox ? [selectedMailbox.id] : [],
     pollingIntervalMs: 15_000,
-    scope: "workspace",
+    scope: isTrashView ? "default" : "workspace",
   });
-  const messages = messagesQuery.data ?? [];
   const allMessages = allMessagesQuery.data ?? [];
   const selectedMessageId = searchParams.get("message");
   const workspaceMessages = useMemo(
@@ -261,6 +301,20 @@ export const WorkspacePage = () => {
       ),
     [deferredQuery, mailboxesWithLiveRecency, resolvedSortMode],
   );
+  const visibleMailboxIdSet = useMemo(
+    () => new Set(visibleMailboxes.map((mailbox) => mailbox.id)),
+    [visibleMailboxes],
+  );
+  const filteredAggregateMessages = useMemo(() => {
+    if (!deferredQuery.trim()) return allMessages;
+
+    return allMessages.filter((message) =>
+      visibleMailboxIdSet.has(message.mailboxId),
+    );
+  }, [allMessages, deferredQuery, visibleMailboxIdSet]);
+  const messages = selectedMailbox
+    ? (messagesQuery.data ?? [])
+    : filteredAggregateMessages;
   const mailboxMessageCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -306,24 +360,26 @@ export const WorkspacePage = () => {
     updateSearchParams,
   ]);
 
-  const messageDetailQuery = useMessageDetailQuery(selectedMessageId ?? "");
+  const selectedMessageIsVisible = Boolean(
+    selectedMessageId &&
+      messages.some((message) => message.id === selectedMessageId),
+  );
+  const messageDetailQuery = useMessageDetailQuery(
+    selectedMessageIsVisible ? (selectedMessageId ?? "") : "",
+    { enabled: selectedMessageIsVisible },
+  );
+  const selectedMessageDetail = selectedMessageIsVisible
+    ? (messageDetailQuery.data ?? null)
+    : null;
   const refreshTargets = useMemo(
     () => [
-      { queryKey: mailboxKeys.list("workspace") },
-      { queryKey: messageKeys.list([], undefined, "workspace") },
-      {
-        queryKey: messageKeys.list(
-          [],
-          undefined,
-          "workspace",
-          selectedMailbox ? [selectedMailbox.id] : [],
-        ),
-      },
+      { queryKey: mailboxKeys.all },
+      { queryKey: messageKeys.all },
       ...(selectedMessageId
         ? [{ queryKey: messageKeys.detail(selectedMessageId) }]
         : []),
     ],
-    [selectedMailbox, selectedMessageId],
+    [selectedMessageId],
   );
   const manualRefresh = useQueryRefresh(refreshTargets);
   const workspaceLastRefreshedAt = resolveLatestRefreshAt(
@@ -335,12 +391,15 @@ export const WorkspacePage = () => {
   const isWorkspaceRefreshing =
     manualRefresh.isRefreshing ||
     mailboxesQuery.isFetching ||
+    expiredMailboxesQuery.isFetching ||
     allMessagesQuery.isFetching ||
     messagesQuery.isFetching ||
     messageDetailQuery.isFetching;
   const hasMetaData = metaQuery.data !== undefined;
-  const hasMailboxesData = mailboxesQuery.data !== undefined;
-  const hasMessagesData = messagesQuery.data !== undefined;
+  const activeMessagesQuery = selectedMailbox
+    ? messagesQuery
+    : allMessagesQuery;
+  const hasMessagesData = activeMessagesQuery.data !== undefined;
   const hasMessageDetailData = messageDetailQuery.data !== undefined;
 
   useEffect(() => {
@@ -418,6 +477,7 @@ export const WorkspacePage = () => {
         updateSearchParams((draft) => {
           draft.delete("q");
           draft.delete("message");
+          draft.delete("view");
           draft.set("mailbox", createdMailbox.id);
           if (!isMailboxSortMode(draft.get("sort"))) {
             draft.set("sort", resolvedSortMode);
@@ -432,6 +492,11 @@ export const WorkspacePage = () => {
           updateSearchParams((draft) => {
             draft.delete("q");
             draft.delete("message");
+            if (existingConflict.mailbox.status === "expired") {
+              draft.set("view", "trash");
+            } else {
+              draft.delete("view");
+            }
             draft.set("mailbox", existingConflict.mailbox.id);
             if (!isMailboxSortMode(draft.get("sort"))) {
               draft.set("sort", resolvedSortMode);
@@ -482,6 +547,11 @@ export const WorkspacePage = () => {
       updateSearchParams((draft) => {
         draft.set("mailbox", nextMailbox.id);
         draft.delete("message");
+        if (nextMailbox.status === "expired") {
+          draft.set("view", "trash");
+        } else {
+          draft.delete("view");
+        }
         if (!isMailboxSortMode(draft.get("sort"))) {
           draft.set("sort", resolvedSortMode);
         }
@@ -517,22 +587,25 @@ export const WorkspacePage = () => {
       ? metaQuery.error.message
       : null;
   const mailboxesPaneError =
-    mailboxesQuery.error && !hasMailboxesData
+    (isTrashView ? expiredMailboxesQuery.error : mailboxesQuery.error) &&
+    !(isTrashView ? hasExpiredMailboxesData : hasMailboxesData)
       ? {
           variant: "recoverable" as const,
           title: "邮箱列表暂时不可用",
           description: "暂时无法获取邮箱目录和统计，请刷新后重试。",
-          details: getErrorDetails(mailboxesQuery.error),
+          details: getErrorDetails(
+            isTrashView ? expiredMailboxesQuery.error : mailboxesQuery.error,
+          ),
           onRetry: handleRefresh,
         }
       : null;
   const messagesPaneError =
-    messagesQuery.error && !hasMessagesData
+    activeMessagesQuery.error && !hasMessagesData
       ? {
           variant: "recoverable" as const,
           title: "邮件流加载失败",
           description: "暂时无法获取当前范围内的邮件，请刷新后重试。",
-          details: getErrorDetails(messagesQuery.error),
+          details: getErrorDetails(activeMessagesQuery.error),
           onRetry: handleRefresh,
         }
       : null;
@@ -558,6 +631,11 @@ export const WorkspacePage = () => {
 
   return (
     <div className="flex flex-1 flex-col xl:min-h-0">
+      {workspaceNotice ? (
+        <div className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 md:mx-6">
+          {workspaceNotice}
+        </div>
+      ) : null}
       <MailWorkspace
         createMailboxAction={{
           defaultTtlMinutes:
@@ -605,16 +683,18 @@ export const WorkspacePage = () => {
         messagesError={messagesPaneError}
         messageError={messagePaneError}
         visibleMailboxes={visibleMailboxes}
-        totalMailboxCount={mailboxes.length}
+        totalMailboxCount={activeMailboxCount}
+        trashMailboxCount={expiredMailboxCount}
+        mailboxView={mailboxView}
         totalMessageCount={messages.length}
-        totalAggregatedMessageCount={allMessages.length}
+        totalAggregatedMessageCount={filteredAggregateMessages.length}
         mailboxMessageCounts={mailboxMessageCounts}
         mailboxLatestVerificationCodes={mailboxLatestVerificationCodes}
         selectedMailboxId={selectedMailboxId}
         selectedMailbox={selectedMailbox}
         messages={messages}
         selectedMessageId={selectedMessageId}
-        selectedMessage={messageDetailQuery.data ?? null}
+        selectedMessage={selectedMessageDetail}
         searchQuery={searchQuery}
         sortMode={resolvedSortMode}
         refreshAction={
@@ -626,12 +706,18 @@ export const WorkspacePage = () => {
             onRefresh={handleRefresh}
           />
         }
-        isMailboxesLoading={mailboxesQuery.isLoading}
-        isMessagesLoading={messagesQuery.isLoading}
+        isMailboxesLoading={
+          isTrashView
+            ? expiredMailboxesQuery.isLoading
+            : mailboxesQuery.isLoading
+        }
+        isMessagesLoading={
+          selectedMailbox ? messagesQuery.isLoading : allMessagesQuery.isLoading
+        }
         isMessageLoading={messageDetailQuery.isLoading}
         mailboxManagementHref="/mailboxes"
         messageDetailHref={
-          selectedMessageId
+          selectedMessageIsVisible && selectedMessageId
             ? `/messages/${selectedMessageId}${buildWorkspaceSearch({
                 mailbox: selectedMailboxId,
                 message: selectedMessageId,
@@ -653,6 +739,30 @@ export const WorkspacePage = () => {
           updateSearchParams((draft) => {
             draft.set("sort", mode);
           })
+        }
+        onMailboxViewChange={(view) =>
+          updateSearchParams((draft) => {
+            if (view === "trash") {
+              draft.set("view", "trash");
+            } else {
+              draft.delete("view");
+            }
+            draft.set("mailbox", "all");
+            draft.delete("message");
+          })
+        }
+        onRestoreMailbox={(mailbox) => {
+          setMailboxPrompt({
+            mailbox,
+            requestedExpiresInMinutes:
+              metaQuery.data?.defaultMailboxTtlMinutes ??
+              DEFAULT_WORKSPACE_TTL_MINUTES,
+            result: null,
+            error: null,
+          });
+        }}
+        onDestroyMailbox={(mailboxId) =>
+          destroyMailboxMutation.mutate(mailboxId)
         }
         onSelectMailbox={(mailboxId) =>
           updateSearchParams((draft) => {

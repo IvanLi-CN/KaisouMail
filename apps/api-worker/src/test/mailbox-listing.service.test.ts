@@ -43,21 +43,16 @@ describe("mailbox listing helpers", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps active and destroying mailboxes, but limits destroyed workspace history to 7 days and 50 rows", () => {
+  it("keeps active and destroying mailboxes and excludes expired or destroyed rows from workspace scope", () => {
     const rows = [
       buildMailbox(0, { status: "active" }),
       buildMailbox(1, { status: "destroying" }),
-      ...Array.from({ length: 55 }, (_, index) =>
-        buildMailbox(index + 10, {
-          status: "destroyed",
-          destroyedAt: `2026-04-08T11:${String(index).padStart(2, "0")}:00.000Z`,
-        }),
-      ),
-      buildMailbox(999, {
+      buildMailbox(2, { status: "expired" }),
+      buildMailbox(3, {
         status: "destroyed",
-        destroyedAt: "2026-03-28T12:00:00.000Z",
+        destroyedAt: "2026-04-08T11:00:00.000Z",
       }),
-      buildMailbox(1000, {
+      buildMailbox(4, {
         status: "destroyed",
         destroyedAt: null,
       }),
@@ -68,36 +63,68 @@ describe("mailbox listing helpers", () => {
       "2026-04-08T12:00:00.000Z",
     );
 
+    expect(visible.map((row: (typeof rows)[number]) => row.id)).toEqual([
+      "mbx_000",
+      "mbx_001",
+    ]);
     expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_000"),
-    ).toBe(true);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_001"),
-    ).toBe(true);
-    expect(
-      visible.filter(
-        (row: (typeof rows)[number]) => row.status === "destroyed",
-      ),
-    ).toHaveLength(50);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_999"),
+      visible.some((row: (typeof rows)[number]) => row.status === "expired"),
     ).toBe(false);
     expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_1000"),
+      visible.some((row: (typeof rows)[number]) => row.status === "destroyed"),
     ).toBe(false);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_064"),
-    ).toBe(true);
-    expect(
-      visible.some((row: (typeof rows)[number]) => row.id === "mbx_010"),
-    ).toBe(false);
-    expect(
-      visible
-        .filter((row: (typeof rows)[number]) => row.status === "destroyed")
-        .map((row: (typeof rows)[number]) => row.id)
-        .slice(0, 3),
-    ).toEqual(["mbx_064", "mbx_063", "mbx_062"]);
-    expect(visible.at(-1)?.id).toBe("mbx_015");
+  });
+
+  it("can filter the full mailbox list by expired status", async () => {
+    const rows = [
+      buildMailbox(0, { status: "active" }),
+      buildMailbox(1, { status: "expired" }),
+      buildMailbox(2, {
+        status: "destroyed",
+        destroyedAt: "2026-04-08T11:00:00.000Z",
+      }),
+    ];
+    const orderBy = vi.fn(async () => rows);
+    const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              orderBy,
+              where: vi.fn(() => ({
+                orderBy,
+                limit: vi.fn(async () => rows),
+              })),
+            };
+          }
+
+          if (table === messages) {
+            return {
+              where: vi.fn(() => ({
+                orderBy: vi.fn(async () => []),
+              })),
+            };
+          }
+
+          throw new Error("Unexpected table");
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+
+    const listed = await listMailboxesForUser(
+      {} as never,
+      adminUser,
+      "default",
+      ["expired"],
+    );
+
+    expect(listed.map((mailbox) => mailbox.id)).toEqual(["mbx_001"]);
   });
 
   it("loads mailbox recency in batches of 50 ids", async () => {
@@ -117,6 +144,11 @@ describe("mailbox listing helpers", () => {
         },
       ]);
     const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
       select: vi.fn(() => ({
         from: vi.fn((table: unknown) => {
           if (table === mailboxes) {
@@ -155,6 +187,11 @@ describe("mailbox listing helpers", () => {
     const rows = [buildMailbox(1, { status: "destroying" })];
     const orderBy = vi.fn();
     const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
       select: vi.fn(() => ({
         from: vi.fn((table: unknown) => {
           if (table === mailboxes) {
