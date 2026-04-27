@@ -40,6 +40,14 @@ describe("MailboxList", () => {
               status: "destroyed",
               routingRuleId: null,
             },
+            {
+              ...demoMailboxes[2],
+              id: "mbx_removed_catch_all",
+              address: "removed@wild.mail.example.net",
+              source: "catch_all",
+              status: "destroyed",
+              routingRuleId: null,
+            },
           ]}
         />
       </MemoryRouter>,
@@ -48,7 +56,7 @@ describe("MailboxList", () => {
     expect(screen.getByText("Rule: 域名级接管")).toBeInTheDocument();
     expect(screen.getByText("Rule: Catch All")).toBeInTheDocument();
     expect(screen.getByText("Rule: rule_beta")).toBeInTheDocument();
-    expect(screen.getByText("Rule: 已移除")).toBeInTheDocument();
+    expect(screen.getAllByText("Rule: 已移除")).toHaveLength(2);
     expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
   });
 
