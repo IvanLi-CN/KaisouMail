@@ -727,7 +727,7 @@ export const MailWorkspace = ({
                     activeIndex={
                       selectedMailboxIndex >= 0 ? selectedMailboxIndex : null
                     }
-                    enabled={isDesktopThreePane}
+                    enabled={isDesktopThreePane && visibleMailboxes.length > 20}
                     estimateSize={() => 108}
                     getItemKey={(mailbox) => mailbox.id}
                     items={visibleMailboxes}
