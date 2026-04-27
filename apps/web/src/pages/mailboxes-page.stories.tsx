@@ -43,6 +43,14 @@ const statusSegmentMailboxes = [
     status: "destroying" as const,
     routingRuleId: "rule_page_destroying",
   },
+  {
+    ...demoMailboxes[1],
+    id: "mbx_page_destroyed",
+    address: "destroyed@history.relay.example.test",
+    status: "destroyed" as const,
+    destroyedAt: "2026-04-08T08:20:00.000Z",
+    routingRuleId: null,
+  },
   ...(demoMailboxes[3] ? [demoMailboxes[3]] : []),
 ];
 
@@ -127,7 +135,7 @@ export const StatusSegmentedRecycleBin: Story = {
     docs: {
       description: {
         story:
-          "Page-level segmented mailbox status filters. The expired segment is presented as a recycle-bin queue with history, immediate destroy, and TTL extension restore affordances.",
+          "Page-level mailbox status filters. Expired rows are the recycle-bin queue; destroyed rows remain in the management history segment with read-only history access.",
       },
     },
   },
@@ -156,6 +164,18 @@ export const StatusSegmentedRecycleBin: Story = {
     await expect(args.onRestoreTtl).toHaveBeenCalledWith(
       expect.objectContaining({ id: "mbx_page_expired" }),
     );
+
+    await userEvent.click(canvas.getByRole("tab", { name: /已销毁/ }));
+    await expect(
+      canvas.getByText("destroyed@history.relay.example.test"),
+    ).toBeInTheDocument();
+    await expect(canvas.getByText("已销毁")).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("link", { name: "查看历史" }),
+    ).toHaveAttribute("href", "/mailboxes/mbx_page_destroyed");
+    await expect(
+      canvas.queryByRole("button", { name: "销毁邮箱" }),
+    ).not.toBeInTheDocument();
   },
 };
 
