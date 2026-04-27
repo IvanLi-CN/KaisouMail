@@ -1013,7 +1013,6 @@ const WorkspaceTrashHarness = () => {
       onDestroyMailbox={destroyMailbox}
       onMailboxViewChange={(view) => {
         setMailboxView(view);
-        setSearchQuery("");
         setSelectedMailboxId("all");
         setSelectedMessageId(
           view === "trash" ? "msg_scope_expired" : "msg_scope_active",
@@ -1146,7 +1145,6 @@ const WorkspaceSearchStressHarness = () => {
       onDestroyMailbox={fn()}
       onMailboxViewChange={(view) => {
         setMailboxView(view);
-        setSearchQuery("");
         setSelectedMailboxId("all");
         setSelectedMessageId(null);
       }}
@@ -1216,7 +1214,7 @@ export const WorkspaceSearchStress: Story = {
     ).not.toBeInTheDocument();
 
     await userEvent.clear(searchInput);
-    await userEvent.type(searchInput, "support-014");
+    await userEvent.type(searchInput, "support-014@trash");
     await expect(
       canvas.getByRole("button", {
         name: /support-014@trash\.search\.mail\.example\.net，已过期/i,
@@ -1225,6 +1223,17 @@ export const WorkspaceSearchStress: Story = {
     await expect(
       canvas.getByRole("heading", {
         name: /Search stress support-014 message/i,
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("tab", { name: "工作区" }));
+    await expect(searchInput).toHaveValue("support-014@trash");
+    await expect(canvas.getByText("没有匹配邮箱")).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("tab", { name: "回收站 36" }));
+    await expect(searchInput).toHaveValue("support-014@trash");
+    await expect(
+      canvas.getByRole("button", {
+        name: /support-014@trash\.search\.mail\.example\.net，已过期/i,
       }),
     ).toBeInTheDocument();
 
