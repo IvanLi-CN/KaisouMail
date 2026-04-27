@@ -153,6 +153,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-04-27: Compressed the workspace mailbox rail sort controls into a single toggle aligned with the workspace/trash tabs so the rail saves one control row while preserving the existing recent-vs-created sort behavior.
 - 2026-04-21: Replaced synchronous catch-all enable/disable with async domain cutover tasks plus task-state/SSE APIs, made wildcard cutover purge every project-created exact Email Routing mailbox host before creating wildcard DNS, kept explicit rebuilds pinned to live mailbox truth instead of historical DNS, and then aligned mailbox create/ensure on wildcard domains with Cloudflare's documented subdomain onboarding model by provisioning fresh active subdomains once, immediately re-purging the resulting exact MX/TXT, and treating that provisioning state as shared per subdomain rather than per mailbox address.
 - 2026-04-20: Added domain-level `subdomainDnsMode` plus wildcard verification/error state, introduced allowlist-gated wildcard Email Routing DNS cloning for Catch All domains via Cloudflare generic DNS CRUD, taught mailbox create/ensure flows to skip per-subdomain DNS enables on wildcard-backed domains, and split orphaned subdomain cleanup into explicit DNS-delete vs. wildcard-local-only paths so rollout and rollback can coexist safely.
 - 2026-04-20: Legacy exact-host cleanup now unlocks zone-level Email Routing DNS once per queue batch before deleting read-only MX/SPF records, and the default orphaned-host scan window is reduced to `SUBDOMAIN_CLEANUP_BATCH_SIZE=50` to lower steady-state quota pressure before wildcard rollout canaries.
@@ -230,6 +231,13 @@ PR: include
 ![Workspace on wide tablet with a mailbox rail and stacked reading panes](./assets/workspace-tablet-split-view-responsive.png)
 
 ![Workspace on desktop with the restored three-pane reading layout](./assets/workspace-desktop-three-pane-responsive.png)
+
+PR: include
+![Workspace mailbox rail with the compact sort toggle aligned to the view tabs on desktop](./assets/workspace-mailbox-sort-toggle-desktop.png)
+
+![Workspace mailbox rail compact sort toggle with surrounding layout context](./assets/workspace-mailbox-sort-toggle-context.png)
+
+![Workspace mailbox rail with the compact sort toggle preserved on a narrow viewport](./assets/workspace-mailbox-sort-toggle-mobile.png)
 
 ![Workspace desktop virtualized long lists](./assets/workspace-virtualized-long-lists.png)
 

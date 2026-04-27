@@ -1299,8 +1299,20 @@ export const DesktopThreePane: Story = {
     await expect(
       canvas.getByRole("link", { name: "打开邮箱管理" }),
     ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole("button", {
+        name: "邮箱排序：最近收信，点击切换为创建时间",
+      }),
+    ).toBeInTheDocument();
 
     assertDesktopThreePaneLayout(canvasElement);
+
+    await userEvent.click(
+      canvas.getByRole("button", {
+        name: "邮箱排序：最近收信，点击切换为创建时间",
+      }),
+    );
+    await expect(args.onSortModeChange).toHaveBeenCalledWith("created");
 
     await userEvent.click(
       getMailboxRowTriggerByAddress(
