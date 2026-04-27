@@ -20,6 +20,7 @@ import {
 } from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +29,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   mailboxKeys,
   useCreateMailboxMutation,
@@ -47,7 +49,6 @@ import {
 import { useReadMessageIds } from "@/lib/message-read-state";
 import { resolveLatestRefreshAt } from "@/lib/message-refresh";
 import { appRoutes } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 
 type MailboxStatusFilter = Mailbox["status"];
 
@@ -250,51 +251,46 @@ export const MailboxesPageView = ({
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>邮箱列表</CardTitle>
-          <CardDescription>查看地址状态、有效期和未读统计。</CardDescription>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>邮箱列表</CardTitle>
+            <CardDescription>查看地址状态、有效期和未读统计。</CardDescription>
+          </div>
+          {!listError ? (
+            <Tabs
+              aria-label="邮箱状态筛选"
+              className="w-full md:w-auto"
+              value={statusFilter}
+              onValueChange={(nextStatus) => {
+                if (
+                  nextStatus === "active" ||
+                  nextStatus === "expired" ||
+                  nextStatus === "destroying" ||
+                  nextStatus === "destroyed"
+                ) {
+                  setStatusFilter(nextStatus);
+                }
+              }}
+            >
+              <TabsList className="grid h-8 w-full grid-cols-4 rounded-lg border border-border bg-muted/40 p-0.5 md:w-auto">
+                {mailboxStatusFilters.map((filter) => (
+                  <TabsTrigger
+                    key={filter.status}
+                    className="h-7 gap-1.5 rounded-md px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)]"
+                    title={filter.description}
+                    value={filter.status}
+                  >
+                    <span>{filter.label}</span>
+                    <Badge className="h-5 min-w-5 rounded-full px-1.5 font-mono text-[10px] leading-none">
+                      {statusCounts.get(filter.status) ?? 0}
+                    </Badge>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-4">
-          {!listError ? (
-            <div className="space-y-3">
-              <div
-                aria-label="邮箱状态筛选"
-                className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
-                role="tablist"
-              >
-                {mailboxStatusFilters.map((filter) => {
-                  const isActive = statusFilter === filter.status;
-
-                  return (
-                    <button
-                      key={filter.status}
-                      aria-selected={isActive}
-                      className={cn(
-                        "rounded-xl border px-3 py-3 text-left transition-colors",
-                        isActive
-                          ? "border-primary/50 bg-primary/10 text-foreground"
-                          : "border-border bg-muted/10 text-muted-foreground hover:bg-muted/20 hover:text-foreground",
-                      )}
-                      role="tab"
-                      type="button"
-                      onClick={() => setStatusFilter(filter.status)}
-                    >
-                      <span className="flex items-center justify-between gap-3 text-sm font-semibold">
-                        {filter.label}
-                        <span className="rounded-full border border-border bg-background/60 px-2 py-0.5 font-mono text-xs">
-                          {statusCounts.get(filter.status) ?? 0}
-                        </span>
-                      </span>
-                      <span className="mt-1 block text-xs leading-5">
-                        {filter.description}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
           {listError ? (
             <ErrorState
               variant={listError.variant}
