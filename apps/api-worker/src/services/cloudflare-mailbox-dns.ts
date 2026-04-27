@@ -6,6 +6,7 @@ import type {
 } from "./emailRouting";
 import {
   deleteSubdomainEmailRoutingDnsRecords,
+  ensureSubdomainEnabled,
   unlockEmailRoutingDnsRecords,
 } from "./emailRouting";
 
@@ -290,6 +291,32 @@ export const purgeProjectMailboxExactDnsHosts = async (
     processedHosts: hostsToDelete,
     deletedHostCount,
     completed: hostsToDelete.length >= hosts.length,
+  };
+};
+
+export const ensureMailboxSubdomainOnboardedForWildcardDns = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  subdomain: string,
+  requestSource: CloudflareRequestSource,
+) => {
+  const fqdn = `${subdomain}.${domain.rootDomain}`;
+
+  await ensureSubdomainEnabled(env, config, domain, subdomain, requestSource);
+  await unlockEmailRoutingDnsRecords(env, config, domain, requestSource, {
+    name: fqdn,
+  });
+  await deleteSubdomainEmailRoutingDnsRecords(
+    env,
+    config,
+    domain,
+    subdomain,
+    requestSource,
+  );
+
+  return {
+    fqdn,
   };
 };
 
