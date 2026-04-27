@@ -883,8 +883,16 @@ const WorkspaceTrashHarness = () => {
     }),
     [expiredMailbox],
   );
+  const [searchQuery, setSearchQuery] = useState("");
   const isTrashView = mailboxView === "trash";
-  const currentMailboxes = isTrashView ? [expiredMailbox] : visibleMailboxes;
+  const currentMailboxes = useMemo(
+    () =>
+      filterMailboxes(
+        isTrashView ? [expiredMailbox] : visibleMailboxes,
+        searchQuery,
+      ),
+    [expiredMailbox, isTrashView, searchQuery, visibleMailboxes],
+  );
   const currentMessages = isTrashView ? trashMessages : activeMessages;
   const selectedMailbox =
     selectedMailboxId === "all"
@@ -928,13 +936,14 @@ const WorkspaceTrashHarness = () => {
       onDestroyMailbox={destroyMailbox}
       onMailboxViewChange={(view) => {
         setMailboxView(view);
+        setSearchQuery("");
         setSelectedMailboxId("all");
         setSelectedMessageId(
           view === "trash" ? "msg_scope_expired" : "msg_scope_active",
         );
       }}
       onRestoreMailbox={restoreMailbox}
-      onSearchQueryChange={fn()}
+      onSearchQueryChange={setSearchQuery}
       onSelectMailbox={(mailboxId) => {
         setSelectedMailboxId(mailboxId);
         const nextMessages =
@@ -955,7 +964,7 @@ const WorkspaceTrashHarness = () => {
           onRefresh={fn()}
         />
       }
-      searchQuery=""
+      searchQuery={searchQuery}
       selectedMailbox={selectedMailbox}
       selectedMailboxId={selectedMailboxId}
       selectedMessage={selectedMessage}
@@ -1630,7 +1639,7 @@ export const WorkspaceScopeExcludesDestroyedHistory: Story = {
     ).not.toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", {
-        name: /expired@trash\.mail\.example\.net/i,
+        name: /expired@trash\.mail\.example\.net，已过期/i,
       }),
     ).not.toBeInTheDocument();
     await expect(
@@ -1674,7 +1683,7 @@ export const WorkspaceTrashView: Story = {
     );
     await expect(
       canvas.getByRole("button", {
-        name: /expired@trash\.mail\.example\.net/i,
+        name: /expired@trash\.mail\.example\.net，已过期/i,
       }),
     ).toBeInTheDocument();
     await expect(
@@ -1686,6 +1695,25 @@ export const WorkspaceTrashView: Story = {
     await expect(
       canvas.getByText("Expired mailbox history remains readable"),
     ).toBeInTheDocument();
+
+    const searchInput = canvas.getByLabelText("搜索邮箱");
+    await userEvent.type(searchInput, "trash");
+    await expect(searchInput).toHaveValue("trash");
+    await expect(
+      canvas.getByRole("button", {
+        name: /expired@trash\.mail\.example\.net，已过期/i,
+      }),
+    ).toBeInTheDocument();
+
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, "nomatch");
+    await expect(canvas.getByText("没有匹配邮箱")).toBeInTheDocument();
+    await expect(
+      canvas.queryByRole("button", {
+        name: /expired@trash\.mail\.example\.net，已过期/i,
+      }),
+    ).not.toBeInTheDocument();
+    await userEvent.clear(searchInput);
 
     await userEvent.click(canvas.getByRole("tab", { name: "工作区" }));
     await expect(canvas.getByRole("tab", { name: "工作区" })).toHaveAttribute(
@@ -1700,7 +1728,7 @@ export const WorkspaceTrashView: Story = {
     ).toBeInTheDocument();
     await expect(
       canvas.queryByRole("button", {
-        name: /expired@trash\.mail\.example\.net/i,
+        name: /expired@trash\.mail\.example\.net，已过期/i,
       }),
     ).not.toBeInTheDocument();
 
@@ -1714,7 +1742,7 @@ export const WorkspaceTrashView: Story = {
     ).toBeInTheDocument();
     await expect(
       canvas.getByRole("button", {
-        name: /expired@trash\.mail\.example\.net/i,
+        name: /expired@trash\.mail\.example\.net，已过期/i,
       }),
     ).toBeInTheDocument();
   },

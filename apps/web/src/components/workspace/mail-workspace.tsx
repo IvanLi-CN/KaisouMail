@@ -248,6 +248,7 @@ export const MailWorkspace = ({
   const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const isTrashView = mailboxView === "trash";
+  const hasMailboxSearchQuery = searchQuery.trim().length > 0;
   const selectedMailboxIndex = visibleMailboxes.findIndex(
     (mailbox) =>
       mailbox.id === highlightedMailboxId || mailbox.id === selectedMailboxId,
@@ -938,21 +939,29 @@ export const MailWorkspace = ({
               ) : (
                 <div className="mx-3 mt-2">
                   <EmptyState
-                    title={isTrashView ? "回收站为空" : "没有匹配邮箱"}
+                    title={
+                      hasMailboxSearchQuery
+                        ? "没有匹配邮箱"
+                        : isTrashView
+                          ? "回收站为空"
+                          : "没有匹配邮箱"
+                    }
                     description={
-                      isTrashView
-                        ? "过期邮箱会移入这里，可在清理前恢复或销毁。"
-                        : "试试清空搜索词，或者直接在这里新建一个地址。"
+                      hasMailboxSearchQuery
+                        ? "试试清空搜索词，或换一个邮箱地址片段。"
+                        : isTrashView
+                          ? "过期邮箱会移入这里，可在清理前恢复或销毁。"
+                          : "试试清空搜索词，或者直接在这里新建一个地址。"
                     }
                     action={
-                      isTrashView ? undefined : (
+                      !isTrashView && !hasMailboxSearchQuery ? (
                         <Button
                           variant="outline"
                           onClick={createMailboxAction.onOpen}
                         >
                           新建邮箱
                         </Button>
-                      )
+                      ) : undefined
                     }
                   />
                 </div>
