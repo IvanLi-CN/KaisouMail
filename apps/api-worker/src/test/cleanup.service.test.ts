@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { parseRuntimeConfig } = vi.hoisted(() => ({
   parseRuntimeConfig: vi.fn(),
 }));
-const { destroyMailbox, listMailboxIdsPendingCleanup } = vi.hoisted(() => ({
+const {
+  autorepairStaleDestroyingMailboxes,
+  destroyMailbox,
+  listMailboxIdsPendingCleanup,
+} = vi.hoisted(() => ({
+  autorepairStaleDestroyingMailboxes: vi.fn(),
   destroyMailbox: vi.fn(),
   listMailboxIdsPendingCleanup: vi.fn(),
 }));
@@ -16,6 +21,7 @@ vi.mock("../env", () => ({
 }));
 
 vi.mock("../services/mailboxes", () => ({
+  autorepairStaleDestroyingMailboxes,
   destroyMailbox,
   listMailboxIdsPendingCleanup,
 }));
@@ -29,12 +35,15 @@ import { runMailboxCleanup } from "../services/cleanup";
 describe("cleanup runner", () => {
   const config = {
     CLEANUP_BATCH_SIZE: 3,
+    MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES: 120,
+    MAILBOX_CLEANUP_REPAIR_BATCH_SIZE: 100,
     SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
   } as never;
 
   beforeEach(() => {
     vi.clearAllMocks();
     parseRuntimeConfig.mockReturnValue(config);
+    autorepairStaleDestroyingMailboxes.mockResolvedValue(0);
     backfillMessageVerification.mockResolvedValue(0);
   });
 
@@ -55,6 +64,10 @@ describe("cleanup runner", () => {
       {} as never,
       config,
       "mbx_active_fail",
+    );
+    expect(autorepairStaleDestroyingMailboxes).toHaveBeenCalledWith(
+      {} as never,
+      config,
     );
     expect(destroyMailbox).toHaveBeenNthCalledWith(
       2,
@@ -84,6 +97,14 @@ describe("cleanup runner", () => {
     await expect(runMailboxCleanup({} as never)).resolves.toBe(1);
 
     expect(callOrder).toEqual(["mailbox", "backfill"]);
+  });
+
+  it("includes autorepaired stale destroying mailboxes in the cleanup count", async () => {
+    autorepairStaleDestroyingMailboxes.mockResolvedValue(2);
+    listMailboxIdsPendingCleanup.mockResolvedValue(["mbx_expired"]);
+    destroyMailbox.mockResolvedValue(undefined);
+
+    await expect(runMailboxCleanup({} as never)).resolves.toBe(3);
   });
 
   it("still runs message verification backfill when mailbox cleanup has nothing to do", async () => {

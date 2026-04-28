@@ -1,10 +1,15 @@
 import type { WorkerEnv } from "../env";
 import { parseRuntimeConfig } from "../env";
-import { destroyMailbox, listMailboxIdsPendingCleanup } from "./mailboxes";
+import {
+  autorepairStaleDestroyingMailboxes,
+  destroyMailbox,
+  listMailboxIdsPendingCleanup,
+} from "./mailboxes";
 import { backfillMessageVerification } from "./message-verification";
 
 export const runMailboxCleanup = async (env: WorkerEnv) => {
   const config = parseRuntimeConfig(env);
+  const repairedCount = await autorepairStaleDestroyingMailboxes(env, config);
   const expiredIds = await listMailboxIdsPendingCleanup(env, config);
   const errors: Array<{ mailboxId: string; error: unknown }> = [];
 
@@ -29,5 +34,5 @@ export const runMailboxCleanup = async (env: WorkerEnv) => {
     );
   }
 
-  return expiredIds.length;
+  return expiredIds.length + repairedCount;
 };

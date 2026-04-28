@@ -204,6 +204,8 @@ export const mailboxes = sqliteTable(
     createdAt: text("created_at").notNull(),
     expiresAt: text("expires_at"),
     destroyedAt: text("destroyed_at"),
+    cleanupNextAttemptAt: text("cleanup_next_attempt_at"),
+    cleanupLastError: text("cleanup_last_error"),
   },
   (table) => [
     uniqueIndex("mailboxes_address_unique")
@@ -217,6 +219,11 @@ export const mailboxes = sqliteTable(
       table.status,
     ),
     index("mailboxes_status_expires_idx").on(table.status, table.expiresAt),
+    index("mailboxes_cleanup_retry_idx").on(
+      table.status,
+      table.cleanupNextAttemptAt,
+      table.createdAt,
+    ),
   ],
 );
 

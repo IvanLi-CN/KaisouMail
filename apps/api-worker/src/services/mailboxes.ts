@@ -9,7 +9,16 @@ import {
   type mailboxStatuses,
   mergeMailboxExpiryByExtension,
 } from "@kaisoumail/shared";
-import { and, desc, eq, inArray, isNotNull, lte } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+} from "drizzle-orm";
 
 import { getDb } from "../db/client";
 import {
@@ -21,6 +30,10 @@ import {
   subdomains,
 } from "../db/schema";
 import type { RuntimeConfig, WorkerEnv } from "../env";
+import {
+  defaultMailboxCleanupAutorepairMinAgeMinutes,
+  defaultMailboxCleanupRepairBatchSize,
+} from "../env";
 import { nowIso, randomId } from "../lib/crypto";
 import { chunkD1InValues } from "../lib/d1-batches";
 import {
@@ -32,6 +45,7 @@ import {
   parseMailboxAddressAgainstDomains,
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
+import { logOperationalEvent } from "../lib/observability";
 import type { AuthUser } from "../types";
 import { ensureMailboxSubdomainOnboardedForWildcardDns } from "./cloudflare-mailbox-dns";
 import {
@@ -62,9 +76,26 @@ type SubdomainProvisionMetadata = {
 
 const longTermMailboxExpirySentinel = "9999-12-31T23:59:59.999Z";
 const expiredMailboxRetentionMs = expiredMailboxRetentionHours * 60 * 60 * 1000;
+const mailboxCleanupRetryDelayMs = 60 * 60 * 1000;
 
 const resolveExpiredMailboxCleanupCutoff = (now: string) =>
   new Date(new Date(now).getTime() - expiredMailboxRetentionMs).toISOString();
+
+const resolveMailboxCleanupRetryAt = (now: string) =>
+  new Date(Date.parse(now) + mailboxCleanupRetryDelayMs).toISOString();
+
+const formatMailboxCleanupError = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error)).slice(0, 1000);
+
+const resolveMailboxAutorepairCutoff = (
+  config: Pick<RuntimeConfig, "MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES">,
+  now: string,
+) => {
+  const minAgeMinutes =
+    config.MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES ??
+    defaultMailboxCleanupAutorepairMinAgeMinutes;
+  return new Date(Date.parse(now) - minAgeMinutes * 60 * 1000).toISOString();
+};
 
 const isMailboxExpiredAt = (expiresAt: string | null, now: string) =>
   Boolean(
@@ -477,6 +508,8 @@ const updateMailboxRegistration = async (
       expiresAt: values.expiresAt,
       status: "active",
       destroyedAt: null,
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
     })
     .where(eq(mailboxes.id, mailboxId));
 };
@@ -499,8 +532,35 @@ const activateMailbox = async (
 ) => {
   await db
     .update(mailboxes)
-    .set({ status: "active" })
+    .set({
+      status: "active",
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
+    })
     .where(eq(mailboxes.id, mailboxId));
+};
+
+const markMailboxCleanupBackoff = async (
+  db: ReturnType<typeof getDb>,
+  mailboxId: string,
+  now: string,
+  error: unknown,
+) => {
+  const nextAttemptAt = resolveMailboxCleanupRetryAt(now);
+  const cleanupLastError = formatMailboxCleanupError(error);
+  await db
+    .update(mailboxes)
+    .set({
+      cleanupNextAttemptAt: nextAttemptAt,
+      cleanupLastError,
+    })
+    .where(eq(mailboxes.id, mailboxId));
+
+  logOperationalEvent("warn", "mailboxes.cleanup.retry_scheduled", {
+    mailboxId,
+    nextAttemptAt,
+    error: cleanupLastError,
+  });
 };
 
 export const resolveRequestedMailboxAddress = (
@@ -1010,6 +1070,8 @@ export const createMailboxForUser = async (
       createdAt: now,
       expiresAt,
       destroyedAt: null,
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
     } as const;
 
     let mailboxInserted = false;
@@ -1323,62 +1385,89 @@ export const destroyMailbox = async (
 
   await db
     .update(mailboxes)
-    .set({ status: "destroying" })
+    .set({
+      status: "destroying",
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
+    })
     .where(eq(mailboxes.id, mailbox.id));
 
-  if (mailbox.routingRuleId) {
-    const domain = await resolveMailboxDomain(env, config, mailbox);
-    if (!domain) {
-      throw new ApiError(500, "Mailbox domain not found for routing cleanup", {
+  try {
+    if (mailbox.routingRuleId) {
+      const domain = await resolveMailboxDomain(env, config, mailbox);
+      if (!domain) {
+        throw new ApiError(
+          500,
+          "Mailbox domain not found for routing cleanup",
+          {
+            mailboxId: mailbox.id,
+            address: mailbox.address,
+          },
+        );
+      }
+      await deleteRoutingRule(
+        env,
+        config,
+        domain,
+        mailbox.routingRuleId,
+        mailboxRouteContexts.destroy,
+      );
+    }
+
+    const relatedMessages = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.mailboxId, mailbox.id));
+    const messageIds = relatedMessages.map((message) => message.id);
+    for (const message of relatedMessages) {
+      await env.MAIL_BUCKET.delete(message.rawR2Key);
+      await env.MAIL_BUCKET.delete(message.parsedR2Key);
+    }
+    if (messageIds.length > 0) {
+      for (const messageIdChunk of chunkD1InValues(messageIds)) {
+        await db
+          .delete(messageAttachments)
+          .where(inArray(messageAttachments.messageId, messageIdChunk));
+        await db
+          .delete(messageRecipients)
+          .where(inArray(messageRecipients.messageId, messageIdChunk));
+      }
+    }
+    await db.delete(messages).where(eq(messages.mailboxId, mailbox.id));
+    const destroyedAt = nowIso();
+    await db
+      .update(mailboxes)
+      .set({
+        status: "destroyed",
+        destroyedAt,
+        routingRuleId: null,
+        cleanupNextAttemptAt: null,
+        cleanupLastError: null,
+      })
+      .where(eq(mailboxes.id, mailbox.id));
+
+    return toMailboxDto(
+      {
+        ...mailbox,
+        status: "destroyed",
+        destroyedAt,
+        routingRuleId: null,
+        rootDomain,
+      },
+      null,
+    );
+  } catch (error) {
+    try {
+      await markMailboxCleanupBackoff(db, mailbox.id, nowIso(), error);
+    } catch (backoffError) {
+      logOperationalEvent("error", "mailboxes.cleanup.backoff_failed", {
         mailboxId: mailbox.id,
-        address: mailbox.address,
+        cleanupError: formatMailboxCleanupError(error),
+        backoffError: formatMailboxCleanupError(backoffError),
       });
     }
-    await deleteRoutingRule(
-      env,
-      config,
-      domain,
-      mailbox.routingRuleId,
-      mailboxRouteContexts.destroy,
-    );
+    throw error;
   }
-
-  const relatedMessages = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.mailboxId, mailbox.id));
-  const messageIds = relatedMessages.map((message) => message.id);
-  for (const message of relatedMessages) {
-    await env.MAIL_BUCKET.delete(message.rawR2Key);
-    await env.MAIL_BUCKET.delete(message.parsedR2Key);
-  }
-  if (messageIds.length > 0) {
-    for (const messageIdChunk of chunkD1InValues(messageIds)) {
-      await db
-        .delete(messageAttachments)
-        .where(inArray(messageAttachments.messageId, messageIdChunk));
-      await db
-        .delete(messageRecipients)
-        .where(inArray(messageRecipients.messageId, messageIdChunk));
-    }
-  }
-  await db.delete(messages).where(eq(messages.mailboxId, mailbox.id));
-  const destroyedAt = nowIso();
-  await db
-    .update(mailboxes)
-    .set({ status: "destroyed", destroyedAt, routingRuleId: null })
-    .where(eq(mailboxes.id, mailbox.id));
-
-  return toMailboxDto(
-    {
-      ...mailbox,
-      status: "destroyed",
-      destroyedAt,
-      routingRuleId: null,
-      rootDomain,
-    },
-    null,
-  );
 };
 
 export const listMailboxIdsPendingCleanup = async (
@@ -1392,7 +1481,15 @@ export const listMailboxIdsPendingCleanup = async (
   const destroyingRows = await db
     .select({ id: mailboxes.id })
     .from(mailboxes)
-    .where(eq(mailboxes.status, "destroying"))
+    .where(
+      and(
+        eq(mailboxes.status, "destroying"),
+        or(
+          isNull(mailboxes.cleanupNextAttemptAt),
+          lte(mailboxes.cleanupNextAttemptAt, now),
+        ),
+      ),
+    )
     .orderBy(mailboxes.createdAt)
     .limit(config.CLEANUP_BATCH_SIZE);
   const shouldAlternateSingleSlotCleanup =
@@ -1427,4 +1524,75 @@ export const listMailboxIdsPendingCleanup = async (
   return [...additionalDestroyingRows, ...expiredRows]
     .filter((row) => row.id && row.id.length > 0)
     .map((row) => row.id);
+};
+
+export const autorepairStaleDestroyingMailboxes = async (
+  env: WorkerEnv,
+  config: Pick<
+    RuntimeConfig,
+    | "MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES"
+    | "MAILBOX_CLEANUP_REPAIR_BATCH_SIZE"
+  >,
+  now = nowIso(),
+) => {
+  const repairBatchSize =
+    config.MAILBOX_CLEANUP_REPAIR_BATCH_SIZE ??
+    defaultMailboxCleanupRepairBatchSize;
+  if (repairBatchSize === 0) return 0;
+
+  const cutoff = resolveMailboxAutorepairCutoff(config, now);
+  const rows = await env.DB.prepare(
+    `SELECT m.id
+    FROM mailboxes m
+    WHERE m.status = 'destroying'
+      AND m.routing_rule_id IS NULL
+      AND m.created_at <= ?
+      AND NOT EXISTS (
+        SELECT 1
+        FROM messages msg
+        WHERE msg.mailbox_id = m.id
+      )
+    ORDER BY m.created_at
+    LIMIT ?`,
+  )
+    .bind(cutoff, repairBatchSize)
+    .all<{ id: string }>();
+  const mailboxIds = (rows.results ?? [])
+    .map((row) => row.id)
+    .filter((id) => id.length > 0);
+  if (mailboxIds.length === 0) return 0;
+
+  let repairedCount = 0;
+  for (const mailboxIdChunk of chunkD1InValues(mailboxIds)) {
+    const placeholders = mailboxIdChunk.map(() => "?").join(",");
+    const result = await env.DB.prepare(
+      `UPDATE mailboxes
+      SET status = 'destroyed',
+          destroyed_at = ?,
+          routing_rule_id = NULL,
+          cleanup_next_attempt_at = NULL,
+          cleanup_last_error = NULL
+      WHERE id IN (${placeholders})
+        AND status = 'destroying'
+        AND routing_rule_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM messages msg
+          WHERE msg.mailbox_id = mailboxes.id
+        )`,
+    )
+      .bind(now, ...mailboxIdChunk)
+      .run();
+    repairedCount += result.meta?.changes ?? 0;
+  }
+
+  if (repairedCount > 0) {
+    logOperationalEvent("info", "mailboxes.cleanup.autorepaired", {
+      repairedCount,
+      selectedCount: mailboxIds.length,
+      cutoff,
+    });
+  }
+
+  return repairedCount;
 };
