@@ -53,6 +53,7 @@ import {
   messages,
 } from "../db/schema";
 import {
+  autorepairStaleDestroyingMailboxes,
   destroyMailbox,
   listMailboxIdsPendingCleanup,
 } from "../services/mailboxes";
@@ -61,6 +62,8 @@ const runtimeConfig = {
   APP_ENV: "development",
   DEFAULT_MAILBOX_TTL_MINUTES: 60,
   CLEANUP_BATCH_SIZE: 3,
+  MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES: 120,
+  MAILBOX_CLEANUP_REPAIR_BATCH_SIZE: 100,
   SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
   EMAIL_ROUTING_MANAGEMENT_ENABLED: true,
   CLOUDFLARE_API_TOKEN: "cf-token",
@@ -154,6 +157,53 @@ describe("mailbox cleanup service", () => {
 
     expect(mailboxIds).toEqual([
       "mbx_destroying",
+      "mbx_expired_1",
+      "mbx_expired_2",
+    ]);
+  });
+
+  it("selects later eligible destroying mailboxes when older failures are cooling down", async () => {
+    const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
+      select: vi
+        .fn()
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  { id: "mbx_later_destroying_ready" },
+                ]),
+              })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({
+                limit: vi.fn(async () => [
+                  { id: "mbx_expired_1" },
+                  { id: "mbx_expired_2" },
+                ]),
+              })),
+            })),
+          })),
+        }),
+    };
+    getDb.mockReturnValue(db);
+
+    const mailboxIds = await listMailboxIdsPendingCleanup(
+      {} as never,
+      runtimeConfig,
+    );
+
+    expect(mailboxIds).toEqual([
+      "mbx_later_destroying_ready",
       "mbx_expired_1",
       "mbx_expired_2",
     ]);
@@ -376,6 +426,7 @@ describe("mailbox cleanup service", () => {
       parsedR2Key: `parsed/retry-${index}.json`,
     }));
     const operationLog: string[] = [];
+    const updateValues: unknown[] = [];
     const db = {
       select: vi.fn(() => ({
         from: vi.fn((table: unknown) => {
@@ -398,6 +449,7 @@ describe("mailbox cleanup service", () => {
       update: vi.fn((table: unknown) => ({
         set: vi.fn((values: { status?: string }) => ({
           where: vi.fn(async () => {
+            if (table === mailboxes) updateValues.push(values);
             if (table === mailboxes && values.status === "destroying") {
               operationLog.push("mailbox:destroying");
             }
@@ -438,5 +490,65 @@ describe("mailbox cleanup service", () => {
     expect(operationLog).not.toContain("recipients");
     expect(operationLog).not.toContain("messages");
     expect(operationLog).not.toContain("mailbox:destroyed");
+    expect(updateValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cleanupNextAttemptAt: "2026-04-08T13:00:00.000Z",
+          cleanupLastError: "R2 temporary failure",
+        }),
+      ]),
+    );
+  });
+
+  it("autorepairs stale destroying mailboxes only when they have no routing rule or messages", async () => {
+    const prepare = vi
+      .fn()
+      .mockReturnValueOnce({
+        bind: vi.fn((cutoff: string, limit: number) => ({
+          all: vi.fn(async () => {
+            expect(cutoff).toBe("2026-04-08T10:00:00.000Z");
+            expect(limit).toBe(100);
+            return {
+              results: [{ id: "mbx_safe_1" }, { id: "mbx_safe_2" }],
+            };
+          }),
+        })),
+      })
+      .mockReturnValueOnce({
+        bind: vi.fn((destroyedAt: string, ...mailboxIds: string[]) => ({
+          run: vi.fn(async () => {
+            expect(destroyedAt).toBe("2026-04-08T12:00:00.000Z");
+            expect(mailboxIds).toEqual(["mbx_safe_1", "mbx_safe_2"]);
+            return { meta: { changes: 2 } };
+          }),
+        })),
+      });
+
+    const repairedCount = await autorepairStaleDestroyingMailboxes(
+      {
+        DB: {
+          prepare,
+        },
+      } as never,
+      runtimeConfig,
+    );
+
+    expect(repairedCount).toBe(2);
+    expect(prepare).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("m.routing_rule_id IS NULL"),
+    );
+    expect(prepare).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("NOT EXISTS"),
+    );
+    expect(prepare).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("routing_rule_id IS NULL"),
+    );
+    expect(prepare).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("NOT EXISTS"),
+    );
   });
 });

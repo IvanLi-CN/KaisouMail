@@ -149,6 +149,26 @@ describe("runtime config parsing", () => {
     expect(config.SUBDOMAIN_CLEANUP_BATCH_SIZE).toBe(50);
   });
 
+  it("defaults mailbox cleanup autorepair to a guarded stale-row window", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES: undefined,
+      MAILBOX_CLEANUP_REPAIR_BATCH_SIZE: undefined,
+    } as never);
+
+    expect(config.MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES).toBe(120);
+    expect(config.MAILBOX_CLEANUP_REPAIR_BATCH_SIZE).toBe(100);
+  });
+
+  it("accepts zero as the mailbox cleanup autorepair kill switch", () => {
+    const config = parseRuntimeConfig({
+      ...baseEnv,
+      MAILBOX_CLEANUP_REPAIR_BATCH_SIZE: "0",
+    } as never);
+
+    expect(config.MAILBOX_CLEANUP_REPAIR_BATCH_SIZE).toBe(0);
+  });
+
   it("accepts zero as the subdomain cleanup kill switch", () => {
     const config = parseRuntimeConfig({
       ...baseEnv,

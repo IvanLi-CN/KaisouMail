@@ -6,6 +6,8 @@ import { normalizeRootDomain } from "./lib/email";
 export const REQUIRED_RUNTIME_SECRETS = ["SESSION_SECRET"] as const;
 export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 export const defaultSubdomainCleanupDispatchBatchSize = 48;
+export const defaultMailboxCleanupAutorepairMinAgeMinutes = 120;
+export const defaultMailboxCleanupRepairBatchSize = 100;
 
 const envBooleanSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
@@ -27,6 +29,18 @@ const runtimeConfigSchema = z.object({
     .max(maxMailboxTtlMinutes)
     .default(60),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(20).default(3),
+  MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10_080)
+    .default(defaultMailboxCleanupAutorepairMinAgeMinutes),
+  MAILBOX_CLEANUP_REPAIR_BATCH_SIZE: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(500)
+    .default(defaultMailboxCleanupRepairBatchSize),
   SUBDOMAIN_CLEANUP_BATCH_SIZE: z.coerce
     .number()
     .int()
@@ -65,6 +79,8 @@ export interface WorkerEnv {
   EMAIL_WORKER_NAME?: string;
   DEFAULT_MAILBOX_TTL_MINUTES: string;
   CLEANUP_BATCH_SIZE: string;
+  MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES?: string;
+  MAILBOX_CLEANUP_REPAIR_BATCH_SIZE?: string;
   SUBDOMAIN_CLEANUP_BATCH_SIZE: string;
   SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE?: string;
   SUBDOMAIN_CLEANUP_QUEUE?: Queue<unknown>;
@@ -89,6 +105,8 @@ export interface RuntimeConfig
   extends Omit<
     z.output<typeof runtimeConfigSchema>,
     | "SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE"
+    | "MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES"
+    | "MAILBOX_CLEANUP_REPAIR_BATCH_SIZE"
     | "WEB_APP_ORIGIN"
     | "WEB_APP_ORIGINS"
     | "WORKERS_AI_MODEL"
@@ -96,6 +114,8 @@ export interface RuntimeConfig
     | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
   > {
   SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE?: number;
+  MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES?: number;
+  MAILBOX_CLEANUP_REPAIR_BATCH_SIZE?: number;
   WEB_APP_ORIGIN?: string;
   WEB_APP_ORIGINS?: string[];
   WORKERS_AI_MODEL?: string;
