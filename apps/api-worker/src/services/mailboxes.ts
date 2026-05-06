@@ -8,6 +8,7 @@ import {
   mailboxSchema,
   type mailboxStatuses,
   mergeMailboxExpiryByExtension,
+  resolveMailboxExpiresAtFromMinutes,
 } from "@kaisoumail/shared";
 import {
   and,
@@ -1271,6 +1272,55 @@ export const resolveMailboxForUser = async (
 
   const [resolved] = await attachLastReceivedAt(env, [classification.row]);
   return resolved;
+};
+
+export const resetMailboxTtlForUser = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  mailboxId: string,
+  input: { expiresInMinutes: number | null },
+) => {
+  await expireDueMailboxes(env);
+  const db = getDb(env);
+  const rows = await db
+    .select()
+    .from(mailboxes)
+    .where(eq(mailboxes.id, mailboxId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new ApiError(404, "Mailbox not found");
+  if (!isVisibleMailbox(row, user)) {
+    throw new ApiError(403, "Forbidden");
+  }
+  if (row.source !== "registered" || row.status !== "active") {
+    throw new ApiError(
+      409,
+      "Mailbox TTL can only be reset for active registered mailboxes",
+      {
+        mailboxId,
+        source: row.source,
+        status: row.status,
+      },
+    );
+  }
+
+  const resolvedExpiresAt = resolveMailboxExpiresAtFromMinutes(
+    input.expiresInMinutes,
+  );
+  const nextExpiresAt = toMailboxStorageExpiresAt(resolvedExpiresAt);
+  if (!nextExpiresAt) {
+    throw new ApiError(400, "Invalid mailbox TTL");
+  }
+
+  await updateMailboxExpiry(db, row.id, nextExpiresAt, "active");
+  const [updatedMailbox] = await attachLastReceivedAt(env, [
+    {
+      ...row,
+      expiresAt: nextExpiresAt,
+      status: "active",
+    },
+  ]);
+  return updatedMailbox;
 };
 
 export const ensureCatchAllMailboxForAddress = async (

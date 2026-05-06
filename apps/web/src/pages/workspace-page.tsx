@@ -18,6 +18,7 @@ import {
   useDestroyMailboxMutation,
   useEnsureMailboxMutation,
   useMailboxesQuery,
+  useResetMailboxTtlMutation,
 } from "@/hooks/use-mailboxes";
 import {
   messageKeys,
@@ -102,26 +103,22 @@ const mergeSelectedMailboxMessages = <
   isSelectedMailboxRefreshing: boolean,
 ) => {
   if (!selectedMailboxId) return aggregateMessages;
-  if (!selectedMailboxMessages) return aggregateMessages;
 
   const aggregateSelectedMailboxMessages = aggregateMessages.filter(
     (message) => message.mailboxId === selectedMailboxId,
   );
+  if (!selectedMailboxMessages) return aggregateSelectedMailboxMessages;
+
   const shouldKeepAggregateMailboxMessages =
     isSelectedMailboxRefreshing &&
     selectedMailboxMessages.length === 0 &&
     aggregateSelectedMailboxMessages.length > 0;
 
   if (shouldKeepAggregateMailboxMessages) {
-    return aggregateMessages;
+    return aggregateSelectedMailboxMessages;
   }
 
-  return [
-    ...aggregateMessages.filter(
-      (message) => message.mailboxId !== selectedMailboxId,
-    ),
-    ...selectedMailboxMessages,
-  ];
+  return selectedMailboxMessages;
 };
 
 const readStoredSortMode = () => {
@@ -144,6 +141,9 @@ export const WorkspacePage = () => {
   const [createMailboxError, setCreateMailboxError] = useState<string | null>(
     null,
   );
+  const [updateMailboxTtlError, setUpdateMailboxTtlError] = useState<
+    string | null
+  >(null);
   const [highlightedMailboxId, setHighlightedMailboxId] = useState<
     string | null
   >(null);
@@ -161,6 +161,7 @@ export const WorkspacePage = () => {
   const createMailboxMutation = useCreateMailboxMutation();
   const destroyMailboxMutation = useDestroyMailboxMutation();
   const ensureMailboxMutation = useEnsureMailboxMutation();
+  const resetMailboxTtlMutation = useResetMailboxTtlMutation();
   const hasMailboxesData = mailboxesQuery.data !== undefined;
   const hasExpiredMailboxesData = expiredMailboxesQuery.data !== undefined;
   const mailboxView = searchParams.get("view") === "trash" ? "trash" : "active";
@@ -261,26 +262,33 @@ export const WorkspacePage = () => {
     scope: isTrashView ? "default" : "workspace",
   });
   const allMessages = allMessagesQuery.data ?? [];
+  const selectedMailboxMessages = useMemo(() => {
+    if (!selectedMailbox || messagesQuery.data === undefined) return undefined;
+    return messagesQuery.data.filter(
+      (message) => message.mailboxId === selectedMailbox.id,
+    );
+  }, [messagesQuery.data, selectedMailbox]);
   const selectedMessageId = searchParams.get("message");
   const workspaceMessages = useMemo(
     () =>
       mergeSelectedMailboxMessages(
         allMessages,
         selectedMailbox?.id ?? null,
-        messagesQuery.data,
+        selectedMailboxMessages,
         messagesQuery.isFetching,
       ),
     [
       allMessages,
-      messagesQuery.data,
       messagesQuery.isFetching,
+      selectedMailboxMessages,
       selectedMailbox?.id,
     ],
   );
+  const railMessages = allMessages;
   const mailboxesWithLiveRecency = useMemo(() => {
     const latestByMailboxId = new Map<string, string>();
 
-    for (const message of workspaceMessages) {
+    for (const message of railMessages) {
       const current = latestByMailboxId.get(message.mailboxId);
       if (!current || message.receivedAt.localeCompare(current) > 0) {
         latestByMailboxId.set(message.mailboxId, message.receivedAt);
@@ -292,7 +300,7 @@ export const WorkspacePage = () => {
       lastReceivedAt:
         latestByMailboxId.get(mailbox.id) ?? mailbox.lastReceivedAt,
     }));
-  }, [mailboxes, workspaceMessages]);
+  }, [mailboxes, railMessages]);
   const visibleMailboxes = useMemo(
     () =>
       filterMailboxes(
@@ -313,7 +321,7 @@ export const WorkspacePage = () => {
     );
   }, [allMessages, deferredQuery, visibleMailboxIdSet]);
   const messages = selectedMailbox
-    ? (messagesQuery.data ?? [])
+    ? workspaceMessages
     : filteredAggregateMessages;
   const mailboxMessageCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -322,16 +330,16 @@ export const WorkspacePage = () => {
       counts.set(mailbox.id, 0);
     }
 
-    for (const message of workspaceMessages) {
+    for (const message of railMessages) {
       const current = counts.get(message.mailboxId) ?? 0;
       counts.set(message.mailboxId, current + 1);
     }
 
     return counts;
-  }, [mailboxes, workspaceMessages]);
+  }, [mailboxes, railMessages]);
   const mailboxLatestVerificationCodes = useMemo(
-    () => buildMailboxLatestVerificationCodes(workspaceMessages),
-    [workspaceMessages],
+    () => buildMailboxLatestVerificationCodes(railMessages),
+    [railMessages],
   );
 
   useEffect(() => {
@@ -582,6 +590,39 @@ export const WorkspacePage = () => {
     updateSearchParams,
   ]);
 
+  const handleResetMailboxTtl = useCallback(
+    async (mailbox: Mailbox, expiresInMinutes: number | null) => {
+      setUpdateMailboxTtlError(null);
+
+      try {
+        const nextMailbox = await resetMailboxTtlMutation.mutateAsync({
+          mailboxId: mailbox.id,
+          expiresInMinutes,
+        });
+        updateSearchParams((draft) => {
+          draft.set("mailbox", nextMailbox.id);
+          if (!isMailboxSortMode(draft.get("sort"))) {
+            draft.set("sort", resolvedSortMode);
+          }
+          if (nextMailbox.status === "expired") {
+            draft.set("view", "trash");
+          } else {
+            draft.delete("view");
+          }
+        });
+      } catch (error) {
+        setUpdateMailboxTtlError(
+          error instanceof Error ? error.message : "更新过期时间失败",
+        );
+        throw error;
+      }
+    },
+    [resetMailboxTtlMutation, resolvedSortMode, updateSearchParams],
+  );
+  const clearUpdateMailboxTtlError = useCallback(() => {
+    setUpdateMailboxTtlError(null);
+  }, []);
+
   const workspaceMetaError =
     metaQuery.error instanceof Error && !hasMetaData
       ? metaQuery.error.message
@@ -655,6 +696,21 @@ export const WorkspacePage = () => {
           onCancel: handleCancelCreateMailbox,
           onOpen: handleOpenCreateMailbox,
           onSubmit: handleCreateMailbox,
+          supportsUnlimitedTtl:
+            metaQuery.data?.supportsUnlimitedMailboxTtl ?? false,
+        }}
+        updateMailboxTtlAction={{
+          defaultTtlMinutes:
+            metaQuery.data?.defaultMailboxTtlMinutes ??
+            DEFAULT_WORKSPACE_TTL_MINUTES,
+          error: updateMailboxTtlError,
+          isPending: resetMailboxTtlMutation.isPending,
+          minTtlMinutes:
+            metaQuery.data?.minMailboxTtlMinutes ?? minMailboxTtlMinutes,
+          maxTtlMinutes:
+            metaQuery.data?.maxMailboxTtlMinutes ?? maxMailboxTtlMinutes,
+          onResetError: clearUpdateMailboxTtlError,
+          onSubmit: handleResetMailboxTtl,
           supportsUnlimitedTtl:
             metaQuery.data?.supportsUnlimitedMailboxTtl ?? false,
         }}

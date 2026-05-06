@@ -67,6 +67,7 @@ import { domains, mailboxes, subdomains } from "../db/schema";
 import {
   createMailboxForUser,
   ensureMailboxForUser,
+  resetMailboxTtlForUser,
 } from "../services/mailboxes";
 
 const memberUser = {
@@ -104,6 +105,7 @@ const createMailboxDb = (options?: {
   mailboxRows?: unknown[];
   subdomainRows?: unknown[];
   onSubdomainInsert?: (values: unknown) => void;
+  onUpdateSet?: (values: unknown) => void;
 }) => {
   const domainRows = options?.domainRows ?? [];
   const mailboxRows = options?.mailboxRows ?? [];
@@ -137,9 +139,12 @@ const createMailboxDb = (options?: {
       }),
     })),
     update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(async () => undefined),
-      })),
+      set: vi.fn((values: unknown) => {
+        options?.onUpdateSet?.(values);
+        return {
+          where: vi.fn(async () => undefined),
+        };
+      }),
     })),
     delete: vi.fn(() => ({
       where: vi.fn(async () => undefined),
@@ -510,6 +515,91 @@ describe("mailboxes wildcard migration guards", () => {
       address: "alerts@ops.707979.xyz",
       routingRuleId: null,
       source: "registered",
+    });
+  });
+});
+
+describe("mailbox TTL reset", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("resets active registered mailbox expiry from now instead of only extending", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-03T12:00:00.000Z"));
+    const updateSets: unknown[] = [];
+    const mailboxRow = {
+      id: "mbx_alpha",
+      userId: memberUser.id,
+      domainId: "dom_primary",
+      localPart: "build",
+      subdomain: "alpha",
+      address: "build@alpha.707979.xyz",
+      source: "registered",
+      status: "active",
+      createdAt: "2026-04-03T10:00:00.000Z",
+      expiresAt: "2026-04-10T12:00:00.000Z",
+      destroyedAt: null,
+      routingRuleId: "rule_alpha",
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
+    };
+    const db = createMailboxDb({
+      domainRows: [{ id: "dom_primary", rootDomain: "707979.xyz" }],
+      mailboxRows: [mailboxRow],
+      onUpdateSet: (values) => updateSets.push(values),
+    });
+    getDb.mockReturnValue(db);
+
+    const mailbox = await resetMailboxTtlForUser(
+      insertSuccessEnv,
+      memberUser,
+      mailboxRow.id,
+      { expiresInMinutes: 120 },
+    );
+
+    expect(updateSets).toContainEqual(
+      expect.objectContaining({
+        expiresAt: "2026-04-03T14:00:00.000Z",
+        status: "active",
+      }),
+    );
+    expect(mailbox.expiresAt).toBe("2026-04-03T14:00:00.000Z");
+    vi.useRealTimers();
+  });
+
+  it("rejects TTL reset for catch-all mailboxes", async () => {
+    const db = createMailboxDb({
+      domainRows: [{ id: "dom_primary", rootDomain: "707979.xyz" }],
+      mailboxRows: [
+        {
+          id: "mbx_catch_all",
+          userId: memberUser.id,
+          domainId: "dom_primary",
+          localPart: "noreply",
+          subdomain: "wild",
+          address: "noreply@wild.707979.xyz",
+          source: "catch_all",
+          status: "active",
+          createdAt: "2026-04-03T10:00:00.000Z",
+          expiresAt: null,
+          destroyedAt: null,
+          routingRuleId: null,
+          cleanupNextAttemptAt: null,
+          cleanupLastError: null,
+        },
+      ],
+    });
+    getDb.mockReturnValue(db);
+
+    await expect(
+      resetMailboxTtlForUser(insertSuccessEnv, memberUser, "mbx_catch_all", {
+        expiresInMinutes: 120,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Mailbox TTL can only be reset for active registered mailboxes",
     });
   });
 });

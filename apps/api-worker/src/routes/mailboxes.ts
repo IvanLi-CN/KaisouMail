@@ -5,6 +5,7 @@ import {
   listMailboxesQuerySchema,
   listMailboxesResponseSchema,
   mailboxSchema,
+  resetMailboxTtlRequestSchema,
   resolveMailboxQuerySchema,
 } from "@kaisoumail/shared";
 import { Hono } from "hono";
@@ -18,6 +19,7 @@ import {
   ensureMailboxForUser,
   getMailboxForUser,
   listMailboxesForUser,
+  resetMailboxTtlForUser,
   resolveMailboxForUser,
 } from "../services/mailboxes";
 import type { AppBindings } from "../types";
@@ -90,6 +92,21 @@ export const mailboxRoutes = new Hono<AppBindings>()
         await getMailboxForUser(c.env, c.get("authUser"), c.req.param("id")),
       ),
     ),
+  )
+  .patch(
+    "/:id/ttl",
+    zValidator("json", resetMailboxTtlRequestSchema, apiValidationHook),
+    async (c) =>
+      c.json(
+        mailboxSchema.parse(
+          await resetMailboxTtlForUser(
+            c.env,
+            c.get("authUser"),
+            c.req.param("id"),
+            c.req.valid("json"),
+          ),
+        ),
+      ),
   )
   .delete("/:id", async (c) => {
     const mailbox = await destroyMailbox(

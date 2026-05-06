@@ -49,7 +49,7 @@ export const PopoverContent = React.forwardRef<
         align={align}
         avoidCollisions={avoidCollisions}
         className={cn(
-          "z-50 w-[min(calc(100vw-2rem),28rem)] rounded-2xl border border-border p-5 text-foreground shadow-[0_28px_84px_rgba(2,6,23,0.46),0_14px_34px_rgba(2,6,23,0.32)] outline-none backdrop-blur-xl",
+          "z-50 w-[min(calc(100vw-2rem),28rem)] rounded-2xl border border-white/10 bg-card/88 p-5 text-foreground shadow-[0_28px_84px_rgba(2,6,23,0.46),0_14px_34px_rgba(2,6,23,0.32),inset_0_1px_0_rgba(255,255,255,0.05)] outline-none backdrop-blur-2xl supports-[backdrop-filter]:bg-card/78",
           className,
         )}
         collisionPadding={collisionPadding}
@@ -57,10 +57,7 @@ export const PopoverContent = React.forwardRef<
         side={side}
         sideOffset={sideOffset}
         sticky={sticky}
-        style={{
-          backgroundColor: "hsl(var(--card))",
-          ...style,
-        }}
+        style={style}
         {...props}
       >
         {children}
@@ -72,8 +69,8 @@ export const PopoverContent = React.forwardRef<
             )}
             height={arrowHeight}
             style={{
-              fill: "hsl(var(--card))",
-              stroke: "hsl(var(--border))",
+              fill: "hsl(var(--card) / 0.86)",
+              stroke: "rgba(255,255,255,0.1)",
               strokeWidth: 1,
               ...arrowStyle,
             }}

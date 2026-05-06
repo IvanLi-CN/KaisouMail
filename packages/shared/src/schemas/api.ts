@@ -93,6 +93,17 @@ export const ensureMailboxRequestSchema = z.union([
   ),
 ]);
 
+export const resetMailboxTtlRequestSchema = z
+  .object({
+    expiresInMinutes: z
+      .number()
+      .int()
+      .min(minMailboxTtlMinutes)
+      .max(maxMailboxTtlMinutes)
+      .nullable(),
+  })
+  .strict();
+
 export const resolveMailboxQuerySchema = z.object({
   address: z.string().email(),
 });

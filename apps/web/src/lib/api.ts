@@ -22,6 +22,7 @@ import {
   type mailboxStatuses,
   messageDetailResponseSchema,
   passkeySchema,
+  resetMailboxTtlRequestSchema,
   sessionResponseSchema,
   versionResponseSchema,
 } from "@kaisoumail/shared";
@@ -329,6 +330,18 @@ export const apiClient = {
     if (DEMO_MODE) return demoApi.destroyMailbox(id);
     return requestJson(`/api/mailboxes/${id}`, { method: "DELETE" }, (value) =>
       mailboxSchema.parse(value),
+    );
+  },
+  async resetMailboxTtl(
+    id: string,
+    input: { expiresInMinutes: number | null },
+  ) {
+    const payload = resetMailboxTtlRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.resetMailboxTtl(id, payload);
+    return requestJson(
+      `/api/mailboxes/${id}/ttl`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      (value) => mailboxSchema.parse(value),
     );
   },
   async listMessages(

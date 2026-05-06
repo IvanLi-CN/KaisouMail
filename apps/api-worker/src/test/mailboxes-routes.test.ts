@@ -6,11 +6,13 @@ const {
   ensureMailboxForUser,
   listMailboxesForUser,
   resolveMailboxForUser,
+  resetMailboxTtlForUser,
 } = vi.hoisted(() => ({
   createMailboxForUser: vi.fn(),
   ensureMailboxForUser: vi.fn(),
   listMailboxesForUser: vi.fn(),
   resolveMailboxForUser: vi.fn(),
+  resetMailboxTtlForUser: vi.fn(),
 }));
 
 vi.mock("../services/auth", () => ({
@@ -37,6 +39,7 @@ vi.mock("../services/mailboxes", () => ({
   getMailboxForUser: vi.fn(),
   listMailboxesForUser,
   resolveMailboxForUser,
+  resetMailboxTtlForUser,
 }));
 
 import { mailboxRoutes } from "../routes/mailboxes";
@@ -330,5 +333,61 @@ describe("mailbox routes", () => {
 
     expect(resolveMailboxForUser).not.toHaveBeenCalled();
     expect(response.status).toBe(400);
+  });
+
+  it("passes TTL reset requests to the mailbox service", async () => {
+    resetMailboxTtlForUser.mockResolvedValue({
+      ...activeMailbox,
+      expiresAt: "2026-04-03T14:00:00.000Z",
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/mbx_alpha/ttl", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          expiresInMinutes: 120,
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(resetMailboxTtlForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "mbx_alpha",
+      { expiresInMinutes: 120 },
+    );
+  });
+
+  it("accepts long-term TTL reset requests", async () => {
+    resetMailboxTtlForUser.mockResolvedValue({
+      ...activeMailbox,
+      expiresAt: null,
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/mbx_alpha/ttl", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          expiresInMinutes: null,
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(resetMailboxTtlForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "mbx_alpha",
+      { expiresInMinutes: null },
+    );
   });
 });

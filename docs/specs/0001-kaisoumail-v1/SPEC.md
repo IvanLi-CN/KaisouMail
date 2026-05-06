@@ -21,6 +21,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace-scoped data is reserved for currently workable mailboxes: `active` / `destroying` rows stay visible, `expired` rows are excluded from the workbench and moved to mailbox management, while `destroyed` rows are limited to the most recent 7 days and at most 50 entries so the operator rail stays dense and query-safe
 - Header actions keep mailbox creation, manual refresh, and mailbox-management jump links inside the workbench; desktop layouts restore explicit labels for the dense toolbar actions
 - Mailbox creation can stay inline through an anchored popover that locks while submit is pending, then selects and transiently highlights the newly created mailbox after success
+- Single-mailbox workspace view keeps the message stream pinned to the selected mailbox and exposes a header settings action for active registered mailboxes; the settings dialog initializes its TTL slider from the mailbox's current remaining lifetime, then saves by resetting expiry from the current time rather than only extending it
 - When Web creation hits an existing visible mailbox, both `/mailboxes` and `/workspace` must select that mailbox in-place and surface a prompt that only offers TTL extension; shorter requested TTLs must explicitly keep the current expiry unchanged
 - URL search params persist mailbox scope, message selection, sort mode, and mailbox search query
 - Message surfaces use manual refresh plus visibility-aware polling instead of server push, preserving Cloudflare free-tier budget while keeping operator-facing data fresh; workspace message streams must stay aligned with the same mailbox visibility window used by the left rail
@@ -86,6 +87,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/mailboxes` keeps create semantics: if the caller already owns the same active or expired mailbox, the API returns `409` with structured `details={ code: "mailbox_exists", mailbox }` so the Web console can select and reuse the existing row instead of silently promoting/recreating it
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional mailDomain/rootDomain)`, reuses an existing visible `active` or `expired` mailbox when present, and otherwise creates a fresh mailbox; when `expiresInMinutes` is provided for an existing mailbox, the API only extends TTL and never shortens it, with `null` treated as long-term/infinite and extension restoring an `expired` mailbox to `active`; promoting a `source=catch_all` mailbox on a Catch-all-enabled domain stays a local-only state transition (`catch_all -> registered`) without an extra per-address Cloudflare rule write. On wildcard-verified domains, the first active mailbox in a fresh subdomain explicitly onboards that subdomain once and then re-purges Cloudflare's exact MX/TXT output so the domain stays on the wildcard baseline; subsequent mailboxes inside the same subdomain do not repeat provisioning. Allowlisted domains that are still waiting on wildcard cutover fail the ensure request instead of silently dropping back to explicit provisioning.
+- `PATCH /api/mailboxes/:id/ttl` accepts `expiresInMinutes` for visible `active + source=registered` mailboxes and resets `expiresAt` from the current request time; finite values may shorten or lengthen the mailbox lifetime, while `null` keeps the long-term `expiresAt = null` API contract. This reset endpoint is intentionally separate from `POST /api/mailboxes/ensure`, whose existing reuse path remains extension-only.
 - Reusing a known subdomain now clears any pending cleanup backoff and, if a prior cleanup attempt partially removed DNS, re-runs the Email Routing DNS ensure before the mailbox create/ensure flow proceeds
 - Active mailboxes accept inbound mail only until `expiresAt`; expired mailboxes are marked `expired`, stop normal receive flow, leave the workspace, and remain recoverable from mailbox management before cleanup advances them to `destroying` / `destroyed`
 - `GET /api/mailboxes/resolve?address=...` resolves a visible `active` or recoverable `expired` mailbox directly from its address without forcing clients to list-and-filter locally
@@ -147,12 +149,14 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Mailbox lifetime control now keeps the dense dialog compact: a log-scale slider covers short-lived to long-lived finite mailboxes up to one year, the current resolved TTL is shown inline at the right edge, double-click inline editing accepts common human units, and the terminal slider slot exposes explicit long-term lifetime
 - Mailbox presentation keeps explicit lifecycle segmentation in management views, while the active workspace rail omits expired rows entirely and the trash aggregate message stream is resolved by server-side mailbox status filtering; Catch All remains an explicit operator-facing badge, mailbox management tables render routing state as badges for per-address rules, domain-level delivery, and removed inactive rules, the workspace rail keeps right-aligned numeric badges, and mailbox tables show unread / total counts
 - Workspace mailbox rail rows use a two-line dense layout: the first line holds address + copy affordance + count, while the second line carries Catch All / expiry / destroyed metadata plus the inline verification-code action
+- Workspace selected-mailbox header places TTL settings in the right-side action slot next to the copied address title; the dialog uses the same logarithmic lifetime control as mailbox creation, seeded from the current remaining TTL so operators can see and adjust the existing expiry before saving
 - Destroyed mailboxes stay in the same two-line dense rhythm as active rows instead of collapsing back to a single-line variant
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
 
 ## Change log
 
+- 2026-05-07: Added a workspace selected-mailbox TTL settings dialog that resets active registered mailbox expiry from now, fixed workspace mailbox creation cache updates so newly created rows are selected immediately, and tightened single-mailbox message streams so the middle rail only shows messages for the selected mailbox.
 - 2026-04-28: Added mailbox cleanup backoff and safe stale-row autorepair so failed `destroying` mailboxes no longer create head-of-line blocking during scheduled cleanup.
 - 2026-04-28: Fixed trash aggregate message loading by adding server-side `mailboxStatus=expired` message filtering, keeping the Web trash stream off oversized `mailboxId` URLs, and passing mailbox `status` filters through the `/api/mailboxes` route.
 - 2026-04-27: Compressed the workspace mailbox rail sort controls into a single toggle aligned with the workspace/trash tabs so the rail saves one control row while preserving the existing recent-vs-created sort behavior.
@@ -254,6 +258,8 @@ PR: include
 
 PR: include
 ![Workspace selected mailbox header with wrapped address text and inline copy button](./assets/workspace-selected-mailbox-address.png)
+
+![Workspace selected mailbox header with TTL settings popover initialized from the current remaining lifetime](./assets/workspace-mailbox-ttl-popover.png)
 
 ![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
 

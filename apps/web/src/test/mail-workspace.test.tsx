@@ -68,6 +68,16 @@ const baseProps = {
     onSubmit: vi.fn(),
     supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
   },
+  updateMailboxTtlAction: {
+    defaultTtlMinutes: demoMeta.defaultMailboxTtlMinutes,
+    error: null,
+    isPending: false,
+    minTtlMinutes: demoMeta.minMailboxTtlMinutes,
+    maxTtlMinutes: demoMeta.maxMailboxTtlMinutes,
+    onResetError: vi.fn(),
+    onSubmit: vi.fn(),
+    supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
+  },
   highlightedMailboxId: null,
   visibleMailboxes: demoMailboxes,
   totalMailboxCount: demoMailboxes.length,
@@ -123,6 +133,7 @@ const resyncWindowEvents = () => {
 
 afterEach(async () => {
   cleanup();
+  vi.useRealTimers();
   await new Promise((resolve) => window.setTimeout(resolve, 0));
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -684,6 +695,127 @@ describe("MailWorkspace", () => {
     expect(selectNodeContents).toHaveBeenCalledWith(addressText);
     expect(removeAllRanges).toHaveBeenCalled();
     expect(addRange).toHaveBeenCalled();
+  });
+
+  it("opens the TTL popover with the selected mailbox remaining time", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-01T08:15:00.000Z"));
+    const onSubmit = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId="mbx_beta"
+          selectedMailbox={demoMailboxes[1] ?? null}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === "mbx_beta",
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+          updateMailboxTtlAction={{
+            ...baseProps.updateMailboxTtlAction,
+            onSubmit,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "设置邮箱过期时间" }));
+
+    const popover = screen.getByRole("dialog", { name: "设置过期时间" });
+    expect(popover).toHaveTextContent("spec@ops.beta.mail.example.net");
+    expect(within(popover).getByLabelText("生命周期值")).toHaveTextContent(
+      "1 小时",
+    );
+
+    fireEvent.click(within(popover).getByRole("button", { name: "保存" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(demoMailboxes[1], 60);
+    vi.useRealTimers();
+  });
+
+  it("keeps edited TTL popover values across selected mailbox refetches", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-01T08:15:00.000Z"));
+    const onSubmit = vi.fn();
+    const selectedMailbox = demoMailboxes[1];
+    if (!selectedMailbox) throw new Error("expected mailbox fixture");
+
+    const { rerender } = render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId={selectedMailbox.id}
+          selectedMailbox={selectedMailbox}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === selectedMailbox.id,
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+          updateMailboxTtlAction={{
+            ...baseProps.updateMailboxTtlAction,
+            onSubmit,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "设置邮箱过期时间" }));
+    fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
+    fireEvent.change(screen.getByLabelText("生命周期值"), {
+      target: { value: "36h" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("生命周期值"), {
+      key: "Enter",
+    });
+
+    rerender(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId={selectedMailbox.id}
+          selectedMailbox={{
+            ...selectedMailbox,
+            expiresAt: "2026-12-19T00:00:00.000Z",
+          }}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === selectedMailbox.id,
+          )}
+          selectedMessageId="msg_beta"
+          selectedMessage={demoMessageDetails.msg_beta}
+          updateMailboxTtlAction={{
+            ...baseProps.updateMailboxTtlAction,
+            onSubmit,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const popover = screen.getByRole("dialog", { name: "设置过期时间" });
+    expect(within(popover).getByLabelText("生命周期值")).toHaveTextContent(
+      "1 天 12 小时",
+    );
+
+    fireEvent.click(within(popover).getByRole("button", { name: "保存" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: selectedMailbox.id }),
+      36 * 60,
+    );
+    vi.useRealTimers();
   });
 
   it("keeps the aggregate workspace title when all mailboxes are selected", () => {
