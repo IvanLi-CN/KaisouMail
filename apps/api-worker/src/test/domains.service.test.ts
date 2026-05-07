@@ -57,6 +57,7 @@ vi.mock("../services/emailRouting", async () => {
 
 import { domains, mailboxes } from "../db/schema";
 import {
+  bindDomain,
   disableDomainCatchAll,
   enableDomainCatchAll,
 } from "../services/domains";
@@ -103,6 +104,8 @@ const createDb = (options?: {
 }) => {
   const domainRows = options?.domainRows ?? [];
   const mailboxRows = options?.mailboxRows ?? [];
+  const inserts: Array<{ table: unknown; values: Record<string, unknown> }> =
+    [];
   const updates: Array<{ table: unknown; values: Record<string, unknown> }> =
     [];
 
@@ -123,10 +126,13 @@ const createDb = (options?: {
         })),
       })),
     })),
-    insert: vi.fn(() => ({
-      values: vi.fn((_values?: unknown) => ({
-        onConflictDoUpdate: vi.fn(async () => undefined),
-      })),
+    insert: vi.fn((table: unknown) => ({
+      values: vi.fn((values?: Record<string, unknown>) => {
+        if (values) inserts.push({ table, values });
+        return Object.assign(Promise.resolve(undefined), {
+          onConflictDoUpdate: vi.fn(async () => undefined),
+        });
+      }),
     })),
     update: vi.fn((table: unknown) => ({
       set: vi.fn((values: Record<string, unknown>) => ({
@@ -140,8 +146,57 @@ const createDb = (options?: {
     })),
   };
 
-  return db;
+  return Object.assign(db, { inserts });
 };
+
+describe("domains direct binding", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("keeps a project-bound zone when Email Routing requires an active zone", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_pending",
+      name: "openplus.asia",
+      status: "pending",
+      nameServers: ["sloan.ns.cloudflare.com", "theo.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockRejectedValue(
+      new ApiError(400, "Active zone required"),
+    );
+
+    const result = await bindDomain(env, runtimeConfig, {
+      rootDomain: "openplus.asia",
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.domain).toMatchObject({
+      rootDomain: "openplus.asia",
+      zoneId: "zone_pending",
+      bindingSource: "project_bind",
+      status: "provisioning_error",
+      lastProvisionError: "Active zone required",
+    });
+    expect(deleteZone).not.toHaveBeenCalled();
+    expect(db.inserts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: domains,
+          values: expect.objectContaining({
+            rootDomain: "openplus.asia",
+            zoneId: "zone_pending",
+            bindingSource: "project_bind",
+            status: "provisioning_error",
+            lastProvisionError: "Active zone required",
+          }),
+        }),
+      ]),
+    );
+  });
+});
 
 describe("domains catch-all wildcard cutover", () => {
   beforeEach(() => {
