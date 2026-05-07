@@ -198,6 +198,34 @@ describe("domains direct binding", () => {
       ]),
     );
   });
+
+  it("does not recover server failures even when the message mentions active zones", async () => {
+    const db = createDb();
+    getDb.mockReturnValue(db);
+    createZone.mockResolvedValue({
+      id: "zone_pending",
+      name: "openplus.asia",
+      status: "pending",
+      nameServers: ["sloan.ns.cloudflare.com", "theo.ns.cloudflare.com"],
+    });
+    validateZoneAccess.mockResolvedValue(undefined);
+    enableDomainRouting.mockRejectedValue(
+      new ApiError(500, "Active zone required"),
+    );
+    deleteZone.mockResolvedValue(undefined);
+
+    await expect(
+      bindDomain(env, runtimeConfig, {
+        rootDomain: "openplus.asia",
+      }),
+    ).rejects.toMatchObject({
+      status: 500,
+      message: "Active zone required",
+    });
+
+    expect(deleteZone).toHaveBeenCalledTimes(1);
+    expect(db.inserts).toEqual([]);
+  });
 });
 
 describe("domains catch-all wildcard cutover", () => {
