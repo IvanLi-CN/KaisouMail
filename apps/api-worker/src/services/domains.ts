@@ -536,6 +536,8 @@ const isRecoverableBindProvisionError = (error: unknown) => {
     error.status === 409 ||
     error.status === 429 ||
     message.includes("pending") ||
+    message.includes("active zone required") ||
+    (message.includes("active") && message.includes("zone")) ||
     message.includes("activate") ||
     message.includes("activation") ||
     message.includes("delegat") ||
