@@ -527,16 +527,21 @@ const requireCatalogZone = async (
 
 const isRecoverableBindProvisionError = (error: unknown) => {
   if (!(error instanceof ApiError)) return false;
+  const message = error.message.toLowerCase();
+  const activeZoneRequired = message.includes("active zone required");
+  if (activeZoneRequired && (error.status === 400 || error.status === 403)) {
+    return true;
+  }
+
   if (error.status === 401 || error.status === 403 || error.status >= 500) {
     return false;
   }
 
-  const message = error.message.toLowerCase();
   return (
     error.status === 409 ||
     error.status === 429 ||
     message.includes("pending") ||
-    message.includes("active zone required") ||
+    activeZoneRequired ||
     (message.includes("active") && message.includes("zone")) ||
     message.includes("activate") ||
     message.includes("activation") ||
