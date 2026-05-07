@@ -154,7 +154,9 @@ describe("domains direct binding", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps a project-bound zone when Email Routing requires an active zone", async () => {
+  it.each([
+    400, 403,
+  ])("keeps a project-bound zone when Email Routing returns %s Active zone required", async (status) => {
     const db = createDb();
     getDb.mockReturnValue(db);
     createZone.mockResolvedValue({
@@ -165,7 +167,7 @@ describe("domains direct binding", () => {
     });
     validateZoneAccess.mockResolvedValue(undefined);
     enableDomainRouting.mockRejectedValue(
-      new ApiError(400, "Active zone required"),
+      new ApiError(status, "Active zone required"),
     );
 
     const result = await bindDomain(env, runtimeConfig, {
