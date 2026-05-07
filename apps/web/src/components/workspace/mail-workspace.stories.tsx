@@ -357,6 +357,24 @@ const buildCreateMailboxAction = (
   ...overrides,
 });
 
+const buildUpdateMailboxTtlAction = (
+  overrides: Partial<
+    NonNullable<ComponentProps<typeof MailWorkspace>["updateMailboxTtlAction"]>
+  > = {},
+): NonNullable<
+  ComponentProps<typeof MailWorkspace>["updateMailboxTtlAction"]
+> => ({
+  defaultTtlMinutes: demoMeta.defaultMailboxTtlMinutes,
+  error: null,
+  isPending: false,
+  minTtlMinutes: demoMeta.minMailboxTtlMinutes,
+  maxTtlMinutes: demoMeta.maxMailboxTtlMinutes,
+  onResetError: fn(),
+  onSubmit: fn(),
+  supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
+  ...overrides,
+});
+
 const meta = {
   title: "Workspace/MailWorkspace",
   component: MailWorkspace,
@@ -380,6 +398,7 @@ const meta = {
   ],
   args: {
     createMailboxAction: buildCreateMailboxAction(),
+    updateMailboxTtlAction: buildUpdateMailboxTtlAction(),
     highlightedMailboxId: null,
     visibleMailboxes: demoMailboxes,
     totalMailboxCount: demoMailboxes.length,
@@ -1453,6 +1472,47 @@ export const DesktopSelectedMailboxAddress: Story = {
     await expect(writeText).toHaveBeenCalledWith(
       demoAddressMailbox?.address ?? "spec@ops.beta.mail.example.net",
     );
+  },
+};
+
+export const SelectedMailboxTtlPopover: Story = {
+  globals: projectViewportGlobals.desktop,
+  args: {
+    selectedMailboxId: existingMailboxConflictStoryMailbox.id,
+    selectedMailbox: existingMailboxConflictStoryMailbox,
+    visibleMailboxes: existingMailboxConflictVisibleMailboxes,
+    messages: demoAddressMailboxMessages,
+    selectedMessageId: demoAddressMailboxDetail.id,
+    selectedMessage: demoAddressMailboxDetail,
+    totalMessageCount: demoAddressMailboxMessages.length,
+    updateMailboxTtlAction: buildUpdateMailboxTtlAction(),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "The selected mailbox header keeps the settings action in the right-side title slot. Opening it shows a compact TTL popover initialized from the mailbox's current remaining lifetime.",
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(
+      within(canvasElement).getByRole("button", {
+        name: "设置邮箱过期时间",
+      }),
+    );
+
+    const popover = await body.findByRole("dialog", {
+      name: "设置过期时间",
+    });
+    await expect(popover).toHaveTextContent(
+      existingMailboxConflictStoryMailbox.address,
+    );
+    await expect(
+      within(popover).getByLabelText("生命周期值"),
+    ).not.toHaveTextContent("1 小时");
   },
 };
 

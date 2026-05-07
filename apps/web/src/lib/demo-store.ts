@@ -370,6 +370,21 @@ export const demoApi = {
     }
     return clone(mailbox);
   },
+  async resetMailboxTtl(
+    id: string,
+    input: { expiresInMinutes: number | null },
+  ) {
+    const mailbox = state.mailboxes.find((entry) => entry.id === id);
+    if (!mailbox) throw new Error("Mailbox not found");
+    if (mailbox.status !== "active" || mailbox.source !== "registered") {
+      throw new Error("Mailbox TTL can only be reset for active mailboxes");
+    }
+    mailbox.expiresAt =
+      input.expiresInMinutes === null
+        ? null
+        : new Date(Date.now() + input.expiresInMinutes * 60_000).toISOString();
+    return clone(mailbox);
+  },
   async listMessages(
     mailboxAddresses: string[],
     input?: { after?: string; since?: string },
