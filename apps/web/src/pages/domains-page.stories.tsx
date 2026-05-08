@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -141,6 +142,54 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+
+const retrySuccessDomains = demoDomainCatalog.filter(
+  (domain) =>
+    domain.projectStatus !== "active" ||
+    domain.rootDomain !== "mail.example.net",
+);
+
+const toRetrySuccessDomain = (domain: DomainCatalogItem): DomainCatalogItem =>
+  domain.id === "dom_failed"
+    ? {
+        ...domain,
+        cloudflareStatus: "active",
+        projectStatus: "active",
+        lastProvisionError: null,
+        lastProvisionedAt: "2026-05-08T06:30:00.000Z",
+        updatedAt: "2026-05-08T06:30:00.000Z",
+      }
+    : domain;
+
+const RetrySuccessStatefulStory = () => {
+  const [domains, setDomains] = useState(retrySuccessDomains);
+
+  return (
+    <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
+      <DomainsPageView
+        cloudflareSync={null}
+        docsLinks={docsLinks}
+        domains={domains}
+        isBindPending={false}
+        isCatchAllPending={false}
+        isDomainBindingEnabled
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onBind={fn()}
+        onDelete={fn()}
+        onDisable={fn()}
+        onDisableCatchAll={fn()}
+        onEnable={fn()}
+        onEnableCatchAll={fn()}
+        onRetry={fn(async () => {
+          const nextDomains = domains.map(toRetrySuccessDomain);
+          setDomains(nextDomains);
+          return nextDomains.find((domain) => domain.id === "dom_failed");
+        })}
+      />
+    </AppShell>
+  );
+};
 
 export const Overview: Story = {};
 
@@ -411,38 +460,21 @@ export const ProvisioningError: Story = {
 };
 
 export const RetrySuccess: Story = {
-  args: {
-    domains: demoDomainCatalog.filter(
-      (domain) =>
-        domain.projectStatus !== "active" ||
-        domain.rootDomain !== "mail.example.net",
-    ),
-    onRetry: fn(async () => ({
-      status: "active",
-      lastProvisionError: null,
-    })),
-  },
+  render: () => <RetrySuccessStatefulStory />,
 };
 
 export const RetrySuccessInteraction: Story = {
-  args: {
-    domains: demoDomainCatalog.filter(
-      (domain) =>
-        domain.projectStatus !== "active" ||
-        domain.rootDomain !== "mail.example.net",
-    ),
-    onRetry: fn(async () => ({
-      status: "active",
-      lastProvisionError: null,
-    })),
-  },
-  play: async ({ canvasElement, args }) => {
+  render: () => <RetrySuccessStatefulStory />,
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "重试接入" }));
-    await expect(args.onRetry).toHaveBeenCalledWith("dom_failed");
     await expect(
       await canvas.findByRole("button", { name: "接入已恢复" }),
     ).toBeDisabled();
+    await expect(
+      await canvas.findByText("2026年5月8日 14:30"),
+    ).toBeInTheDocument();
+    expect(canvas.getAllByText("ACTIVE").length).toBeGreaterThan(1);
   },
 };
 
