@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -190,6 +190,88 @@ const RetrySuccessStatefulStory = () => {
     </AppShell>
   );
 };
+
+type RetryGalleryPanelProps = {
+  title: string;
+  initialDomains?: DomainCatalogItem[];
+  autoRetry?: "success" | "incomplete";
+};
+
+const RetryGalleryPanel = ({
+  title,
+  initialDomains = retrySuccessDomains,
+  autoRetry,
+}: RetryGalleryPanelProps) => {
+  const [domains, setDomains] = useState(initialDomains);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const didAutoRetryRef = useRef(false);
+
+  useEffect(() => {
+    if (!autoRetry || didAutoRetryRef.current) return;
+    didAutoRetryRef.current = true;
+    const timerId = window.setTimeout(() => {
+      const retryButton = Array.from(
+        panelRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find(
+        (button) =>
+          button.getAttribute("aria-label") === "重试接入" ||
+          button.textContent?.includes("重试接入"),
+      );
+      retryButton?.click();
+    }, 100);
+    return () => window.clearTimeout(timerId);
+  }, [autoRetry]);
+
+  return (
+    <section
+      ref={panelRef}
+      className="min-h-[760px] overflow-auto rounded-md border border-border bg-background"
+    >
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      </div>
+      <div className="min-w-[1180px]">
+        <DomainsPageView
+          cloudflareSync={null}
+          docsLinks={docsLinks}
+          domains={domains}
+          isBindPending={false}
+          isCatchAllPending={false}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          isEnablePending={false}
+          onBind={fn()}
+          onDelete={fn()}
+          onDisable={fn()}
+          onDisableCatchAll={fn()}
+          onEnable={fn()}
+          onEnableCatchAll={fn()}
+          onRetry={fn(async () => {
+            if (autoRetry === "success") {
+              const nextDomains = domains.map(toRetrySuccessDomain);
+              setDomains(nextDomains);
+              return { status: "active", lastProvisionError: null };
+            }
+
+            return {
+              status: "provisioning_error",
+              lastProvisionError: "Active zone required",
+            };
+          })}
+        />
+      </div>
+    </section>
+  );
+};
+
+const RetryStateGalleryStory = () => (
+  <div className="grid gap-6 bg-background p-6 xl:grid-cols-2">
+    <RetryGalleryPanel title="成功 / 初始态" />
+    <RetryGalleryPanel title="成功 / 结束态" autoRetry="success" />
+    <RetryGalleryPanel title="未完成 / 初始态" />
+    <RetryGalleryPanel title="未完成 / 结束态" autoRetry="incomplete" />
+  </div>
+);
 
 export const Overview: Story = {};
 
@@ -478,6 +560,26 @@ export const RetrySuccessInteraction: Story = {
     await expect(
       within(canvasElement.ownerDocument.body).queryByRole("status"),
     ).not.toBeInTheDocument();
+  },
+};
+
+export const RetryStateGallery: Story = {
+  parameters: {
+    layout: "fullscreen",
+  },
+  render: () => <RetryStateGalleryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("成功 / 初始态")).toBeInTheDocument();
+    await expect(canvas.getByText("成功 / 结束态")).toBeInTheDocument();
+    await expect(canvas.getByText("未完成 / 初始态")).toBeInTheDocument();
+    await expect(canvas.getByText("未完成 / 结束态")).toBeInTheDocument();
+    await expect(
+      await canvas.findByText("2026年5月8日 14:30"),
+    ).toBeInTheDocument();
+    await expect(
+      await within(canvasElement.ownerDocument.body).findByRole("status"),
+    ).toHaveTextContent("仍未完成接入：Active zone required");
   },
 };
 
