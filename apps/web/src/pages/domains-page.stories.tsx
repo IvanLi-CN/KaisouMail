@@ -365,8 +365,12 @@ export const ProvisioningError: Story = {
         domain.projectStatus !== "active" ||
         domain.rootDomain !== "mail.example.net",
     ),
+    onRetry: fn(async () => ({
+      status: "provisioning_error",
+      lastProvisionError: "Active zone required",
+    })),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
       canvas.getByTestId("domain-bind-delegation-guide"),
@@ -395,6 +399,14 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByRole("button", { name: "查看详情" }),
     ).toHaveAttribute("data-icon-only", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "重试接入" }));
+    await expect(args.onRetry).toHaveBeenCalledWith("dom_failed");
+    const feedback = await within(canvasElement.ownerDocument.body).findByRole(
+      "status",
+    );
+    await expect(feedback).toHaveTextContent(
+      "仍未完成接入：Active zone required。请先完成 NS 切换，等 Cloudflare 变为 active 后再重试。",
+    );
   },
 };
 
