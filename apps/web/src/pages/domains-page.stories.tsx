@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useRef, useState } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { DomainTable } from "@/components/domains/domain-table";
 import { AppShell } from "@/components/layout/app-shell";
 import type { CloudflareSync, DomainCatalogItem } from "@/lib/contracts";
 import { buildPublicDocsLinks } from "@/lib/public-docs";
@@ -229,47 +230,41 @@ const RetryGalleryPanel = ({
   return (
     <section
       ref={panelRef}
-      className="min-h-[640px] overflow-auto rounded-md border border-border bg-background"
+      className="rounded-md border border-border bg-background"
     >
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       </div>
-      <div className="min-w-[1180px]">
-        <DomainsPageView
-          cloudflareSync={null}
-          docsLinks={docsLinks}
-          domains={domains}
-          isBindPending={false}
-          isCatchAllPending={false}
-          isDomainBindingEnabled
-          isDomainLifecycleEnabled
-          isEnablePending={false}
-          onBind={fn()}
-          onDelete={fn()}
-          onDisable={fn()}
-          onDisableCatchAll={fn()}
-          onEnable={fn()}
-          onEnableCatchAll={fn()}
-          onRetry={fn(async () => {
-            if (autoRetry === "success") {
-              const nextDomains = domains.map(toRetrySuccessDomain);
-              setDomains(nextDomains);
-              return { status: "active", lastProvisionError: null };
-            }
+      <DomainTable
+        docsLinks={docsLinks}
+        domains={domains}
+        isCatchAllPending={false}
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onDelete={fn()}
+        onDisable={fn()}
+        onDisableCatchAll={fn()}
+        onEnable={fn()}
+        onEnableCatchAll={fn()}
+        onRetry={fn(async () => {
+          if (autoRetry === "success") {
+            const nextDomains = domains.map(toRetrySuccessDomain);
+            setDomains(nextDomains);
+            return { status: "active", lastProvisionError: null };
+          }
 
-            return {
-              status: "provisioning_error",
-              lastProvisionError: "Active zone required",
-            };
-          })}
-        />
-      </div>
+          return {
+            status: "provisioning_error",
+            lastProvisionError: "Active zone required",
+          };
+        })}
+      />
     </section>
   );
 };
 
 const RetryStateGalleryStory = () => (
-  <div className="grid gap-6 bg-background p-6 xl:grid-cols-2">
+  <div className="grid gap-6 bg-background p-6">
     <RetryGalleryPanel title="成功 / 初始态" />
     <RetryGalleryPanel title="成功 / 结束态" autoRetry="success" />
     <RetryGalleryPanel title="未完成 / 初始态" />
