@@ -149,6 +149,10 @@ const retrySuccessDomains = demoDomainCatalog.filter(
     domain.rootDomain !== "mail.example.net",
 );
 
+const retryGalleryDomains = retrySuccessDomains.filter(
+  (domain) => domain.id === "dom_failed",
+);
+
 const toRetrySuccessDomain = (domain: DomainCatalogItem): DomainCatalogItem =>
   domain.id === "dom_failed"
     ? {
@@ -199,7 +203,7 @@ type RetryGalleryPanelProps = {
 
 const RetryGalleryPanel = ({
   title,
-  initialDomains = retrySuccessDomains,
+  initialDomains = retryGalleryDomains,
   autoRetry,
 }: RetryGalleryPanelProps) => {
   const [domains, setDomains] = useState(initialDomains);
@@ -225,7 +229,7 @@ const RetryGalleryPanel = ({
   return (
     <section
       ref={panelRef}
-      className="min-h-[760px] overflow-auto rounded-md border border-border bg-background"
+      className="min-h-[640px] overflow-auto rounded-md border border-border bg-background"
     >
       <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
