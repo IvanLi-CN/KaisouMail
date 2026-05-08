@@ -410,6 +410,42 @@ export const ProvisioningError: Story = {
   },
 };
 
+export const RetrySuccess: Story = {
+  args: {
+    domains: demoDomainCatalog.filter(
+      (domain) =>
+        domain.projectStatus !== "active" ||
+        domain.rootDomain !== "mail.example.net",
+    ),
+    onRetry: fn(async () => ({
+      status: "active",
+      lastProvisionError: null,
+    })),
+  },
+};
+
+export const RetrySuccessInteraction: Story = {
+  args: {
+    domains: demoDomainCatalog.filter(
+      (domain) =>
+        domain.projectStatus !== "active" ||
+        domain.rootDomain !== "mail.example.net",
+    ),
+    onRetry: fn(async () => ({
+      status: "active",
+      lastProvisionError: null,
+    })),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "重试接入" }));
+    await expect(args.onRetry).toHaveBeenCalledWith("dom_failed");
+    await expect(
+      await canvas.findByRole("button", { name: "接入已恢复" }),
+    ).toBeDisabled();
+  },
+};
+
 export const RateLimitedCatalog: Story = {
   args: {
     domains: demoDomainCatalog.filter((domain) => domain.id !== null),
