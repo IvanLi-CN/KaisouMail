@@ -184,7 +184,7 @@ const RetrySuccessStatefulStory = () => {
         onRetry={fn(async () => {
           const nextDomains = domains.map(toRetrySuccessDomain);
           setDomains(nextDomains);
-          return nextDomains.find((domain) => domain.id === "dom_failed");
+          return { status: "active", lastProvisionError: null };
         })}
       />
     </AppShell>
@@ -475,6 +475,9 @@ export const RetrySuccessInteraction: Story = {
       await canvas.findByText("2026年5月8日 14:30"),
     ).toBeInTheDocument();
     expect(canvas.getAllByText("ACTIVE").length).toBeGreaterThan(1);
+    await expect(
+      within(canvasElement.ownerDocument.body).queryByRole("status"),
+    ).not.toBeInTheDocument();
   },
 };
 
