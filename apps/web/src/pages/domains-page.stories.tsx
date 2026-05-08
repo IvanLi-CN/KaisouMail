@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useEffect, useRef, useState } from "react";
 import { expect, fn, userEvent, within } from "storybook/test";
 
+import { DomainTable } from "@/components/domains/domain-table";
 import { AppShell } from "@/components/layout/app-shell";
 import type { CloudflareSync, DomainCatalogItem } from "@/lib/contracts";
 import { buildPublicDocsLinks } from "@/lib/public-docs";
@@ -141,6 +143,135 @@ const meta = {
 export default meta;
 
 type Story = StoryObj<typeof meta>;
+
+const retrySuccessDomains = demoDomainCatalog.filter(
+  (domain) =>
+    domain.projectStatus !== "active" ||
+    domain.rootDomain !== "mail.example.net",
+);
+
+const retryGalleryDomains = retrySuccessDomains.filter(
+  (domain) => domain.id === "dom_failed",
+);
+
+const toRetrySuccessDomain = (domain: DomainCatalogItem): DomainCatalogItem =>
+  domain.id === "dom_failed"
+    ? {
+        ...domain,
+        cloudflareStatus: "active",
+        projectStatus: "active",
+        lastProvisionError: null,
+        lastProvisionedAt: "2026-05-08T06:30:00.000Z",
+        updatedAt: "2026-05-08T06:30:00.000Z",
+      }
+    : domain;
+
+const RetrySuccessStatefulStory = () => {
+  const [domains, setDomains] = useState(retrySuccessDomains);
+
+  return (
+    <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
+      <DomainsPageView
+        cloudflareSync={null}
+        docsLinks={docsLinks}
+        domains={domains}
+        isBindPending={false}
+        isCatchAllPending={false}
+        isDomainBindingEnabled
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onBind={fn()}
+        onDelete={fn()}
+        onDisable={fn()}
+        onDisableCatchAll={fn()}
+        onEnable={fn()}
+        onEnableCatchAll={fn()}
+        onRetry={fn(async () => {
+          const nextDomains = domains.map(toRetrySuccessDomain);
+          setDomains(nextDomains);
+          return { status: "active", lastProvisionError: null };
+        })}
+      />
+    </AppShell>
+  );
+};
+
+type RetryGalleryPanelProps = {
+  title: string;
+  initialDomains?: DomainCatalogItem[];
+  autoRetry?: "success" | "incomplete";
+};
+
+const RetryGalleryPanel = ({
+  title,
+  initialDomains = retryGalleryDomains,
+  autoRetry,
+}: RetryGalleryPanelProps) => {
+  const [domains, setDomains] = useState(initialDomains);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const didAutoRetryRef = useRef(false);
+
+  useEffect(() => {
+    if (!autoRetry || didAutoRetryRef.current) return;
+    didAutoRetryRef.current = true;
+    const timerId = window.setTimeout(() => {
+      const retryButton = Array.from(
+        panelRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find(
+        (button) =>
+          button.getAttribute("aria-label") === "重试接入" ||
+          button.textContent?.includes("重试接入"),
+      );
+      retryButton?.click();
+    }, 100);
+    return () => window.clearTimeout(timerId);
+  }, [autoRetry]);
+
+  return (
+    <section
+      ref={panelRef}
+      className="rounded-md border border-border bg-background"
+    >
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      </div>
+      <DomainTable
+        docsLinks={docsLinks}
+        domains={domains}
+        isCatchAllPending={false}
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onDelete={fn()}
+        onDisable={fn()}
+        onDisableCatchAll={fn()}
+        onEnable={fn()}
+        onEnableCatchAll={fn()}
+        onRetry={fn(async () => {
+          if (autoRetry === "success") {
+            const nextDomains = domains.map(toRetrySuccessDomain);
+            setDomains(nextDomains);
+            return { status: "active", lastProvisionError: null };
+          }
+
+          return {
+            status: "provisioning_error",
+            lastProvisionError: "Active zone required",
+          };
+        })}
+        retrySuccessVisibleMs={autoRetry === "success" ? 60_000 : undefined}
+      />
+    </section>
+  );
+};
+
+const RetryStateGalleryStory = () => (
+  <div className="grid gap-6 bg-background p-6">
+    <RetryGalleryPanel title="成功 / 初始态" />
+    <RetryGalleryPanel title="成功 / 结果态（对勾）" autoRetry="success" />
+    <RetryGalleryPanel title="未完成 / 初始态" />
+    <RetryGalleryPanel title="未完成 / 结果态（气泡）" autoRetry="incomplete" />
+  </div>
+);
 
 export const Overview: Story = {};
 
@@ -365,8 +496,12 @@ export const ProvisioningError: Story = {
         domain.projectStatus !== "active" ||
         domain.rootDomain !== "mail.example.net",
     ),
+    onRetry: fn(async () => ({
+      status: "provisioning_error",
+      lastProvisionError: "Active zone required",
+    })),
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await expect(
       canvas.getByTestId("domain-bind-delegation-guide"),
@@ -395,6 +530,61 @@ export const ProvisioningError: Story = {
     await expect(
       canvas.getByRole("button", { name: "查看详情" }),
     ).toHaveAttribute("data-icon-only", "true");
+    await userEvent.click(canvas.getByRole("button", { name: "重试接入" }));
+    await expect(args.onRetry).toHaveBeenCalledWith("dom_failed");
+    const feedback = await within(canvasElement.ownerDocument.body).findByRole(
+      "status",
+    );
+    await expect(feedback).toHaveTextContent(
+      "仍未完成接入：Active zone required。请先完成 NS 切换，等 Cloudflare 变为 active 后再重试。",
+    );
+  },
+};
+
+export const RetrySuccess: Story = {
+  render: () => <RetrySuccessStatefulStory />,
+};
+
+export const RetrySuccessInteraction: Story = {
+  render: () => <RetrySuccessStatefulStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "重试接入" }));
+    await expect(
+      await canvas.findByRole("button", { name: "接入已恢复" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByText("2026年5月8日 14:30"),
+    ).toBeInTheDocument();
+    expect(canvas.getAllByText("ACTIVE").length).toBeGreaterThan(1);
+    await expect(
+      within(canvasElement.ownerDocument.body).queryByRole("status"),
+    ).not.toBeInTheDocument();
+  },
+};
+
+export const RetryStateGallery: Story = {
+  parameters: {
+    layout: "fullscreen",
+  },
+  render: () => <RetryStateGalleryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("成功 / 初始态")).toBeInTheDocument();
+    await expect(canvas.getByText("成功 / 结果态（对勾）")).toBeInTheDocument();
+    await expect(canvas.getByText("未完成 / 初始态")).toBeInTheDocument();
+    await expect(
+      canvas.getByText("未完成 / 结果态（气泡）"),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByRole("button", { name: "接入已恢复" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByText("2026年5月8日 14:30"),
+    ).toBeInTheDocument();
+    await expect(
+      await within(canvasElement.ownerDocument.body).findByRole("status"),
+    ).toHaveTextContent("仍未完成接入：Active zone required");
   },
 };
 

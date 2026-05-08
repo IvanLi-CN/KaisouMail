@@ -12,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { FocusEvent, MouseEvent } from "react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
@@ -195,6 +195,70 @@ const cloudflareStatusTone = (status: string | null) => {
   return "border-border bg-muted/30 text-muted-foreground";
 };
 
+type RetryProvisionResult = {
+  status?: DomainCatalogItem["projectStatus"];
+  lastProvisionError?: string | null;
+};
+
+type RetryRowState =
+  | { state: "pending" }
+  | { state: "success" }
+  | { state: "incomplete" | "failed"; message: string };
+
+const retryMinimumSpinMs = 700;
+const defaultRetrySuccessVisibleMs = 3000;
+
+const wait = (durationMs: number) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
+
+const isRetryProvisionResult = (
+  value: unknown,
+): value is RetryProvisionResult => Boolean(value) && typeof value === "object";
+
+const getRetryProvisionError = (result: unknown, fallback?: string | null) => {
+  if (
+    isRetryProvisionResult(result) &&
+    typeof result.lastProvisionError === "string" &&
+    result.lastProvisionError.trim()
+  ) {
+    return result.lastProvisionError.trim();
+  }
+
+  return fallback?.trim() || "Cloudflare zone 尚未 active";
+};
+
+const buildRetryIncompleteMessage = (reason: string) =>
+  `仍未完成接入：${reason}。请先完成 NS 切换，等 Cloudflare 变为 active 后再重试。`;
+
+const getRetryFailureMessage = (reason: unknown) => {
+  if (reason instanceof Error && reason.message.trim()) {
+    return reason.message.trim();
+  }
+
+  if (typeof reason === "string" && reason.trim()) {
+    return reason.trim();
+  }
+
+  if (reason && typeof reason === "object") {
+    const details = "details" in reason ? reason.details : null;
+    if (typeof details === "string" && details.trim()) {
+      return details.trim();
+    }
+  }
+
+  return "重试接入失败";
+};
+
+const deleteRetryRowState = (
+  states: Record<string, RetryRowState>,
+  domainId: string,
+) => {
+  const { [domainId]: _removed, ...next } = states;
+  return next;
+};
+
 export const DomainTable = ({
   domains,
   onEnable,
@@ -209,6 +273,7 @@ export const DomainTable = ({
   isCatchAllEnablementEnabled = true,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
+  retrySuccessVisibleMs = defaultRetrySuccessVisibleMs,
 }: {
   domains: DomainCatalogItem[];
   onEnable: (values: {
@@ -219,13 +284,14 @@ export const DomainTable = ({
   onDisableCatchAll: (domainId: string) => Promise<void> | void;
   onDisable: (domainId: string) => Promise<void> | void;
   onDelete: (domainId: string) => Promise<void> | void;
-  onRetry: (domainId: string) => Promise<void> | void;
+  onRetry: (domainId: string) => Promise<unknown> | unknown;
   docsLinks?: PublicDocsLinks | null;
   isCatchAllPending?: boolean;
   isCatchAllManagementEnabled?: boolean;
   isCatchAllEnablementEnabled?: boolean;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
+  retrySuccessVisibleMs?: number;
 }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
@@ -236,6 +302,10 @@ export const DomainTable = ({
   const [copiedDetailValue, setCopiedDetailValue] = useState<string | null>(
     null,
   );
+  const [retryStates, setRetryStates] = useState<Record<string, RetryRowState>>(
+    {},
+  );
+  const retrySuccessTimerRefs = useRef(new Map<string, number>());
   const detailsDialogTitleId = useId();
 
   const activeCount = domains.filter(
@@ -287,6 +357,16 @@ export const DomainTable = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [detailDomain]);
 
+  useEffect(
+    () => () => {
+      for (const timerId of retrySuccessTimerRefs.current.values()) {
+        window.clearTimeout(timerId);
+      }
+      retrySuccessTimerRefs.current.clear();
+    },
+    [],
+  );
+
   const selectInputValue = (
     event: FocusEvent<HTMLInputElement> | MouseEvent<HTMLInputElement>,
   ) => {
@@ -303,6 +383,73 @@ export const DomainTable = ({
       setCopiedDetailValue(value);
     } catch {
       setCopiedDetailValue(null);
+    }
+  };
+
+  const clearRetrySuccessTimer = (domainId: string) => {
+    const timerId = retrySuccessTimerRefs.current.get(domainId);
+    if (timerId === undefined) return;
+    window.clearTimeout(timerId);
+    retrySuccessTimerRefs.current.delete(domainId);
+  };
+
+  const handleRetry = async (domainId: string, domain: DomainCatalogItem) => {
+    if (retryStates[domainId]?.state === "pending") return;
+
+    clearRetrySuccessTimer(domainId);
+    setRetryStates((current) => ({
+      ...current,
+      [domainId]: { state: "pending" },
+    }));
+    const startedAt = performance.now();
+
+    try {
+      const result = await onRetry(domainId);
+      const remainingSpinMs =
+        retryMinimumSpinMs - (performance.now() - startedAt);
+      if (remainingSpinMs > 0) {
+        await wait(remainingSpinMs);
+      }
+
+      if (isRetryProvisionResult(result) && result.status === "active") {
+        setRetryStates((current) => ({
+          ...current,
+          [domainId]: { state: "success" },
+        }));
+        const timerId = window.setTimeout(() => {
+          setRetryStates((current) =>
+            current[domainId]?.state === "success"
+              ? deleteRetryRowState(current, domainId)
+              : current,
+          );
+          retrySuccessTimerRefs.current.delete(domainId);
+        }, retrySuccessVisibleMs);
+        retrySuccessTimerRefs.current.set(domainId, timerId);
+        return;
+      }
+
+      setRetryStates((current) => ({
+        ...current,
+        [domainId]: {
+          state: "incomplete",
+          message: buildRetryIncompleteMessage(
+            getRetryProvisionError(result, domain.lastProvisionError),
+          ),
+        },
+      }));
+    } catch (error) {
+      const remainingSpinMs =
+        retryMinimumSpinMs - (performance.now() - startedAt);
+      if (remainingSpinMs > 0) {
+        await wait(remainingSpinMs);
+      }
+      setRetryStates((current) => ({
+        ...current,
+        [domainId]: {
+          state: "failed",
+          message: getRetryFailureMessage(error),
+        },
+      }));
     }
   };
 
@@ -402,6 +549,22 @@ export const DomainTable = ({
                 const zoneId = domain.zoneId ?? "";
                 const domainId = domain.id ?? "";
                 const isDeleteOpen = deleteTargetId === domainId;
+                const rowRetryState = retryStates[domainId] ?? null;
+                const isRetryPending = rowRetryState?.state === "pending";
+                const isRetrySuccess =
+                  rowRetryState?.state === "success" && !isRetryPending;
+                const RetryIcon = isRetrySuccess ? Check : RefreshCcw;
+                const retryLabel = isRetryPending
+                  ? "正在重试接入"
+                  : isRetrySuccess
+                    ? "接入已恢复"
+                    : "重试接入";
+                const isRetryPopoverOpen =
+                  rowRetryState?.state === "incomplete" ||
+                  rowRetryState?.state === "failed";
+                const shouldShowRetryControl = Boolean(
+                  canRetry || rowRetryState,
+                );
 
                 return (
                   <TableRow
@@ -578,15 +741,65 @@ export const DomainTable = ({
                             }
                           />
                         ) : null}
-                        {canRetry ? (
-                          <ActionButton
-                            density="dense"
-                            icon={RefreshCcw}
-                            label="重试接入"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onRetry(domainId)}
-                          />
+                        {shouldShowRetryControl ? (
+                          <Popover
+                            open={isRetryPopoverOpen}
+                            onOpenChange={(open) => {
+                              if (!open) {
+                                setRetryStates((current) =>
+                                  deleteRetryRowState(current, domainId),
+                                );
+                              }
+                            }}
+                          >
+                            <PopoverAnchor asChild>
+                              <div className="inline-flex">
+                                <ActionButton
+                                  density="dense"
+                                  icon={RetryIcon}
+                                  iconClassName={cn(
+                                    isRetryPending && "animate-spin",
+                                    isRetrySuccess && "text-emerald-300",
+                                  )}
+                                  label={retryLabel}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={
+                                    isRetryPending ||
+                                    isRetrySuccess ||
+                                    !canRetry
+                                  }
+                                  tooltip="重试接入"
+                                  onClick={() => {
+                                    void handleRetry(domainId, domain);
+                                  }}
+                                />
+                              </div>
+                            </PopoverAnchor>
+                            {rowRetryState?.state === "incomplete" ||
+                            rowRetryState?.state === "failed" ? (
+                              <PopoverContent
+                                align="end"
+                                className="w-[min(calc(100vw-2rem),24rem)] space-y-2 p-4 text-left"
+                                role={
+                                  rowRetryState.state === "failed"
+                                    ? "alert"
+                                    : "status"
+                                }
+                                side="left"
+                                sideOffset={8}
+                              >
+                                <p className="text-sm font-medium text-foreground">
+                                  {rowRetryState.state === "failed"
+                                    ? "重试接入失败"
+                                    : "接入仍未完成"}
+                                </p>
+                                <p className="text-xs leading-5 text-muted-foreground">
+                                  {rowRetryState.message}
+                                </p>
+                              </PopoverContent>
+                            ) : null}
+                          </Popover>
                         ) : null}
                         {canEnableCatchAll ? (
                           <ActionButton

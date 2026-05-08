@@ -28,6 +28,7 @@ const domainsHookState = {
   error: null as Error | null,
   refetch: vi.fn(),
   bindMutateAsync: vi.fn(),
+  retryMutateAsync: vi.fn(),
   role: "admin" as "admin" | "member",
   cloudflareDomainBindingEnabled: true,
   cloudflareDomainLifecycleEnabled: true,
@@ -102,11 +103,12 @@ vi.mock("@/hooks/use-domains", () => ({
     mutateAsync: vi.fn(),
   }),
   useRetryDomainMutation: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.retryMutateAsync,
   }),
 }));
 
 afterEach(() => {
+  vi.useRealTimers();
   domainsHookState.catalog = demoDomainCatalog;
   domainsHookState.cloudflareSync = {
     status: "live",
@@ -117,6 +119,7 @@ afterEach(() => {
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
   domainsHookState.bindMutateAsync = vi.fn();
+  domainsHookState.retryMutateAsync = vi.fn();
   domainsHookState.role = "admin";
   domainsHookState.cloudflareDomainBindingEnabled = true;
   domainsHookState.cloudflareDomainLifecycleEnabled = true;
@@ -352,6 +355,234 @@ describe("domains page view", () => {
         zoneId: "zone_mail_customer_com",
       }),
     );
+  });
+
+  it("shows an immediate retry spin before surfacing an incomplete provisioning result", async () => {
+    const onRetry = vi.fn(async () => ({
+      status: "provisioning_error",
+      lastProvisionError: "Active zone required",
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={onRetry}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重试接入" }));
+
+    expect(onRetry).toHaveBeenCalledWith("dom_failed");
+    const pendingButton = screen.getByRole("button", {
+      name: "正在重试接入",
+    });
+    expect(pendingButton).toBeDisabled();
+    expect(pendingButton.querySelector("svg.animate-spin")).not.toBeNull();
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "仍未完成接入：Active zone required。请先完成 NS 切换，等 Cloudflare 变为 active 后再重试。",
+    );
+  });
+
+  it("shows a success check after retry activates the domain and restores it after three seconds", async () => {
+    domainsHookState.retryMutateAsync = vi.fn(async () => ({
+      status: "active",
+      lastProvisionError: null,
+    }));
+
+    render(
+      <MemoryRouter>
+        <DomainsPage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重试接入" }));
+
+    const successButton = await screen.findByRole("button", {
+      name: "接入已恢复",
+    });
+    expect(successButton).toBeDisabled();
+    expect(successButton.querySelector("svg.text-emerald-300")).not.toBeNull();
+
+    await waitFor(
+      () =>
+        expect(
+          screen.getByRole("button", { name: "重试接入" }),
+        ).toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(domainsHookState.retryMutateAsync).toHaveBeenCalledWith(
+      "dom_failed",
+    );
+  });
+
+  it("keeps retry success feedback visible when catalog refetch turns the row active", async () => {
+    const onRetry = vi.fn(async () => ({
+      status: "active",
+      lastProvisionError: null,
+    }));
+    const activeDomains = demoDomainCatalog.map((domain) =>
+      domain.id === "dom_failed"
+        ? {
+            ...domain,
+            projectStatus: "active" as const,
+            lastProvisionError: null,
+            lastProvisionedAt: "2026-04-01T08:30:00.000Z",
+          }
+        : domain,
+    );
+
+    const renderView = (domains = demoDomainCatalog) => (
+      <MemoryRouter>
+        <DomainsPageView
+          domains={domains}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={onRetry}
+        />
+      </MemoryRouter>
+    );
+    const { rerender } = render(renderView());
+
+    fireEvent.click(screen.getByRole("button", { name: "重试接入" }));
+    expect(
+      await screen.findByRole("button", { name: "接入已恢复" }),
+    ).toBeDisabled();
+
+    rerender(renderView(activeDomains));
+
+    expect(screen.getByRole("button", { name: "接入已恢复" })).toBeDisabled();
+    await waitFor(
+      () =>
+        expect(
+          screen.queryByRole("button", { name: "接入已恢复" }),
+        ).not.toBeInTheDocument(),
+      { timeout: 4000 },
+    );
+    expect(
+      screen.queryByRole("button", { name: "重试接入" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens an explicit failure popover when retry rejects", async () => {
+    const onRetry = vi.fn(async () => {
+      throw new Error("Cloudflare token expired");
+    });
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={demoDomainCatalog}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={onRetry}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重试接入" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Cloudflare token expired",
+    );
+  });
+
+  it("keeps retry pending feedback scoped to each domain row", async () => {
+    const failedDomain = demoDomainCatalog.find(
+      (domain) => domain.id === "dom_failed",
+    );
+
+    if (!failedDomain) {
+      throw new Error("missing demo domain dom_failed");
+    }
+
+    const onRetry = vi.fn(
+      (_domainId: string) =>
+        new Promise<{
+          status: "provisioning_error";
+          lastProvisionError: string;
+        }>(() => undefined),
+    );
+
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[
+            failedDomain,
+            {
+              ...failedDomain,
+              id: "dom_failed_second",
+              mailDomain: "pending-two.example.dev",
+              rootDomain: "pending-two.example.dev",
+              zoneId: "zone_failed_second",
+            },
+          ]}
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={onRetry}
+        />
+      </MemoryRouter>,
+    );
+
+    const firstRow = screen.getByText("staging.example.dev").closest("tr");
+    const secondRow = screen.getByText("pending-two.example.dev").closest("tr");
+    expect(firstRow).not.toBeNull();
+    expect(secondRow).not.toBeNull();
+
+    fireEvent.click(
+      within(firstRow as HTMLTableRowElement).getByRole("button", {
+        name: "重试接入",
+      }),
+    );
+    fireEvent.click(
+      within(secondRow as HTMLTableRowElement).getByRole("button", {
+        name: "重试接入",
+      }),
+    );
+
+    expect(
+      within(firstRow as HTMLTableRowElement).getByRole("button", {
+        name: "正在重试接入",
+      }),
+    ).toBeDisabled();
+    expect(
+      within(secondRow as HTMLTableRowElement).getByRole("button", {
+        name: "正在重试接入",
+      }),
+    ).toBeDisabled();
+    expect(onRetry).toHaveBeenCalledTimes(2);
   });
 
   it("hides Catch All actions when runtime management is unavailable", () => {

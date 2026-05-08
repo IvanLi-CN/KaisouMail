@@ -137,7 +137,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
 - Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
-- Domains management includes a dedicated apex-only bind form, explicit apex NS guidance plus local unsupported-subdomain intercepts, generic catalog enablement for discovered zones, legacy guidance for historical subdomain records, and a confirmation popover for destructive delete
+- Domains management includes a dedicated apex-only bind form, explicit apex NS guidance plus local unsupported-subdomain intercepts, generic catalog enablement for discovered zones, legacy guidance for historical subdomain records, retry feedback that distinguishes still-pending NS activation from successful recovery, and a confirmation popover for destructive delete
 - Refresh controls stay compact and header-aligned on wide layouts, while narrow viewports may wrap the action row without truncating the primary operations or introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
 - Reusable advanced action button primitive: icon + text by default, but secondary actions collapse to icon-only in dense layouts unless a desktop toolbar explicitly restores labels at `lg+`
@@ -156,6 +156,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-05-08: Added row-scoped retry feedback on provisioning-error domains so retry immediately spins, active recovery shows a temporary success check, and still-pending or failed attempts open a direct popover with the Cloudflare reason and NS next step.
 - 2026-05-07: Added a workspace selected-mailbox TTL settings dialog that resets active registered mailbox expiry from now, fixed workspace mailbox creation cache updates so newly created rows are selected immediately, and tightened single-mailbox message streams so the middle rail only shows messages for the selected mailbox.
 - 2026-04-28: Added mailbox cleanup backoff and safe stale-row autorepair so failed `destroying` mailboxes no longer create head-of-line blocking during scheduled cleanup.
 - 2026-04-28: Fixed trash aggregate message loading by adding server-side `mailboxStatus=expired` message filtering, keeping the Web trash stream off oversized `mailboxId` URLs, and passing mailbox `status` filters through the `/api/mailboxes` route.
@@ -318,6 +319,8 @@ PR: include
 ![Domains bind follow-up dialog preserving parent-zone NS guidance when a historical child-zone record is reused](./assets/domains-existing-child-zone-bind-next-steps.png)
 
 ![Domains legacy subdomain-zone details dialog preserving NS guidance for an already-existing delegated record](./assets/domains-existing-child-zone-details.png)
+
+![Domains retry feedback popover for a provisioning-error domain that still needs NS activation](./assets/domains-retry-feedback-popover.png)
 
 ### Mailbox Creation
 

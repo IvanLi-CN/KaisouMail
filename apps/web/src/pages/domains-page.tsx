@@ -177,7 +177,7 @@ export const DomainsPageView = ({
             await onDelete(domainId);
           }}
           onRetry={async (domainId) => {
-            await onRetry(domainId);
+            return onRetry(domainId);
           }}
           onEnableCatchAll={async (domainId) => {
             await onEnableCatchAll(domainId);
@@ -327,7 +327,7 @@ export const DomainsPage = () => {
         await deleteDomainMutation.mutateAsync(domainId);
       }}
       onRetry={async (domainId) => {
-        await retryDomainMutation.mutateAsync(domainId);
+        return retryDomainMutation.mutateAsync(domainId);
       }}
       onEnableCatchAll={async (domainId) => {
         await enableDomainCatchAllMutation.mutateAsync(domainId);
