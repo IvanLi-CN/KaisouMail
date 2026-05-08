@@ -258,6 +258,7 @@ const RetryGalleryPanel = ({
             lastProvisionError: "Active zone required",
           };
         })}
+        retrySuccessVisibleMs={autoRetry === "success" ? 60_000 : undefined}
       />
     </section>
   );
@@ -266,9 +267,9 @@ const RetryGalleryPanel = ({
 const RetryStateGalleryStory = () => (
   <div className="grid gap-6 bg-background p-6">
     <RetryGalleryPanel title="成功 / 初始态" />
-    <RetryGalleryPanel title="成功 / 结束态" autoRetry="success" />
+    <RetryGalleryPanel title="成功 / 结果态（对勾）" autoRetry="success" />
     <RetryGalleryPanel title="未完成 / 初始态" />
-    <RetryGalleryPanel title="未完成 / 结束态" autoRetry="incomplete" />
+    <RetryGalleryPanel title="未完成 / 结果态（气泡）" autoRetry="incomplete" />
   </div>
 );
 
@@ -570,9 +571,14 @@ export const RetryStateGallery: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("成功 / 初始态")).toBeInTheDocument();
-    await expect(canvas.getByText("成功 / 结束态")).toBeInTheDocument();
+    await expect(canvas.getByText("成功 / 结果态（对勾）")).toBeInTheDocument();
     await expect(canvas.getByText("未完成 / 初始态")).toBeInTheDocument();
-    await expect(canvas.getByText("未完成 / 结束态")).toBeInTheDocument();
+    await expect(
+      canvas.getByText("未完成 / 结果态（气泡）"),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByRole("button", { name: "接入已恢复" }),
+    ).toBeDisabled();
     await expect(
       await canvas.findByText("2026年5月8日 14:30"),
     ).toBeInTheDocument();

@@ -206,7 +206,7 @@ type RetryRowState =
   | { state: "incomplete" | "failed"; message: string };
 
 const retryMinimumSpinMs = 700;
-const retrySuccessVisibleMs = 3000;
+const defaultRetrySuccessVisibleMs = 3000;
 
 const wait = (durationMs: number) =>
   new Promise((resolve) => {
@@ -273,6 +273,7 @@ export const DomainTable = ({
   isCatchAllEnablementEnabled = true,
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
+  retrySuccessVisibleMs = defaultRetrySuccessVisibleMs,
 }: {
   domains: DomainCatalogItem[];
   onEnable: (values: {
@@ -290,6 +291,7 @@ export const DomainTable = ({
   isCatchAllEnablementEnabled?: boolean;
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
+  retrySuccessVisibleMs?: number;
 }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
