@@ -395,6 +395,8 @@ export const DomainTable = ({
   const [domainActionStates, setDomainActionStates] = useState<
     Record<string, DomainActionState>
   >({});
+  const [domainActionErrorPopoverOpen, setDomainActionErrorPopoverOpen] =
+    useState<Record<string, boolean>>({});
   const retrySuccessTimerRefs = useRef(new Map<string, number>());
   const domainActionSuccessTimerRefs = useRef(new Map<string, number>());
   const detailsDialogTitleId = useId();
@@ -508,6 +510,11 @@ export const DomainTable = ({
     if (domainActionStates[stateKey]?.state === "pending") return;
 
     clearDomainActionSuccessTimer(actionScopeId, action);
+    setDomainActionErrorPopoverOpen((current) => {
+      if (!(stateKey in current)) return current;
+      const { [stateKey]: _removed, ...next } = current;
+      return next;
+    });
     setDomainActionStates((current) => ({
       ...current,
       [stateKey]: { state: "pending" },
@@ -551,18 +558,11 @@ export const DomainTable = ({
           ),
         },
       }));
+      setDomainActionErrorPopoverOpen((current) => ({
+        ...current,
+        [stateKey]: true,
+      }));
     }
-  };
-
-  const clearDomainActionError = (
-    actionScopeId: string,
-    action: DomainActionKind,
-  ) => {
-    setDomainActionStates((current) =>
-      current[domainActionStateKey(actionScopeId, action)]?.state === "failed"
-        ? deleteDomainActionState(current, actionScopeId, action)
-        : current,
-    );
   };
 
   const handleRetry = async (domainId: string, domain: DomainCatalogItem) => {
@@ -646,6 +646,7 @@ export const DomainTable = ({
   }) => {
     const state =
       domainActionStates[domainActionStateKey(actionScopeId, action)];
+    const stateKey = domainActionStateKey(actionScopeId, action);
     const copy = domainActionCopy[action];
     const isPending = state?.state === "pending";
     const isSuccess = state?.state === "success";
@@ -692,11 +693,12 @@ export const DomainTable = ({
 
     return (
       <Popover
-        open
+        open={domainActionErrorPopoverOpen[stateKey] ?? true}
         onOpenChange={(open) => {
-          if (!open) {
-            clearDomainActionError(actionScopeId, action);
-          }
+          setDomainActionErrorPopoverOpen((current) => ({
+            ...current,
+            [stateKey]: open,
+          }));
         }}
       >
         <PopoverAnchor asChild>

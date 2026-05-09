@@ -1004,6 +1004,14 @@ describe("domains page view", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(errorTitle);
     expect(alert).toHaveTextContent(errorMessage);
+
+    fireEvent.click(document.body);
+
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: retryName,
+      }),
+    ).toBeEnabled();
   });
 
   it("uses a gapped inline layout for Cloudflare status badges", () => {
