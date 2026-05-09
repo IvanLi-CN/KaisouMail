@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "0.29.6",
+  "base_stable_version": "0.29.5",
+  "channel_label": "channel:stable",
+  "created_at": "2026-05-09T06:03:28Z",
+  "next_stable_version": "0.29.6",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "415c886c204cd23d2f37780acb484e8f77d6b88e",
+  "pr_number": 79,
+  "pr_title": "fix(web): add domain action feedback",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v0.29.6",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v0.29.6",
+  "target_sha": "7109199cc8027ec9566e0e444bcf70b56099b8a5",
+  "type_label": "type:patch"
+}
