@@ -282,6 +282,45 @@ type DomainActionFeedbackAction =
 type DomainActionFeedbackOutcome = "pending" | "success" | "error";
 
 const neverSettles = () => new Promise<void>(() => undefined);
+const storyDelay = (durationMs: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
+
+const domainActionButtonLabel = {
+  enable_domain: "启用域名",
+  disable_domain: "停用域名",
+  enable_catch_all: "开启 Catch All",
+  disable_catch_all: "关闭 Catch All",
+} satisfies Record<DomainActionFeedbackAction, string>;
+
+const domainActionOutcomeLabel = {
+  pending: "等待中",
+  success: "成功反馈",
+  error: "失败反馈",
+} satisfies Record<DomainActionFeedbackOutcome, string>;
+
+const domainActionFeedbackActions: DomainActionFeedbackAction[] = [
+  "enable_domain",
+  "disable_domain",
+  "enable_catch_all",
+  "disable_catch_all",
+];
+
+const domainActionFeedbackOutcomes: DomainActionFeedbackOutcome[] = [
+  "pending",
+  "success",
+  "error",
+];
+
+const domainActionScenarioDomains = (
+  action: DomainActionFeedbackAction,
+): DomainCatalogItem[] =>
+  demoDomainCatalog.filter((domain) => {
+    if (action === "enable_domain") return domain.zoneId === "zone_available";
+    if (action === "disable_catch_all") return domain.id === "dom_secondary";
+    return domain.id === "dom_primary";
+  });
 
 const updateDomainForAction = (
   domains: DomainCatalogItem[],
@@ -371,6 +410,124 @@ const DomainActionFeedbackStory = ({
     </AppShell>
   );
 };
+
+const DomainActionManualPlaygroundStory = () => {
+  const [domains, setDomains] = useState(demoDomainCatalog);
+
+  const runAction = async (action: DomainActionFeedbackAction) => {
+    await storyDelay(1200);
+    setDomains((current) => updateDomainForAction(current, action));
+  };
+
+  return (
+    <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
+      <DomainTable
+        docsLinks={docsLinks}
+        domains={domains}
+        isCatchAllPending={false}
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onDelete={fn()}
+        onDisable={() => runAction("disable_domain")}
+        onDisableCatchAll={() => runAction("disable_catch_all")}
+        onEnable={() => runAction("enable_domain")}
+        onEnableCatchAll={() => runAction("enable_catch_all")}
+        onRetry={fn()}
+        retrySuccessVisibleMs={60_000}
+        domainActionSuccessVisibleMs={60_000}
+      />
+    </AppShell>
+  );
+};
+
+const DomainActionGalleryPanel = ({
+  action,
+  outcome,
+}: {
+  action: DomainActionFeedbackAction;
+  outcome: DomainActionFeedbackOutcome;
+}) => {
+  const [domains, setDomains] = useState(() =>
+    domainActionScenarioDomains(action),
+  );
+  const panelRef = useRef<HTMLDivElement>(null);
+  const didAutoClickRef = useRef(false);
+
+  useEffect(() => {
+    if (didAutoClickRef.current) return;
+    didAutoClickRef.current = true;
+    const timerId = window.setTimeout(() => {
+      const targetButton = Array.from(
+        panelRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+      ).find(
+        (button) =>
+          button.getAttribute("aria-label") ===
+            domainActionButtonLabel[action] ||
+          button.textContent?.includes(domainActionButtonLabel[action]),
+      );
+      targetButton?.click();
+    }, 100);
+    return () => window.clearTimeout(timerId);
+  }, [action]);
+
+  const runAction = async (requestedAction: DomainActionFeedbackAction) => {
+    if (requestedAction !== action) return;
+    if (outcome === "pending") return neverSettles();
+    if (outcome === "error") {
+      throw new Error(`${domainActionButtonLabel[action]} request failed`);
+    }
+
+    await storyDelay(500);
+    setDomains((current) => updateDomainForAction(current, requestedAction));
+  };
+
+  return (
+    <section
+      ref={panelRef}
+      className="overflow-hidden rounded-md border border-border bg-background"
+    >
+      <div className="border-b border-border bg-muted/20 px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">
+          {domainActionButtonLabel[action]} /{" "}
+          {domainActionOutcomeLabel[outcome]}
+        </h2>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[58rem]">
+          <DomainTable
+            docsLinks={docsLinks}
+            domains={domains}
+            isCatchAllPending={false}
+            isDomainLifecycleEnabled
+            isEnablePending={false}
+            onDelete={fn()}
+            onDisable={() => runAction("disable_domain")}
+            onDisableCatchAll={() => runAction("disable_catch_all")}
+            onEnable={() => runAction("enable_domain")}
+            onEnableCatchAll={() => runAction("enable_catch_all")}
+            onRetry={fn()}
+            retrySuccessVisibleMs={60_000}
+            domainActionSuccessVisibleMs={60_000}
+          />
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const DomainActionFeedbackGalleryStory = () => (
+  <div className="grid gap-5 bg-background p-6">
+    {domainActionFeedbackActions.flatMap((action) =>
+      domainActionFeedbackOutcomes.map((outcome) => (
+        <DomainActionGalleryPanel
+          action={action}
+          key={`${action}-${outcome}`}
+          outcome={outcome}
+        />
+      )),
+    )}
+  </div>
+);
 
 export const Overview: Story = {};
 
@@ -569,6 +726,53 @@ export const CatchAllToggle: Story = {
       canvas.getByRole("button", { name: "关闭 Catch All" }),
     );
     await expect(args.onDisableCatchAll).toHaveBeenCalledWith("dom_secondary");
+  },
+};
+
+export const DomainActionManualPlayground: Story = {
+  render: () => <DomainActionManualPlaygroundStory />,
+};
+
+export const DomainActionFeedbackGallery: Story = {
+  render: () => <DomainActionFeedbackGalleryStory />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByRole("button", { name: "正在启用域名" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "域名已启用" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "重试启用域名" }),
+    ).toBeEnabled();
+    await expect(
+      await canvas.findByRole("button", { name: "正在停用域名" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "域名已停用" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "重试停用域名" }),
+    ).toBeEnabled();
+    await expect(
+      await canvas.findByRole("button", { name: "正在开启 Catch All" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "Catch All 已开启" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "重试开启 Catch All" }),
+    ).toBeEnabled();
+    await expect(
+      await canvas.findByRole("button", { name: "正在关闭 Catch All" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "Catch All 已关闭" }),
+    ).toBeDisabled();
+    await expect(
+      await canvas.findByRole("button", { name: "重试关闭 Catch All" }),
+    ).toBeEnabled();
   },
 };
 

@@ -327,6 +327,12 @@ PR: include
 
 ![Domains row-level action feedback exposing a retryable Catch All failure with alert copy](./assets/domains-action-feedback-error.png)
 
+PR: include
+![Domains row-level action pending feedback using a loader icon instead of spinning the Catch All action icon](./assets/domain-action-loading-icon.png)
+
+PR: include
+![Domains action feedback gallery showing pending, success, and retryable error states for domain and Catch All operations](./assets/domain-action-feedback-gallery.png)
+
 ### Mailbox Creation
 
 PR: include
