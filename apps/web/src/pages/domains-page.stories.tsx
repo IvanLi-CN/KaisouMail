@@ -273,6 +273,105 @@ const RetryStateGalleryStory = () => (
   </div>
 );
 
+type DomainActionFeedbackAction =
+  | "enable_domain"
+  | "disable_domain"
+  | "enable_catch_all"
+  | "disable_catch_all";
+
+type DomainActionFeedbackOutcome = "pending" | "success" | "error";
+
+const neverSettles = () => new Promise<void>(() => undefined);
+
+const updateDomainForAction = (
+  domains: DomainCatalogItem[],
+  action: DomainActionFeedbackAction,
+) =>
+  domains.map((domain) => {
+    if (action === "enable_domain" && domain.zoneId === "zone_available") {
+      return {
+        ...domain,
+        id: "dom_ops_example_org",
+        bindingSource: "catalog" as const,
+        projectStatus: "active" as const,
+        lastProvisionedAt: "2026-05-09T04:30:00.000Z",
+        updatedAt: "2026-05-09T04:30:00.000Z",
+        disabledAt: null,
+      };
+    }
+
+    if (action === "disable_domain" && domain.id === "dom_primary") {
+      return {
+        ...domain,
+        projectStatus: "disabled" as const,
+        updatedAt: "2026-05-09T04:35:00.000Z",
+        disabledAt: "2026-05-09T04:35:00.000Z",
+      };
+    }
+
+    if (action === "enable_catch_all" && domain.id === "dom_primary") {
+      return {
+        ...domain,
+        catchAllEnabled: true,
+        updatedAt: "2026-05-09T04:40:00.000Z",
+      };
+    }
+
+    if (action === "disable_catch_all" && domain.id === "dom_secondary") {
+      return {
+        ...domain,
+        catchAllEnabled: false,
+        updatedAt: "2026-05-09T04:45:00.000Z",
+      };
+    }
+
+    return domain;
+  });
+
+const DomainActionFeedbackStory = ({
+  action,
+  outcome,
+}: {
+  action: DomainActionFeedbackAction;
+  outcome: DomainActionFeedbackOutcome;
+}) => {
+  const [domains, setDomains] = useState(demoDomainCatalog);
+
+  const runAction = async (requestedAction: DomainActionFeedbackAction) => {
+    if (requestedAction !== action) return;
+
+    if (outcome === "pending") {
+      return neverSettles();
+    }
+
+    if (outcome === "error") {
+      throw new Error("Cloudflare request failed");
+    }
+
+    setDomains((current) => updateDomainForAction(current, requestedAction));
+  };
+
+  return (
+    <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
+      <DomainTable
+        docsLinks={docsLinks}
+        domains={domains}
+        isCatchAllPending={false}
+        isDomainLifecycleEnabled
+        isEnablePending={false}
+        onDelete={fn()}
+        onDisable={() => runAction("disable_domain")}
+        onDisableCatchAll={() => runAction("disable_catch_all")}
+        onEnable={() => runAction("enable_domain")}
+        onEnableCatchAll={() => runAction("enable_catch_all")}
+        onRetry={fn()}
+        retrySuccessVisibleMs={60_000}
+        domainActionSuccessVisibleMs={60_000}
+      />
+    </AppShell>
+  );
+};
+
 export const Overview: Story = {};
 
 export const BindSubmitError: Story = {
@@ -470,6 +569,95 @@ export const CatchAllToggle: Story = {
       canvas.getByRole("button", { name: "关闭 Catch All" }),
     );
     await expect(args.onDisableCatchAll).toHaveBeenCalledWith("dom_secondary");
+  },
+};
+
+export const DomainEnableFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="enable_domain" outcome="success" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "启用域名" }));
+    await expect(
+      await canvas.findByRole("button", { name: "域名已启用" }),
+    ).toBeDisabled();
+  },
+};
+
+export const DomainDisableFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="disable_domain" outcome="success" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "停用域名" }));
+    await expect(
+      await canvas.findByRole("button", { name: "域名已停用" }),
+    ).toBeDisabled();
+  },
+};
+
+export const CatchAllEnableFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="enable_catch_all" outcome="success" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "开启 Catch All" }),
+    );
+    await expect(
+      await canvas.findByRole("button", { name: "Catch All 已开启" }),
+    ).toBeDisabled();
+  },
+};
+
+export const CatchAllDisableFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="disable_catch_all" outcome="success" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "关闭 Catch All" }),
+    );
+    await expect(
+      await canvas.findByRole("button", { name: "Catch All 已关闭" }),
+    ).toBeDisabled();
+  },
+};
+
+export const DomainActionPendingFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="enable_catch_all" outcome="pending" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "开启 Catch All" }),
+    );
+    await expect(
+      await canvas.findByRole("button", { name: "正在开启 Catch All" }),
+    ).toBeDisabled();
+  },
+};
+
+export const DomainActionErrorFeedback: Story = {
+  render: () => (
+    <DomainActionFeedbackStory action="enable_catch_all" outcome="error" />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "开启 Catch All" }),
+    );
+    await expect(
+      await canvas.findByRole("button", { name: "重试开启 Catch All" }),
+    ).toBeEnabled();
+    await expect(
+      await within(canvasElement.ownerDocument.body).findByRole("alert"),
+    ).toHaveTextContent("Cloudflare request failed");
   },
 };
 

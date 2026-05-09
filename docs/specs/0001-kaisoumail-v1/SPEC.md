@@ -322,6 +322,10 @@ PR: include
 
 ![Domains retry feedback popover for a provisioning-error domain that still needs NS activation](./assets/domains-retry-feedback-popover.png)
 
+![Domains row-level action feedback preserving Catch All success after the domain state changes](./assets/domains-action-feedback-success.png)
+
+![Domains row-level action feedback exposing a retryable Catch All failure with alert copy](./assets/domains-action-feedback-error.png)
+
 ### Mailbox Creation
 
 PR: include

@@ -1,6 +1,8 @@
+import type { LucideIcon } from "lucide-react";
 import {
   Check,
   CheckCircle2,
+  CircleAlert,
   CloudOff,
   Copy,
   ExternalLink,
@@ -205,8 +207,59 @@ type RetryRowState =
   | { state: "success" }
   | { state: "incomplete" | "failed"; message: string };
 
+type DomainActionKind =
+  | "enable_domain"
+  | "disable_domain"
+  | "enable_catch_all"
+  | "disable_catch_all";
+
+type DomainActionState =
+  | { state: "pending" }
+  | { state: "success" }
+  | { state: "failed"; message: string };
+
+type DomainActionDefinition = {
+  pendingLabel: string;
+  successLabel: string;
+  failedLabel: string;
+  failedTitle: string;
+  failedFallback: string;
+};
+
 const retryMinimumSpinMs = 700;
 const defaultRetrySuccessVisibleMs = 3000;
+const defaultDomainActionSuccessVisibleMs = 3000;
+
+const domainActionCopy = {
+  enable_domain: {
+    pendingLabel: "正在启用域名",
+    successLabel: "域名已启用",
+    failedLabel: "重试启用域名",
+    failedTitle: "启用域名失败",
+    failedFallback: "启用域名失败",
+  },
+  disable_domain: {
+    pendingLabel: "正在停用域名",
+    successLabel: "域名已停用",
+    failedLabel: "重试停用域名",
+    failedTitle: "停用域名失败",
+    failedFallback: "停用域名失败",
+  },
+  enable_catch_all: {
+    pendingLabel: "正在开启 Catch All",
+    successLabel: "Catch All 已开启",
+    failedLabel: "重试开启 Catch All",
+    failedTitle: "开启 Catch All 失败",
+    failedFallback: "开启 Catch All 失败",
+  },
+  disable_catch_all: {
+    pendingLabel: "正在关闭 Catch All",
+    successLabel: "Catch All 已关闭",
+    failedLabel: "重试关闭 Catch All",
+    failedTitle: "关闭 Catch All 失败",
+    failedFallback: "关闭 Catch All 失败",
+  },
+} satisfies Record<DomainActionKind, DomainActionDefinition>;
 
 const wait = (durationMs: number) =>
   new Promise((resolve) => {
@@ -251,11 +304,42 @@ const getRetryFailureMessage = (reason: unknown) => {
   return "重试接入失败";
 };
 
+const getDomainActionFailureMessage = (reason: unknown, fallback: string) => {
+  if (reason instanceof Error && reason.message.trim()) {
+    return reason.message.trim();
+  }
+
+  if (typeof reason === "string" && reason.trim()) {
+    return reason.trim();
+  }
+
+  if (reason && typeof reason === "object") {
+    const details = "details" in reason ? reason.details : null;
+    if (typeof details === "string" && details.trim()) {
+      return details.trim();
+    }
+  }
+
+  return fallback;
+};
+
 const deleteRetryRowState = (
   states: Record<string, RetryRowState>,
   domainId: string,
 ) => {
   const { [domainId]: _removed, ...next } = states;
+  return next;
+};
+
+const domainActionStateKey = (scopeId: string, action: DomainActionKind) =>
+  `${scopeId}:${action}`;
+
+const deleteDomainActionState = (
+  states: Record<string, DomainActionState>,
+  scopeId: string,
+  action: DomainActionKind,
+) => {
+  const { [domainActionStateKey(scopeId, action)]: _removed, ...next } = states;
   return next;
 };
 
@@ -274,6 +358,7 @@ export const DomainTable = ({
   isEnablePending = false,
   isDomainLifecycleEnabled = true,
   retrySuccessVisibleMs = defaultRetrySuccessVisibleMs,
+  domainActionSuccessVisibleMs = defaultDomainActionSuccessVisibleMs,
 }: {
   domains: DomainCatalogItem[];
   onEnable: (values: {
@@ -292,6 +377,7 @@ export const DomainTable = ({
   isEnablePending?: boolean;
   isDomainLifecycleEnabled?: boolean;
   retrySuccessVisibleMs?: number;
+  domainActionSuccessVisibleMs?: number;
 }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
@@ -305,7 +391,11 @@ export const DomainTable = ({
   const [retryStates, setRetryStates] = useState<Record<string, RetryRowState>>(
     {},
   );
+  const [domainActionStates, setDomainActionStates] = useState<
+    Record<string, DomainActionState>
+  >({});
   const retrySuccessTimerRefs = useRef(new Map<string, number>());
+  const domainActionSuccessTimerRefs = useRef(new Map<string, number>());
   const detailsDialogTitleId = useId();
 
   const activeCount = domains.filter(
@@ -363,6 +453,10 @@ export const DomainTable = ({
         window.clearTimeout(timerId);
       }
       retrySuccessTimerRefs.current.clear();
+      for (const timerId of domainActionSuccessTimerRefs.current.values()) {
+        window.clearTimeout(timerId);
+      }
+      domainActionSuccessTimerRefs.current.clear();
     },
     [],
   );
@@ -391,6 +485,83 @@ export const DomainTable = ({
     if (timerId === undefined) return;
     window.clearTimeout(timerId);
     retrySuccessTimerRefs.current.delete(domainId);
+  };
+
+  const clearDomainActionSuccessTimer = (
+    actionScopeId: string,
+    action: DomainActionKind,
+  ) => {
+    const stateKey = domainActionStateKey(actionScopeId, action);
+    const timerId = domainActionSuccessTimerRefs.current.get(stateKey);
+    if (timerId === undefined) return;
+    window.clearTimeout(timerId);
+    domainActionSuccessTimerRefs.current.delete(stateKey);
+  };
+
+  const handleDomainAction = async (
+    actionScopeId: string,
+    action: DomainActionKind,
+    callback: () => Promise<void> | void,
+  ) => {
+    const stateKey = domainActionStateKey(actionScopeId, action);
+    if (domainActionStates[stateKey]?.state === "pending") return;
+
+    clearDomainActionSuccessTimer(actionScopeId, action);
+    setDomainActionStates((current) => ({
+      ...current,
+      [stateKey]: { state: "pending" },
+    }));
+    const startedAt = performance.now();
+
+    try {
+      await callback();
+      const remainingSpinMs =
+        retryMinimumSpinMs - (performance.now() - startedAt);
+      if (remainingSpinMs > 0) {
+        await wait(remainingSpinMs);
+      }
+
+      setDomainActionStates((current) => ({
+        ...current,
+        [stateKey]: { state: "success" },
+      }));
+      const timerId = window.setTimeout(() => {
+        setDomainActionStates((current) =>
+          current[stateKey]?.state === "success"
+            ? deleteDomainActionState(current, actionScopeId, action)
+            : current,
+        );
+        domainActionSuccessTimerRefs.current.delete(stateKey);
+      }, domainActionSuccessVisibleMs);
+      domainActionSuccessTimerRefs.current.set(stateKey, timerId);
+    } catch (reason) {
+      const remainingSpinMs =
+        retryMinimumSpinMs - (performance.now() - startedAt);
+      if (remainingSpinMs > 0) {
+        await wait(remainingSpinMs);
+      }
+      setDomainActionStates((current) => ({
+        ...current,
+        [stateKey]: {
+          state: "failed",
+          message: getDomainActionFailureMessage(
+            reason,
+            domainActionCopy[action].failedFallback,
+          ),
+        },
+      }));
+    }
+  };
+
+  const clearDomainActionError = (
+    actionScopeId: string,
+    action: DomainActionKind,
+  ) => {
+    setDomainActionStates((current) =>
+      current[domainActionStateKey(actionScopeId, action)]?.state === "failed"
+        ? deleteDomainActionState(current, actionScopeId, action)
+        : current,
+    );
   };
 
   const handleRetry = async (domainId: string, domain: DomainCatalogItem) => {
@@ -451,6 +622,102 @@ export const DomainTable = ({
         },
       }));
     }
+  };
+
+  const renderDomainActionButton = ({
+    action,
+    actionScopeId,
+    baseDisabled = false,
+    baseIcon: BaseIcon,
+    baseLabel,
+    baseVariant,
+    isRowActionPending,
+    onAction,
+  }: {
+    action: DomainActionKind;
+    actionScopeId: string;
+    baseDisabled?: boolean;
+    baseIcon: LucideIcon;
+    baseLabel: string;
+    baseVariant: "outline" | "destructive";
+    isRowActionPending: boolean;
+    onAction: () => Promise<void> | void;
+  }) => {
+    const state =
+      domainActionStates[domainActionStateKey(actionScopeId, action)];
+    const copy = domainActionCopy[action];
+    const isPending = state?.state === "pending";
+    const isSuccess = state?.state === "success";
+    const isFailed = state?.state === "failed";
+    const ActionIcon = isSuccess ? Check : isFailed ? CircleAlert : BaseIcon;
+    const label = isPending
+      ? copy.pendingLabel
+      : isSuccess
+        ? copy.successLabel
+        : isFailed
+          ? copy.failedLabel
+          : baseLabel;
+    const button = (
+      <ActionButton
+        density="dense"
+        icon={ActionIcon}
+        iconClassName={cn(
+          isPending && "animate-spin",
+          isSuccess && "text-emerald-300",
+          isFailed && "text-destructive",
+        )}
+        label={label}
+        size="sm"
+        variant={baseVariant}
+        disabled={baseDisabled || isPending || isSuccess || isRowActionPending}
+        aria-describedby={
+          isFailed ? `${actionScopeId}-${action}-error` : undefined
+        }
+        onClick={() => {
+          void handleDomainAction(actionScopeId, action, onAction);
+        }}
+      />
+    );
+
+    if (!isFailed) {
+      return button;
+    }
+
+    return (
+      <Popover
+        open
+        onOpenChange={(open) => {
+          if (!open) {
+            clearDomainActionError(actionScopeId, action);
+          }
+        }}
+      >
+        <PopoverAnchor asChild>
+          <div className="inline-flex">
+            {button}
+            <span className="sr-only" role="alert">
+              {copy.failedTitle}: {state.message}
+            </span>
+          </div>
+        </PopoverAnchor>
+        <PopoverContent
+          align="end"
+          className="w-[min(calc(100vw-2rem),24rem)] space-y-2 p-4 text-left"
+          id={`${actionScopeId}-${action}-error`}
+          side="left"
+          sideOffset={8}
+        >
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">
+              {copy.failedTitle}
+            </p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {state.message}
+            </p>
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
   };
 
   return (
@@ -548,8 +815,43 @@ export const DomainTable = ({
                   needsNameserverDelegation(domain);
                 const zoneId = domain.zoneId ?? "";
                 const domainId = domain.id ?? "";
+                const actionScopeId = zoneId || domainId || domain.rootDomain;
                 const isDeleteOpen = deleteTargetId === domainId;
                 const rowRetryState = retryStates[domainId] ?? null;
+                const enableDomainActionState =
+                  domainActionStates[
+                    domainActionStateKey(actionScopeId, "enable_domain")
+                  ];
+                const disableDomainActionState =
+                  domainActionStates[
+                    domainActionStateKey(actionScopeId, "disable_domain")
+                  ];
+                const enableCatchAllActionState =
+                  domainActionStates[
+                    domainActionStateKey(actionScopeId, "enable_catch_all")
+                  ];
+                const disableCatchAllActionState =
+                  domainActionStates[
+                    domainActionStateKey(actionScopeId, "disable_catch_all")
+                  ];
+                const isRowActionPending = [
+                  enableDomainActionState,
+                  disableDomainActionState,
+                  enableCatchAllActionState,
+                  disableCatchAllActionState,
+                ].some((state) => state?.state === "pending");
+                const showEnableDomainAction = Boolean(
+                  canEnable || enableDomainActionState,
+                );
+                const showDisableDomainAction = Boolean(
+                  canDisable || disableDomainActionState,
+                );
+                const showEnableCatchAllAction = Boolean(
+                  canEnableCatchAll || enableCatchAllActionState,
+                );
+                const showDisableCatchAllAction = Boolean(
+                  canDisableCatchAll || disableCatchAllActionState,
+                );
                 const isRetryPending = rowRetryState?.state === "pending";
                 const isRetrySuccess =
                   rowRetryState?.state === "success" && !isRetryPending;
@@ -721,26 +1023,25 @@ export const DomainTable = ({
                             setDetailsRootDomain(domain.rootDomain);
                           }}
                         />
-                        {canEnable ? (
-                          <ActionButton
-                            density="dense"
-                            icon={CheckCircle2}
-                            label={
-                              domain.projectStatus === "disabled"
-                                ? "重新启用"
-                                : "启用域名"
-                            }
-                            size="sm"
-                            variant="outline"
-                            disabled={isEnablePending}
-                            onClick={() =>
-                              onEnable({
-                                mailDomain: domain.mailDomain,
-                                zoneId,
-                              })
-                            }
-                          />
-                        ) : null}
+                        {showEnableDomainAction
+                          ? renderDomainActionButton({
+                              action: "enable_domain",
+                              actionScopeId,
+                              baseDisabled: isEnablePending || !canEnable,
+                              baseIcon: CheckCircle2,
+                              baseLabel:
+                                domain.projectStatus === "disabled"
+                                  ? "重新启用"
+                                  : "启用域名",
+                              baseVariant: "outline",
+                              isRowActionPending,
+                              onAction: () =>
+                                onEnable({
+                                  mailDomain: domain.mailDomain,
+                                  zoneId,
+                                }),
+                            })
+                          : null}
                         {shouldShowRetryControl ? (
                           <Popover
                             open={isRetryPopoverOpen}
@@ -801,38 +1102,48 @@ export const DomainTable = ({
                             ) : null}
                           </Popover>
                         ) : null}
-                        {canEnableCatchAll ? (
-                          <ActionButton
-                            density="dense"
-                            icon={MailPlus}
-                            label="开启 Catch All"
-                            size="sm"
-                            variant="outline"
-                            disabled={isCatchAllPending}
-                            onClick={() => onEnableCatchAll(domainId)}
-                          />
-                        ) : null}
-                        {canDisableCatchAll ? (
-                          <ActionButton
-                            density="dense"
-                            icon={MailMinus}
-                            label="关闭 Catch All"
-                            size="sm"
-                            variant="outline"
-                            disabled={isCatchAllPending}
-                            onClick={() => onDisableCatchAll(domainId)}
-                          />
-                        ) : null}
-                        {canDisable ? (
-                          <ActionButton
-                            density="dense"
-                            icon={PowerOff}
-                            label="停用域名"
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => onDisable(domainId)}
-                          />
-                        ) : null}
+                        {showEnableCatchAllAction
+                          ? renderDomainActionButton({
+                              action: "enable_catch_all",
+                              actionScopeId,
+                              baseDisabled:
+                                isCatchAllPending ||
+                                !canEnableCatchAll ||
+                                !domainId,
+                              baseIcon: MailPlus,
+                              baseLabel: "开启 Catch All",
+                              baseVariant: "outline",
+                              isRowActionPending,
+                              onAction: () => onEnableCatchAll(domainId),
+                            })
+                          : null}
+                        {showDisableCatchAllAction
+                          ? renderDomainActionButton({
+                              action: "disable_catch_all",
+                              actionScopeId,
+                              baseDisabled:
+                                isCatchAllPending ||
+                                !canDisableCatchAll ||
+                                !domainId,
+                              baseIcon: MailMinus,
+                              baseLabel: "关闭 Catch All",
+                              baseVariant: "outline",
+                              isRowActionPending,
+                              onAction: () => onDisableCatchAll(domainId),
+                            })
+                          : null}
+                        {showDisableDomainAction
+                          ? renderDomainActionButton({
+                              action: "disable_domain",
+                              actionScopeId,
+                              baseDisabled: !canDisable || !domainId,
+                              baseIcon: PowerOff,
+                              baseLabel: "停用域名",
+                              baseVariant: "destructive",
+                              isRowActionPending,
+                              onAction: () => onDisable(domainId),
+                            })
+                          : null}
                         {canDelete ? (
                           <Popover
                             open={isDeleteOpen}

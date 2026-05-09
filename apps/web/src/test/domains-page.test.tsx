@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +29,10 @@ const domainsHookState = {
   error: null as Error | null,
   refetch: vi.fn(),
   bindMutateAsync: vi.fn(),
+  createMutateAsync: vi.fn(),
+  disableMutateAsync: vi.fn(),
+  enableCatchAllMutateAsync: vi.fn(),
+  disableCatchAllMutateAsync: vi.fn(),
   retryMutateAsync: vi.fn(),
   role: "admin" as "admin" | "member",
   cloudflareDomainBindingEnabled: true,
@@ -86,21 +91,21 @@ vi.mock("@/hooks/use-domains", () => ({
   }),
   useCreateDomainMutation: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.createMutateAsync,
   }),
   useDisableDomainMutation: () => ({
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.disableMutateAsync,
   }),
   useDeleteDomainMutation: () => ({
     mutateAsync: vi.fn(),
   }),
   useEnableDomainCatchAllMutation: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.enableCatchAllMutateAsync,
   }),
   useDisableDomainCatchAllMutation: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: domainsHookState.disableCatchAllMutateAsync,
   }),
   useRetryDomainMutation: () => ({
     mutateAsync: domainsHookState.retryMutateAsync,
@@ -119,6 +124,10 @@ afterEach(() => {
   domainsHookState.error = null;
   domainsHookState.refetch = vi.fn();
   domainsHookState.bindMutateAsync = vi.fn();
+  domainsHookState.createMutateAsync = vi.fn();
+  domainsHookState.disableMutateAsync = vi.fn();
+  domainsHookState.enableCatchAllMutateAsync = vi.fn();
+  domainsHookState.disableCatchAllMutateAsync = vi.fn();
   domainsHookState.retryMutateAsync = vi.fn();
   domainsHookState.role = "admin";
   domainsHookState.cloudflareDomainBindingEnabled = true;
@@ -133,6 +142,96 @@ const docsLinks = buildPublicDocsLinks("https://docs.example.test");
 if (!docsLinks) {
   throw new Error("docs links are required for domains tests");
 }
+
+const DomainActionFeedbackHarness = ({
+  onEnableDomain = async () => undefined,
+  onDisableDomain = async () => undefined,
+  onEnableCatchAll = async () => undefined,
+  onDisableCatchAll = async () => undefined,
+}: {
+  onEnableDomain?: () => Promise<void> | void;
+  onDisableDomain?: () => Promise<void> | void;
+  onEnableCatchAll?: () => Promise<void> | void;
+  onDisableCatchAll?: () => Promise<void> | void;
+}) => {
+  const [domains, setDomains] = useState(demoDomainCatalog);
+
+  return (
+    <MemoryRouter>
+      <DomainsPageView
+        domains={domains}
+        isDomainBindingEnabled
+        isDomainLifecycleEnabled
+        docsLinks={docsLinks}
+        onBind={vi.fn()}
+        onEnable={async ({ zoneId }) => {
+          await onEnableDomain();
+          setDomains((current) =>
+            current.map((domain) =>
+              domain.zoneId === zoneId
+                ? {
+                    ...domain,
+                    id: domain.id ?? "dom_ops_example_org",
+                    bindingSource: domain.bindingSource ?? "catalog",
+                    projectStatus: "active",
+                    lastProvisionError: null,
+                    lastProvisionedAt: "2026-05-09T04:30:00.000Z",
+                    updatedAt: "2026-05-09T04:30:00.000Z",
+                    disabledAt: null,
+                  }
+                : domain,
+            ),
+          );
+        }}
+        onDisable={async (domainId) => {
+          await onDisableDomain();
+          setDomains((current) =>
+            current.map((domain) =>
+              domain.id === domainId
+                ? {
+                    ...domain,
+                    projectStatus: "disabled",
+                    updatedAt: "2026-05-09T04:35:00.000Z",
+                    disabledAt: "2026-05-09T04:35:00.000Z",
+                  }
+                : domain,
+            ),
+          );
+        }}
+        onEnableCatchAll={async (domainId) => {
+          await onEnableCatchAll();
+          setDomains((current) =>
+            current.map((domain) =>
+              domain.id === domainId
+                ? {
+                    ...domain,
+                    catchAllEnabled: true,
+                    updatedAt: "2026-05-09T04:40:00.000Z",
+                  }
+                : domain,
+            ),
+          );
+        }}
+        onDisableCatchAll={async (domainId) => {
+          await onDisableCatchAll();
+          setDomains((current) =>
+            current.map((domain) =>
+              domain.id === domainId
+                ? {
+                    ...domain,
+                    catchAllEnabled: false,
+                    updatedAt: "2026-05-09T04:45:00.000Z",
+                  }
+                : domain,
+            ),
+          );
+        }}
+        onDelete={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    </MemoryRouter>
+  );
+};
 
 describe("domains page view", () => {
   it("renders a non-blocking Cloudflare cooldown banner with manual retry", () => {
@@ -727,6 +826,184 @@ describe("domains page view", () => {
         name: "关闭 Catch All",
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps domain enable success visible after the row becomes active", async () => {
+    render(<DomainActionFeedbackHarness />);
+
+    const row = screen.getByText("ops.example.org").closest("tr");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "启用域名",
+      }),
+    );
+
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "正在启用域名",
+      }),
+    ).toBeDisabled();
+    expect(
+      await within(row as HTMLTableRowElement).findByRole("button", {
+        name: "域名已启用",
+      }),
+    ).toBeDisabled();
+  });
+
+  it("keeps domain disable success visible after the row becomes disabled", async () => {
+    render(<DomainActionFeedbackHarness />);
+
+    const row = screen.getByText("relay.example.test").closest("tr");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "停用域名",
+      }),
+    );
+
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "正在停用域名",
+      }),
+    ).toBeDisabled();
+    expect(
+      await within(row as HTMLTableRowElement).findByRole("button", {
+        name: "域名已停用",
+      }),
+    ).toBeDisabled();
+  });
+
+  it("keeps Catch All enable success visible after catch-all becomes enabled", async () => {
+    render(<DomainActionFeedbackHarness />);
+
+    const row = screen.getByText("relay.example.test").closest("tr");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "开启 Catch All",
+      }),
+    );
+
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "正在开启 Catch All",
+      }),
+    ).toBeDisabled();
+    expect(
+      await within(row as HTMLTableRowElement).findByRole("button", {
+        name: "Catch All 已开启",
+      }),
+    ).toBeDisabled();
+  });
+
+  it("keeps Catch All disable success visible after catch-all becomes disabled", async () => {
+    render(<DomainActionFeedbackHarness />);
+
+    const row = screen.getByText("mail.example.net").closest("tr");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "关闭 Catch All",
+      }),
+    );
+
+    expect(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "正在关闭 Catch All",
+      }),
+    ).toBeDisabled();
+    expect(
+      await within(row as HTMLTableRowElement).findByRole("button", {
+        name: "Catch All 已关闭",
+      }),
+    ).toBeDisabled();
+  });
+
+  it.each([
+    {
+      action: "enable domain",
+      buttonName: "启用域名",
+      retryName: "重试启用域名",
+      errorTitle: "启用域名失败",
+      errorMessage: "Domain enable failed",
+      targetText: "ops.example.org",
+      props: {
+        onEnableDomain: async () => {
+          throw new Error("Domain enable failed");
+        },
+      },
+    },
+    {
+      action: "disable domain",
+      buttonName: "停用域名",
+      retryName: "重试停用域名",
+      errorTitle: "停用域名失败",
+      errorMessage: "Domain disable failed",
+      targetText: "relay.example.test",
+      props: {
+        onDisableDomain: async () => {
+          throw new Error("Domain disable failed");
+        },
+      },
+    },
+    {
+      action: "enable catch-all",
+      buttonName: "开启 Catch All",
+      retryName: "重试开启 Catch All",
+      errorTitle: "开启 Catch All 失败",
+      errorMessage: "Catch All enable failed",
+      targetText: "relay.example.test",
+      props: {
+        onEnableCatchAll: async () => {
+          throw new Error("Catch All enable failed");
+        },
+      },
+    },
+    {
+      action: "disable catch-all",
+      buttonName: "关闭 Catch All",
+      retryName: "重试关闭 Catch All",
+      errorTitle: "关闭 Catch All 失败",
+      errorMessage: "Catch All disable failed",
+      targetText: "mail.example.net",
+      props: {
+        onDisableCatchAll: async () => {
+          throw new Error("Catch All disable failed");
+        },
+      },
+    },
+  ])("shows a button-level retry popover when $action fails", async ({
+    buttonName,
+    errorMessage,
+    errorTitle,
+    props,
+    retryName,
+    targetText,
+  }) => {
+    render(<DomainActionFeedbackHarness {...props} />);
+
+    const row = screen.getByText(targetText).closest("tr");
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: buttonName,
+      }),
+    );
+
+    expect(
+      await within(row as HTMLTableRowElement).findByRole("button", {
+        name: retryName,
+      }),
+    ).toBeEnabled();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(errorTitle);
+    expect(alert).toHaveTextContent(errorMessage);
   });
 
   it("uses a gapped inline layout for Cloudflare status badges", () => {
