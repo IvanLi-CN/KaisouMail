@@ -6,6 +6,7 @@ import {
   CloudOff,
   Copy,
   ExternalLink,
+  LoaderCircle,
   MailMinus,
   MailPlus,
   PanelRightOpen,
@@ -649,7 +650,13 @@ export const DomainTable = ({
     const isPending = state?.state === "pending";
     const isSuccess = state?.state === "success";
     const isFailed = state?.state === "failed";
-    const ActionIcon = isSuccess ? Check : isFailed ? CircleAlert : BaseIcon;
+    const ActionIcon = isPending
+      ? LoaderCircle
+      : isSuccess
+        ? Check
+        : isFailed
+          ? CircleAlert
+          : BaseIcon;
     const label = isPending
       ? copy.pendingLabel
       : isSuccess
