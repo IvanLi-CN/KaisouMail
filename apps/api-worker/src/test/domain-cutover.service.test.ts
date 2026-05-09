@@ -79,7 +79,10 @@ import {
   mailboxes,
   subdomains,
 } from "../db/schema";
-import { runDomainCutoverTaskById } from "../services/domain-cutover";
+import {
+  createDomainCutoverTask,
+  runDomainCutoverTaskById,
+} from "../services/domain-cutover";
 
 const env = {} as never;
 const runtimeConfig = {
@@ -156,6 +159,7 @@ const createDb = (options: {
   const updates: Array<{ table: unknown; values: Record<string, unknown> }> =
     [];
   const insertedSubdomains: unknown[] = [];
+  const insertedTasks: unknown[] = [];
   const deletedTables: unknown[] = [];
 
   const nextRows = (table: unknown) => {
@@ -164,18 +168,25 @@ const createDb = (options: {
     if (table === mailboxes) return mailboxRows.shift() ?? [];
     return [];
   };
+  const orderByRows = (table: unknown) => {
+    const rows = nextRows(table);
+    return Object.assign(Promise.resolve(rows), {
+      limit: vi.fn(async () => rows),
+    });
+  };
 
   return {
     updates,
     insertedSubdomains,
+    insertedTasks,
     deletedTables,
     select: vi.fn(() => ({
       from: vi.fn((table: unknown) => ({
         where: vi.fn(() => ({
           limit: vi.fn(async () => nextRows(table)),
-          orderBy: vi.fn(async () => nextRows(table)),
+          orderBy: vi.fn(() => orderByRows(table)),
         })),
-        orderBy: vi.fn(async () => nextRows(table)),
+        orderBy: vi.fn(() => orderByRows(table)),
       })),
     })),
     insert: vi.fn((table: unknown) => ({
@@ -184,6 +195,9 @@ const createDb = (options: {
           insertedSubdomains.push(
             ...(Array.isArray(values) ? values : [values]),
           );
+        }
+        if (table === domainCutoverTasks) {
+          insertedTasks.push(...(Array.isArray(values) ? values : [values]));
         }
       }),
     })),
@@ -225,6 +239,33 @@ describe("domain cutover service", () => {
     deleteRoutingRule.mockResolvedValue(undefined);
   });
 
+  it("creates enable tasks in wildcard mode without runtime allowlist", async () => {
+    const db = createDb({
+      taskRows: [[]],
+      domainRows: [[baseDomain]],
+      mailboxRows: [],
+    });
+    getDb.mockReturnValue(db);
+
+    const task = await createDomainCutoverTask(env, runtimeConfig, {
+      action: "enable",
+      domainId: baseDomain.id,
+      requestedByUserId: "usr_admin",
+    });
+
+    expect(task).toMatchObject({
+      action: "enable",
+      targetMode: "wildcard",
+      status: "pending",
+    });
+    expect(db.insertedTasks).toEqual([
+      expect.objectContaining({
+        action: "enable",
+        targetMode: "wildcard",
+      }),
+    ]);
+  });
+
   it("cuts domains over to wildcard by purging exact DNS before enabling catch-all", async () => {
     const db = createDb({
       taskRows: [[baseTask]],
@@ -248,11 +289,7 @@ describe("domain cutover service", () => {
 
     const result = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       baseTask.id,
     );
 
@@ -342,11 +379,7 @@ describe("domain cutover service", () => {
 
     const result = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       baseTask.id,
     );
 
@@ -516,11 +549,7 @@ describe("domain cutover service", () => {
 
     const result = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       baseTask.id,
     );
 
@@ -573,11 +602,7 @@ describe("domain cutover service", () => {
 
     const firstResult = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       baseTask.id,
     );
 
@@ -612,11 +637,7 @@ describe("domain cutover service", () => {
 
     const secondResult = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       resumedTask.id,
     );
 
@@ -644,11 +665,7 @@ describe("domain cutover service", () => {
 
     const result = await runDomainCutoverTaskById(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
       baseTask.id,
     );
 

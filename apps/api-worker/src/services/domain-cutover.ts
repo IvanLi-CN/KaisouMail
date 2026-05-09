@@ -12,7 +12,6 @@ import {
 import type { RuntimeConfig, WorkerEnv } from "../env";
 import { nowIso, randomId } from "../lib/crypto";
 import { chunkD1InsertValues, chunkD1InValues } from "../lib/d1-batches";
-import { normalizeRootDomain } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import { logOperationalEvent } from "../lib/observability";
 import {
@@ -109,18 +108,6 @@ const requireCatchAllWorkerName = (config: RuntimeConfig) => {
     "Catch-all management requires EMAIL_WORKER_NAME to be configured",
   );
 };
-
-const shouldAllowWildcardSubdomainDnsCutover = (
-  config: Pick<
-    RuntimeConfig,
-    "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
-  >,
-  rootDomain: string,
-) =>
-  config.WILDCARD_SUBDOMAIN_DNS_ENABLED === true &&
-  (config.WILDCARD_SUBDOMAIN_DNS_ALLOWLIST ?? []).includes(
-    normalizeRootDomain(rootDomain),
-  );
 
 const parseCatchAllRestoreState = (value: string | null) => {
   if (!value) return null;
@@ -1272,12 +1259,7 @@ export const createDomainCutoverTask = async (
     rootDomain: domain.rootDomain,
     requestedByUserId: input.requestedByUserId,
     action: input.action,
-    targetMode:
-      input.action === "disable"
-        ? "explicit"
-        : shouldAllowWildcardSubdomainDnsCutover(config, domain.rootDomain)
-          ? "wildcard"
-          : "explicit",
+    targetMode: input.action === "disable" ? "explicit" : "wildcard",
     status: "pending",
     phase: "queued",
     currentHost: null,

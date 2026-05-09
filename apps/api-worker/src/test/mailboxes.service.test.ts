@@ -160,7 +160,7 @@ describe("mailboxes wildcard migration guards", () => {
     });
   });
 
-  it("blocks create on allowlisted catch-all domains that have not finished wildcard cutover", async () => {
+  it("blocks create on catch-all domains that have not finished wildcard cutover", async () => {
     const domain = {
       id: "dom_primary",
       rootDomain: "707979.xyz",
@@ -200,20 +200,11 @@ describe("mailboxes wildcard migration guards", () => {
     requireActiveDomainByRootDomain.mockResolvedValue(domain);
 
     await expect(
-      createMailboxForUser(
-        insertSuccessEnv,
-        {
-          ...runtimeConfig,
-          WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-          WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [domain.rootDomain],
-        },
-        memberUser,
-        {
-          localPart: "build",
-          subdomain: "ops",
-          rootDomain: domain.rootDomain,
-        },
-      ),
+      createMailboxForUser(insertSuccessEnv, runtimeConfig, memberUser, {
+        localPart: "build",
+        subdomain: "ops",
+        rootDomain: domain.rootDomain,
+      }),
     ).rejects.toMatchObject({
       status: 409,
       message:
@@ -228,7 +219,7 @@ describe("mailboxes wildcard migration guards", () => {
     expect(db.delete).toHaveBeenCalledWith(mailboxes);
   });
 
-  it("blocks ensure/promote on allowlisted catch-all domains that are still explicit", async () => {
+  it("blocks ensure/promote on catch-all domains that are still explicit", async () => {
     const domain = {
       id: "dom_primary",
       rootDomain: "707979.xyz",
@@ -270,18 +261,9 @@ describe("mailboxes wildcard migration guards", () => {
     resolveMailboxDomain.mockResolvedValue(domain);
 
     await expect(
-      ensureMailboxForUser(
-        {} as never,
-        {
-          ...runtimeConfig,
-          WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-          WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [domain.rootDomain],
-        },
-        memberUser,
-        {
-          address: catchAllMailbox.address,
-        },
-      ),
+      ensureMailboxForUser({} as never, runtimeConfig, memberUser, {
+        address: catchAllMailbox.address,
+      }),
     ).rejects.toMatchObject({
       status: 409,
       message:
@@ -295,7 +277,7 @@ describe("mailboxes wildcard migration guards", () => {
     expect(createRoutingRule).not.toHaveBeenCalled();
   });
 
-  it("keeps non-allowlisted catch-all domains on explicit DNS during mailbox create", async () => {
+  it("blocks non-wildcard catch-all domains during mailbox create", async () => {
     const domain = {
       id: "dom_primary",
       rootDomain: "707979.xyz",
@@ -333,29 +315,23 @@ describe("mailboxes wildcard migration guards", () => {
     });
     getDb.mockReturnValue(db);
     requireActiveDomainByRootDomain.mockResolvedValue(domain);
-    ensureSubdomainEnabled.mockResolvedValue(undefined);
-
-    const created = await createMailboxForUser(
-      insertSuccessEnv,
-      runtimeConfig,
-      memberUser,
-      {
+    await expect(
+      createMailboxForUser(insertSuccessEnv, runtimeConfig, memberUser, {
         localPart: "build",
         subdomain: "ops",
         rootDomain: domain.rootDomain,
-      },
-    );
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message:
+        "Catch-all domain must finish wildcard DNS migration before mailbox writes can continue",
+    });
 
-    expect(ensureSubdomainEnabled).toHaveBeenCalledTimes(1);
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(
       ensureMailboxSubdomainOnboardedForWildcardDns,
     ).not.toHaveBeenCalled();
     expect(createRoutingRule).not.toHaveBeenCalled();
-    expect(created).toMatchObject({
-      address: "build@ops.707979.xyz",
-      routingRuleId: null,
-      source: "registered",
-    });
   });
 
   it("onboards fresh wildcard subdomains through Cloudflare while keeping wildcard metadata", async () => {

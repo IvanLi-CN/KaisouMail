@@ -17,7 +17,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 - The direct-bind entry is apex-only: bind `example.com` directly; for `user@mail.example.com`, bind the apex first and use mailbox-level `subdomain=mail`
 - Random or custom mailbox creation with TTL-based cleanup and optional `mailDomain` selection (`rootDomain` remains a compatibility alias)
 - Scheduled cleanup now also reclaims orphaned per-subdomain Email Routing DNS in a budgeted background pass, instead of leaving historical MX/SPF records behind indefinitely
-- Catch-all domains can roll subdomain DNS from explicit hosts to a wildcard low-record baseline through an allowlist-gated runtime switch that clones the apex Email Routing MX/SPF template instead of hardcoding provider values
+- Catch-all domains require a wildcard low-record DNS baseline that clones the apex Email Routing MX/SPF template instead of hardcoding provider values
 - Wildcard-backed domains now provision Cloudflare Email Routing at the **subdomain scope** instead of the mailbox-address scope: a fresh active subdomain is onboarded once, then the exact MX/TXT emitted by Cloudflare is immediately purged back to the wildcard baseline so DNS growth tracks active subdomains rather than mailbox addresses
 - Metadata endpoint for active mailbox domains, TTL defaults, and mailbox address rules
 - Idempotent mailbox ensure/resolve endpoints for address-based automation flows
@@ -125,8 +125,6 @@ The Worker expects these bindings and variables:
 - `CLEANUP_BATCH_SIZE`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE` (`0` disables orphaned subdomain DNS cleanup; default `50`; this is only the per-run candidate scan window, not a Cloudflare quota)
 - `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE` (default `48`; caps how many orphaned hosts the minute dispatcher leases and enqueues per tick)
-- `WILDCARD_SUBDOMAIN_DNS_ENABLED` (enables wildcard subdomain DNS reconciliation for allowlisted catch-all domains)
-- `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` (comma-separated root domains that are allowed to switch from explicit to wildcard Email Routing DNS)
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_NAME`
@@ -142,7 +140,7 @@ The Worker expects these bindings and variables:
 These two values are kept only for one-time bootstrap/backfill when upgrading a historical single-domain deployment. After bootstrap, the runtime truth source for mailbox domains is the D1 `domains` table.
 
 If `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`, the app still runs in demo/local mode without mutating live Email Routing resources, and orphaned subdomain DNS cleanup is skipped as well.
-Wildcard subdomain DNS is intentionally conservative in V1: only domains that already have `catchAllEnabled=true` and appear in `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` can switch to wildcard mode, while non-catch-all domains always remain explicit. If wildcard DNS ensure fails for an allowlisted domain, the domain stays on `explicit` mode and exposes the last failure through `wildcardDnsLastError`.
+Catch All requires wildcard subdomain DNS. Enabling Catch All reconciles the domain to `subdomainDnsMode=wildcard`; if wildcard DNS ensure fails because `*.rootDomain` has conflicting MX/TXT records or Cloudflare rejects the write, the domain remains disabled and exposes the failure through `wildcardDnsLastError`.
 On wildcard-backed catch-all domains, mailbox create/ensure no longer assumes that arbitrary fresh subdomains are receive-ready. Instead, the app explicitly onboards a new active subdomain once through Cloudflare Email Routing's subdomain API, then immediately removes the exact MX/TXT that Cloudflare created so wildcard remains the steady-state DNS baseline and DNS growth is bounded by active subdomain scopes rather than mailbox addresses.
 The deploy workflow must inject `CLOUDFLARE_ACCOUNT_ID` into the API Worker runtime config before publish. Setting the GitHub Actions job environment alone is not enough; `/api/meta` reports `cloudflareDomainBindingEnabled=false` until the Worker runtime receives the binding.
 First-party browser traffic now uses same-origin `/api`, served by Cloudflare Pages Functions and forwarded through the `API` Service Binding declared in `apps/web/wrangler.jsonc`. The checked-in Pages config now stays aligned with the live `kaisoumail` project and points at the existing `kaisoumail-api` service; preview `.pages.dev` requests fail closed inside the proxy instead of being allowed to reach the live control plane. Keep `api.cfm...` / `api.km...` style API aliases available for compatibility, automation, and direct API consumers, and keep `WEB_APP_ORIGINS` aligned with every live control-plane origin so those direct API aliases still receive the correct CORS allowlist.
@@ -322,15 +320,14 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
   - receives Email Routing `email()` events
   - uses the same source code as `kaisoumail-api`, but is deployed with the dedicated `wrangler.email.jsonc` config and the same D1/R2 bindings
 
-## Wildcard subdomain DNS rollout
+## Wildcard subdomain DNS
 
-- V1 only supports wildcard rollout for domains that already have Catch All enabled.
 - `POST /api/domains/:id/catch-all/enable` is the async reconcile entry and returns `202 { taskId }`; follow `GET /api/domain-cutover-tasks/:taskId` or `/events` to watch bounded DNS/route batches progress over SSE.
-- When a root domain is allowlisted, `POST /api/domains/:id/catch-all/enable` reconciles the domain into `subdomainDnsMode=wildcard` by deleting every project-created exact Email Routing mailbox host under that root, then cloning the apex Email Routing DNS template onto `*.rootDomain` through Cloudflare's generic DNS-record API.
+- Enabling Catch All always reconciles the domain into `subdomainDnsMode=wildcard` by deleting every project-created exact Email Routing mailbox host under that root, then cloning the apex Email Routing DNS template onto `*.rootDomain` through Cloudflare's generic DNS-record API.
 - Once a domain is in wildcard mode, mailbox create/ensure no longer grows exact DNS per mailbox address. Instead, the first active mailbox inside a fresh subdomain explicitly onboards that subdomain through Cloudflare Email Routing, then the project removes the exact MX/TXT that Cloudflare created so wildcard remains the steady-state DNS baseline. Additional mailboxes inside the same subdomain reuse that subdomain-level capability.
-- If runtime target mode is `explicit`, the same entry removes project-created wildcard Email Routing DNS, then rebuilds exact DNS solely from the current live mailbox set. Historical DNS records and historical `subdomains` rows are never used as the truth source.
-- Roll back by removing the root domain from `WILDCARD_SUBDOMAIN_DNS_ALLOWLIST` and reconciling Catch All again, or by disabling Catch All for that domain. The domain falls back to `explicit` mode by rebuilding only the currently live mailbox hosts instead of restoring historical DNS snapshots.
-- Recommended canary: allowlist one low-risk active Catch All domain, reconcile it into wildcard mode, create or ensure a mailbox inside a never-before-used subdomain to trigger explicit subdomain onboarding, send a real message to that mailbox, and verify mail ingestion succeeds while Cloudflare returns to `0` project-created exact `MX` / `TXT` records for that hostname after the onboarding purge completes.
+- If wildcard DNS conflicts with existing non-matching `*.rootDomain` MX/TXT records, Catch All enable fails and does not fall back to explicit subdomain DNS.
+- Roll back by disabling Catch All for that domain. The domain falls back to `explicit` mode by rebuilding only the currently live mailbox hosts instead of restoring historical DNS snapshots.
+- Recommended canary: enable Catch All on one low-risk active domain, create or ensure a mailbox inside a never-before-used subdomain to trigger explicit subdomain onboarding, send a real message to that mailbox, and verify mail ingestion succeeds while Cloudflare returns to `0` project-created exact `MX` / `TXT` records for that hostname after the onboarding purge completes.
 
 ## Domain topology example
 

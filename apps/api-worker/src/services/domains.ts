@@ -206,18 +206,6 @@ const orderByRootDomain = [asc(domains.rootDomain)] as const;
 
 const domainNotDeletedFilter = isNull(domains.deletedAt);
 
-const shouldAllowWildcardSubdomainDnsCutover = (
-  config: Pick<
-    RuntimeConfig,
-    "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
-  >,
-  rootDomain: string,
-) =>
-  config.WILDCARD_SUBDOMAIN_DNS_ENABLED === true &&
-  (config.WILDCARD_SUBDOMAIN_DNS_ALLOWLIST ?? []).includes(
-    normalizeRootDomain(rootDomain),
-  );
-
 export const shouldUseWildcardSubdomainDnsForDomain = (
   domain: Pick<
     DomainRow,
@@ -229,10 +217,7 @@ export const shouldUseWildcardSubdomainDnsForDomain = (
   Boolean(domain.wildcardDnsVerifiedAt);
 
 export const shouldRequireWildcardSubdomainDnsMigration = (
-  config: Pick<
-    RuntimeConfig,
-    "WILDCARD_SUBDOMAIN_DNS_ENABLED" | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
-  >,
+  _config: unknown,
   domain: Pick<
     DomainRow,
     | "catchAllEnabled"
@@ -240,10 +225,7 @@ export const shouldRequireWildcardSubdomainDnsMigration = (
     | "subdomainDnsMode"
     | "wildcardDnsVerifiedAt"
   >,
-) =>
-  domain.catchAllEnabled &&
-  !shouldUseWildcardSubdomainDnsForDomain(domain) &&
-  shouldAllowWildcardSubdomainDnsCutover(config, domain.rootDomain);
+) => domain.catchAllEnabled && !shouldUseWildcardSubdomainDnsForDomain(domain);
 
 const persistExplicitSubdomainHost = async (
   db: ReturnType<typeof getDb>,
@@ -334,17 +316,6 @@ const resolveCatchAllSubdomainDnsState = async (
   updatedAt: string,
   requestSource: CloudflareRequestSource,
 ) => {
-  if (
-    !shouldAllowWildcardSubdomainDnsCutover(config, domain.rootDomain) &&
-    domain.subdomainDnsMode !== "wildcard"
-  ) {
-    return {
-      subdomainDnsMode: "explicit" as const,
-      wildcardDnsVerifiedAt: domain.wildcardDnsVerifiedAt,
-      wildcardDnsLastError: null,
-    };
-  }
-
   await ensureWildcardEmailRoutingDnsRecords(
     env,
     config,
@@ -1413,43 +1384,26 @@ export const enableDomainCatchAll = async (
   }
 
   const updatedAt = nowIso();
-  const isWildcardCutoverTarget = shouldAllowWildcardSubdomainDnsCutover(
-    config,
-    existing.rootDomain,
-  );
-
   let dnsState: {
-    subdomainDnsMode: "explicit" | "wildcard";
-    wildcardDnsVerifiedAt: string | null;
-    wildcardDnsLastError: string | null;
+    subdomainDnsMode: "wildcard";
+    wildcardDnsVerifiedAt: string;
+    wildcardDnsLastError: null;
   };
 
-  if (isWildcardCutoverTarget) {
-    try {
-      dnsState = await resolveCatchAllSubdomainDnsState(
-        env,
-        config,
-        existing,
-        updatedAt,
-        domainRouteContexts.catchAllEnable,
-      );
-    } catch (error) {
-      const wildcardDnsLastError =
-        error instanceof Error ? error.message : String(error);
-      logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
-      await persistWildcardDnsCutoverFailure(
-        db,
-        existing,
-        wildcardDnsLastError,
-      );
-      throw toWildcardDnsCutoverApiError(existing, error);
-    }
-  } else {
-    dnsState = {
-      subdomainDnsMode: "explicit",
-      wildcardDnsVerifiedAt: existing.wildcardDnsVerifiedAt,
-      wildcardDnsLastError: null,
-    };
+  try {
+    dnsState = await resolveCatchAllSubdomainDnsState(
+      env,
+      config,
+      existing,
+      updatedAt,
+      domainRouteContexts.catchAllEnable,
+    );
+  } catch (error) {
+    const wildcardDnsLastError =
+      error instanceof Error ? error.message : String(error);
+    logWildcardDnsCutoverFailure(existing, wildcardDnsLastError);
+    await persistWildcardDnsCutoverFailure(db, existing, wildcardDnsLastError);
+    throw toWildcardDnsCutoverApiError(existing, error);
   }
 
   const currentRule = await getCatchAllRule(

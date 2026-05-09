@@ -233,35 +233,7 @@ describe("domains catch-all wildcard cutover", () => {
     vi.clearAllMocks();
   });
 
-  it("keeps non-allowlisted domains on explicit mode when enabling catch-all", async () => {
-    const db = createDb({
-      domainRows: [baseDomain],
-    });
-    getDb.mockReturnValue(db);
-    getCatchAllRule.mockResolvedValue({
-      enabled: false,
-      name: "Catch all",
-      matchers: [{ type: "all" }],
-      actions: [{ type: "forward", value: ["owner@example.com"] }],
-    });
-    updateCatchAllRule.mockResolvedValue(undefined);
-
-    const result = await enableDomainCatchAll(
-      env,
-      runtimeConfig,
-      baseDomain.id,
-      { id: "usr_admin" },
-    );
-
-    expect(ensureWildcardEmailRoutingDnsRecords).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      catchAllEnabled: true,
-      subdomainDnsMode: "explicit",
-      wildcardDnsLastError: null,
-    });
-  });
-
-  it("cuts allowlisted domains over to wildcard before mutating the Cloudflare catch-all rule", async () => {
+  it("cuts domains over to wildcard without runtime allowlist", async () => {
     const db = createDb({
       domainRows: [baseDomain],
     });
@@ -277,11 +249,37 @@ describe("domains catch-all wildcard cutover", () => {
 
     const result = await enableDomainCatchAll(
       env,
-      {
-        ...runtimeConfig,
-        WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-        WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-      },
+      runtimeConfig,
+      baseDomain.id,
+      { id: "usr_admin" },
+    );
+
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      catchAllEnabled: true,
+      subdomainDnsMode: "wildcard",
+      wildcardDnsLastError: null,
+    });
+    expect(result.wildcardDnsVerifiedAt).toEqual(expect.any(String));
+  });
+
+  it("cuts domains over to wildcard before mutating the Cloudflare catch-all rule", async () => {
+    const db = createDb({
+      domainRows: [baseDomain],
+    });
+    getDb.mockReturnValue(db);
+    ensureWildcardEmailRoutingDnsRecords.mockResolvedValue(undefined);
+    getCatchAllRule.mockResolvedValue({
+      enabled: false,
+      name: "Catch all",
+      matchers: [{ type: "all" }],
+      actions: [{ type: "forward", value: ["owner@example.com"] }],
+    });
+    updateCatchAllRule.mockResolvedValue(undefined);
+
+    const result = await enableDomainCatchAll(
+      env,
+      runtimeConfig,
       baseDomain.id,
       { id: "usr_admin" },
     );
@@ -301,7 +299,7 @@ describe("domains catch-all wildcard cutover", () => {
     expect(result.wildcardDnsVerifiedAt).toEqual(expect.any(String));
   });
 
-  it("blocks initial allowlisted cutover when wildcard DNS ensure fails", async () => {
+  it("blocks initial cutover when wildcard DNS ensure fails", async () => {
     const db = createDb({
       domainRows: [baseDomain],
     });
@@ -311,16 +309,9 @@ describe("domains catch-all wildcard cutover", () => {
     );
 
     await expect(
-      enableDomainCatchAll(
-        env,
-        {
-          ...runtimeConfig,
-          WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-          WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [baseDomain.rootDomain],
-        },
-        baseDomain.id,
-        { id: "usr_admin" },
-      ),
+      enableDomainCatchAll(env, runtimeConfig, baseDomain.id, {
+        id: "usr_admin",
+      }),
     ).rejects.toMatchObject({
       status: 409,
       message: "Wildcard MX conflict",
@@ -363,16 +354,9 @@ describe("domains catch-all wildcard cutover", () => {
     );
 
     await expect(
-      enableDomainCatchAll(
-        env,
-        {
-          ...runtimeConfig,
-          WILDCARD_SUBDOMAIN_DNS_ENABLED: true,
-          WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: [catchAllDomain.rootDomain],
-        },
-        catchAllDomain.id,
-        { id: "usr_admin" },
-      ),
+      enableDomainCatchAll(env, runtimeConfig, catchAllDomain.id, {
+        id: "usr_admin",
+      }),
     ).rejects.toMatchObject({
       status: 409,
       message: "Record quota exceeded.",
