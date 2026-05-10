@@ -5,6 +5,7 @@ import type {
   EmailRoutingDomain,
 } from "./emailRouting";
 import {
+  deleteEmailRoutingDnsRecordById,
   deleteSubdomainEmailRoutingDnsRecords,
   ensureSubdomainEnabled,
   unlockEmailRoutingDnsRecords,
@@ -124,6 +125,32 @@ const toRelativeHost = (name: string, rootDomain: string) => {
   return normalizedName.slice(0, -(normalizedRootDomain.length + 1));
 };
 
+const listProjectMailboxExactDnsRecordGroups = async (
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+) => {
+  const records = await listAllDnsRecords(config, domain);
+  const groups = new Map<string, CloudflareDnsRecord[]>();
+
+  for (const record of records) {
+    if (!isProjectMailboxExactDnsRecord(record, domain.rootDomain)) {
+      continue;
+    }
+
+    const relativeHost = toRelativeHost(record.name, domain.rootDomain);
+    if (!relativeHost) {
+      continue;
+    }
+
+    groups.set(relativeHost, [...(groups.get(relativeHost) ?? []), record]);
+  }
+
+  return [...groups.entries()].map(([host, records]) => ({
+    host,
+    records,
+  }));
+};
+
 const cfRequest = async <T>(
   config: RuntimeConfig,
   path: string,
@@ -191,29 +218,8 @@ const listDnsRecordsByName = async (
   );
 };
 
-const deleteDnsRecordById = async (
-  config: RuntimeConfig,
-  domain: EmailRoutingDomain,
-  recordId: string,
-) => {
-  if (!ensureManagementEnabled(config)) return;
-  const zoneId = requireZoneId(domain);
-
-  try {
-    await cfRequest(config, `/zones/${zoneId}/dns_records/${recordId}`, {
-      method: "DELETE",
-    });
-  } catch (error) {
-    if (
-      error instanceof ApiError &&
-      error.status === 404 &&
-      /dns record not found|record not found/i.test(error.message)
-    ) {
-      return;
-    }
-    throw error;
-  }
-};
+const isMissingEmailRoutingSubdomainError = (error: unknown) =>
+  error instanceof ApiError && /subdomain not found/i.test(error.message);
 
 export const listProjectMailboxExactDnsHosts = async (
   _env: WorkerEnv,
@@ -221,25 +227,8 @@ export const listProjectMailboxExactDnsHosts = async (
   domain: EmailRoutingDomain,
   _requestSource?: CloudflareRequestSource,
 ) => {
-  const records = await listAllDnsRecords(config, domain);
-  const hosts: string[] = [];
-  const seenHosts = new Set<string>();
-
-  for (const record of records) {
-    if (!isProjectMailboxExactDnsRecord(record, domain.rootDomain)) {
-      continue;
-    }
-
-    const relativeHost = toRelativeHost(record.name, domain.rootDomain);
-    if (!relativeHost || seenHosts.has(relativeHost)) {
-      continue;
-    }
-
-    seenHosts.add(relativeHost);
-    hosts.push(relativeHost);
-  }
-
-  return hosts;
+  const groups = await listProjectMailboxExactDnsRecordGroups(config, domain);
+  return groups.map((group) => group.host);
 };
 
 export const purgeProjectMailboxExactDnsHosts = async (
@@ -256,28 +245,36 @@ export const purgeProjectMailboxExactDnsHosts = async (
     }) => Promise<void> | void;
   },
 ) => {
-  const hosts = await listProjectMailboxExactDnsHosts(
-    env,
-    config,
-    domain,
-    requestSource,
-  );
-  const maxHostCount = Math.max(options?.maxHostCount ?? hosts.length, 0);
-  const hostsToDelete = maxHostCount > 0 ? hosts.slice(0, maxHostCount) : [];
+  const groups = await listProjectMailboxExactDnsRecordGroups(config, domain);
+  const hosts = groups.map((group) => group.host);
+  const maxHostCount = Math.max(options?.maxHostCount ?? groups.length, 0);
+  const groupsToDelete = maxHostCount > 0 ? groups.slice(0, maxHostCount) : [];
+  const hostsToDelete = groupsToDelete.map((group) => group.host);
   let deletedHostCount = 0;
 
-  for (const host of hostsToDelete) {
-    const fqdn = `${host}.${domain.rootDomain}`;
-    await unlockEmailRoutingDnsRecords(env, config, domain, requestSource, {
-      name: fqdn,
-    });
-    await deleteSubdomainEmailRoutingDnsRecords(
-      env,
-      config,
-      domain,
-      host,
-      requestSource,
-    );
+  for (const group of groupsToDelete) {
+    const fqdn = `${group.host}.${domain.rootDomain}`;
+    if (group.records.some((record) => record.meta?.read_only === true)) {
+      try {
+        await unlockEmailRoutingDnsRecords(env, config, domain, requestSource, {
+          name: fqdn,
+        });
+      } catch (error) {
+        if (!isMissingEmailRoutingSubdomainError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    for (const record of group.records) {
+      await deleteEmailRoutingDnsRecordById(
+        env,
+        config,
+        domain,
+        record.id,
+        requestSource,
+      );
+    }
     deletedHostCount += 1;
     await options?.onHostDeleted?.({
       host: fqdn,
@@ -321,10 +318,10 @@ export const ensureMailboxSubdomainOnboardedForWildcardDns = async (
 };
 
 export const deleteWildcardEmailRoutingDnsRecords = async (
-  _env: WorkerEnv,
+  env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
-  _requestSource?: CloudflareRequestSource,
+  requestSource?: CloudflareRequestSource,
 ) => {
   const wildcardName = `*.${domain.rootDomain}`;
   const records = await listDnsRecordsByName(config, domain, wildcardName);
@@ -333,7 +330,13 @@ export const deleteWildcardEmailRoutingDnsRecords = async (
   );
 
   for (const record of matchedRecords) {
-    await deleteDnsRecordById(config, domain, record.id);
+    await deleteEmailRoutingDnsRecordById(
+      env,
+      config,
+      domain,
+      record.id,
+      requestSource,
+    );
   }
 
   return {

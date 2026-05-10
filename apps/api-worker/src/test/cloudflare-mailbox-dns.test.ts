@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../lib/errors";
 
 const {
   deleteSubdomainEmailRoutingDnsRecords,
@@ -8,6 +9,13 @@ const {
   deleteSubdomainEmailRoutingDnsRecords: vi.fn(),
   ensureSubdomainEnabled: vi.fn(),
   unlockEmailRoutingDnsRecords: vi.fn(),
+}));
+const { acquireCloudflareRequestPermit } = vi.hoisted(() => ({
+  acquireCloudflareRequestPermit: vi.fn(),
+}));
+const { getRuntimeStateValue, setRuntimeStateValue } = vi.hoisted(() => ({
+  getRuntimeStateValue: vi.fn(),
+  setRuntimeStateValue: vi.fn(),
 }));
 
 vi.mock("../services/emailRouting", async () => {
@@ -21,6 +29,15 @@ vi.mock("../services/emailRouting", async () => {
     unlockEmailRoutingDnsRecords,
   };
 });
+
+vi.mock("../services/cloudflare-request-gate", () => ({
+  acquireCloudflareRequestPermit,
+}));
+
+vi.mock("../services/runtime-state", () => ({
+  getRuntimeStateValue,
+  setRuntimeStateValue,
+}));
 
 import {
   deleteWildcardEmailRoutingDnsRecords,
@@ -57,6 +74,9 @@ describe("cloudflare mailbox dns helper", () => {
       requestCount: 4,
       completed: true,
     });
+    acquireCloudflareRequestPermit.mockResolvedValue(undefined);
+    getRuntimeStateValue.mockResolvedValue(null);
+    setRuntimeStateValue.mockResolvedValue(undefined);
   });
 
   it("lists only exact project mailbox Email Routing hosts", async () => {
@@ -118,31 +138,51 @@ describe("cloudflare mailbox dns helper", () => {
     ).resolves.toEqual(["ops", "deep.ops"]);
   });
 
-  it("purges exact hosts by unlocking each fqdn before deleting project DNS", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          errors: [],
-          result: [
-            {
-              id: "mx_ops",
-              type: "MX",
-              name: "ops.707979.xyz",
-              content: "route1.mx.cloudflare.net",
-              meta: { email_routing: true },
-            },
-            {
-              id: "mx_deep",
-              type: "MX",
-              name: "deep.ops.707979.xyz",
-              content: "route2.mx.cloudflare.net",
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
-    );
+  it("purges exact hosts by deleting matched DNS records directly", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "mx_ops",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+                meta: { email_routing: true, read_only: true },
+              },
+              {
+                id: "txt_ops",
+                type: "TXT",
+                name: "ops.707979.xyz",
+                content: '"v=spf1 include:_spf.mx.cloudflare.net ~all"',
+              },
+              {
+                id: "mx_deep",
+                type: "MX",
+                name: "deep.ops.707979.xyz",
+                content: "route2.mx.cloudflare.net",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              errors: [],
+              result: { id: "deleted" },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      );
 
     await expect(
       purgeProjectMailboxExactDnsHosts(
@@ -164,8 +204,7 @@ describe("cloudflare mailbox dns helper", () => {
       completed: true,
     });
 
-    expect(unlockEmailRoutingDnsRecords).toHaveBeenNthCalledWith(
-      1,
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledWith(
       env,
       baseConfig,
       {
@@ -178,19 +217,148 @@ describe("cloudflare mailbox dns helper", () => {
       },
       { name: "ops.707979.xyz" },
     );
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenNthCalledWith(
-      2,
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_ops",
+    );
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/txt_ops",
+    );
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_deep",
+    );
+  });
+
+  it("does not require subdomain unlocks when purging unlocked exact hosts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "mx_ops",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              errors: [],
+              result: { id: "deleted" },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      );
+
+    await expect(
+      purgeProjectMailboxExactDnsHosts(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        {
+          projectOperation: "domains.catch_all.enable",
+          projectRoute: "POST /api/domains/:id/catch-all/enable",
+        },
+      ),
+    ).resolves.toMatchObject({
+      hosts: ["ops"],
+      processedHosts: ["ops"],
+      completed: true,
+    });
+
+    expect(unlockEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("continues deleting exact dns records when read-only unlock reports a stale subdomain", async () => {
+    unlockEmailRoutingDnsRecords.mockRejectedValueOnce(
+      new ApiError(404, "Subdomain not found"),
+    );
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "mx_ops",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+                meta: { email_routing: true, read_only: true },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { id: "deleted" },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+    await expect(
+      purgeProjectMailboxExactDnsHosts(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        {
+          projectOperation: "domains.catch_all.enable",
+          projectRoute: "POST /api/domains/:id/catch-all/enable",
+        },
+      ),
+    ).resolves.toMatchObject({
+      hosts: ["ops"],
+      processedHosts: ["ops"],
+      deletedHostCount: 1,
+      completed: true,
+    });
+
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledWith(
       env,
       baseConfig,
       {
         rootDomain: "707979.xyz",
         zoneId: "zone_123",
       },
-      "deep.ops",
       {
         projectOperation: "domains.catch_all.enable",
         projectRoute: "POST /api/domains/:id/catch-all/enable",
       },
+      { name: "ops.707979.xyz" },
+    );
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_ops",
     );
   });
 
@@ -255,35 +423,49 @@ describe("cloudflare mailbox dns helper", () => {
   });
 
   it("limits exact-host purges to a bounded batch without touching later hosts", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          errors: [],
-          result: [
-            {
-              id: "mx_ops",
-              type: "MX",
-              name: "ops.707979.xyz",
-              content: "route1.mx.cloudflare.net",
-            },
-            {
-              id: "mx_deep",
-              type: "MX",
-              name: "deep.ops.707979.xyz",
-              content: "route2.mx.cloudflare.net",
-            },
-            {
-              id: "mx_relay",
-              type: "MX",
-              name: "relay.707979.xyz",
-              content: "route3.mx.cloudflare.net",
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "mx_ops",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+              },
+              {
+                id: "mx_deep",
+                type: "MX",
+                name: "deep.ops.707979.xyz",
+                content: "route2.mx.cloudflare.net",
+              },
+              {
+                id: "mx_relay",
+                type: "MX",
+                name: "relay.707979.xyz",
+                content: "route3.mx.cloudflare.net",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              errors: [],
+              result: { id: "deleted" },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      );
 
     await expect(
       purgeProjectMailboxExactDnsHosts(
@@ -306,7 +488,14 @@ describe("cloudflare mailbox dns helper", () => {
       completed: false,
     });
 
-    expect(deleteSubdomainEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_ops",
+    );
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_deep",
+    );
+    expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalled();
     expect(deleteSubdomainEmailRoutingDnsRecords).not.toHaveBeenCalledWith(
       env,
       baseConfig,

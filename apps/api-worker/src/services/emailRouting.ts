@@ -1237,6 +1237,34 @@ export const deleteSubdomainEmailRoutingDnsRecords = async (
   }
 };
 
+export const deleteEmailRoutingDnsRecordById = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  domain: EmailRoutingDomain,
+  recordId: string,
+  requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
+  options?: CloudflareRequestExecutionOptions,
+) => {
+  if (!ensureManagementEnabled(config)) return;
+  const zoneId = requireZoneId(domain);
+  const deletePath = `/zones/${zoneId}/dns_records/${recordId}`;
+  await cfRequest(
+    env,
+    config,
+    deletePath,
+    buildCloudflareRequestContext(requestSource, "DELETE", deletePath),
+    {
+      method: "DELETE",
+    },
+    {
+      ignoreWhen: ({ response, data }) =>
+        response.status === 404 && hasOnlyMissingDnsRecordErrors(data?.errors),
+      beforeRequest: options?.beforeRequest,
+      onRequestAttempted: options?.onRequestAttempted,
+    },
+  );
+};
+
 export const createRoutingRule = async (
   env: WorkerEnv,
   config: RuntimeConfig,
