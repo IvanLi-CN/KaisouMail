@@ -291,6 +291,46 @@ const replaceSubdomainCacheForDomain = async (
   }
 };
 
+const replaceSubdomainCacheForExplicitRepair = async (
+  db: ReturnType<typeof getDb>,
+  domain: Pick<DomainRow, "id">,
+  hosts: string[],
+  message: string,
+  timestamp: string,
+) => {
+  await db.delete(subdomains).where(eq(subdomains.domainId, domain.id));
+
+  if (hosts.length === 0) {
+    return;
+  }
+
+  const values = hosts.map((host) => ({
+    id: randomId("sub"),
+    domainId: domain.id,
+    name: host,
+    enabledAt: timestamp,
+    lastUsedAt: timestamp,
+    cleanupLeaseOwner: null,
+    cleanupLeaseUntil: null,
+    cleanupNextAttemptAt: null,
+    cleanupLastError: message,
+    metadata: JSON.stringify({
+      mode: "explicit",
+      deliveryProvisioned: false,
+    }),
+  }));
+
+  for (const chunk of chunkD1InsertValues(values)) {
+    await db.insert(subdomains).values(chunk);
+  }
+};
+
+const shouldMarkWildcardCacheForExplicitRepair = (
+  task: Pick<DomainCutoverTaskRow, "phase">,
+) =>
+  task.phase === "purging_exact_dns" ||
+  task.phase === "updating_catch_all_rule";
+
 const patchTask = async (
   db: ReturnType<typeof getDb>,
   task: DomainCutoverTaskRow,
@@ -398,12 +438,34 @@ const reconcileToWildcard = async (
   if (
     task.phase === "queued" ||
     task.phase === "loading_state" ||
+    task.phase === "ensuring_wildcard_dns" ||
     task.phase === "purging_exact_dns"
   ) {
+    if (
+      task.phase === "queued" ||
+      task.phase === "loading_state" ||
+      task.phase === "ensuring_wildcard_dns"
+    ) {
+      nextTask = await patchTask(db, task, {
+        phase: "ensuring_wildcard_dns",
+        currentHost: wildcardHost,
+        deletedCount: task.deletedCount,
+        rebuiltCount: 0,
+        totalCount: task.totalCount,
+      });
+    }
+
+    await ensureWildcardEmailRoutingDnsRecords(
+      env,
+      config,
+      domain,
+      requestSource,
+    );
+
     const deletedCountOffset =
       task.phase === "purging_exact_dns" ? task.deletedCount : 0;
     if (task.phase !== "purging_exact_dns") {
-      nextTask = await patchTask(db, task, {
+      nextTask = await patchTask(db, nextTask, {
         phase: "purging_exact_dns",
         currentHost: null,
         deletedCount: deletedCountOffset,
@@ -454,19 +516,7 @@ const reconcileToWildcard = async (
         }),
       };
     }
-
-    nextTask = await patchTask(db, nextTask, {
-      phase: "ensuring_wildcard_dns",
-      currentHost: wildcardHost,
-    });
   }
-
-  await ensureWildcardEmailRoutingDnsRecords(
-    env,
-    config,
-    domain,
-    requestSource,
-  );
   await replaceSubdomainCacheForDomain(
     db,
     domain,
@@ -809,63 +859,24 @@ const runEnableCutover = async (
   });
 
   if (task.rollbackPhase === "rolling_back_dns") {
-    try {
-      const rollbackResult = await reconcileToExplicit(
-        env,
-        config,
-        db,
-        task,
-        domain,
-        liveMailboxes,
-        requestSource,
-      );
-      if (!rollbackResult.completed) {
-        return rollbackResult.task;
-      }
-
-      const failedTask = await markTaskFailed(
-        db,
-        rollbackResult.task,
-        task.error ?? "Wildcard cutover failed",
-        "rollback_completed",
-      );
-      logOperationalEvent("warn", "domains.cutover.failed", {
-        taskId: failedTask.id,
-        domainId: domain.id,
-        rootDomain: domain.rootDomain,
-        action: task.action,
-        targetMode: task.targetMode,
-        rollbackPhase: "rollback_completed",
-        error: failedTask.error,
-      });
-      return failedTask;
-    } catch (rollbackError) {
-      const errorMessage = `${task.error ?? "Wildcard cutover failed"} (dns rollback failed: ${toErrorMessage(
-        rollbackError,
-      )})`;
-      await persistWildcardFailure(db, domain.id, errorMessage);
-      const failedTask = await markTaskFailed(
-        db,
-        task,
-        errorMessage,
-        "rollback_failed",
-      );
-      logOperationalEvent("warn", "domains.cutover.failed", {
-        taskId: failedTask.id,
-        domainId: domain.id,
-        rootDomain: domain.rootDomain,
-        action: task.action,
-        targetMode: task.targetMode,
-        rollbackPhase: "rollback_failed",
-        error: errorMessage,
-      });
-      return failedTask;
-    }
+    const errorMessage = task.error ?? "Wildcard cutover failed";
+    await persistWildcardFailure(db, domain.id, errorMessage);
+    const failedTask = await markTaskFailed(db, task, errorMessage, null);
+    logOperationalEvent("warn", "domains.cutover.failed", {
+      taskId: failedTask.id,
+      domainId: domain.id,
+      rootDomain: domain.rootDomain,
+      action: task.action,
+      targetMode: task.targetMode,
+      rollbackPhase: null,
+      error: errorMessage,
+    });
+    return failedTask;
   }
 
   let nextTask = task;
   let catchAllRuleChanged = false;
-  let rollbackFailed = false;
+  let catchAllRuleRollbackFailed = false;
   let rollbackPhase: string | null = null;
   let currentRule: CloudflareCatchAllRule | null = null;
 
@@ -950,11 +961,6 @@ const runEnableCutover = async (
   } catch (error) {
     nextTask = (await getTaskRowById(db, nextTask.id)) ?? nextTask;
     let errorMessage = toErrorMessage(error);
-    const shouldRollbackDns =
-      task.targetMode === "wildcard" &&
-      (nextTask.phase === "purging_exact_dns" ||
-        nextTask.phase === "ensuring_wildcard_dns" ||
-        nextTask.phase === "updating_catch_all_rule");
 
     if (catchAllRuleChanged) {
       rollbackPhase = "restoring_catch_all_rule";
@@ -970,52 +976,27 @@ const runEnableCutover = async (
           );
         }
       } catch (restoreError) {
-        rollbackFailed = true;
+        catchAllRuleRollbackFailed = true;
         errorMessage = `${errorMessage} (rule rollback failed: ${toErrorMessage(
           restoreError,
         )})`;
       }
     }
 
-    if (shouldRollbackDns) {
-      rollbackPhase = "rolling_back_dns";
-      nextTask = await patchTask(db, nextTask, {
-        rollbackPhase,
-        error: errorMessage,
-      });
-
-      try {
-        const rollbackResult = await reconcileToExplicit(
-          env,
-          config,
+    if (task.targetMode === "wildcard") {
+      await persistWildcardFailure(db, domain.id, errorMessage);
+      if (shouldMarkWildcardCacheForExplicitRepair(nextTask)) {
+        await replaceSubdomainCacheForExplicitRepair(
           db,
-          nextTask,
           domain,
-          liveMailboxes,
-          requestSource,
+          buildDesiredExactHosts(liveMailboxes),
+          errorMessage,
+          nowIso(),
         );
-        nextTask = rollbackResult.task;
-        await persistWildcardFailure(db, domain.id, errorMessage);
-
-        if (!rollbackResult.completed) {
-          return await markTaskPending(db, nextTask, {
-            rollbackPhase,
-            error: errorMessage,
-          });
-        }
-      } catch (rollbackError) {
-        rollbackFailed = true;
-        errorMessage = `${errorMessage} (dns rollback failed: ${toErrorMessage(
-          rollbackError,
-        )})`;
       }
     }
 
-    if (task.targetMode === "wildcard") {
-      await persistWildcardFailure(db, domain.id, errorMessage);
-    }
-
-    rollbackPhase = rollbackFailed
+    rollbackPhase = catchAllRuleRollbackFailed
       ? "rollback_failed"
       : rollbackPhase
         ? "rollback_completed"
