@@ -266,7 +266,7 @@ describe("domain cutover service", () => {
     ]);
   });
 
-  it("cuts domains over to wildcard by purging exact DNS before enabling catch-all", async () => {
+  it("cuts domains over to wildcard by ensuring wildcard DNS before purging exact DNS", async () => {
     const db = createDb({
       taskRows: [[baseTask]],
       domainRows: [[baseDomain]],
@@ -296,9 +296,9 @@ describe("domain cutover service", () => {
     expect(purgeProjectMailboxExactDnsHosts).toHaveBeenCalledTimes(1);
     expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
     expect(
-      purgeProjectMailboxExactDnsHosts.mock.invocationCallOrder[0],
-    ).toBeLessThan(
       ensureWildcardEmailRoutingDnsRecords.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      purgeProjectMailboxExactDnsHosts.mock.invocationCallOrder[0],
     );
     expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(result).toMatchObject({
@@ -327,7 +327,7 @@ describe("domain cutover service", () => {
     );
   });
 
-  it("rolls failed wildcard cutovers back to explicit DNS derived from live mailboxes", async () => {
+  it("fails wildcard cutovers with persisted error without explicit DNS rollback", async () => {
     const db = createDb({
       taskRows: [
         [baseTask],
@@ -360,19 +360,12 @@ describe("domain cutover service", () => {
       ],
     });
     getDb.mockReturnValue(db);
-    purgeProjectMailboxExactDnsHosts
-      .mockResolvedValueOnce({
-        hosts: ["ops"],
-        processedHosts: ["ops"],
-        deletedHostCount: 1,
-        completed: true,
-      })
-      .mockResolvedValueOnce({
-        hosts: [],
-        processedHosts: [],
-        deletedHostCount: 0,
-        completed: true,
-      });
+    purgeProjectMailboxExactDnsHosts.mockResolvedValueOnce({
+      hosts: ["ops"],
+      processedHosts: ["ops"],
+      deletedHostCount: 1,
+      completed: true,
+    });
     ensureWildcardEmailRoutingDnsRecords.mockRejectedValue(
       new Error("Record quota exceeded."),
     );
@@ -385,26 +378,186 @@ describe("domain cutover service", () => {
 
     expect(result).toMatchObject({
       status: "failed",
-      rollbackPhase: "rollback_completed",
+      rollbackPhase: null,
       error: "Record quota exceeded.",
     });
-    expect(deleteWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
-    expect(ensureSubdomainEnabled).toHaveBeenCalledWith(
-      env,
-      expect.any(Object),
-      baseDomain,
-      "ops",
-      {
-        projectOperation: "domains.catch_all.enable",
-        projectRoute: "POST /api/domains/:id/catch-all/enable",
-      },
-    );
+    expect(deleteWildcardEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(purgeProjectMailboxExactDnsHosts).not.toHaveBeenCalled();
+    expect(ensureSubdomainEnabled).not.toHaveBeenCalled();
     expect(db.updates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           table: domains,
           values: expect.objectContaining({
             wildcardDnsLastError: "Record quota exceeded.",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("marks wildcard cache rows repairable when catch-all rule update fails after DNS cutover", async () => {
+    const db = createDb({
+      taskRows: [
+        [baseTask],
+        [
+          {
+            ...baseTask,
+            status: "running",
+            phase: "updating_catch_all_rule",
+            currentHost: null,
+            deletedCount: 1,
+            totalCount: 1,
+            startedAt: "2026-04-21T10:00:00.000Z",
+          },
+        ],
+      ],
+      domainRows: [[baseDomain]],
+      mailboxRows: [
+        [
+          {
+            id: "mbx_registered",
+            address: "build@ops.ivanli.asia",
+            subdomain: "ops",
+            source: "registered",
+            routingRuleId: "rule_existing",
+            status: "active",
+            domainId: baseDomain.id,
+            createdAt: "2026-04-21T09:55:00.000Z",
+          },
+        ],
+      ],
+    });
+    getDb.mockReturnValue(db);
+    purgeProjectMailboxExactDnsHosts.mockResolvedValueOnce({
+      hosts: ["ops"],
+      processedHosts: ["ops"],
+      deletedHostCount: 1,
+      completed: true,
+    });
+    updateCatchAllRule.mockRejectedValue(new Error("Rule update failed."));
+
+    const result = await runDomainCutoverTaskById(
+      env,
+      runtimeConfig,
+      baseTask.id,
+    );
+
+    expect(result).toMatchObject({
+      status: "failed",
+      rollbackPhase: null,
+      error: "Rule update failed.",
+    });
+    expect(db.deletedTables).toContain(subdomains);
+    expect(db.insertedSubdomains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "ops",
+          cleanupNextAttemptAt: null,
+          cleanupLastError: "Rule update failed.",
+          metadata: JSON.stringify({
+            mode: "explicit",
+            deliveryProvisioned: false,
+          }),
+        }),
+      ]),
+    );
+    expect(db.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: domains,
+          values: expect.objectContaining({
+            wildcardDnsLastError: "Rule update failed.",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("marks wildcard cache rows repairable when purge fails after deleting exact DNS", async () => {
+    const db = createDb({
+      taskRows: [
+        [baseTask],
+        [
+          {
+            ...baseTask,
+            status: "running",
+            phase: "purging_exact_dns",
+            currentHost: "ops.ivanli.asia",
+            deletedCount: 1,
+            totalCount: 1,
+            startedAt: "2026-04-21T10:00:00.000Z",
+          },
+        ],
+      ],
+      domainRows: [[baseDomain]],
+      mailboxRows: [
+        [
+          {
+            id: "mbx_registered",
+            address: "build@ops.ivanli.asia",
+            subdomain: "ops",
+            source: "registered",
+            routingRuleId: "rule_existing",
+            status: "active",
+            domainId: baseDomain.id,
+            createdAt: "2026-04-21T09:55:00.000Z",
+          },
+        ],
+      ],
+    });
+    getDb.mockReturnValue(db);
+    purgeProjectMailboxExactDnsHosts.mockReset();
+    purgeProjectMailboxExactDnsHosts.mockImplementationOnce(
+      async (...args: unknown[]) => {
+        const options = args[4] as {
+          onHostDeleted: (event: {
+            host: string;
+            deletedCount: number;
+            totalCount: number;
+          }) => Promise<void>;
+        };
+        await options.onHostDeleted({
+          host: "ops",
+          deletedCount: 1,
+          totalCount: 1,
+        });
+        throw new Error("Purge failed.");
+      },
+    );
+
+    const result = await runDomainCutoverTaskById(
+      env,
+      runtimeConfig,
+      baseTask.id,
+    );
+
+    expect(result).toMatchObject({
+      status: "failed",
+      rollbackPhase: null,
+      error: "Purge failed.",
+    });
+    expect(updateCatchAllRule).not.toHaveBeenCalled();
+    expect(db.deletedTables).toContain(subdomains);
+    expect(db.insertedSubdomains).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "ops",
+          cleanupNextAttemptAt: null,
+          cleanupLastError: "Purge failed.",
+          metadata: JSON.stringify({
+            mode: "explicit",
+            deliveryProvisioned: false,
+          }),
+        }),
+      ]),
+    );
+    expect(db.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: domains,
+          values: expect.objectContaining({
+            wildcardDnsLastError: "Purge failed.",
           }),
         }),
       ]),
@@ -612,7 +765,7 @@ describe("domain cutover service", () => {
       deletedCount: 6,
       totalCount: 8,
     });
-    expect(ensureWildcardEmailRoutingDnsRecords).not.toHaveBeenCalled();
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
 
     const resumedTask = {
       ...baseTask,
@@ -646,7 +799,7 @@ describe("domain cutover service", () => {
       phase: "completed",
       targetMode: "wildcard",
     });
-    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(1);
+    expect(ensureWildcardEmailRoutingDnsRecords).toHaveBeenCalledTimes(2);
   });
 
   it("fails preflight restore-state validation instead of leaving tasks stuck in loading_state", async () => {
