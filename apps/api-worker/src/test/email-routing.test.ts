@@ -403,7 +403,7 @@ describe("email routing service", () => {
     });
   });
 
-  it("clones apex Email Routing DNS into a wildcard hostname without hardcoded targets", async () => {
+  it("enables wildcard Email Routing DNS through the Email Routing DNS endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
       Promise.resolve(
         new Response(
@@ -490,11 +490,14 @@ describe("email routing service", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records?per_page=100&name=*.707979.xyz",
     );
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    for (const [, init] of fetchMock.mock.calls.slice(2)) {
-      expect(init?.method).toBe("POST");
-      expect(init?.body).toContain('"name":"*.707979.xyz"');
-    }
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/email/routing/dns",
+    );
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      method: "POST",
+      body: '{"name":"*.707979.xyz"}',
+    });
   });
 
   it("refuses wildcard Email Routing DNS rollout when conflicting wildcard records already exist", async () => {
