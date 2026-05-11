@@ -246,6 +246,17 @@ const hasOnlyMissingDnsRecordErrors = (
       )
     : false;
 
+const hasOnlyExistingEmailRoutingDnsErrors = (
+  errors: CloudflareError[] | undefined,
+) =>
+  errors?.length
+    ? errors.every((error) =>
+        /already exists|already enabled|record already exists|subdomain already exists/i.test(
+          error.message,
+        ),
+      )
+    : false;
+
 const emailRoutingMxTargets = new Set([
   "route1.mx.cloudflare.net",
   "route2.mx.cloudflare.net",
@@ -893,36 +904,30 @@ const listDnsRecordsByName = async (
   );
 };
 
-const createDnsRecord = async (
+const enableEmailRoutingDnsForName = async (
   env: WorkerEnv,
   config: RuntimeConfig,
   domain: EmailRoutingDomain,
-  record: CloudflareEmailRoutingDnsTemplateRecord,
+  name: string,
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
   options?: CloudflareRequestExecutionOptions,
 ) => {
-  if (!ensureManagementEnabled(config)) return null;
+  if (!ensureManagementEnabled(config)) return;
   const zoneId = requireZoneId(domain);
-  return cfRequest<CloudflareDnsRecordResult>(
+  const path = `/zones/${zoneId}/email/routing/dns`;
+  await cfRequest(
     env,
     config,
-    `/zones/${zoneId}/dns_records`,
-    buildCloudflareRequestContext(
-      requestSource,
-      "POST",
-      `/zones/${zoneId}/dns_records`,
-    ),
+    path,
+    buildCloudflareRequestContext(requestSource, "POST", path),
     {
       method: "POST",
-      body: JSON.stringify({
-        type: record.type,
-        name: record.name,
-        content: record.content,
-        ttl: record.ttl ?? 1,
-        ...(record.priority !== null ? { priority: record.priority } : {}),
-      }),
+      body: JSON.stringify({ name }),
     },
     {
+      ignoreWhen: ({ response, data }) =>
+        response.status === 409 &&
+        hasOnlyExistingEmailRoutingDnsErrors(data?.errors),
       beforeRequest: options?.beforeRequest,
       onRequestAttempted: options?.onRequestAttempted,
     },
@@ -1061,20 +1066,30 @@ export const ensureWildcardEmailRoutingDnsRecords = async (
   let createdRecordCount = 0;
   let matchedRecordCount = 0;
 
-  for (const templateRecord of templateRecords) {
+  const missingTemplateRecords = templateRecords.filter((templateRecord) => {
     const alreadyExists = existingRecords.some((record) =>
       isSameDnsRecord(record, templateRecord, domain.rootDomain),
     );
     if (alreadyExists) {
       matchedRecordCount += 1;
-      continue;
+      return false;
     }
+    return true;
+  });
 
-    await createDnsRecord(env, config, domain, templateRecord, requestSource, {
-      beforeRequest: options?.beforeRequest,
-      onRequestAttempted: options?.onRequestAttempted,
-    });
-    createdRecordCount += 1;
+  if (missingTemplateRecords.length > 0) {
+    await enableEmailRoutingDnsForName(
+      env,
+      config,
+      domain,
+      wildcardName,
+      requestSource,
+      {
+        beforeRequest: options?.beforeRequest,
+        onRequestAttempted: options?.onRequestAttempted,
+      },
+    );
+    createdRecordCount = missingTemplateRecords.length;
   }
 
   logOperationalEvent("info", "domains.wildcard_dns.ensured", {
@@ -1099,26 +1114,14 @@ export const ensureSubdomainEnabled = async (
   requestSource: CloudflareRequestSource = defaultCloudflareRequestSource,
   options?: CloudflareRequestExecutionOptions,
 ) => {
-  if (!ensureManagementEnabled(config)) return;
   const fqdn = `${subdomain}.${domain.rootDomain}`;
-  const zoneId = requireZoneId(domain);
-  await cfRequest(
+  await enableEmailRoutingDnsForName(
     env,
     config,
-    `/zones/${zoneId}/email/routing/dns`,
-    buildCloudflareRequestContext(
-      requestSource,
-      "POST",
-      `/zones/${zoneId}/email/routing/dns`,
-    ),
-    {
-      method: "POST",
-      body: JSON.stringify({ name: fqdn }),
-    },
-    {
-      beforeRequest: options?.beforeRequest,
-      onRequestAttempted: options?.onRequestAttempted,
-    },
+    domain,
+    fqdn,
+    requestSource,
+    options,
   );
 };
 
