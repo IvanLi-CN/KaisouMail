@@ -221,6 +221,9 @@ const listDnsRecordsByName = async (
 const isMissingEmailRoutingSubdomainError = (error: unknown) =>
   error instanceof ApiError && /subdomain not found/i.test(error.message);
 
+const isEmailRoutingManagedDnsRecordError = (error: unknown) =>
+  error instanceof ApiError && /managed by email routing/i.test(error.message);
+
 export const listProjectMailboxExactDnsHosts = async (
   _env: WorkerEnv,
   config: RuntimeConfig,
@@ -267,13 +270,19 @@ export const purgeProjectMailboxExactDnsHosts = async (
     }
 
     for (const record of group.records) {
-      await deleteEmailRoutingDnsRecordById(
-        env,
-        config,
-        domain,
-        record.id,
-        requestSource,
-      );
+      try {
+        await deleteEmailRoutingDnsRecordById(
+          env,
+          config,
+          domain,
+          record.id,
+          requestSource,
+        );
+      } catch (error) {
+        if (!isEmailRoutingManagedDnsRecordError(error)) {
+          throw error;
+        }
+      }
     }
     deletedHostCount += 1;
     await options?.onHostDeleted?.({

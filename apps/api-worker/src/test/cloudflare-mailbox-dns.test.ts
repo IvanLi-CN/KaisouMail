@@ -362,6 +362,83 @@ describe("cloudflare mailbox dns helper", () => {
     );
   });
 
+  it("continues catch-all cutover when exact DNS records are still Email Routing managed", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: [
+              {
+                id: "mx_ops",
+                type: "MX",
+                name: "ops.707979.xyz",
+                content: "route1.mx.cloudflare.net",
+                meta: { email_routing: true, read_only: true },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: false,
+            errors: [
+              {
+                code: 81057,
+                message:
+                  "This record is managed by Email Routing. Disable Email Routing to modify/remove this record.",
+              },
+            ],
+            result: null,
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
+
+    await expect(
+      purgeProjectMailboxExactDnsHosts(
+        env,
+        baseConfig,
+        {
+          rootDomain: "707979.xyz",
+          zoneId: "zone_123",
+        },
+        {
+          projectOperation: "domains.catch_all.enable",
+          projectRoute: "POST /api/domains/:id/catch-all/enable",
+        },
+      ),
+    ).resolves.toMatchObject({
+      hosts: ["ops"],
+      processedHosts: ["ops"],
+      deletedHostCount: 1,
+      completed: true,
+    });
+
+    expect(unlockEmailRoutingDnsRecords).toHaveBeenCalledWith(
+      env,
+      baseConfig,
+      {
+        rootDomain: "707979.xyz",
+        zoneId: "zone_123",
+      },
+      {
+        projectOperation: "domains.catch_all.enable",
+        projectRoute: "POST /api/domains/:id/catch-all/enable",
+      },
+      { name: "ops.707979.xyz" },
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.cloudflare.com/client/v4/zones/zone_123/dns_records/mx_ops",
+    );
+  });
+
   it("onboards wildcard mailbox subdomains through Cloudflare and then removes the exact dns records", async () => {
     await expect(
       ensureMailboxSubdomainOnboardedForWildcardDns(
