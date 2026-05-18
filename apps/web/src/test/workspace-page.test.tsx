@@ -23,6 +23,7 @@ const workspacePageState: {
   createMailbox: ReturnType<typeof vi.fn>;
   ensureMailbox: ReturnType<typeof vi.fn>;
   resetMailboxTtl: ReturnType<typeof vi.fn>;
+  updateMailboxTags: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
 } = {
   meta: demoMeta,
@@ -49,6 +50,7 @@ const workspacePageState: {
   createMailbox: vi.fn(),
   ensureMailbox: vi.fn(),
   resetMailboxTtl: vi.fn(),
+  updateMailboxTags: vi.fn(),
   refresh: vi.fn(),
 };
 
@@ -66,6 +68,9 @@ const workspacePropsState = {
       mailbox: { id: string },
       expiresInMinutes: number | null,
     ) => Promise<void>;
+  },
+  updateMailboxTagsAction: null as null | {
+    onSubmit: (mailbox: { id: string }, tags: string[]) => Promise<void>;
   },
   mailboxPrompt: null as null | { mailboxId: string; content: ReactNode },
   mailboxesError: null as null | { title: string },
@@ -107,6 +112,9 @@ vi.mock("@/components/workspace/mail-workspace", () => ({
         expiresInMinutes: number | null,
       ) => Promise<void>;
     };
+    updateMailboxTagsAction: {
+      onSubmit: (mailbox: { id: string }, tags: string[]) => Promise<void>;
+    };
     mailboxPrompt?: { mailboxId: string; content: ReactNode } | null;
     mailboxesError?: { title: string } | null;
     visibleMailboxes: Array<{ address: string }>;
@@ -118,6 +126,7 @@ vi.mock("@/components/workspace/mail-workspace", () => ({
   }) => {
     workspacePropsState.createMailboxAction = props.createMailboxAction;
     workspacePropsState.updateMailboxTtlAction = props.updateMailboxTtlAction;
+    workspacePropsState.updateMailboxTagsAction = props.updateMailboxTagsAction;
     workspacePropsState.mailboxPrompt = props.mailboxPrompt ?? null;
     workspacePropsState.mailboxesError = props.mailboxesError ?? null;
     workspacePropsState.visibleMailboxAddresses = props.visibleMailboxes.map(
@@ -188,6 +197,10 @@ vi.mock("@/hooks/use-mailboxes", () => ({
   useResetMailboxTtlMutation: () => ({
     isPending: false,
     mutateAsync: workspacePageState.resetMailboxTtl,
+  }),
+  useUpdateMailboxTagsMutation: () => ({
+    isPending: false,
+    mutateAsync: workspacePageState.updateMailboxTags,
   }),
   useDestroyMailboxMutation: () => ({
     isPending: false,
@@ -311,9 +324,11 @@ afterEach(() => {
   workspacePageState.createMailbox = vi.fn();
   workspacePageState.ensureMailbox = vi.fn();
   workspacePageState.resetMailboxTtl = vi.fn();
+  workspacePageState.updateMailboxTags = vi.fn();
   workspacePageState.refresh = vi.fn();
   workspacePropsState.createMailboxAction = null;
   workspacePropsState.updateMailboxTtlAction = null;
+  workspacePropsState.updateMailboxTagsAction = null;
   workspacePropsState.mailboxPrompt = null;
   workspacePropsState.mailboxesError = null;
   workspacePropsState.visibleMailboxAddresses = [];
@@ -694,6 +709,57 @@ describe("workspace page", () => {
     expect(workspacePageState.resetMailboxTtl).toHaveBeenCalledWith({
       mailboxId: "mbx_alpha",
       expiresInMinutes: 120,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("location-search")).toHaveTextContent(
+        "message=msg_alpha",
+      );
+    });
+  });
+
+  it("submits current mailbox tag updates from the workspace action", async () => {
+    const selectedMailbox = demoMailboxes[0];
+    workspacePageState.updateMailboxTags.mockResolvedValue({
+      ...selectedMailbox,
+      tags: ["ci", "ops"],
+    });
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: localStorageState,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/workspace?mailbox=mbx_alpha&message=msg_alpha&sort=recent",
+        ]}
+      >
+        <Routes>
+          <Route
+            path="/workspace"
+            element={
+              <>
+                <WorkspacePage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    if (!workspacePropsState.updateMailboxTagsAction) {
+      throw new Error("expected tags action");
+    }
+
+    await workspacePropsState.updateMailboxTagsAction.onSubmit(
+      selectedMailbox,
+      ["ci", "ops"],
+    );
+
+    expect(workspacePageState.updateMailboxTags).toHaveBeenCalledWith({
+      mailboxId: "mbx_alpha",
+      tags: ["ci", "ops"],
     });
     await waitFor(() => {
       expect(screen.getByTestId("location-search")).toHaveTextContent(

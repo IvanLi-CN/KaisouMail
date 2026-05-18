@@ -1,4 +1,4 @@
-import { Eye, History, RotateCcw, Trash2 } from "lucide-react";
+import { Eye, History, RotateCcw, Tags, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -70,6 +70,7 @@ export const MailboxList = ({
   mailboxes,
   messageStatsByMailbox,
   onDestroy,
+  onEditTags,
   onRestoreTtl,
   itemHrefBuilder,
   selectedMailboxId = null,
@@ -80,6 +81,7 @@ export const MailboxList = ({
   mailboxes: Mailbox[];
   messageStatsByMailbox?: Map<string, { unread: number; total: number }>;
   onDestroy?: (mailboxId: string) => void;
+  onEditTags?: (mailbox: Mailbox) => void;
   onRestoreTtl?: (mailbox: Mailbox) => void;
   itemHrefBuilder?: (mailbox: Mailbox) => string;
   selectedMailboxId?: string | null;
@@ -178,6 +180,23 @@ export const MailboxList = ({
                       {ruleBadge.label}
                     </Badge>
                   ) : null}
+                  <Badge className="border border-border bg-muted/20 text-muted-foreground">
+                    {mailbox.createdVia === "api_key"
+                      ? (mailbox.createdByApiKey?.name ?? "API key")
+                      : mailbox.createdVia === "web"
+                        ? "Web"
+                        : mailbox.createdVia === "system"
+                          ? "System"
+                          : "来源未知"}
+                  </Badge>
+                  {mailbox.tags.map((tag) => (
+                    <Badge
+                      key={tag}
+                      className="border border-primary/25 bg-primary/10 text-primary"
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
               </div>
             </TableCell>
@@ -256,6 +275,17 @@ export const MailboxList = ({
                     variant="outline"
                     onClick={() => onRestoreTtl(mailbox)}
                     tooltip={`延长 ${mailbox.address} 的 TTL 并恢复使用`}
+                  />
+                ) : null}
+                {onEditTags ? (
+                  <ActionButton
+                    density="dense"
+                    icon={Tags}
+                    label="编辑 Tags"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onEditTags(mailbox)}
+                    tooltip={`编辑 ${mailbox.address} 的 Tags`}
                   />
                 ) : null}
                 {onDestroy ? (

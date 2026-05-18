@@ -43,7 +43,9 @@ export const filterMailboxes = (mailboxes: Mailbox[], query: string) => {
   if (!normalizedQuery) return mailboxes;
 
   return mailboxes.filter((mailbox) =>
-    mailbox.address.toLowerCase().includes(normalizedQuery),
+    [mailbox.address, ...mailbox.tags].some((value) =>
+      value.toLowerCase().includes(normalizedQuery),
+    ),
   );
 };
 

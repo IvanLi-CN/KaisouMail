@@ -73,6 +73,13 @@ if (typeof HTMLElement !== "undefined" && !HTMLElement.prototype.scrollTo) {
   };
 }
 
+if (
+  typeof HTMLElement !== "undefined" &&
+  !HTMLElement.prototype.scrollIntoView
+) {
+  HTMLElement.prototype.scrollIntoView = function scrollIntoView() {};
+}
+
 afterEach(() => {
   cleanup();
   resyncWindowEvents();

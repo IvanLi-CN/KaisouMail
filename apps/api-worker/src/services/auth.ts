@@ -16,7 +16,7 @@ import {
   verifySession,
 } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
-import type { AppBindings, AuthUser } from "../types";
+import type { AppBindings, AuthContext, AuthUser } from "../types";
 import { ensureBootstrapAdmin } from "./bootstrap";
 
 const SESSION_COOKIE = "kaisoumail_session";
@@ -175,6 +175,52 @@ export const authenticateApiKey = async (
   });
 };
 
+export const authenticateApiKeyWithContext = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  apiKey: string,
+) => {
+  const db = getDb(env);
+  await ensureBootstrapAdmin(db, config);
+  const keyHash = await sha256Hex(apiKey);
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      apiKeyId: apiKeys.id,
+      apiKeyName: apiKeys.name,
+      apiKeyPrefix: apiKeys.prefix,
+    })
+    .from(apiKeys)
+    .innerJoin(users, eq(apiKeys.userId, users.id))
+    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  await db
+    .update(apiKeys)
+    .set({ lastUsedAt: nowIso() })
+    .where(eq(apiKeys.id, row.apiKeyId));
+  return {
+    user: mapUserRow({
+      id: row.userId,
+      email: row.email,
+      name: row.name,
+      role: row.role,
+    }),
+    authContext: {
+      method: "api_key",
+      apiKey: {
+        id: row.apiKeyId,
+        name: row.apiKeyName,
+        prefix: row.apiKeyPrefix,
+      },
+    } satisfies AuthContext,
+  };
+};
+
 export const listApiKeysForUser = async (env: WorkerEnv, userId: string) => {
   const db = getDb(env);
   const rows = await db
@@ -284,6 +330,32 @@ export const resolveAuthUser = async (
   return getUserById(env, payload.sub);
 };
 
+export const resolveAuthContext = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+) => {
+  const bearer = parseAuthorizationHeader(
+    request.headers.get("authorization") ?? undefined,
+  );
+  if (bearer) return authenticateApiKeyWithContext(env, config, bearer);
+
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const sessionCookie = parseCookies(cookieHeader)[SESSION_COOKIE];
+  if (!sessionCookie) return null;
+  const payload = await verifySession(sessionCookie, config.SESSION_SECRET);
+  if (!payload) return null;
+  const user = await getUserById(env, payload.sub);
+  if (!user) return null;
+  return {
+    user,
+    authContext: {
+      method: "web",
+      apiKey: null,
+    } satisfies AuthContext,
+  };
+};
+
 export const resolveSessionUser = async (
   env: WorkerEnv,
   config: RuntimeConfig,
@@ -304,12 +376,26 @@ export const requireAuth = (options?: {
 }): MiddlewareHandler<AppBindings> => {
   return async (c, next) => {
     const config = c.get("runtimeConfig");
-    const user = options?.sessionOnly
-      ? await resolveSessionUser(c.env, config, c.req.raw)
-      : await resolveAuthUser(c.env, config, c.req.raw);
+    const resolved = options?.sessionOnly
+      ? await resolveSessionUser(c.env, config, c.req.raw).then((user) =>
+          user
+            ? {
+                user,
+                authContext: {
+                  method: "web",
+                  apiKey: null,
+                } satisfies AuthContext,
+              }
+            : null,
+        )
+      : await resolveAuthContext(c.env, config, c.req.raw);
+    const user = resolved?.user ?? null;
     if (!user && !options?.optional)
       throw new ApiError(401, "Authentication required");
-    if (user) c.set("authUser", user);
+    if (resolved) {
+      c.set("authUser", resolved.user);
+      c.set("authContext", resolved.authContext);
+    }
     if (options?.admin && user?.role !== "admin")
       throw new ApiError(403, "Admin access required");
     await next();

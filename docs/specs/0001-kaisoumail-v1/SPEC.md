@@ -31,6 +31,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/mailboxes/:mailboxId`
 - Lightweight mailbox inventory and lifecycle management surface
 - Message browsing is no longer embedded here; active and destroying mailbox rows hand off to the workspace, expired and destroyed rows hand off to mailbox detail/history, while `/mailboxes` itself keeps the full mailbox history and does not inherit the workspace trimming window
+- Mailbox records expose creation provenance separately from delivery source: `createdVia=web|api_key|system|unknown`, optional `createdByApiKey={id,name,prefix}`, and normalized `tags`; mailbox management can create with tags, filter by tag, display provenance/tags, and edit tags without changing mailbox delivery state
 - API mailbox creation accepts optional `mailDomain`, while `rootDomain` remains a deprecated compatibility alias; the Web console defaults to `随机`, omits the explicit domain field until the user manually chooses a concrete domain, and otherwise reuses the server-side random active-domain allocation
 - The shared mailbox-creation form now supports both segmented entry (`localPart + subdomain + mailDomain/rootDomain`) and a full-address mode; supported full addresses normalize to lowercase, unsupported domains are blocked client-side, and pasting a supported full address into segmented fields offers a one-click mode switch with auto-filled values
 - Mailbox TTL entry now uses a non-linear slider plus inline editable display: finite values span `1 hour .. 1 year` on a logarithmic scale, with compact key anchors such as `30 days` and `180 days`; an explicit final slot and `expiresInMinutes: null` represent long-term lifetime. Expired mailbox rows appear in a dedicated mailbox-management recovery segment where operators can view history, extend TTL to restore, or destroy immediately
@@ -84,6 +85,9 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `POST /api/domains/:id/catch-all/disable` also returns `202 + taskId`, retires active `source=catch_all` mailboxes first, rebuilds exact DNS only from surviving `active + source=registered` mailboxes, backfills missing literal routing rules for those registered mailboxes, restores the pre-managed Cloudflare catch-all rule snapshot, and finally persists `catchAllEnabled=false + subdomainDnsMode=explicit`.
 - Wildcard cleanup only touches non-apex, non-wildcard, Email Routing `MX/TXT` records that belong to the managed mailbox root domain, and deletes those records directly by DNS record id instead of requiring a Cloudflare Email Routing subdomain object to exist; project access domains, Worker custom domains, A/AAAA/CNAME/HTTPS/CAA records, non-Email-Routing TXT records, and apex Email Routing records are never part of the purge set.
 - `POST /api/mailboxes` accepts optional `mailDomain`; `rootDomain` remains a compatibility alias, and when both are omitted the API randomly selects one active mailbox domain server-side, while `expiresInMinutes` can be omitted for the runtime default TTL or set to `null` for a long-term mailbox; on `catchAllEnabled=true` domains it now registers the mailbox locally without creating a per-address Cloudflare routing rule. Wildcard-verified domains no longer treat arbitrary fresh subdomains as implicitly receive-ready: the first active mailbox inside a new subdomain explicitly onboards that subdomain through Cloudflare Email Routing, then the project removes the exact MX/TXT emitted by Cloudflare so wildcard remains the steady-state baseline, while multiple mailboxes inside the same subdomain reuse that subdomain-level provisioning. Catch-all domains that have not completed wildcard verification fail mailbox writes instead of recreating exact DNS as a silent fallback.
+- `POST /api/mailboxes` and `POST /api/mailboxes/ensure` accept optional `tags`, normalized to lowercase `[a-z0-9_-]` values with duplicate removal and a 20-tag cap; `tags` on ensure only applies when a new mailbox is created, while `PATCH /api/mailboxes/:id/tags` replaces tags for a visible mailbox. Tags are persisted through a per-user `tags` table and `mailbox_tags` join table; `mailboxes.tags_json` is retained only as a compatibility cache and migration source.
+- Mailbox creation provenance is stored independently of `source`: Bearer requests write `createdVia=api_key` plus the current API key id, Web session requests write `createdVia=web`, system materialization writes `createdVia=system`, and historical rows remain `unknown`.
+- `GET /api/mailboxes` accepts repeated `tag` query parameters and returns only mailboxes containing every requested tag.
 - `POST /api/mailboxes` keeps create semantics: if the caller already owns the same active or expired mailbox, the API returns `409` with structured `details={ code: "mailbox_exists", mailbox }` so the Web console can select and reuse the existing row instead of silently promoting/recreating it
 - Generated mailbox aliases keep the existing validation rules but now prefer realistic person-like or function-like local parts plus readable single- or multi-level subdomains; runtime metadata and Web preview examples use the same deterministic example family
 - `POST /api/mailboxes/ensure` accepts either `address` or `localPart + subdomain (+ optional mailDomain/rootDomain)`, reuses an existing visible `active` or `expired` mailbox when present, and otherwise creates a fresh mailbox; when `expiresInMinutes` is provided for an existing mailbox, the API only extends TTL and never shortens it, with `null` treated as long-term/infinite and extension restoring an `expired` mailbox to `active`; promoting a `source=catch_all` mailbox on a Catch-all-enabled domain stays a local-only state transition (`catch_all -> registered`) without an extra per-address Cloudflare rule write. On wildcard-verified domains, the first active mailbox in a fresh subdomain explicitly onboards that subdomain once and then re-purges Cloudflare's exact MX/TXT output so the domain stays on the wildcard baseline; subsequent mailboxes inside the same subdomain do not repeat provisioning. Domains that are still waiting on wildcard cutover fail the ensure request instead of silently dropping back to explicit provisioning.
@@ -148,14 +152,16 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Mailbox creation guidance stays mode-aware: segmented mode can still promise random active-domain allocation, while full-address mode instead explains supported-domain validation and keeps the current normalized address preview visible
 - Mailbox lifetime control now keeps the dense dialog compact: a log-scale slider covers short-lived to long-lived finite mailboxes up to one year, the current resolved TTL is shown inline at the right edge, double-click inline editing accepts common human units, and the terminal slider slot exposes explicit long-term lifetime
 - Mailbox presentation keeps explicit lifecycle segmentation in management views, while the active workspace rail omits expired rows entirely and the trash aggregate message stream is resolved by server-side mailbox status filtering; Catch All remains an explicit operator-facing badge, mailbox management tables render routing state as badges for per-address rules, domain-level delivery, and removed inactive rules, the workspace rail keeps right-aligned numeric badges, and mailbox tables show unread / total counts
+- Mailbox management rows show creation provenance and tag badges; the management header exposes a tag filter, and tag inputs provide existing-tag autocomplete while still accepting custom tags.
 - Workspace mailbox rail rows use a two-line dense layout: the first line holds address + copy affordance + count, while the second line carries Catch All / expiry / destroyed metadata plus the inline verification-code action
-- Workspace selected-mailbox header places TTL settings in the right-side action slot next to the copied address title; the dialog uses the same logarithmic lifetime control as mailbox creation, seeded from the current remaining TTL so operators can see and adjust the existing expiry before saving
+- Workspace selected-mailbox header places mailbox settings in the right-side action slot next to the copied address title; the dialog allows tag edits for visible mailboxes and keeps the same logarithmic TTL control for active registered mailboxes, seeded from the current remaining lifetime so operators can see and adjust the existing expiry before saving
 - Destroyed mailboxes stay in the same two-line dense rhythm as active rows instead of collapsing back to a single-line variant
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
 
 ## Change log
 
+- 2026-05-18: Added mailbox creation provenance and tags, including API key attribution, create/ensure tag input, tag replacement, list filtering by repeated `tag`, normalized tag tables, and mailbox-management UI badges/filter/editing.
 - 2026-05-08: Added row-scoped retry feedback on provisioning-error domains so retry immediately spins, active recovery shows a temporary success check, and still-pending or failed attempts open a direct popover with the Cloudflare reason and NS next step.
 - 2026-05-10: Removed the explicit DNS rollback path from failed wildcard Catch All enable tasks so wildcard ensure failures surface directly instead of masking the primary error with subdomain rollback failures.
 - 2026-05-10: Changed wildcard cutover exact-host purge to delete matched DNS records by id so stale Email Routing MX/TXT records can be removed even when Cloudflare no longer has a corresponding Email Routing subdomain object.
@@ -265,6 +271,8 @@ PR: include
 
 ![Workspace selected mailbox header with TTL settings popover initialized from the current remaining lifetime](./assets/workspace-mailbox-ttl-popover.png)
 
+![Workspace mailbox settings popover supports editing tags while preserving TTL rules](./assets/workspace-mailbox-settings-tags.png)
+
 ![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
 
 ![Workspace long mailbox addresses wrap in the reader header while the rail keeps truncation](./assets/workspace-long-mailbox-address.png)
@@ -278,6 +286,12 @@ PR: include
 ### Mailboxes
 
 ![Mailboxes repeated create flow selects the existing mailbox and offers TTL extension](./assets/mailboxes-existing-mailbox-conflict.png)
+
+![Mailboxes management with tag filter, provenance badges, and tag editing](./assets/mailboxes-tags-management.png)
+
+![Mailboxes tag filter dropdown without a redundant group heading](./assets/mailboxes-tag-filter-no-heading.png)
+
+![Mailboxes create form keeps tag suggestions independent from the active list filter](./assets/mailboxes-create-tags-unfiltered-suggestions.png)
 
 ### UI Primitives
 

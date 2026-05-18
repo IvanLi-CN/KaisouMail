@@ -68,6 +68,7 @@ import {
   createMailboxForUser,
   ensureMailboxForUser,
   resetMailboxTtlForUser,
+  updateMailboxTagsForUser,
 } from "../services/mailboxes";
 
 const memberUser = {
@@ -577,5 +578,86 @@ describe("mailbox TTL reset", () => {
       status: 409,
       message: "Mailbox TTL can only be reset for active registered mailboxes",
     });
+  });
+});
+
+describe("mailbox tags storage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("updates the normalized tag tables when mailbox tags change", async () => {
+    const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const mailboxRow = {
+      id: "mbx_alpha",
+      userId: memberUser.id,
+      domainId: "dom_primary",
+      localPart: "build",
+      subdomain: "alpha",
+      address: "build@alpha.707979.xyz",
+      source: "registered",
+      createdVia: "web",
+      createdByApiKeyId: null,
+      tagsJson: JSON.stringify(["old"]),
+      status: "active",
+      createdAt: "2026-04-03T10:00:00.000Z",
+      expiresAt: "2026-04-10T12:00:00.000Z",
+      destroyedAt: null,
+      routingRuleId: "rule_alpha",
+      cleanupNextAttemptAt: null,
+      cleanupLastError: null,
+    };
+    const db = createMailboxDb({
+      domainRows: [{ id: "dom_primary", rootDomain: "707979.xyz" }],
+      mailboxRows: [mailboxRow],
+    });
+    getDb.mockReturnValue(db);
+
+    const env = {
+      DB: {
+        prepare: vi.fn((query: string) => ({
+          bind: vi.fn((...values: unknown[]) => {
+            preparedStatements.push({ query, values });
+            return {
+              run: vi.fn(async () => ({ meta: { changes: 1 } })),
+              all: vi.fn(async () => ({
+                results: [
+                  { mailboxId: "mbx_alpha", tag: "ci" },
+                  { mailboxId: "mbx_alpha", tag: "ops" },
+                ],
+              })),
+            };
+          }),
+        })),
+      },
+    } as never;
+
+    const mailbox = await updateMailboxTagsForUser(
+      env,
+      memberUser,
+      "mbx_alpha",
+      {
+        tags: ["CI", "ops", "ci"],
+      },
+    );
+
+    expect(mailbox.tags).toEqual(["ci", "ops"]);
+    expect(db.update).toHaveBeenCalledWith(mailboxes);
+    expect(preparedStatements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          query: expect.stringContaining("DELETE FROM mailbox_tags"),
+          values: ["mbx_alpha"],
+        }),
+        expect.objectContaining({
+          query: expect.stringContaining("INSERT INTO tags"),
+          values: expect.arrayContaining([memberUser.id, "ci"]),
+        }),
+        expect.objectContaining({
+          query: expect.stringContaining("INSERT OR IGNORE INTO mailbox_tags"),
+          values: expect.arrayContaining(["mbx_alpha", memberUser.id, "ops"]),
+        }),
+      ]),
+    );
   });
 });

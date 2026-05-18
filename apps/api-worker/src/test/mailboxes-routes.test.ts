@@ -7,12 +7,14 @@ const {
   listMailboxesForUser,
   resolveMailboxForUser,
   resetMailboxTtlForUser,
+  updateMailboxTagsForUser,
 } = vi.hoisted(() => ({
   createMailboxForUser: vi.fn(),
   ensureMailboxForUser: vi.fn(),
   listMailboxesForUser: vi.fn(),
   resolveMailboxForUser: vi.fn(),
   resetMailboxTtlForUser: vi.fn(),
+  updateMailboxTagsForUser: vi.fn(),
 }));
 
 vi.mock("../services/auth", () => ({
@@ -28,6 +30,10 @@ vi.mock("../services/auth", () => ({
         name: "Owner",
         role: "member",
       });
+      c.set("authContext", {
+        method: "web",
+        apiKey: null,
+      });
       await next();
     },
 }));
@@ -40,6 +46,7 @@ vi.mock("../services/mailboxes", () => ({
   listMailboxesForUser,
   resolveMailboxForUser,
   resetMailboxTtlForUser,
+  updateMailboxTagsForUser,
 }));
 
 import { mailboxRoutes } from "../routes/mailboxes";
@@ -113,6 +120,7 @@ describe("mailbox routes", () => {
       expect.objectContaining({ id: "usr_1" }),
       "workspace",
       undefined,
+      undefined,
     );
   });
 
@@ -130,6 +138,7 @@ describe("mailbox routes", () => {
       expect.objectContaining({ id: "usr_1" }),
       "default",
       ["expired", "destroying"],
+      undefined,
     );
   });
 
@@ -161,6 +170,7 @@ describe("mailbox routes", () => {
         subdomain: "alpha",
         expiresInMinutes: 60,
       }),
+      expect.objectContaining({ method: "web" }),
     );
   });
 
@@ -192,6 +202,7 @@ describe("mailbox routes", () => {
         mailDomain: "707979.xyz",
         rootDomain: "707979.xyz",
       }),
+      expect.objectContaining({ method: "web" }),
     );
   });
 
@@ -223,6 +234,7 @@ describe("mailbox routes", () => {
         subdomain: "alpha",
         expiresInMinutes: null,
       }),
+      expect.objectContaining({ method: "web" }),
     );
   });
 
@@ -280,6 +292,53 @@ describe("mailbox routes", () => {
         mailDomain: "707979.xyz",
         rootDomain: "707979.xyz",
       }),
+      expect.objectContaining({ method: "web" }),
+    );
+  });
+
+  it("passes tag filters to mailbox listing", async () => {
+    listMailboxesForUser.mockResolvedValue([activeMailbox]);
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/?tag=ci&tag=ops"),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(listMailboxesForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "default",
+      undefined,
+      ["ci", "ops"],
+    );
+  });
+
+  it("passes tag updates to the mailbox service", async () => {
+    updateMailboxTagsForUser.mockResolvedValue({
+      ...activeMailbox,
+      tags: ["ci", "ops"],
+    });
+
+    const response = await mailboxRoutes.fetch(
+      new Request("http://localhost/mbx_alpha/tags", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          tags: ["CI", "ops", "ci"],
+        }),
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateMailboxTagsForUser).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "usr_1" }),
+      "mbx_alpha",
+      { tags: ["ci", "ops"] },
     );
   });
 

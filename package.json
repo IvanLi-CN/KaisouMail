@@ -26,7 +26,7 @@
     "build": "bun run version:write && bun run --cwd apps/api-worker build && bun run --cwd apps/web build && bun run --cwd docs-site build",
     "build-storybook": "bun run version:write && bun run --cwd apps/web build-storybook",
     "build-docs-site": "bun run --cwd docs-site build",
-    "test:e2e": "bun run version:write && bun run --cwd apps/web test:e2e"
+    "test:e2e": "bun run --cwd apps/web playwright install --with-deps chromium && bun run version:write && bun run --cwd apps/web test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

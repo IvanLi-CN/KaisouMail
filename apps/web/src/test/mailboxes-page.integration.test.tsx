@@ -16,6 +16,7 @@ const mailboxesPageState: {
   createMailbox: ReturnType<typeof vi.fn>;
   ensureMailbox: ReturnType<typeof vi.fn>;
   destroyMailbox: ReturnType<typeof vi.fn>;
+  updateMailboxTags: ReturnType<typeof vi.fn>;
   refresh: ReturnType<typeof vi.fn>;
   refetchMeta: ReturnType<typeof vi.fn>;
 } = {
@@ -28,6 +29,7 @@ const mailboxesPageState: {
   createMailbox: vi.fn(),
   ensureMailbox: vi.fn(),
   destroyMailbox: vi.fn(),
+  updateMailboxTags: vi.fn(),
   refresh: vi.fn(),
   refetchMeta: vi.fn(),
 };
@@ -61,6 +63,10 @@ vi.mock("@/hooks/use-mailboxes", () => ({
   }),
   useDestroyMailboxMutation: () => ({
     mutate: mailboxesPageState.destroyMailbox,
+  }),
+  useUpdateMailboxTagsMutation: () => ({
+    isPending: false,
+    mutateAsync: mailboxesPageState.updateMailboxTags,
   }),
 }));
 
@@ -104,6 +110,7 @@ afterEach(() => {
   mailboxesPageState.createMailbox = vi.fn();
   mailboxesPageState.ensureMailbox = vi.fn();
   mailboxesPageState.destroyMailbox = vi.fn();
+  mailboxesPageState.updateMailboxTags = vi.fn();
   mailboxesPageState.refresh = vi.fn();
   mailboxesPageState.refetchMeta = vi.fn();
 });

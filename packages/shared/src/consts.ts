@@ -7,7 +7,14 @@ export const mailboxStatuses = [
 ] as const;
 export const expiredMailboxRetentionHours = 24;
 export const mailboxSources = ["registered", "catch_all"] as const;
+export const mailboxCreatedVia = [
+  "web",
+  "api_key",
+  "system",
+  "unknown",
+] as const;
 export const mailboxListScopes = ["default", "workspace"] as const;
+export const maxMailboxTags = 20;
 export const domainStatuses = [
   "active",
   "disabled",
@@ -37,6 +44,8 @@ export const mailboxLocalPartRegex = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export const mailboxSubdomainRegex =
   /^(?=.{1,190}$)[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)*$/;
+
+export const mailboxTagRegex = /^[a-z0-9_-]{1,32}$/;
 
 export const rootDomainRegex =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+$/;

@@ -78,6 +78,12 @@ const baseProps = {
     onSubmit: vi.fn(),
     supportsUnlimitedTtl: demoMeta.supportsUnlimitedMailboxTtl,
   },
+  updateMailboxTagsAction: {
+    error: null,
+    isPending: false,
+    onResetError: vi.fn(),
+    onSubmit: vi.fn(),
+  },
   highlightedMailboxId: null,
   visibleMailboxes: demoMailboxes,
   totalMailboxCount: demoMailboxes.length,
@@ -154,6 +160,35 @@ const getMailboxRowTriggerByAddress = (
 ) => within(container).getByRole("button", { name: address });
 
 describe("MailWorkspace", () => {
+  it("suggests mailbox tags from search without browser autofill", () => {
+    const onSearchQueryChange = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          onSearchQueryChange={onSearchQueryChange}
+        />
+      </MemoryRouter>,
+    );
+
+    const searchInput = screen.getByLabelText("搜索邮箱");
+    expect(searchInput).toHaveAttribute("autocomplete", "new-password");
+    expect(searchInput).toHaveAttribute(
+      "name",
+      "workspace-mailbox-query-token",
+    );
+
+    fireEvent.focus(searchInput);
+    fireEvent.click(screen.getByRole("option", { name: "按 Tag 搜索 ops" }));
+
+    expect(onSearchQueryChange).toHaveBeenCalledWith("ops");
+  });
+
   it("only closes the create popover via cancel or escape when idle", () => {
     const onCancel = vi.fn();
 
@@ -725,18 +760,72 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "设置邮箱过期时间" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置邮箱" }));
 
-    const popover = screen.getByRole("dialog", { name: "设置过期时间" });
+    const popover = screen.getByRole("dialog", { name: "邮箱设置" });
     expect(popover).toHaveTextContent("spec@ops.beta.mail.example.net");
+    expect(popover).toHaveTextContent("spec");
+    expect(popover).toHaveTextContent("ops");
     expect(within(popover).getByLabelText("生命周期值")).toHaveTextContent(
       "1 小时",
     );
 
     fireEvent.click(within(popover).getByRole("button", { name: "保存" }));
 
-    expect(onSubmit).toHaveBeenCalledWith(demoMailboxes[1], 60);
+    expect(onSubmit).not.toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it("updates selected mailbox tags from the workspace settings popover", async () => {
+    const onSubmitTags = vi.fn();
+    const catchAllMailbox = demoMailboxes[2];
+    if (!catchAllMailbox) throw new Error("expected catch-all mailbox fixture");
+
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          selectedMailboxId={catchAllMailbox.id}
+          selectedMailbox={catchAllMailbox}
+          messages={demoMessages.filter(
+            (message) => message.mailboxId === catchAllMailbox.id,
+          )}
+          selectedMessageId="msg_catch_all"
+          selectedMessage={demoMessageDetails.msg_catch_all}
+          updateMailboxTagsAction={{
+            ...baseProps.updateMailboxTagsAction,
+            onSubmit: onSubmitTags,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "设置邮箱" }));
+    const popover = screen.getByRole("dialog", { name: "邮箱设置" });
+
+    expect(
+      within(popover).queryByLabelText("生命周期值"),
+    ).not.toBeInTheDocument();
+    expect(popover).toHaveTextContent("Tags 仍可保存");
+
+    fireEvent.change(within(popover).getByLabelText("Tags"), {
+      target: { value: "ci" },
+    });
+    fireEvent.keyDown(within(popover).getByLabelText("Tags"), {
+      key: "Enter",
+    });
+    fireEvent.click(within(popover).getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(onSubmitTags).toHaveBeenCalledWith(catchAllMailbox, [
+        "auth",
+        "ci",
+      ]);
+    });
   });
 
   it("keeps edited TTL popover values across selected mailbox refetches", () => {
@@ -769,7 +858,7 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "设置邮箱过期时间" }));
+    fireEvent.click(screen.getByRole("button", { name: "设置邮箱" }));
     fireEvent.doubleClick(screen.getByLabelText("生命周期值"));
     fireEvent.change(screen.getByLabelText("生命周期值"), {
       target: { value: "36h" },
@@ -804,7 +893,7 @@ describe("MailWorkspace", () => {
       </MemoryRouter>,
     );
 
-    const popover = screen.getByRole("dialog", { name: "设置过期时间" });
+    const popover = screen.getByRole("dialog", { name: "邮箱设置" });
     expect(within(popover).getByLabelText("生命周期值")).toHaveTextContent(
       "1 天 12 小时",
     );
