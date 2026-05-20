@@ -208,6 +208,7 @@ export const demoApi = {
   async listMailboxes(options?: {
     scope?: MailboxListScope;
     status?: MailboxStatus | MailboxStatus[];
+    tags?: string[];
   }) {
     const visibleMailboxes =
       options?.scope === "workspace"
@@ -218,9 +219,15 @@ export const demoApi = {
           Array.isArray(options.status) ? options.status : [options.status],
         )
       : null;
+    const tagSet = new Set(options?.tags ?? []);
     return clone(
       [...visibleMailboxes]
         .filter((mailbox) => !statuses || statuses.has(mailbox.status))
+        .filter(
+          (mailbox) =>
+            tagSet.size === 0 ||
+            [...tagSet].every((tag) => mailbox.tags.includes(tag)),
+        )
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     );
   },
@@ -233,6 +240,7 @@ export const demoApi = {
     mailDomain?: string;
     rootDomain?: string;
     expiresInMinutes?: number | null;
+    tags?: string[];
   }) {
     const rootDomain = (
       input.mailDomain?.trim().toLowerCase() ??
@@ -272,6 +280,9 @@ export const demoApi = {
           : new Date(Date.now() + expiresInMinutes * 60_000).toISOString(),
       destroyedAt: null,
       source: "registered",
+      createdVia: "web",
+      createdByApiKey: null,
+      tags: input.tags ?? [],
       routingRuleId: randomId("rule"),
     };
     state.mailboxes.unshift(mailbox);
@@ -286,6 +297,7 @@ export const demoApi = {
           mailDomain?: string;
           rootDomain?: string;
           expiresInMinutes?: number | null;
+          tags?: string[];
         },
   ) {
     const address =
@@ -341,6 +353,7 @@ export const demoApi = {
       localPart,
       subdomain,
       rootDomain,
+      ...("tags" in input ? { tags: input.tags } : {}),
       expiresInMinutes:
         input.expiresInMinutes === undefined
           ? state.meta.defaultMailboxTtlMinutes
@@ -383,6 +396,12 @@ export const demoApi = {
       input.expiresInMinutes === null
         ? null
         : new Date(Date.now() + input.expiresInMinutes * 60_000).toISOString();
+    return clone(mailbox);
+  },
+  async updateMailboxTags(id: string, input: { tags: string[] }) {
+    const mailbox = state.mailboxes.find((entry) => entry.id === id);
+    if (!mailbox) throw new Error("Mailbox not found");
+    mailbox.tags = [...new Set(input.tags)];
     return clone(mailbox);
   },
   async listMessages(

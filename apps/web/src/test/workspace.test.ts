@@ -29,6 +29,12 @@ describe("workspace helpers", () => {
     expect(filtered[0]?.id).toBe("mbx_beta");
   });
 
+  it("filters mailboxes by tag text", () => {
+    const filtered = filterMailboxes(demoMailboxes, "build");
+
+    expect(filtered.map((mailbox) => mailbox.id)).toEqual(["mbx_alpha"]);
+  });
+
   it("builds stable workspace query strings", () => {
     expect(
       buildWorkspaceSearch({

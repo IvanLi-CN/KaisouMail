@@ -4,9 +4,11 @@ import {
   generatedMailboxMaxAttempts,
   generateRealisticMailboxLocalPart,
   generateRealisticMailboxSubdomain,
+  type mailboxCreatedVia,
   type mailboxListScopes,
   mailboxSchema,
   type mailboxStatuses,
+  mailboxTagsSchema,
   mergeMailboxExpiryByExtension,
   resolveMailboxExpiresAtFromMinutes,
 } from "@kaisoumail/shared";
@@ -23,6 +25,7 @@ import {
 
 import { getDb } from "../db/client";
 import {
+  apiKeys,
   domains,
   mailboxes,
   messageAttachments,
@@ -47,7 +50,7 @@ import {
 } from "../lib/email";
 import { ApiError } from "../lib/errors";
 import { logOperationalEvent } from "../lib/observability";
-import type { AuthUser } from "../types";
+import type { AuthContext, AuthUser } from "../types";
 import { ensureMailboxSubdomainOnboardedForWildcardDns } from "./cloudflare-mailbox-dns";
 import {
   type DomainRow,
@@ -67,7 +70,17 @@ import {
 
 type MailboxRow = typeof mailboxes.$inferSelect;
 type MailboxLookupRow = MailboxRow;
-type MailboxRowWithRootDomain = MailboxRow & { rootDomain: string };
+type MailboxCreatedVia = (typeof mailboxCreatedVia)[number];
+type MailboxCreatedByApiKey = {
+  id: string;
+  name: string;
+  prefix: string;
+} | null;
+type MailboxRowWithRootDomain = MailboxRow & {
+  rootDomain: string;
+  createdByApiKey: MailboxCreatedByApiKey;
+};
+type MailboxTagsByMailboxId = Map<string, string[]>;
 type MailboxListScope = (typeof mailboxListScopes)[number];
 type MailboxStatus = (typeof mailboxStatuses)[number];
 type SubdomainProvisionMetadata = {
@@ -207,6 +220,173 @@ const toMailboxStorageExpiresAt = (expiresAt: string | null | undefined) => {
   return expiresAt === null ? longTermMailboxExpirySentinel : expiresAt;
 };
 
+const parseMailboxTags = (tagsJson: string | null | undefined) => {
+  if (!tagsJson) return [];
+  try {
+    return mailboxTagsSchema.parse(JSON.parse(tagsJson));
+  } catch {
+    return [];
+  }
+};
+
+const serializeMailboxTags = (tags: string[] | undefined) =>
+  JSON.stringify(mailboxTagsSchema.parse(tags ?? []));
+
+const normalizeMailboxTags = (tags: string[] | undefined) =>
+  mailboxTagsSchema.parse(tags ?? []);
+
+const canUseRawD1 = (
+  env: WorkerEnv,
+): env is WorkerEnv & {
+  DB: {
+    prepare: (query: string) => {
+      bind: (...values: unknown[]) => {
+        run?: () => Promise<unknown>;
+        all?: <T = unknown>() => Promise<{ results?: T[] }>;
+      };
+    };
+  };
+} =>
+  Boolean(
+    (env as { DB?: { prepare?: unknown } }).DB &&
+      typeof (env as { DB?: { prepare?: unknown } }).DB?.prepare === "function",
+  );
+
+const syncMailboxTagTables = async (
+  env: WorkerEnv,
+  input: {
+    mailboxId: string;
+    userId: string;
+    tags: string[];
+    now?: string;
+  },
+) => {
+  if (!canUseRawD1(env)) return;
+
+  const timestamp = input.now ?? nowIso();
+  const deleteStatement = env.DB.prepare(
+    "DELETE FROM mailbox_tags WHERE mailbox_id = ?",
+  ).bind(input.mailboxId);
+  if (typeof deleteStatement.run !== "function") return;
+
+  await deleteStatement.run();
+
+  for (const tag of input.tags) {
+    const tagId = randomId("tag");
+    const upsertTagStatement = env.DB.prepare(
+      `INSERT INTO tags (id, user_id, name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, name) DO UPDATE SET updated_at = excluded.updated_at`,
+    ).bind(tagId, input.userId, tag, timestamp, timestamp);
+    if (typeof upsertTagStatement.run !== "function") return;
+    await upsertTagStatement.run();
+
+    const linkStatement = env.DB.prepare(
+      `INSERT OR IGNORE INTO mailbox_tags (mailbox_id, tag_id, created_at)
+       SELECT ?, id, ?
+       FROM tags
+       WHERE user_id = ? AND name = ?`,
+    ).bind(input.mailboxId, timestamp, input.userId, tag);
+    if (typeof linkStatement.run !== "function") return;
+    await linkStatement.run();
+  }
+};
+
+const loadMailboxTagsFromTables = async (
+  env: WorkerEnv,
+  mailboxIds: string[],
+): Promise<MailboxTagsByMailboxId | null> => {
+  if (!canUseRawD1(env) || mailboxIds.length === 0) return null;
+
+  const tagsByMailboxId: MailboxTagsByMailboxId = new Map(
+    mailboxIds.map((mailboxId) => [mailboxId, []]),
+  );
+
+  try {
+    for (const mailboxIdChunk of chunkD1InValues(mailboxIds)) {
+      const placeholders = mailboxIdChunk.map(() => "?").join(",");
+      const statement = env.DB.prepare(
+        `SELECT mailbox_tags.mailbox_id AS mailboxId, tags.name AS tag
+         FROM mailbox_tags
+         INNER JOIN tags ON tags.id = mailbox_tags.tag_id
+         WHERE mailbox_tags.mailbox_id IN (${placeholders})
+         ORDER BY mailbox_tags.created_at ASC, tags.name ASC`,
+      ).bind(...mailboxIdChunk);
+      if (typeof statement.all !== "function") return null;
+      const result = await statement.all<{ mailboxId: string; tag: string }>();
+
+      for (const row of result.results ?? []) {
+        const mailboxTags = tagsByMailboxId.get(row.mailboxId);
+        if (!mailboxTags) continue;
+        mailboxTags.push(row.tag);
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return tagsByMailboxId;
+};
+
+const listMailboxIdsMatchingTags = async (
+  env: WorkerEnv,
+  mailboxIds: string[],
+  tags: string[],
+) => {
+  if (!canUseRawD1(env) || mailboxIds.length === 0 || tags.length === 0) {
+    return null;
+  }
+
+  const matchingMailboxIds = new Set<string>();
+
+  try {
+    for (const mailboxIdChunk of chunkD1InValues(mailboxIds)) {
+      const mailboxPlaceholders = mailboxIdChunk.map(() => "?").join(",");
+      const tagPlaceholders = tags.map(() => "?").join(",");
+      const statement = env.DB.prepare(
+        `SELECT mailbox_tags.mailbox_id AS mailboxId
+         FROM mailbox_tags
+         INNER JOIN tags ON tags.id = mailbox_tags.tag_id
+         WHERE mailbox_tags.mailbox_id IN (${mailboxPlaceholders})
+           AND tags.name IN (${tagPlaceholders})
+         GROUP BY mailbox_tags.mailbox_id
+         HAVING COUNT(DISTINCT tags.name) = ?`,
+      ).bind(...mailboxIdChunk, ...tags, tags.length);
+      if (typeof statement.all !== "function") return null;
+      const result = await statement.all<{ mailboxId: string }>();
+
+      for (const row of result.results ?? []) {
+        matchingMailboxIds.add(row.mailboxId);
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return matchingMailboxIds;
+};
+
+const resolveCreationAttribution = (authContext?: AuthContext) => {
+  if (authContext?.method === "api_key") {
+    return {
+      createdVia: "api_key" satisfies MailboxCreatedVia,
+      createdByApiKeyId: authContext.apiKey.id,
+    };
+  }
+
+  if (authContext?.method === "web") {
+    return {
+      createdVia: "web" satisfies MailboxCreatedVia,
+      createdByApiKeyId: null,
+    };
+  }
+
+  return {
+    createdVia: "unknown" satisfies MailboxCreatedVia,
+    createdByApiKeyId: null,
+  };
+};
+
 const getFallbackRootDomain = (row: MailboxRow) => {
   const extracted = extractRootDomainFromAddress(row.address, row.subdomain);
   if (extracted) return extracted;
@@ -219,6 +399,7 @@ const getFallbackRootDomain = (row: MailboxRow) => {
 const toMailboxDto = (
   row: MailboxRowWithRootDomain,
   lastReceivedAt: string | null = null,
+  tagsByMailboxId?: MailboxTagsByMailboxId | null,
 ) =>
   mailboxSchema.parse({
     id: row.id,
@@ -229,6 +410,10 @@ const toMailboxDto = (
     rootDomain: row.rootDomain,
     address: row.address,
     source: row.source,
+    createdVia: row.createdVia ?? "unknown",
+    createdByApiKey: row.createdByApiKey,
+    tags:
+      tagsByMailboxId?.get(row.id) ?? parseMailboxTags(row.tagsJson ?? "[]"),
     status: row.status,
     createdAt: row.createdAt,
     lastReceivedAt,
@@ -256,6 +441,7 @@ export const listScopedMailboxRowsForUser = async (
   user: AuthUser,
   scope: MailboxListScope = "default",
   statuses?: MailboxStatus[],
+  tags?: string[],
 ) => {
   await expireDueMailboxes(env);
   const rows = await listMailboxRowsForUser(env, user);
@@ -263,10 +449,33 @@ export const listScopedMailboxRowsForUser = async (
     scope === "workspace"
       ? filterMailboxesForWorkspaceScope(rows, nowIso())
       : rows;
-  if (!statuses || statuses.length === 0) return scopedRows;
+  const normalizedTags = normalizeMailboxTags(tags);
+  const tagSet = new Set(normalizedTags);
+  const tagFilteredRows =
+    tagSet.size === 0
+      ? scopedRows
+      : await (async () => {
+          const matchingMailboxIds = await listMailboxIdsMatchingTags(
+            env,
+            scopedRows.map((row) => row.id),
+            normalizedTags,
+          );
+          if (matchingMailboxIds) {
+            return scopedRows.filter((row) => matchingMailboxIds.has(row.id));
+          }
+
+          return scopedRows.filter((row) => {
+            const mailboxTags = new Set(parseMailboxTags(row.tagsJson ?? "[]"));
+            return [...tagSet].every((tag) => mailboxTags.has(tag));
+          });
+        })();
+
+  if (!statuses || statuses.length === 0) return tagFilteredRows;
 
   const statusSet = new Set(statuses);
-  return scopedRows.filter((row) => statusSet.has(row.status as MailboxStatus));
+  return tagFilteredRows.filter((row) =>
+    statusSet.has(row.status as MailboxStatus),
+  );
 };
 
 export const classifyMailboxAddressState = (
@@ -427,6 +636,9 @@ const insertMailboxIfDomainStillActive = async (
     subdomain: string;
     address: string;
     source: string;
+    createdVia: string;
+    createdByApiKeyId: string | null;
+    tagsJson: string;
     routingRuleId: string | null;
     status: string;
     createdAt: string;
@@ -439,9 +651,10 @@ const insertMailboxIfDomainStillActive = async (
   const result = await env.DB.prepare(
     `INSERT INTO mailboxes (
       id, user_id, domain_id, local_part, subdomain, address,
-      source, routing_rule_id, status, created_at, expires_at, destroyed_at
+      source, created_via, created_by_api_key_id, tags_json,
+      routing_rule_id, status, created_at, expires_at, destroyed_at
     )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE EXISTS (
       SELECT 1
       FROM domains
@@ -459,6 +672,9 @@ const insertMailboxIfDomainStillActive = async (
       created.subdomain,
       created.address,
       created.source,
+      created.createdVia,
+      created.createdByApiKeyId,
+      created.tagsJson,
       created.routingRuleId,
       created.status,
       created.createdAt,
@@ -566,7 +782,7 @@ const markMailboxCleanupBackoff = async (
 
 export const resolveRequestedMailboxAddress = (
   input:
-    | { address: string; expiresInMinutes?: number | null }
+    | { address: string; expiresInMinutes?: number | null; tags?: string[] }
     | {
         localPart: string;
         subdomain: string;
@@ -824,6 +1040,14 @@ const attachRootDomains = async (
     ),
   ];
   const domainMap = new Map<string, string>();
+  const apiKeyIds = [
+    ...new Set(
+      rows
+        .map((row) => row.createdByApiKeyId)
+        .filter((keyId): keyId is string => Boolean(keyId)),
+    ),
+  ];
+  const apiKeyMap = new Map<string, NonNullable<MailboxCreatedByApiKey>>();
 
   if (domainIds.length > 0) {
     for (const domainIdChunk of chunkD1InValues(domainIds)) {
@@ -841,11 +1065,31 @@ const attachRootDomains = async (
     }
   }
 
+  if (apiKeyIds.length > 0) {
+    for (const apiKeyIdChunk of chunkD1InValues(apiKeyIds)) {
+      const keyRows = await db
+        .select({
+          id: apiKeys.id,
+          name: apiKeys.name,
+          prefix: apiKeys.prefix,
+        })
+        .from(apiKeys)
+        .where(inArray(apiKeys.id, apiKeyIdChunk));
+
+      for (const keyRow of keyRows) {
+        apiKeyMap.set(keyRow.id, keyRow);
+      }
+    }
+  }
+
   return rows.map((row) => ({
     ...row,
     rootDomain:
       (row.domainId ? domainMap.get(row.domainId) : null) ??
       getFallbackRootDomain(row),
+    createdByApiKey: row.createdByApiKeyId
+      ? (apiKeyMap.get(row.createdByApiKeyId) ?? null)
+      : null,
   }));
 };
 
@@ -854,6 +1098,10 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
 
   const db = getDb(env);
   const hydratedRows = await attachRootDomains(env, rows);
+  const tagsByMailboxId = await loadMailboxTagsFromTables(
+    env,
+    hydratedRows.map((row) => row.id),
+  );
   const recentMap = new Map<string, string | null>(
     hydratedRows.map((row) => [row.id, null]),
   );
@@ -880,7 +1128,7 @@ const attachLastReceivedAt = async (env: WorkerEnv, rows: MailboxRow[]) => {
   }
 
   return hydratedRows.map((row) =>
-    toMailboxDto(row, recentMap.get(row.id) ?? null),
+    toMailboxDto(row, recentMap.get(row.id) ?? null, tagsByMailboxId),
   );
 };
 
@@ -889,8 +1137,15 @@ export const listMailboxesForUser = async (
   user: AuthUser,
   scope: MailboxListScope = "default",
   statuses?: MailboxStatus[],
+  tags?: string[],
 ) => {
-  const rows = await listScopedMailboxRowsForUser(env, user, scope, statuses);
+  const rows = await listScopedMailboxRowsForUser(
+    env,
+    user,
+    scope,
+    statuses,
+    tags,
+  );
   return attachLastReceivedAt(env, rows);
 };
 
@@ -913,6 +1168,7 @@ export const getMailboxForUser = async (
   }
 
   const [hydrated] = await attachRootDomains(env, [row]);
+  const tagsByMailboxId = await loadMailboxTagsFromTables(env, [row.id]);
   const recentRows =
     row.status === "destroying"
       ? []
@@ -923,7 +1179,11 @@ export const getMailboxForUser = async (
           .orderBy(desc(messages.receivedAt))
           .limit(1);
 
-  return toMailboxDto(hydrated, recentRows[0]?.receivedAt ?? null);
+  return toMailboxDto(
+    hydrated,
+    recentRows[0]?.receivedAt ?? null,
+    tagsByMailboxId,
+  );
 };
 
 export const createMailboxForUser = async (
@@ -935,7 +1195,9 @@ export const createMailboxForUser = async (
     subdomain?: string;
     rootDomain?: string;
     expiresInMinutes?: number | null;
+    tags?: string[];
   },
+  authContext?: AuthContext,
 ) => {
   const db = getDb(env);
   const domain = input.rootDomain
@@ -1057,6 +1319,8 @@ export const createMailboxForUser = async (
       expiresInMinutes === null
         ? longTermMailboxExpirySentinel
         : new Date(Date.now() + expiresInMinutes * 60_000).toISOString();
+    const attribution = resolveCreationAttribution(authContext);
+    const normalizedTags = normalizeMailboxTags(input.tags);
 
     const created = {
       id: randomId("mbx"),
@@ -1066,6 +1330,9 @@ export const createMailboxForUser = async (
       subdomain,
       address: mailboxAddress.address,
       source: "registered",
+      createdVia: attribution.createdVia,
+      createdByApiKeyId: attribution.createdByApiKeyId,
+      tagsJson: serializeMailboxTags(normalizedTags),
       routingRuleId: null,
       status: "destroying",
       createdAt: now,
@@ -1085,6 +1352,12 @@ export const createMailboxForUser = async (
         domain.rootDomain,
       );
       mailboxInserted = true;
+      await syncMailboxTagTables(env, {
+        mailboxId: created.id,
+        userId: created.userId,
+        tags: normalizedTags,
+        now,
+      });
 
       await upsertSubdomainUsage(
         env,
@@ -1121,6 +1394,8 @@ export const createMailboxForUser = async (
           status: "active",
           routingRuleId,
           rootDomain: domain.rootDomain,
+          createdByApiKey:
+            authContext?.method === "api_key" ? authContext.apiKey : null,
         },
         null,
       );
@@ -1198,7 +1473,9 @@ export const ensureMailboxForUser = async (
         subdomain: string;
         rootDomain?: string;
         expiresInMinutes?: number | null;
+        tags?: string[];
       },
+  authContext?: AuthContext,
 ) => {
   await expireDueMailboxes(env);
   const activeRootDomains = await listActiveRootDomains(env);
@@ -1243,12 +1520,19 @@ export const ensureMailboxForUser = async (
     throw new ApiError(409, "Mailbox already exists");
   }
 
-  const mailbox = await createMailboxForUser(env, config, user, {
-    localPart: mailboxAddress.localPart,
-    subdomain: mailboxAddress.subdomain,
-    rootDomain: mailboxAddress.rootDomain,
-    expiresInMinutes,
-  });
+  const mailbox = await createMailboxForUser(
+    env,
+    config,
+    user,
+    {
+      localPart: mailboxAddress.localPart,
+      subdomain: mailboxAddress.subdomain,
+      rootDomain: mailboxAddress.rootDomain,
+      expiresInMinutes,
+      ...("tags" in input ? { tags: input.tags } : {}),
+    },
+    authContext,
+  );
 
   return {
     mailbox,
@@ -1323,6 +1607,42 @@ export const resetMailboxTtlForUser = async (
   return updatedMailbox;
 };
 
+export const updateMailboxTagsForUser = async (
+  env: WorkerEnv,
+  user: AuthUser,
+  mailboxId: string,
+  input: { tags: string[] },
+) => {
+  await expireDueMailboxes(env);
+  const db = getDb(env);
+  const rows = await db
+    .select()
+    .from(mailboxes)
+    .where(eq(mailboxes.id, mailboxId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new ApiError(404, "Mailbox not found");
+  if (!isVisibleMailbox(row, user)) {
+    throw new ApiError(403, "Forbidden");
+  }
+
+  const normalizedTags = normalizeMailboxTags(input.tags);
+  const tagsJson = serializeMailboxTags(normalizedTags);
+  await db.update(mailboxes).set({ tagsJson }).where(eq(mailboxes.id, row.id));
+  await syncMailboxTagTables(env, {
+    mailboxId: row.id,
+    userId: row.userId,
+    tags: normalizedTags,
+  });
+  const [updatedMailbox] = await attachLastReceivedAt(env, [
+    {
+      ...row,
+      tagsJson,
+    },
+  ]);
+  return updatedMailbox;
+};
+
 export const ensureCatchAllMailboxForAddress = async (
   env: WorkerEnv,
   domain: DomainRow,
@@ -1354,6 +1674,9 @@ export const ensureCatchAllMailboxForAddress = async (
     subdomain: parsed.subdomain,
     address: parsed.address,
     source: "catch_all",
+    createdVia: "system",
+    createdByApiKeyId: null,
+    tagsJson: serializeMailboxTags(undefined),
     routingRuleId: null,
     status: "active",
     createdAt: nowIso(),
@@ -1365,9 +1688,10 @@ export const ensureCatchAllMailboxForAddress = async (
     const result = await env.DB.prepare(
       `INSERT INTO mailboxes (
         id, user_id, domain_id, local_part, subdomain, address,
-        source, routing_rule_id, status, created_at, expires_at, destroyed_at
+        source, created_via, created_by_api_key_id, tags_json,
+        routing_rule_id, status, created_at, expires_at, destroyed_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE EXISTS (
         SELECT 1
         FROM domains
@@ -1386,6 +1710,9 @@ export const ensureCatchAllMailboxForAddress = async (
         created.subdomain,
         created.address,
         created.source,
+        created.createdVia,
+        created.createdByApiKeyId,
+        created.tagsJson,
         created.routingRuleId,
         created.status,
         created.createdAt,
@@ -1429,8 +1756,13 @@ export const destroyMailbox = async (
   }
 
   const rootDomain = getFallbackRootDomain(mailbox);
+  const dtoBase = {
+    ...mailbox,
+    rootDomain,
+    createdByApiKey: null,
+  };
   if (mailbox.status === "destroyed") {
-    return toMailboxDto({ ...mailbox, rootDomain }, null);
+    return toMailboxDto(dtoBase, null);
   }
 
   await db
@@ -1498,11 +1830,10 @@ export const destroyMailbox = async (
 
     return toMailboxDto(
       {
-        ...mailbox,
+        ...dtoBase,
         status: "destroyed",
         destroyedAt,
         routingRuleId: null,
-        rootDomain,
       },
       null,
     );

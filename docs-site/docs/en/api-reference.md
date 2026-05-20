@@ -36,11 +36,16 @@ This page lists the implemented endpoints and their purpose. For request and res
 
 ## Mailboxes
 
-Mailbox records follow `mailboxSchema`; the two catch-all-related fields are:
+Mailbox records follow `mailboxSchema`; notable mailbox metadata fields are:
 
 - `source`: `registered | catch_all`
 - `routingRuleId`: typically present for registered mailboxes, always `null`
   for auto-materialized catch-all mailboxes
+- `createdVia`: `web | api_key | system | unknown`
+- `createdByApiKey`: `{ id, name, prefix }` when a Bearer API key created
+  the mailbox, otherwise `null`
+- `tags`: normalized lowercase tag strings; pass repeated `tag` query
+  parameters to require all listed tags
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -49,6 +54,7 @@ Mailbox records follow `mailboxSchema`; the two catch-all-related fields are:
 | `POST /api/mailboxes/ensure` | idempotently ensure a mailbox exists |
 | `GET /api/mailboxes/resolve` | resolve a mailbox by address |
 | `GET /api/mailboxes/:id` | read a mailbox |
+| `PATCH /api/mailboxes/:id/tags` | replace mailbox tags |
 | `DELETE /api/mailboxes/:id` | delete a mailbox |
 
 ## Messages

@@ -19,6 +19,7 @@ import {
   useEnsureMailboxMutation,
   useMailboxesQuery,
   useResetMailboxTtlMutation,
+  useUpdateMailboxTagsMutation,
 } from "@/hooks/use-mailboxes";
 import {
   messageKeys,
@@ -144,6 +145,9 @@ export const WorkspacePage = () => {
   const [updateMailboxTtlError, setUpdateMailboxTtlError] = useState<
     string | null
   >(null);
+  const [updateMailboxTagsError, setUpdateMailboxTagsError] = useState<
+    string | null
+  >(null);
   const [highlightedMailboxId, setHighlightedMailboxId] = useState<
     string | null
   >(null);
@@ -162,6 +166,7 @@ export const WorkspacePage = () => {
   const destroyMailboxMutation = useDestroyMailboxMutation();
   const ensureMailboxMutation = useEnsureMailboxMutation();
   const resetMailboxTtlMutation = useResetMailboxTtlMutation();
+  const updateMailboxTagsMutation = useUpdateMailboxTagsMutation();
   const hasMailboxesData = mailboxesQuery.data !== undefined;
   const hasExpiredMailboxesData = expiredMailboxesQuery.data !== undefined;
   const mailboxView = searchParams.get("view") === "trash" ? "trash" : "active";
@@ -623,6 +628,45 @@ export const WorkspacePage = () => {
     setUpdateMailboxTtlError(null);
   }, []);
 
+  const handleUpdateMailboxTags = useCallback(
+    async (mailbox: Mailbox, tags: string[]) => {
+      setUpdateMailboxTagsError(null);
+
+      try {
+        const nextMailbox = await updateMailboxTagsMutation.mutateAsync({
+          mailboxId: mailbox.id,
+          tags,
+        });
+        updateSearchParams((draft) => {
+          draft.set("mailbox", nextMailbox.id);
+          if (!isMailboxSortMode(draft.get("sort"))) {
+            draft.set("sort", resolvedSortMode);
+          }
+          if (nextMailbox.status === "expired") {
+            draft.set("view", "trash");
+          } else if (!isTrashView) {
+            draft.delete("view");
+          }
+        });
+      } catch (error) {
+        setUpdateMailboxTagsError(
+          error instanceof Error ? error.message : "更新 Tags 失败",
+        );
+        throw error;
+      }
+    },
+    [
+      isTrashView,
+      resolvedSortMode,
+      updateMailboxTagsMutation,
+      updateSearchParams,
+    ],
+  );
+
+  const clearUpdateMailboxTagsError = useCallback(() => {
+    setUpdateMailboxTagsError(null);
+  }, []);
+
   const workspaceMetaError =
     metaQuery.error instanceof Error && !hasMetaData
       ? metaQuery.error.message
@@ -714,6 +758,12 @@ export const WorkspacePage = () => {
           supportsUnlimitedTtl:
             metaQuery.data?.supportsUnlimitedMailboxTtl ?? false,
         }}
+        updateMailboxTagsAction={{
+          error: updateMailboxTagsError,
+          isPending: updateMailboxTagsMutation.isPending,
+          onResetError: clearUpdateMailboxTagsError,
+          onSubmit: handleUpdateMailboxTags,
+        }}
         highlightedMailboxId={highlightedMailboxId}
         mailboxPrompt={
           mailboxPrompt
@@ -739,6 +789,7 @@ export const WorkspacePage = () => {
         messagesError={messagesPaneError}
         messageError={messagePaneError}
         visibleMailboxes={visibleMailboxes}
+        tagSuggestionMailboxes={mailboxesWithLiveRecency}
         totalMailboxCount={activeMailboxCount}
         trashMailboxCount={expiredMailboxCount}
         mailboxView={mailboxView}

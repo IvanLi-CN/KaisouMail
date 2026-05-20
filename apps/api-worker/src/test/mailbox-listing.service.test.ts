@@ -127,6 +127,55 @@ describe("mailbox listing helpers", () => {
     expect(listed.map((mailbox) => mailbox.id)).toEqual(["mbx_001"]);
   });
 
+  it("filters mailboxes by all requested tags", async () => {
+    const rows = [
+      buildMailbox(0, { tagsJson: JSON.stringify(["ci", "ops"]) }),
+      buildMailbox(1, { tagsJson: JSON.stringify(["ci"]) }),
+      buildMailbox(2, { tagsJson: JSON.stringify(["ops", "smoke"]) }),
+    ];
+    const db = {
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(async () => undefined),
+        })),
+      })),
+      select: vi.fn(() => ({
+        from: vi.fn((table: unknown) => {
+          if (table === mailboxes) {
+            return {
+              orderBy: vi.fn(async () => rows),
+              where: vi.fn(() => ({
+                orderBy: vi.fn(async () => rows),
+                limit: vi.fn(async () => rows),
+              })),
+            };
+          }
+
+          if (table === messages) {
+            return {
+              where: vi.fn(() => ({
+                orderBy: vi.fn(async () => []),
+              })),
+            };
+          }
+
+          throw new Error("Unexpected table");
+        }),
+      })),
+    };
+    getDb.mockReturnValue(db);
+
+    const listed = await listMailboxesForUser(
+      {} as never,
+      adminUser,
+      "default",
+      undefined,
+      ["ci", "ops"],
+    );
+
+    expect(listed.map((mailbox) => mailbox.id)).toEqual(["mbx_000"]);
+  });
+
   it("loads mailbox recency in batches of 50 ids", async () => {
     const rows = Array.from({ length: 70 }, (_, index) => buildMailbox(index));
     const recentOrderBy = vi

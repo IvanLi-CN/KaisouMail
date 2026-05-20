@@ -216,6 +216,9 @@ export const demoMailboxes: Mailbox[] = [
     expiresAt: "2026-04-01T10:05:00.000Z",
     destroyedAt: null,
     source: "registered",
+    createdVia: "web",
+    createdByApiKey: null,
+    tags: ["ci", "build"],
     routingRuleId: "rule_alpha",
   },
   {
@@ -232,6 +235,13 @@ export const demoMailboxes: Mailbox[] = [
     expiresAt: "2026-04-01T09:15:00.000Z",
     destroyedAt: null,
     source: "registered",
+    createdVia: "api_key",
+    createdByApiKey: {
+      id: "key_deploy",
+      name: "Deploy Bot",
+      prefix: "cfm_deploy9x",
+    },
+    tags: ["spec", "ops"],
     routingRuleId: "rule_beta",
   },
   {
@@ -248,6 +258,9 @@ export const demoMailboxes: Mailbox[] = [
     expiresAt: null,
     destroyedAt: null,
     source: "catch_all",
+    createdVia: "system",
+    createdByApiKey: null,
+    tags: ["auth"],
     routingRuleId: null,
   },
   {
@@ -264,6 +277,9 @@ export const demoMailboxes: Mailbox[] = [
     expiresAt: "2026-04-01T08:00:00.000Z",
     destroyedAt: "2026-04-01T08:01:00.000Z",
     source: "registered",
+    createdVia: "unknown",
+    createdByApiKey: null,
+    tags: [],
     routingRuleId: null,
   },
 ];

@@ -61,6 +61,31 @@ describe("MailboxList", () => {
     expect(screen.queryByText(/已清理/)).not.toBeInTheDocument();
   });
 
+  it("shows creation provenance and tags", () => {
+    render(
+      <MemoryRouter>
+        <MailboxList
+          mailboxes={[
+            {
+              ...demoMailboxes[1],
+              createdVia: "api_key",
+              createdByApiKey: {
+                id: "key_deploy",
+                name: "Deploy Bot",
+                prefix: "cfm_deploy9x",
+              },
+              tags: ["ci", "ops"],
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Deploy Bot")).toBeInTheDocument();
+    expect(screen.getByText("ci")).toBeInTheDocument();
+    expect(screen.getByText("ops")).toBeInTheDocument();
+  });
+
   it("keeps destroy available for mailboxes that are still destroying", () => {
     render(
       <MemoryRouter>

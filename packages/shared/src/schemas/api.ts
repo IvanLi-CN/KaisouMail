@@ -5,6 +5,8 @@ import {
   mailboxLocalPartRegex,
   mailboxStatuses,
   mailboxSubdomainRegex,
+  mailboxTagRegex,
+  maxMailboxTags,
   maxMailboxTtlMinutes,
   minMailboxTtlMinutes,
   rootDomainRegex,
@@ -48,6 +50,11 @@ export const createApiKeyResponseSchema = z.object({
   apiKeyRecord: apiKeySchema,
 });
 
+export const mailboxTagsInputSchema = z
+  .array(z.string().trim().toLowerCase().regex(mailboxTagRegex))
+  .max(maxMailboxTags)
+  .transform((tags) => [...new Set(tags)]);
+
 export const createPasskeyRequestSchema = z.object({
   name: z.string().trim().min(1).max(64),
 });
@@ -55,6 +62,7 @@ export const createPasskeyRequestSchema = z.object({
 export const createMailboxRequestSchema = withMailDomainAliases({
   localPart: z.string().regex(mailboxLocalPartRegex).optional(),
   subdomain: z.string().regex(mailboxSubdomainRegex).optional(),
+  tags: mailboxTagsInputSchema.optional(),
   expiresInMinutes: z
     .number()
     .int()
@@ -75,6 +83,7 @@ export const ensureMailboxRequestSchema = z.union([
         .max(maxMailboxTtlMinutes)
         .nullable()
         .optional(),
+      tags: mailboxTagsInputSchema.optional(),
     })
     .strict(),
   withMailDomainAliases(
@@ -88,6 +97,7 @@ export const ensureMailboxRequestSchema = z.union([
         .max(maxMailboxTtlMinutes)
         .nullable()
         .optional(),
+      tags: mailboxTagsInputSchema.optional(),
     },
     { strict: true },
   ),
@@ -104,6 +114,12 @@ export const resetMailboxTtlRequestSchema = z
   })
   .strict();
 
+export const updateMailboxTagsRequestSchema = z
+  .object({
+    tags: mailboxTagsInputSchema,
+  })
+  .strict();
+
 export const resolveMailboxQuerySchema = z.object({
   address: z.string().email(),
 });
@@ -116,6 +132,12 @@ export const listMailboxesQuerySchema = z.object({
   scope: listQueryScopeSchema.optional(),
   status: z
     .union([listMailboxStatusSchema, z.array(listMailboxStatusSchema)])
+    .optional(),
+  tag: z
+    .union([
+      z.string().trim().toLowerCase().regex(mailboxTagRegex),
+      z.array(z.string().trim().toLowerCase().regex(mailboxTagRegex)),
+    ])
     .optional(),
 });
 

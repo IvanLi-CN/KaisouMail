@@ -7,6 +7,7 @@ import {
   mailboxSchema,
   resetMailboxTtlRequestSchema,
   resolveMailboxQuerySchema,
+  updateMailboxTagsRequestSchema,
 } from "@kaisoumail/shared";
 import { Hono } from "hono";
 
@@ -21,6 +22,7 @@ import {
   listMailboxesForUser,
   resetMailboxTtlForUser,
   resolveMailboxForUser,
+  updateMailboxTagsForUser,
 } from "../services/mailboxes";
 import type { AppBindings } from "../types";
 
@@ -43,6 +45,11 @@ export const mailboxRoutes = new Hono<AppBindings>()
                 ? query.status
                 : [query.status]
               : undefined,
+            query.tag
+              ? Array.isArray(query.tag)
+                ? query.tag
+                : [query.tag]
+              : undefined,
           ),
         }),
       );
@@ -55,6 +62,7 @@ export const mailboxRoutes = new Hono<AppBindings>()
       parseRuntimeConfig(c.env),
       user,
       c.req.valid("json"),
+      c.get("authContext"),
     );
     return c.json(mailboxSchema.parse(mailbox), 201);
   })
@@ -68,6 +76,7 @@ export const mailboxRoutes = new Hono<AppBindings>()
         parseRuntimeConfig(c.env),
         user,
         c.req.valid("json"),
+        c.get("authContext"),
       );
       return c.json(
         mailboxSchema.parse(ensured.mailbox),
@@ -100,6 +109,21 @@ export const mailboxRoutes = new Hono<AppBindings>()
       c.json(
         mailboxSchema.parse(
           await resetMailboxTtlForUser(
+            c.env,
+            c.get("authUser"),
+            c.req.param("id"),
+            c.req.valid("json"),
+          ),
+        ),
+      ),
+  )
+  .patch(
+    "/:id/tags",
+    zValidator("json", updateMailboxTagsRequestSchema, apiValidationHook),
+    async (c) =>
+      c.json(
+        mailboxSchema.parse(
+          await updateMailboxTagsForUser(
             c.env,
             c.get("authUser"),
             c.req.param("id"),

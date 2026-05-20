@@ -24,6 +24,7 @@ import {
   passkeySchema,
   resetMailboxTtlRequestSchema,
   sessionResponseSchema,
+  updateMailboxTagsRequestSchema,
   versionResponseSchema,
 } from "@kaisoumail/shared";
 import type {
@@ -254,6 +255,7 @@ export const apiClient = {
   async listMailboxes(options?: {
     scope?: MailboxListScope;
     status?: MailboxStatus | MailboxStatus[];
+    tags?: string[];
   }) {
     if (DEMO_MODE) return demoApi.listMailboxes(options);
     const params = new URLSearchParams();
@@ -264,6 +266,7 @@ export const apiClient = {
         : [options.status];
       for (const status of statuses) params.append("status", status);
     }
+    for (const tag of options?.tags ?? []) params.append("tag", tag);
     const payload = await requestJson(
       `/api/mailboxes${params.size > 0 ? `?${params.toString()}` : ""}`,
       { method: "GET" },
@@ -283,6 +286,7 @@ export const apiClient = {
     mailDomain?: string;
     rootDomain?: string;
     expiresInMinutes?: number | null;
+    tags?: string[];
   }) {
     const payload = toCanonicalMailDomainPayload(
       createMailboxRequestSchema.parse(input),
@@ -303,6 +307,7 @@ export const apiClient = {
           mailDomain?: string;
           rootDomain?: string;
           expiresInMinutes?: number | null;
+          tags?: string[];
         },
   ) {
     const parsedPayload = ensureMailboxRequestSchema.parse(input);
@@ -340,6 +345,15 @@ export const apiClient = {
     if (DEMO_MODE) return demoApi.resetMailboxTtl(id, payload);
     return requestJson(
       `/api/mailboxes/${id}/ttl`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      (value) => mailboxSchema.parse(value),
+    );
+  },
+  async updateMailboxTags(id: string, input: { tags: string[] }) {
+    const payload = updateMailboxTagsRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.updateMailboxTags(id, payload);
+    return requestJson(
+      `/api/mailboxes/${id}/tags`,
       { method: "PATCH", body: JSON.stringify(payload) },
       (value) => mailboxSchema.parse(value),
     );

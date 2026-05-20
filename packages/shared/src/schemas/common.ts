@@ -6,8 +6,11 @@ import {
   domainCatalogAvailabilities,
   domainProjectStatuses,
   domainStatuses,
+  mailboxCreatedVia,
   mailboxSources,
   mailboxStatuses,
+  mailboxTagRegex,
+  maxMailboxTags,
   recipientKinds,
   subdomainDnsModes,
   userRoles,
@@ -18,6 +21,16 @@ export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
 export const mailboxSourceSchema = z.enum(mailboxSources);
+export const mailboxCreatedViaSchema = z.enum(mailboxCreatedVia);
+export const mailboxTagSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(mailboxTagRegex);
+export const mailboxTagsSchema = z
+  .array(mailboxTagSchema)
+  .max(maxMailboxTags)
+  .transform((tags) => [...new Set(tags)]);
 export const domainStatusSchema = z.enum(domainStatuses);
 export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
 export const domainBindingSourceSchema = z.enum(domainBindingSources);
@@ -87,6 +100,12 @@ export const apiKeySchema = z.object({
   revokedAt: isoDateSchema.nullable(),
 });
 
+export const mailboxCreatedByApiKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+});
+
 export const passkeySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -107,6 +126,9 @@ export const mailboxSchema = withMailDomainAliases(
     subdomain: z.string(),
     address: z.string().email(),
     source: mailboxSourceSchema,
+    createdVia: mailboxCreatedViaSchema.default("unknown"),
+    createdByApiKey: mailboxCreatedByApiKeySchema.nullable().default(null),
+    tags: mailboxTagsSchema.default([]),
     status: mailboxStatusSchema,
     createdAt: isoDateSchema,
     lastReceivedAt: isoDateSchema.nullable(),

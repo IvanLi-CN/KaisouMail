@@ -19,12 +19,14 @@ export const MailboxCreateCard = ({
   isMetaLoading = false,
   metaError = null,
   submitError = null,
+  tagSuggestions = [],
 }: {
   onSubmit: (values: {
     localPart?: string;
     subdomain?: string;
     rootDomain?: string;
     expiresInMinutes: number | null;
+    tags?: string[];
   }) => Promise<void> | void;
   isPending?: boolean;
   domains?: string[];
@@ -35,6 +37,7 @@ export const MailboxCreateCard = ({
   isMetaLoading?: boolean;
   metaError?: string | null;
   submitError?: string | null;
+  tagSuggestions?: string[];
 }) => {
   const statusDescription = metaError ? (
     <span className="text-destructive">邮箱规则加载失败：{metaError}</span>
@@ -60,6 +63,7 @@ export const MailboxCreateCard = ({
           minTtlMinutes={minTtlMinutes}
           supportsUnlimitedTtl={supportsUnlimitedTtl}
           submitError={submitError}
+          tagSuggestions={tagSuggestions}
           ttlDensity="compact"
           onSubmit={onSubmit}
         />

@@ -6,8 +6,23 @@ import type { RuntimeConfig, WorkerEnv } from "./env";
 
 export type AuthUser = z.infer<typeof sessionUserSchema>;
 
+export type AuthContext =
+  | {
+      method: "api_key";
+      apiKey: {
+        id: string;
+        name: string;
+        prefix: string;
+      };
+    }
+  | {
+      method: "web";
+      apiKey: null;
+    };
+
 export interface AppVariables {
   authUser: AuthUser;
+  authContext: AuthContext;
   runtimeConfig: RuntimeConfig;
   requestId: string;
 }

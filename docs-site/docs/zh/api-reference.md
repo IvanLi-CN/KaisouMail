@@ -36,10 +36,13 @@
 
 ## Mailboxes
 
-邮箱记录由 `mailboxSchema` 定义；当前特别关注两个字段：
+邮箱记录由 `mailboxSchema` 定义；当前特别关注这些元数据字段：
 
 - `source`: `registered | catch_all`
 - `routingRuleId`: 预注册邮箱通常有值；Catch All 自动物化邮箱固定为 `null`
+- `createdVia`: `web | api_key | system | unknown`
+- `createdByApiKey`: 当邮箱由 Bearer API key 创建时返回 `{ id, name, prefix }`，否则为 `null`
+- `tags`: 规范化后的小写 tag；`GET /api/mailboxes` 可重复传 `tag`，只返回包含全部 tag 的邮箱
 
 | 接口 | 用途 |
 | --- | --- |
@@ -48,6 +51,7 @@
 | `POST /api/mailboxes/ensure` | 幂等确保邮箱存在 |
 | `GET /api/mailboxes/resolve` | 按地址解析邮箱 |
 | `GET /api/mailboxes/:id` | 读取单个邮箱 |
+| `PATCH /api/mailboxes/:id/tags` | 替换邮箱 tags |
 | `DELETE /api/mailboxes/:id` | 删除邮箱 |
 
 ## Messages

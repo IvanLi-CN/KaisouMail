@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -199,6 +200,14 @@ export const mailboxes = sqliteTable(
     subdomain: text("subdomain").notNull(),
     address: text("address").notNull(),
     source: text("source").notNull().default("registered"),
+    createdVia: text("created_via").notNull().default("unknown"),
+    createdByApiKeyId: text("created_by_api_key_id").references(
+      () => apiKeys.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    tagsJson: text("tags_json").notNull().default("[]"),
     routingRuleId: text("routing_rule_id"),
     status: text("status").notNull(),
     createdAt: text("created_at").notNull(),
@@ -212,6 +221,7 @@ export const mailboxes = sqliteTable(
       .on(table.address)
       .where(sql`${table.status} != 'destroyed'`),
     index("mailboxes_user_idx").on(table.userId),
+    index("mailboxes_created_by_api_key_idx").on(table.createdByApiKeyId),
     index("mailboxes_domain_idx").on(table.domainId, table.status),
     index("mailboxes_domain_subdomain_status_idx").on(
       table.domainId,
@@ -224,6 +234,41 @@ export const mailboxes = sqliteTable(
       table.cleanupNextAttemptAt,
       table.createdAt,
     ),
+  ],
+);
+
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("tags_user_name_unique").on(table.userId, table.name),
+    index("tags_user_idx").on(table.userId, table.name),
+  ],
+);
+
+export const mailboxTags = sqliteTable(
+  "mailbox_tags",
+  {
+    mailboxId: text("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.mailboxId, table.tagId] }),
+    index("mailbox_tags_tag_idx").on(table.tagId, table.mailboxId),
+    index("mailbox_tags_mailbox_idx").on(table.mailboxId),
   ],
 );
 

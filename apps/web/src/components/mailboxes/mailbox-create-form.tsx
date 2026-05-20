@@ -23,6 +23,7 @@ import {
   type MailboxCreatePreviewState,
   RANDOM_ROOT_DOMAIN_OPTION_LABEL,
 } from "@/components/mailboxes/mailbox-create-preview";
+import { MailboxTagsInput } from "@/components/mailboxes/mailbox-tags-input";
 import { MailboxTtlControl } from "@/components/mailboxes/mailbox-ttl-control";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,10 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  formatMailboxTagsInput,
+  parseMailboxTagInput,
+} from "@/lib/mailbox-tags";
 import {
   formatMailboxTtl,
   parseMailboxTtlInputWithOptions,
@@ -58,6 +63,7 @@ type CreateMailboxValues = {
   rootDomain: string;
   address: string;
   expiresInMinutes: number | null;
+  tags: string;
 };
 
 type SegmentFieldName = "localPart" | "subdomain";
@@ -139,6 +145,7 @@ export const MailboxCreateForm = ({
   isMetaLoading = false,
   submitError = null,
   autoFocusFirstField = false,
+  tagSuggestions = [],
   className,
   onPreviewChange,
   ttlDensity = "comfortable",
@@ -148,6 +155,7 @@ export const MailboxCreateForm = ({
     subdomain?: string;
     rootDomain?: string;
     expiresInMinutes: number | null;
+    tags?: string[];
   }) => Promise<void> | void;
   onCancel?: () => void;
   isPending?: boolean;
@@ -159,6 +167,7 @@ export const MailboxCreateForm = ({
   isMetaLoading?: boolean;
   submitError?: string | null;
   autoFocusFirstField?: boolean;
+  tagSuggestions?: string[];
   className?: string;
   onPreviewChange?: (preview: MailboxCreatePreviewState) => void;
   ttlDensity?: "comfortable" | "compact";
@@ -188,6 +197,7 @@ export const MailboxCreateForm = ({
       rootDomain: "",
       address: "",
       expiresInMinutes: defaultTtlMinutes,
+      tags: "",
     },
   });
 
@@ -493,6 +503,8 @@ export const MailboxCreateForm = ({
         }
 
         const resolvedExpiresInMinutes = ttlResult.value;
+        const parsedTags = parseMailboxTagInput(values.tags);
+        const tagsPayload = parsedTags.length > 0 ? { tags: parsedTags } : {};
         if (resolvedExpiresInMinutes !== values.expiresInMinutes) {
           form.setValue("expiresInMinutes", resolvedExpiresInMinutes, {
             shouldDirty: true,
@@ -531,6 +543,7 @@ export const MailboxCreateForm = ({
             subdomain: parsed.subdomain,
             rootDomain: parsed.rootDomain,
             expiresInMinutes: resolvedExpiresInMinutes,
+            ...tagsPayload,
           });
         }
 
@@ -589,6 +602,7 @@ export const MailboxCreateForm = ({
           ...(normalizedSubdomain ? { subdomain: normalizedSubdomain } : {}),
           ...(normalizedRootDomain ? { rootDomain: normalizedRootDomain } : {}),
           expiresInMinutes: resolvedExpiresInMinutes,
+          ...tagsPayload,
         });
       })}
     >
@@ -811,6 +825,23 @@ export const MailboxCreateForm = ({
               {segmentedErrorMessage}
             </p>
           ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="mailbox-tags">Tags</Label>
+          <MailboxTagsInput
+            id="mailbox-tags"
+            disabled={isPending}
+            suggestions={tagSuggestions}
+            value={parseMailboxTagInput(form.watch("tags"))}
+            onChange={(tags) => {
+              form.setValue("tags", formatMailboxTagsInput(tags), {
+                shouldDirty: true,
+                shouldTouch: true,
+                shouldValidate: true,
+              });
+            }}
+          />
         </div>
 
         <div className="space-y-2">

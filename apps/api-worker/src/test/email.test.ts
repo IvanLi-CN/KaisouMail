@@ -102,6 +102,16 @@ describe("email helpers", () => {
     });
   });
 
+  it("normalizes and deduplicates mailbox creation tags", () => {
+    expect(
+      createMailboxRequestSchema.parse({
+        tags: ["CI", "ops", "ci"],
+      }),
+    ).toEqual({
+      tags: ["ci", "ops"],
+    });
+  });
+
   it("rejects malformed dotted subdomains", () => {
     expect(() =>
       createMailboxRequestSchema.parse({
