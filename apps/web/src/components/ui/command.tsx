@@ -1,6 +1,10 @@
 import { Command as CommandPrimitive } from "cmdk";
 import * as React from "react";
 
+import {
+  applyNoAutofillAttributes,
+  noAutofillAttributes,
+} from "@/lib/no-autofill";
 import { cn } from "@/lib/utils";
 
 export const Command = React.forwardRef<
@@ -20,16 +24,21 @@ Command.displayName = CommandPrimitive.displayName;
 
 export const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
-  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, autoComplete, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+    allowAutoFill?: boolean;
+  }
+>(({ allowAutoFill = false, className, autoComplete, ...props }, ref) => {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const autofillProps = allowAutoFill
+    ? { autoComplete }
+    : noAutofillAttributes(autoComplete);
 
   React.useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
 
   React.useEffect(() => {
-    if (!inputRef.current || !autoComplete) return;
-    inputRef.current.setAttribute("autocomplete", autoComplete);
-  }, [autoComplete]);
+    if (!inputRef.current || allowAutoFill) return;
+    applyNoAutofillAttributes(inputRef.current, autoComplete);
+  }, [allowAutoFill, autoComplete]);
 
   return (
     <div
@@ -38,7 +47,7 @@ export const CommandInput = React.forwardRef<
     >
       <CommandPrimitive.Input
         ref={inputRef}
-        autoComplete={autoComplete}
+        {...autofillProps}
         className={cn(
           "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className,

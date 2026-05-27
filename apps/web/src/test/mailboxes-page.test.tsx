@@ -95,11 +95,14 @@ describe("mailboxes page view", () => {
     fireEvent.click(screen.getByLabelText("按 Tag 筛选"));
 
     const searchInput = screen.getByLabelText("搜索 Tag");
-    expect(searchInput).toHaveAttribute("autocomplete", "new-password");
+    expect(searchInput).toHaveAttribute("autocomplete", "off");
     expect(searchInput).toHaveAttribute(
       "name",
       "mailbox-tag-filter-search-token",
     );
+    expect(searchInput).toHaveAttribute("data-1p-ignore", "true");
+    expect(searchInput).toHaveAttribute("data-bwignore", "true");
+    expect(searchInput).toHaveAttribute("data-lpignore", "true");
 
     fireEvent.change(searchInput, { target: { value: "op" } });
     fireEvent.click(screen.getByRole("option", { name: "筛选 Tag ops" }));
