@@ -9,7 +9,13 @@ describe("LoginCard", () => {
 
     render(<LoginCard onSubmit={onSubmit} passkeySupported />);
 
-    fireEvent.change(screen.getByLabelText("API Key"), {
+    const apiKeyInput = screen.getByLabelText("API Key");
+    expect(apiKeyInput).toHaveAttribute("autocomplete", "off");
+    expect(apiKeyInput).toHaveAttribute("data-1p-ignore", "true");
+    expect(apiKeyInput).toHaveAttribute("data-bwignore", "true");
+    expect(apiKeyInput).toHaveAttribute("data-lpignore", "true");
+
+    fireEvent.change(apiKeyInput, {
       target: { value: "cfm_demo_secret_123456" },
     });
     fireEvent.click(screen.getByRole("button", { name: "登录控制台" }));

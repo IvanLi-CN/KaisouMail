@@ -834,7 +834,6 @@ export const MailWorkspace = ({
                         aria-autocomplete="list"
                         aria-controls="workspace-mailbox-search-suggestions"
                         aria-expanded={showSearchTagSuggestions}
-                        autoComplete="new-password"
                         className="pl-9"
                         id="workspace-mailbox-search"
                         name="workspace-mailbox-query-token"

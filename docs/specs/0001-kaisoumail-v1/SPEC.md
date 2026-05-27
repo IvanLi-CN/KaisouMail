@@ -155,6 +155,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Mailbox management rows show creation provenance and tag badges; the management header exposes a tag filter, and tag inputs provide existing-tag autocomplete while still accepting custom tags.
 - Workspace mailbox rail rows use a two-line dense layout: the first line holds address + copy affordance + count, while the second line carries Catch All / expiry / destroyed metadata plus the inline verification-code action
 - Workspace selected-mailbox header places mailbox settings in the right-side action slot next to the copied address title; the dialog allows tag edits for visible mailboxes and keeps the same logarithmic TTL control for active registered mailboxes, seeded from the current remaining lifetime so operators can see and adjust the existing expiry before saving
+- Web console text inputs disable browser and password-manager autofill by default, including mailbox tag/search controls and API key fallback login, while retaining an explicit opt-in path for future fields that should use browser autofill.
 - Destroyed mailboxes stay in the same two-line dense rhythm as active rows instead of collapsing back to a single-line variant
 - Table-first detail and management pages remain available as compatibility surfaces
 - Cool gray embedded HTML mail preview surface to reduce glare while preserving message fidelity
@@ -162,6 +163,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 ## Change log
 
 - 2026-05-18: Added mailbox creation provenance and tags, including API key attribution, create/ensure tag input, tag replacement, list filtering by repeated `tag`, normalized tag tables, and mailbox-management UI badges/filter/editing.
+- 2026-05-28: Disabled default browser/password-manager autofill hints across Web console inputs, covering mailbox tag/search controls and API key fallback login while keeping an explicit opt-in escape hatch for future fields.
 - 2026-05-08: Added row-scoped retry feedback on provisioning-error domains so retry immediately spins, active recovery shows a temporary success check, and still-pending or failed attempts open a direct popover with the Cloudflare reason and NS next step.
 - 2026-05-10: Removed the explicit DNS rollback path from failed wildcard Catch All enable tasks so wildcard ensure failures surface directly instead of masking the primary error with subdomain rollback failures.
 - 2026-05-10: Changed wildcard cutover exact-host purge to delete matched DNS records by id so stale Email Routing MX/TXT records can be removed even when Cloudflare no longer has a corresponding Email Routing subdomain object.
@@ -272,6 +274,8 @@ PR: include
 ![Workspace selected mailbox header with TTL settings popover initialized from the current remaining lifetime](./assets/workspace-mailbox-ttl-popover.png)
 
 ![Workspace mailbox settings popover supports editing tags while preserving TTL rules](./assets/workspace-mailbox-settings-tags.png)
+
+![Workspace mailbox settings popover with Tags input carrying no-autofill attributes](./assets/workspace-settings-no-autofill.png)
 
 ![Workspace mailbox rail rows keep copy buttons visible while long addresses truncate](./assets/workspace-mailbox-list-copy-button.png)
 

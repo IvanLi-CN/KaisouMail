@@ -1513,7 +1513,12 @@ export const SelectedMailboxTtlPopover: Story = {
     await expect(popover).toHaveTextContent(
       existingMailboxConflictStoryMailbox.address,
     );
-    await expect(within(popover).getByLabelText("Tags")).toBeInTheDocument();
+    const tagsInput = within(popover).getByLabelText("Tags");
+    await expect(tagsInput).toBeInTheDocument();
+    await expect(tagsInput).toHaveAttribute("autocomplete", "off");
+    await expect(tagsInput).toHaveAttribute("data-1p-ignore", "true");
+    await expect(tagsInput).toHaveAttribute("data-bwignore", "true");
+    await expect(tagsInput).toHaveAttribute("data-lpignore", "true");
     await expect(
       within(popover).getByLabelText("生命周期值"),
     ).not.toHaveTextContent("1 小时");

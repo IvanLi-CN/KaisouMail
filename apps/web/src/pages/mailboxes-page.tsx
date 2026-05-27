@@ -182,7 +182,6 @@ const TagFilterSelect = ({
         <Command shouldFilter={false}>
           <CommandInput
             aria-label="搜索 Tag"
-            autoComplete="new-password"
             name="mailbox-tag-filter-search-token"
             placeholder="搜索 Tag"
             spellCheck={false}

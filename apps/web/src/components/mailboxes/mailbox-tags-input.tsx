@@ -19,6 +19,7 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { parseMailboxTagInput } from "@/lib/mailbox-tags";
+import { noAutofillAttributes } from "@/lib/no-autofill";
 import { cn } from "@/lib/utils";
 
 type MailboxTagsInputProps = {
@@ -146,11 +147,11 @@ export const MailboxTagsInput = ({
             aria-controls={id ? `${id}-suggestions` : undefined}
             aria-expanded={showSuggestions}
             aria-label={ariaLabel}
-            autoComplete="new-password"
             className="min-w-[8rem] flex-1 bg-transparent px-1 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
             disabled={disabled}
             id={id}
             name={id ? `${id}-tag-token` : "mailbox-tag-token"}
+            {...noAutofillAttributes()}
             placeholder={normalizedTags.length > 0 ? "" : placeholder}
             role="combobox"
             spellCheck={false}

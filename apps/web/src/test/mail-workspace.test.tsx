@@ -177,11 +177,14 @@ describe("MailWorkspace", () => {
     );
 
     const searchInput = screen.getByLabelText("搜索邮箱");
-    expect(searchInput).toHaveAttribute("autocomplete", "new-password");
+    expect(searchInput).toHaveAttribute("autocomplete", "off");
     expect(searchInput).toHaveAttribute(
       "name",
       "workspace-mailbox-query-token",
     );
+    expect(searchInput).toHaveAttribute("data-1p-ignore", "true");
+    expect(searchInput).toHaveAttribute("data-bwignore", "true");
+    expect(searchInput).toHaveAttribute("data-lpignore", "true");
 
     fireEvent.focus(searchInput);
     fireEvent.click(screen.getByRole("option", { name: "按 Tag 搜索 ops" }));
@@ -812,10 +815,16 @@ describe("MailWorkspace", () => {
     ).not.toBeInTheDocument();
     expect(popover).toHaveTextContent("Tags 仍可保存");
 
-    fireEvent.change(within(popover).getByLabelText("Tags"), {
+    const tagsInput = within(popover).getByLabelText("Tags");
+    expect(tagsInput).toHaveAttribute("autocomplete", "off");
+    expect(tagsInput).toHaveAttribute("data-1p-ignore", "true");
+    expect(tagsInput).toHaveAttribute("data-bwignore", "true");
+    expect(tagsInput).toHaveAttribute("data-lpignore", "true");
+
+    fireEvent.change(tagsInput, {
       target: { value: "ci" },
     });
-    fireEvent.keyDown(within(popover).getByLabelText("Tags"), {
+    fireEvent.keyDown(tagsInput, {
       key: "Enter",
     });
     fireEvent.click(within(popover).getByRole("button", { name: "保存" }));
