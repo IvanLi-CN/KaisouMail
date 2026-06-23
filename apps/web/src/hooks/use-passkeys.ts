@@ -1,3 +1,4 @@
+import { startRegistration } from "@simplewebauthn/browser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -63,6 +64,27 @@ export const usePasskeyLoginMutation = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => signInWithPasskey(),
+    onSuccess: (session) => {
+      queryClient.setQueryData(sessionKeys.all, session);
+    },
+  });
+};
+
+export const usePasskeyInviteRegistrationMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      inviteCode: string;
+      nickname: string;
+      passkeyName: string;
+    }) => {
+      const options =
+        await apiClient.createPasskeyInviteRegistrationOptions(input);
+      const response = await startRegistration({
+        optionsJSON: options,
+      });
+      return apiClient.verifyPasskeyInviteRegistration(response);
+    },
     onSuccess: (session) => {
       queryClient.setQueryData(sessionKeys.all, session);
     },

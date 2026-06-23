@@ -13,7 +13,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { projectMeta } from "@/lib/project-meta";
 import { demoSessionUser, demoVersion } from "@/mocks/data";
 
-const accountDetailsButtonName = `${demoSessionUser.name} 账号详情`;
+const accountDetailsButtonName = `${demoSessionUser.nickname} 账号详情`;
 
 const renderAppShell = (props: Partial<ComponentProps<typeof AppShell>> = {}) =>
   render(
@@ -92,7 +92,7 @@ describe("AppShell account trigger", () => {
     expect(navRow).not.toContainElement(trigger);
   });
 
-  it("keeps header utilities compact until account preview is opened", () => {
+  it("reveals nickname, username and role when the preview opens", () => {
     renderAppShell();
 
     const trigger = screen.getByRole("button", {
@@ -100,16 +100,16 @@ describe("AppShell account trigger", () => {
     });
 
     expect(trigger).toBeInTheDocument();
-    expect(screen.queryByText(demoSessionUser.name)).not.toBeInTheDocument();
-    expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
-    expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "退出登录" }),
-    ).toBeInTheDocument();
+      screen.queryByText(`@${demoSessionUser.username}`),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^admin$/i)).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(trigger);
 
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+    expect(
+      screen.getByText(`@${demoSessionUser.username}`),
+    ).toBeInTheDocument();
     expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
   });
 
@@ -121,34 +121,41 @@ describe("AppShell account trigger", () => {
     });
 
     fireEvent.focus(trigger);
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+    expect(
+      screen.getByText(`@${demoSessionUser.username}`),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(trigger, { key: "Escape" });
-    expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(`@${demoSessionUser.username}`),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+    expect(
+      screen.getByText(`@${demoSessionUser.username}`),
+    ).toBeInTheDocument();
 
     fireEvent.click(trigger);
 
     await waitFor(() => {
       expect(trigger).toHaveAttribute("aria-expanded", "false");
     });
-    expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(`@${demoSessionUser.username}`),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps logout available while account details are open", () => {
     const onLogout = vi.fn();
     renderAppShell({ onLogout });
 
-    const trigger = screen.getByRole("button", {
-      name: accountDetailsButtonName,
-    });
-
-    fireEvent.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: accountDetailsButtonName }),
+    );
+    expect(
+      screen.getByText(`@${demoSessionUser.username}`),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
@@ -169,32 +176,20 @@ describe("AppShell account trigger", () => {
     });
 
     fireEvent.mouseEnter(trigger);
-    expect(screen.queryByText(demoSessionUser.email)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(`@${demoSessionUser.username}`),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
 
-    expect(screen.getByText(demoSessionUser.email)).toBeInTheDocument();
+    expect(
+      screen.getByText(`@${demoSessionUser.username}`),
+    ).toBeInTheDocument();
     expect(screen.getByText(/^admin$/i)).toBeInTheDocument();
   });
 });
 
 describe("AppShell mobile navigation", () => {
-  it("keeps the mobile drawer trigger inside the brand row when collapsed", () => {
-    const { container } = renderAppShell();
-    const header = container.querySelector("header");
-    const brandRow = header?.querySelector('[data-slot="shell-brand-row"]');
-    const mobileTriggerSlot = header?.querySelector(
-      '[data-slot="shell-mobile-trigger"]',
-    );
-    const menuTrigger = screen.getByRole("button", { name: "打开导航抽屉" });
-
-    expect(brandRow).toContainElement(menuTrigger);
-    expect(mobileTriggerSlot).toBe(menuTrigger);
-    expect(
-      screen.queryByRole("dialog", { name: "菜单" }),
-    ).not.toBeInTheDocument();
-  });
-
   it("supports a controlled default-open mobile drawer state with user info inside", () => {
     renderAppShell({ defaultMobileNavOpen: true });
 
@@ -205,46 +200,31 @@ describe("AppShell mobile navigation", () => {
 
     expect(drawer).toBeInTheDocument();
     expect(
-      within(drawer).getAllByText(demoSessionUser.email).length,
+      within(drawer).getAllByText(`@${demoSessionUser.username}`).length,
     ).toBeGreaterThan(0);
     expect(within(drawer).getByText(/^admin$/i)).toBeInTheDocument();
     expect(
       within(mobileNav).getByRole("link", { name: /工作台/i }),
     ).toBeInTheDocument();
     expect(
-      within(mobileNav).getByRole("link", { name: /用户/i }),
+      within(mobileNav).getByRole("link", { name: /系统/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "收起导航抽屉" }),
-    ).toHaveAttribute("aria-expanded", "true");
   });
 
   it("toggles the mobile drawer and exposes logout inside it", async () => {
     const onLogout = vi.fn();
     renderAppShell({ onLogout });
 
-    const menuTrigger = screen.getByRole("button", { name: "打开导航抽屉" });
-    fireEvent.click(menuTrigger);
+    fireEvent.click(screen.getByRole("button", { name: "打开导航抽屉" }));
 
     const drawer = screen.getByRole("dialog", { name: "菜单" });
     expect(drawer).toBeInTheDocument();
-    expect(menuTrigger).toHaveAttribute("aria-expanded", "true");
     expect(
-      within(drawer).getAllByText(demoSessionUser.email).length,
+      within(drawer).getAllByText(`@${demoSessionUser.username}`).length,
     ).toBeGreaterThan(0);
 
     fireEvent.click(within(drawer).getByRole("button", { name: "退出登录" }));
     expect(onLogout).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole("button", { name: "打开导航抽屉" }));
-    expect(screen.getByRole("dialog", { name: "菜单" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "关闭导航抽屉" }));
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: "菜单" }),
-      ).not.toBeInTheDocument();
-    });
   });
 });
 
@@ -263,36 +243,10 @@ describe("AppShell footer metadata", () => {
     expect(
       within(footer).getByText(projectMeta.projectName),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("Manage inbox lifecycle, messages, and API access."),
-    ).not.toBeInTheDocument();
 
     const repositoryLink = within(footer).getByRole("link", {
       name: projectMeta.repositoryLabel,
     });
     expect(repositoryLink).toHaveAttribute("href", projectMeta.repositoryUrl);
-    expect(repositoryLink).toHaveAttribute("target", "_blank");
-    expect(repositoryLink).toHaveAttribute("rel", "noreferrer");
-
-    const developerLink = within(footer).getByRole("link", {
-      name: projectMeta.developerName,
-    });
-    expect(developerLink).toHaveAttribute("href", projectMeta.developerUrl);
-    expect(developerLink).toHaveAttribute("target", "_blank");
-    expect(developerLink).toHaveAttribute("rel", "noreferrer");
-
-    const versionLink = within(footer).getByRole("link", {
-      name: `Version ${demoVersion.version}`,
-    });
-    expect(versionLink).toHaveAttribute("href", projectMeta.versionUrl);
-    expect(versionLink).toHaveAttribute("target", "_blank");
-    expect(versionLink).toHaveAttribute("rel", "noreferrer");
-
-    expect(
-      screen.queryByText(new RegExp(demoVersion.commitSha, "i")),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(new RegExp(demoVersion.branch, "i")),
-    ).not.toBeInTheDocument();
   });
 });

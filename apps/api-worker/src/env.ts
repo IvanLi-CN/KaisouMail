@@ -60,9 +60,14 @@ const runtimeConfigSchema = z.object({
   CLOUDFLARE_ZONE_ID: z.string().optional(),
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_RUNTIME_API_TOKEN: z.string().optional(),
-  BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
-  BOOTSTRAP_ADMIN_NAME: z.string().default("Owner"),
-  BOOTSTRAP_ADMIN_API_KEY: z.string().min(16).optional(),
+  BOOTSTRAP_ADMIN_INVITE_CODE: z.string().min(8).optional(),
+  BOOTSTRAP_ADMIN_NAME: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_OAUTH_SCOPES: z.string().default("read:user"),
+  LINUXDO_CLIENT_ID: z.string().optional(),
+  LINUXDO_CLIENT_SECRET: z.string().optional(),
+  LINUXDO_OAUTH_BASE_URL: z.string().url().optional(),
   SESSION_SECRET: z.string().min(16),
   CF_ROUTE_RULESET_TAG: z.string().default("kaisoumail"),
   WEB_APP_ORIGIN: z.string().url().optional(),
@@ -91,9 +96,14 @@ export interface WorkerEnv {
   CLOUDFLARE_ZONE_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_RUNTIME_API_TOKEN?: string;
-  BOOTSTRAP_ADMIN_EMAIL?: string;
+  BOOTSTRAP_ADMIN_INVITE_CODE?: string;
   BOOTSTRAP_ADMIN_NAME?: string;
-  BOOTSTRAP_ADMIN_API_KEY?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  GITHUB_OAUTH_SCOPES?: string;
+  LINUXDO_CLIENT_ID?: string;
+  LINUXDO_CLIENT_SECRET?: string;
+  LINUXDO_OAUTH_BASE_URL?: string;
   SESSION_SECRET: string;
   CF_ROUTE_RULESET_TAG?: string;
   WEB_APP_ORIGIN?: string;
@@ -112,6 +122,8 @@ export interface RuntimeConfig
     | "WORKERS_AI_MODEL"
     | "WILDCARD_SUBDOMAIN_DNS_ENABLED"
     | "WILDCARD_SUBDOMAIN_DNS_ALLOWLIST"
+    | "GITHUB_OAUTH_SCOPES"
+    | "LINUXDO_OAUTH_BASE_URL"
   > {
   SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE?: number;
   MAILBOX_CLEANUP_AUTOREPAIR_MIN_AGE_MINUTES?: number;
@@ -121,6 +133,8 @@ export interface RuntimeConfig
   WORKERS_AI_MODEL?: string;
   WILDCARD_SUBDOMAIN_DNS_ENABLED?: boolean;
   WILDCARD_SUBDOMAIN_DNS_ALLOWLIST?: string[];
+  GITHUB_OAUTH_SCOPES?: string[];
+  LINUXDO_OAUTH_BASE_URL?: string;
 }
 
 export type RuntimeConfigParseResult =
@@ -201,6 +215,11 @@ const normalizeRuntimeConfig = (
     WILDCARD_SUBDOMAIN_DNS_ALLOWLIST: parseConfiguredRootDomains(
       config.WILDCARD_SUBDOMAIN_DNS_ALLOWLIST,
     ),
+    GITHUB_OAUTH_SCOPES: config.GITHUB_OAUTH_SCOPES.split(/[,\s]+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean),
+    LINUXDO_OAUTH_BASE_URL:
+      config.LINUXDO_OAUTH_BASE_URL ?? "https://connect.linux.do",
     WEB_APP_ORIGIN: webAppOrigins[0],
     WEB_APP_ORIGINS: webAppOrigins,
   };

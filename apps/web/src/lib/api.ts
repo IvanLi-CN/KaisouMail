@@ -1,11 +1,20 @@
 import {
+  accountResponseSchema,
+  adminTransferApiKeyReauthRequestSchema,
+  adminTransferPasskeyReauthRequestSchema,
+  adminTransferVerificationResponseSchema,
   apiErrorSchema,
   apiMetaResponseSchema,
+  authProvidersResponseSchema,
   bindDomainRequestSchema,
+  completeExternalRegistrationRequestSchema,
+  completePasskeyRegistrationRequestSchema,
+  createAdminTransferIntentResponseSchema,
   createApiKeyResponseSchema,
   createDomainRequestSchema,
+  createInviteRequestSchema,
+  createInviteResponseSchema,
   createMailboxRequestSchema,
-  createUserResponseSchema,
   domainCutoverTaskAcceptedResponseSchema,
   domainCutoverTaskResponseSchema,
   domainSchema,
@@ -13,6 +22,8 @@ import {
   listApiKeysResponseSchema,
   listDomainCatalogResponseSchema,
   listDomainsResponseSchema,
+  listExternalAccountsResponseSchema,
+  listInvitesResponseSchema,
   listMailboxesResponseSchema,
   listMessagesResponseSchema,
   listPasskeysResponseSchema,
@@ -21,10 +32,19 @@ import {
   mailboxSchema,
   type mailboxStatuses,
   messageDetailResponseSchema,
+  passkeyInviteRegistrationOptionsRequestSchema,
   passkeySchema,
+  pendingRegistrationQuerySchema,
+  pendingRegistrationResponseSchema,
+  registrationSettingsResponseSchema,
   resetMailboxTtlRequestSchema,
   sessionResponseSchema,
+  startPasskeyRegistrationRequestSchema,
+  startProviderRegistrationRequestSchema,
+  startProviderRegistrationResponseSchema,
+  updateAccountRequestSchema,
   updateMailboxTagsRequestSchema,
+  updateRegistrationSettingsRequestSchema,
   versionResponseSchema,
 } from "@kaisoumail/shared";
 import type {
@@ -231,6 +251,182 @@ export const apiClient = {
       (value) => sessionResponseSchema.parse(value),
     );
   },
+  async createAdminTransferIntent(userId: string) {
+    if (DEMO_MODE) return demoApi.createAdminTransferIntent(userId);
+    return requestJson(
+      `/api/admin/users/${userId}/transfer-admin/intent`,
+      { method: "POST" },
+      (value) => createAdminTransferIntentResponseSchema.parse(value),
+    );
+  },
+  async createAdminTransferPasskeyOptions(userId: string, intentToken: string) {
+    const payload = adminTransferPasskeyReauthRequestSchema.parse({
+      intentToken,
+    });
+    return requestJson(
+      `/api/admin/users/${userId}/transfer-admin/verify/passkey/options`,
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => value as PublicKeyCredentialRequestOptionsJSON,
+    );
+  },
+  async verifyAdminTransferPasskey(
+    userId: string,
+    input: {
+      intentToken: string;
+      response: AuthenticationResponseJSON;
+    },
+  ) {
+    if (DEMO_MODE) return demoApi.verifyAdminTransferPasskey(userId, input);
+    return requestJson(
+      `/api/admin/users/${userId}/transfer-admin/verify/passkey`,
+      { method: "POST", body: JSON.stringify(input) },
+      (value) => adminTransferVerificationResponseSchema.parse(value),
+    );
+  },
+  async verifyAdminTransferApiKey(
+    userId: string,
+    input: {
+      intentToken: string;
+      apiKey: string;
+    },
+  ) {
+    const payload = adminTransferApiKeyReauthRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.verifyAdminTransferApiKey(userId, payload);
+    return requestJson(
+      `/api/admin/users/${userId}/transfer-admin/verify/api-key`,
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => adminTransferVerificationResponseSchema.parse(value),
+    );
+  },
+  async listAuthProviders() {
+    if (DEMO_MODE) return demoApi.listAuthProviders();
+    const payload = await requestJson(
+      "/api/auth/providers",
+      { method: "GET" },
+      (value) => authProvidersResponseSchema.parse(value),
+    );
+    return payload.providers;
+  },
+  getProviderStartUrl(
+    provider: "github" | "linuxdo",
+    options?: {
+      intent?: "login" | "bind" | "admin-transfer";
+      inviteCode?: string;
+      returnTo?: string;
+      intentToken?: string;
+    },
+  ) {
+    if (DEMO_MODE) {
+      return demoApi.getProviderStartUrl(provider, {
+        intent: options?.intent,
+        inviteCode: options?.inviteCode,
+      });
+    }
+    const params = new URLSearchParams();
+    if (options?.intent) params.set("intent", options.intent);
+    if (options?.inviteCode) params.set("inviteCode", options.inviteCode);
+    if (options?.returnTo) params.set("returnTo", options.returnTo);
+    if (options?.intentToken) params.set("intentToken", options.intentToken);
+    return `${API_BASE}/api/auth/${provider}/start${
+      params.size ? `?${params.toString()}` : ""
+    }`;
+  },
+  async startProviderRegistration(
+    provider: "github" | "linuxdo",
+    input?: {
+      inviteCode?: string;
+      returnTo?: string;
+    },
+  ) {
+    const payload = startProviderRegistrationRequestSchema.parse(input ?? {});
+    if (DEMO_MODE) {
+      return demoApi.startProviderRegistration(provider, payload);
+    }
+    return requestJson(
+      `/api/auth/${provider}/register/start`,
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => startProviderRegistrationResponseSchema.parse(value),
+    );
+  },
+  async startPasskeyRegistration(input?: { inviteCode?: string }) {
+    const payload = startPasskeyRegistrationRequestSchema.parse(input ?? {});
+    if (DEMO_MODE) return demoApi.startPasskeyRegistration(payload);
+    return requestJson(
+      "/api/auth/passkey/register/start",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => pendingRegistrationResponseSchema.parse(value),
+    );
+  },
+  async getPendingRegistration(token: string) {
+    const query = pendingRegistrationQuerySchema.parse({ token });
+    if (DEMO_MODE) return demoApi.getPendingRegistration(query.token);
+    const params = new URLSearchParams(query);
+    return requestJson(
+      `/api/auth/registration/pending?${params.toString()}`,
+      { method: "GET" },
+      (value) => pendingRegistrationResponseSchema.parse(value),
+    );
+  },
+  async completeExternalRegistration(input: {
+    token: string;
+    nickname: string;
+    inviteCode?: string;
+  }) {
+    const payload = completeExternalRegistrationRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.completeExternalRegistration(payload);
+    return requestJson(
+      "/api/auth/registration/external/complete",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => sessionResponseSchema.parse(value),
+    );
+  },
+  async getAccount() {
+    if (DEMO_MODE) return demoApi.getAccount();
+    return requestJson("/api/account", { method: "GET" }, (value) =>
+      accountResponseSchema.parse(value),
+    );
+  },
+  async updateAccount(input: { nickname: string }) {
+    const payload = updateAccountRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.updateAccount(payload);
+    return requestJson(
+      "/api/account",
+      { method: "PATCH", body: JSON.stringify(payload) },
+      (value) => accountResponseSchema.parse(value),
+    );
+  },
+  async deleteAccount() {
+    if (DEMO_MODE) return demoApi.deleteAccount();
+    const response = await fetch(`${API_BASE}/api/account`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new Error("Account deletion failed");
+    }
+  },
+  async listExternalAccounts() {
+    if (DEMO_MODE) return demoApi.listExternalAccounts();
+    const payload = await requestJson(
+      "/api/account/external-accounts",
+      { method: "GET" },
+      (value) => listExternalAccountsResponseSchema.parse(value),
+    );
+    return payload.externalAccounts;
+  },
+  async unlinkExternalAccount(id: string) {
+    if (DEMO_MODE) return demoApi.unlinkExternalAccount(id);
+    const response = await fetch(
+      `${API_BASE}/api/account/external-accounts/${id}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
+    if (!response.ok && response.status !== 204) {
+      throw new Error("External account unlink failed");
+    }
+  },
   async logout() {
     if (DEMO_MODE) return demoApi.logout();
     const response = await fetch(`${API_BASE}/api/auth/session`, {
@@ -430,6 +626,53 @@ export const apiClient = {
       (value) => passkeySchema.parse(value),
     );
   },
+  async createPasskeyInviteRegistrationOptions(input: {
+    inviteCode: string;
+    nickname: string;
+    passkeyName: string;
+  }) {
+    const payload = passkeyInviteRegistrationOptionsRequestSchema.parse(input);
+    if (DEMO_MODE)
+      return demoApi.createPasskeyInviteRegistrationOptions(payload);
+    return requestJson(
+      "/api/auth/passkey/register/options",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => value as PublicKeyCredentialCreationOptionsJSON,
+    );
+  },
+  async verifyPasskeyInviteRegistration(response: RegistrationResponseJSON) {
+    if (DEMO_MODE) return demoApi.verifyPasskeyInviteRegistration();
+    return requestJson(
+      "/api/auth/passkey/register/verify",
+      { method: "POST", body: JSON.stringify({ response }) },
+      (value) => sessionResponseSchema.parse(value),
+    );
+  },
+  async createPasskeyRegistrationCompletionOptions(input: {
+    inviteCode?: string;
+    nickname: string;
+    passkeyName: string;
+  }) {
+    const payload = completePasskeyRegistrationRequestSchema.parse(input);
+    if (DEMO_MODE) {
+      return demoApi.createPasskeyRegistrationCompletionOptions(payload);
+    }
+    return requestJson(
+      "/api/auth/registration/passkey/options",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => value as PublicKeyCredentialCreationOptionsJSON,
+    );
+  },
+  async verifyPasskeyRegistrationCompletion(
+    response: RegistrationResponseJSON,
+  ) {
+    if (DEMO_MODE) return demoApi.verifyPasskeyRegistrationCompletion();
+    return requestJson(
+      "/api/auth/registration/passkey/verify",
+      { method: "POST", body: JSON.stringify({ response }) },
+      (value) => sessionResponseSchema.parse(value),
+    );
+  },
   async revokePasskey(id: string) {
     if (DEMO_MODE) return demoApi.revokePasskey(id);
     const response = await fetch(`${API_BASE}/api/passkeys/${id}`, {
@@ -472,17 +715,75 @@ export const apiClient = {
     );
     return payload.users;
   },
-  async createUser(input: {
-    email: string;
-    name: string;
-    role: "admin" | "member";
-  }) {
-    if (DEMO_MODE) return demoApi.createUser(input);
-    return requestJson(
-      "/api/users",
-      { method: "POST", body: JSON.stringify(input) },
-      (value) => createUserResponseSchema.parse(value),
+  async listInvites() {
+    if (DEMO_MODE) return demoApi.listInvites();
+    const payload = await requestJson(
+      "/api/admin/invites",
+      { method: "GET" },
+      (value) => listInvitesResponseSchema.parse(value),
     );
+    return payload.invites;
+  },
+  async createInvite(input: { note?: string; count: number }) {
+    const payload = createInviteRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.createInvite(payload);
+    return requestJson(
+      "/api/admin/invites",
+      { method: "POST", body: JSON.stringify(payload) },
+      (value) => createInviteResponseSchema.parse(value),
+    );
+  },
+  async deleteInvite(id: string) {
+    if (DEMO_MODE) return demoApi.deleteInvite(id);
+    const response = await fetch(`${API_BASE}/api/admin/invites/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new Error("Invite deletion failed");
+    }
+  },
+  async getRegistrationSettings() {
+    if (DEMO_MODE) return demoApi.getRegistrationSettings();
+    return requestJson(
+      "/api/admin/registration-settings",
+      { method: "GET" },
+      (value) => registrationSettingsResponseSchema.parse(value),
+    );
+  },
+  async updateRegistrationSettings(input: {
+    githubMode: "off" | "invite-only" | "open";
+    githubDailyLimit: number;
+    linuxdoMode: "off" | "invite-only" | "open";
+    linuxdoDailyLimit: number;
+    passkeyMode: "off" | "invite-only";
+    deletedUserMailboxRetentionDays: number;
+  }) {
+    const payload = updateRegistrationSettingsRequestSchema.parse(input);
+    if (DEMO_MODE) return demoApi.updateRegistrationSettings(payload);
+    return requestJson(
+      "/api/admin/registration-settings",
+      { method: "PUT", body: JSON.stringify(payload) },
+      (value) => registrationSettingsResponseSchema.parse(value),
+    );
+  },
+  async transferAdmin(userId: string, verificationToken: string) {
+    if (DEMO_MODE) return demoApi.transferAdmin(userId, verificationToken);
+    const payload = { verificationToken };
+    const response = await fetch(
+      `${API_BASE}/api/admin/users/${userId}/transfer-admin`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!response.ok && response.status !== 204) {
+      throw new Error("Admin transfer failed");
+    }
   },
   async listDomains() {
     if (DEMO_MODE) return demoApi.listDomains();

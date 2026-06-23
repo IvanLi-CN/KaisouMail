@@ -1,5 +1,7 @@
 export const appRoutes = {
   login: "/login",
+  loginApiKey: "/login/api-key",
+  register: "/register",
   apiKeys: "/api-keys",
   apiKeysDocs: "/api-keys/docs",
   domains: "/domains",

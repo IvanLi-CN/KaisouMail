@@ -1,133 +1,165 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-
+import type { MouseEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Tooltip } from "@/components/ui/tooltip";
+import type { AuthProviderStatus } from "@/lib/contracts";
+import { appRoutes } from "@/lib/routes";
 
-const loginSchema = z.object({
-  apiKey: z.string().min(8, "请输入有效 API Key"),
-});
-
-type LoginValues = z.infer<typeof loginSchema>;
+const providerLabel = (provider: "github" | "linuxdo") =>
+  provider === "github" ? "GitHub" : "LinuxDO";
 
 export const LoginCard = ({
-  onSubmit,
   onPasskeySubmit,
-  isPending,
+  onProviderLogin,
   isPasskeyPending,
-  error,
+  isProviderPending,
   passkeyError,
   passkeySupported,
   passkeyButtonLabel,
   passkeySupportMessage,
+  providers,
 }: {
-  onSubmit: (values: LoginValues) => Promise<void> | void;
   onPasskeySubmit?: () => Promise<void> | void;
-  isPending?: boolean;
+  onProviderLogin?: (provider: "github" | "linuxdo") => void;
   isPasskeyPending?: boolean;
-  error?: string | null;
+  isProviderPending?: boolean;
   passkeyError?: string | null;
   passkeySupported?: boolean;
   passkeyButtonLabel?: string;
   passkeySupportMessage?: string | null;
+  providers?: AuthProviderStatus[];
 }) => {
-  const form = useForm<LoginValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { apiKey: "" },
-  });
+  const navigate = useNavigate();
+  const providerEntries =
+    providers?.filter(
+      (
+        provider,
+      ): provider is AuthProviderStatus & { provider: "github" | "linuxdo" } =>
+        provider.provider !== "passkey" && provider.loginEnabled,
+    ) ?? [];
+  const passkeySoftDisabled = Boolean(!passkeySupported || isPasskeyPending);
+  const passkeyTooltip = !passkeySupported
+    ? (passkeySupportMessage ??
+      passkeyButtonLabel ??
+      "当前浏览器或上下文不支持 WebAuthn。")
+    : null;
+  const preventSoftDisabledAction = (
+    event: MouseEvent<HTMLButtonElement>,
+    softDisabled: boolean,
+  ) => {
+    if (!softDisabled) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.focus();
+    return true;
+  };
+  const passkeyButton = (
+    <Button
+      id="passkey-signin"
+      type="button"
+      size="lg"
+      className="min-h-11 w-full"
+      aria-disabled={passkeySoftDisabled || undefined}
+      onClick={(event) => {
+        if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
+          return;
+        }
+
+        void onPasskeySubmit?.();
+      }}
+    >
+      {isPasskeyPending ? "Passkey 登录中…" : "使用 Passkey 登录"}
+    </Button>
+  );
 
   return (
-    <Card className="mx-auto w-full max-w-lg p-6">
-      <CardHeader>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Sign in
-        </p>
+    <Card className="mx-auto w-full max-w-[520px] border-border/70 bg-card/95 p-4 shadow-none sm:p-6">
+      <CardHeader className="space-y-2">
         <CardTitle className="text-2xl">登录 KaisouMail</CardTitle>
-        <CardDescription>
-          推荐使用 passkey 登录控制台；API Key 仍保留给自动化与浏览器回退登录。
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <section className="space-y-3" aria-labelledby="passkey-heading">
+        <section className="space-y-3" aria-labelledby="signin-methods-heading">
           <div className="space-y-1">
             <p
-              id="passkey-heading"
+              id="signin-methods-heading"
               className="text-sm font-medium text-foreground"
             >
-              Passkey
-            </p>
-            <p className="text-sm leading-6 text-muted-foreground">
-              支持设备内认证器、跨设备 passkey 与安全密钥。
+              登录方式
             </p>
           </div>
-          <Button
-            id="passkey-signin"
-            type="button"
-            size="lg"
-            className="w-full"
-            onClick={() => onPasskeySubmit?.()}
-            disabled={!passkeySupported || isPasskeyPending}
-          >
-            {isPasskeyPending
-              ? "Passkey 登录中…"
-              : (passkeyButtonLabel ??
-                (passkeySupported
-                  ? "使用 Passkey 登录"
-                  : "当前浏览器不支持 Passkey"))}
-          </Button>
-          <p className="min-h-5 text-sm text-destructive" role="alert">
-            {passkeyError ??
-              (passkeySupported
-                ? " "
-                : (passkeySupportMessage ??
-                  "当前浏览器或上下文不支持 WebAuthn。"))}
-          </p>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              {passkeyTooltip ? (
+                <Tooltip tooltipContent={passkeyTooltip} delayDuration={0}>
+                  {passkeyButton}
+                </Tooltip>
+              ) : (
+                passkeyButton
+              )}
+              {passkeyError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {passkeyError}
+                </p>
+              ) : null}
+            </div>
+            {providerEntries.map((provider) => (
+              <Button
+                key={provider.provider}
+                type="button"
+                variant="outline"
+                size="lg"
+                className="min-h-11 w-full justify-center"
+                aria-disabled={
+                  !provider.configured || isProviderPending || undefined
+                }
+                onClick={(event) => {
+                  if (
+                    preventSoftDisabledAction(
+                      event,
+                      Boolean(!provider.configured || isProviderPending),
+                    )
+                  ) {
+                    return;
+                  }
+
+                  onProviderLogin?.(provider.provider);
+                }}
+              >
+                使用 {providerLabel(provider.provider)} 登录
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="min-h-11 w-full justify-center"
+              onClick={() => {
+                navigate(appRoutes.loginApiKey);
+              }}
+            >
+              使用 API Key 登录
+            </Button>
+          </div>
         </section>
-
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            或使用 API Key
-          </span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <form
-          className="space-y-5"
-          onSubmit={form.handleSubmit((values) => onSubmit(values))}
-        >
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key</Label>
-            <Input
-              id="apiKey"
-              type="password"
-              placeholder="cfm_xxx"
-              autoComplete="off"
-              {...form.register("apiKey")}
-            />
-            <p className="text-sm text-destructive">
-              {form.formState.errors.apiKey?.message ?? error ?? " "}
-            </p>
-          </div>
-          <Button
-            type="submit"
-            size="lg"
-            className="w-full"
-            disabled={isPending || isPasskeyPending}
-          >
-            {isPending ? "登录中…" : "登录控制台"}
-          </Button>
-        </form>
       </CardContent>
+      <CardFooter className="flex justify-center pt-2">
+        <Link
+          to={appRoutes.register}
+          className="text-sm font-medium text-foreground underline decoration-border underline-offset-4 transition hover:decoration-foreground"
+        >
+          还没有账号？前往注册
+        </Link>
+      </CardFooter>
     </Card>
   );
 };

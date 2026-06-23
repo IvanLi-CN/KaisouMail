@@ -11,7 +11,9 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 ## Features
 
-- Multi-user temporary mailbox management with per-user API keys
+- Multi-user temporary mailbox management with username/nickname identities, per-user API keys, and soft account deletion
+- GitHub, LinuxDO, invite-based passkey first sign-in, and bootstrap-admin invite onboarding without passwords or stored email addresses
+- Admin-only invite codes, channel-level registration policy, and per-provider daily signup quotas for open third-party registration
 - Multi-domain mailbox management backed by D1-stored Cloudflare zone records and real-time Cloudflare zone discovery
 - Direct domain binding that creates a Cloudflare full zone from `/domains/bind`, plus project-bound zone deletion with soft local cleanup
 - The direct-bind entry is apex-only: bind `example.com` directly; for `user@mail.example.com`, bind the apex first and use mailbox-level `subdomain=mail`
@@ -109,7 +111,7 @@ The Worker expects these bindings and variables:
 
 ### Optional bootstrap secrets
 
-- `BOOTSTRAP_ADMIN_API_KEY` (only needed when `BOOTSTRAP_ADMIN_EMAIL` is also set to auto-create the first admin)
+- `BOOTSTRAP_ADMIN_INVITE_CODE` (one-time code that can create the first admin in an empty deployment)
 
 ### Optional live-management runtime config
 
@@ -126,8 +128,13 @@ The Worker expects these bindings and variables:
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE` (`0` disables orphaned subdomain DNS cleanup; default `50`; this is only the per-run candidate scan window, not a Cloudflare quota)
 - `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE` (default `48`; caps how many orphaned hosts the minute dispatcher leases and enqueues per tick)
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
-- `BOOTSTRAP_ADMIN_EMAIL`
-- `BOOTSTRAP_ADMIN_NAME`
+- `BOOTSTRAP_ADMIN_INVITE_CODE`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- `GITHUB_OAUTH_SCOPES`
+- `LINUXDO_CLIENT_ID`
+- `LINUXDO_CLIENT_SECRET`
+- `LINUXDO_OAUTH_BASE_URL`
 - `CF_ROUTE_RULESET_TAG`
 - `WEB_APP_ORIGIN` (legacy primary control-plane origin for direct API compatibility)
 - `WEB_APP_ORIGINS` (comma-separated trusted control-plane origins when multiple production aliases stay live)
@@ -234,7 +241,21 @@ Use shared-token mode only for fastest onboarding, short-lived evaluation, or lo
 - `GET /api/messages`
 - `GET /api/messages/:id`
 - `GET /api/messages/:id/raw`
-- `GET|POST /api/users`
+- `GET /api/auth/providers`
+- `GET /api/auth/:provider/start`
+- `GET /api/auth/:provider/callback`
+- `POST /api/auth/passkey/options`
+- `POST /api/auth/passkey/verify`
+- `POST /api/auth/passkey/register/options`
+- `POST /api/auth/passkey/register/verify`
+- `GET|PATCH|DELETE /api/account`
+- `GET /api/account/external-accounts`
+- `DELETE /api/account/external-accounts/:id`
+- `GET /api/users`
+- `GET|POST /api/admin/invites`
+- `DELETE /api/admin/invites/:id`
+- `GET|PUT /api/admin/registration-settings`
+- `POST /api/admin/users/:id/transfer-admin`
 
 ## Database workflows
 
@@ -299,7 +320,7 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 1. Create or reuse the Cloudflare Pages project referenced by `CF_PAGES_PROJECT_NAME`
 2. Bind one or more control-plane origins (for example `cfm.example.com` and `km.example.com`) to Pages, and attach the matching API custom domains (for example `api.cfm.example.com` and `api.km.example.com`) to the API Worker
-3. Set the Worker runtime secret `SESSION_SECRET`, and only add `BOOTSTRAP_ADMIN_API_KEY` when you also set `BOOTSTRAP_ADMIN_EMAIL` for first-admin bootstrap
+3. Set the Worker runtime secret `SESSION_SECRET`, and set `BOOTSTRAP_ADMIN_INVITE_CODE` when you want an empty deployment to mint its very first admin through a one-time bootstrap invite
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`; the workflow injects `CLOUDFLARE_ACCOUNT_ID` into the API Worker runtime config during deploy, so leaving the secret unset now fails closed instead of publishing a version with direct domain binding disabled
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=<your Pages project>`, `VITE_API_BASE_URL=<your canonical direct API origin for deploy smoke>`, and `CF_PAGES_SMOKE_ORIGINS=<comma-separated Pages origins that must pass same-origin /api/version smoke after deploy>`

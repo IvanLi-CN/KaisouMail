@@ -17,7 +17,7 @@
 
 | Name | Purpose |
 | --- | --- |
-| `BOOTSTRAP_ADMIN_API_KEY` | first admin bootstrap key; only needed when `BOOTSTRAP_ADMIN_EMAIL` is also set |
+| `BOOTSTRAP_ADMIN_INVITE_CODE` | one-time bootstrap invite that can create the first admin in an empty deployment |
 
 ## Worker runtime variables
 
@@ -29,8 +29,12 @@
 | `CLEANUP_BATCH_SIZE` | cleanup batch size |
 | `EMAIL_ROUTING_MANAGEMENT_ENABLED` | whether the app may mutate live Email Routing |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID exposed to the API Worker runtime; required for direct zone binding from `/domains` |
-| `BOOTSTRAP_ADMIN_EMAIL` | first admin email |
-| `BOOTSTRAP_ADMIN_NAME` | first admin display name |
+| `GITHUB_CLIENT_ID` | GitHub OAuth client id |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
+| `GITHUB_OAUTH_SCOPES` | optional GitHub OAuth scopes; defaults to `read:user` |
+| `LINUXDO_CLIENT_ID` | LinuxDO OAuth client id |
+| `LINUXDO_CLIENT_SECRET` | LinuxDO OAuth client secret |
+| `LINUXDO_OAUTH_BASE_URL` | LinuxDO OAuth issuer base URL |
 | `CF_ROUTE_RULESET_TAG` | Worker route management tag |
 | `WEB_APP_ORIGIN` | primary browser origin used for direct-API compatibility and passkey trust; when only one origin is configured its host becomes the RP ID, and passkeys require `localhost` or a domain name instead of an IP literal |
 | `WEB_APP_ORIGINS` | comma-separated browser origins to trust when multiple production aliases stay live; passkeys accept every configured origin and derive one shared non-public RP ID suffix from the full set |

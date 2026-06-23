@@ -26,13 +26,22 @@ import {
 } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
+import {
+  registerViaPasskeyInvite,
+  resolveInteractiveMethodCount,
+  resolvePasskeyRegistrationRequirement,
+} from "./identity";
+import type { PendingRegistrationPayload } from "./oauth";
 
 const encoder = new TextEncoder();
 
 const PASSKEY_REGISTRATION_COOKIE = "kaisoumail_passkey_registration";
 const PASSKEY_AUTHENTICATION_COOKIE = "kaisoumail_passkey_authentication";
+const PASSKEY_INVITE_REGISTRATION_COOKIE =
+  "kaisoumail_passkey_invite_registration";
 const PASSKEY_CHALLENGE_TTL_SECONDS = 60 * 5;
 const PASSKEY_RP_NAME = "KaisouMail";
+const PASSKEY_PENDING_REGISTRATION_TTL_SECONDS = 60 * 15;
 
 type PasskeyRecord = z.infer<typeof passkeySchema>;
 
@@ -40,9 +49,13 @@ type PasskeyChallengePayload = {
   challenge: string;
   exp: number;
   iat: number;
-  kind: "authentication" | "registration";
+  kind: "authentication" | "registration" | "invite-registration";
   name?: string;
+  nickname?: string;
+  inviteCode?: string;
   userId?: string;
+  pendingToken?: string;
+  adminTransferIntentToken?: string;
 };
 
 const parseCookies = (cookieHeader: string) =>
@@ -254,10 +267,7 @@ const toApiErrorDetails = (error: unknown) =>
   error instanceof Error ? error.message : null;
 
 const isPasskeyCredentialConflictError = (error: unknown) => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
+  if (!(error instanceof Error)) return false;
   return (
     error.message.includes(
       "UNIQUE constraint failed: passkeys.credential_id",
@@ -335,23 +345,124 @@ const mapPasskeyRow = (row: {
   });
 
 const mapUserRow = (row: {
-  email: string;
   id: string;
-  name: string;
+  username: string;
+  nickname: string;
   role: string;
 }): AuthUser =>
   sessionUserSchema.parse({
     id: row.id,
-    email: row.email,
-    name: row.name,
+    username: row.username,
+    nickname: row.nickname,
     role: row.role,
   });
+
+const resolveUserNameForPasskey = (user: AuthUser) =>
+  user.username ?? user.email ?? user.id;
+const resolveUserDisplayNameForPasskey = (user: AuthUser) =>
+  user.nickname ?? user.name ?? resolveUserNameForPasskey(user);
+
+const listActivePasskeyRowsForUser = async (env: WorkerEnv, userId: string) => {
+  const db = getDb(env);
+  return db
+    .select({
+      credentialId: passkeys.credentialId,
+      revokedAt: passkeys.revokedAt,
+      transportsJson: passkeys.transportsJson,
+    })
+    .from(passkeys)
+    .where(eq(passkeys.userId, userId));
+};
+
+const verifyRegistration = async (
+  config: RuntimeConfig,
+  challenge: string,
+  response: RegistrationResponseJSON,
+) => {
+  const { expectedOrigin, expectedRPID } = resolvePasskeyRuntimeConfig(config);
+  try {
+    return await verifyRegistrationResponse({
+      response,
+      expectedChallenge: challenge,
+      expectedOrigin,
+      expectedRPID,
+      requireUserVerification: true,
+    });
+  } catch (error) {
+    throw new ApiError(
+      400,
+      "Passkey registration failed",
+      toApiErrorDetails(error),
+    );
+  }
+};
+
+const persistPasskey = async (
+  env: WorkerEnv,
+  userId: string,
+  name: string,
+  response: RegistrationResponseJSON,
+  verification: Awaited<ReturnType<typeof verifyRegistration>>,
+) => {
+  if (!verification.verified || !verification.registrationInfo) {
+    throw new ApiError(400, "Passkey registration failed");
+  }
+
+  const db = getDb(env);
+  const existing = await db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(
+      and(
+        eq(passkeys.credentialId, verification.registrationInfo.credential.id),
+        isNull(passkeys.revokedAt),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) {
+    throw new ApiError(409, "Passkey already registered");
+  }
+
+  const createdAt = nowIso();
+  const transports = response.response.transports ?? [];
+  const record = {
+    id: randomId("psk"),
+    userId,
+    name,
+    credentialId: verification.registrationInfo.credential.id,
+    publicKeyB64u: toBase64Url(
+      verification.registrationInfo.credential.publicKey,
+    ),
+    counter: verification.registrationInfo.credential.counter,
+    deviceType: verification.registrationInfo.credentialDeviceType,
+    backedUp: verification.registrationInfo.credentialBackedUp,
+    transportsJson: JSON.stringify(transports),
+    createdAt,
+    lastUsedAt: null,
+    revokedAt: null,
+  } satisfies typeof passkeys.$inferInsert;
+
+  try {
+    await db.insert(passkeys).values(record);
+  } catch (error) {
+    if (isPasskeyCredentialConflictError(error)) {
+      throw new ApiError(409, "Passkey already registered");
+    }
+    throw error;
+  }
+
+  return mapPasskeyRow(record);
+};
 
 export const serializeExpiredPasskeyAuthenticationCookie = (secure: boolean) =>
   serializeExpiredCookie(PASSKEY_AUTHENTICATION_COOKIE, secure);
 
 export const serializeExpiredPasskeyRegistrationCookie = (secure: boolean) =>
   serializeExpiredCookie(PASSKEY_REGISTRATION_COOKIE, secure);
+
+export const serializeExpiredPasskeyInviteRegistrationCookie = (
+  secure: boolean,
+) => serializeExpiredCookie(PASSKEY_INVITE_REGISTRATION_COOKIE, secure);
 
 export const listPasskeysForUser = async (env: WorkerEnv, userId: string) => {
   const db = getDb(env);
@@ -375,22 +486,14 @@ export const createPasskeyRegistrationOptionsForUser = async (
   cookie: string;
   options: PublicKeyCredentialCreationOptionsJSON;
 }> => {
-  const db = getDb(env);
   const { rpID, rpName } = resolvePasskeyRequestConfig(config, request);
-  const rows = await db
-    .select({
-      credentialId: passkeys.credentialId,
-      revokedAt: passkeys.revokedAt,
-      transportsJson: passkeys.transportsJson,
-    })
-    .from(passkeys)
-    .where(eq(passkeys.userId, user.id));
+  const rows = await listActivePasskeyRowsForUser(env, user.id);
 
   const options = await generateRegistrationOptions({
     rpName,
     rpID,
-    userName: user.email,
-    userDisplayName: user.name,
+    userName: resolveUserNameForPasskey(user),
+    userDisplayName: resolveUserDisplayNameForPasskey(user),
     userID: encoder.encode(user.id),
     attestationType: "none",
     excludeCredentials: rows
@@ -444,106 +547,282 @@ export const verifyPasskeyRegistrationForUser = async (
     throw new ApiError(400, "Passkey challenge is missing or expired");
   }
 
-  const { expectedOrigin, expectedRPID, secure } =
-    resolvePasskeyRuntimeConfig(config);
-  const verification = await (async () => {
-    try {
-      return await verifyRegistrationResponse({
-        response,
-        expectedChallenge: challenge.challenge,
-        expectedOrigin,
-        expectedRPID,
-        requireUserVerification: true,
-      });
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new ApiError(
-        400,
-        "Passkey registration failed",
-        toApiErrorDetails(error),
-      );
-    }
-  })();
-  if (!verification.verified || !verification.registrationInfo) {
-    throw new ApiError(400, "Passkey registration failed");
-  }
-
-  const db = getDb(env);
-  const existing = await db
-    .select({
-      id: passkeys.id,
-    })
-    .from(passkeys)
-    .where(
-      and(
-        eq(passkeys.credentialId, verification.registrationInfo.credential.id),
-        isNull(passkeys.revokedAt),
-      ),
-    )
-    .limit(1);
-  const existingRecord = existing[0];
-  if (existingRecord) {
-    throw new ApiError(409, "Passkey already registered");
-  }
-
-  const createdAt = nowIso();
-  const transports = response.response.transports ?? [];
-  const baseRecord = {
-    userId: user.id,
-    name: challenge.name,
-    credentialId: verification.registrationInfo.credential.id,
-    publicKeyB64u: toBase64Url(
-      verification.registrationInfo.credential.publicKey,
-    ),
-    counter: verification.registrationInfo.credential.counter,
-    deviceType: verification.registrationInfo.credentialDeviceType,
-    backedUp: verification.registrationInfo.credentialBackedUp,
-    transportsJson: JSON.stringify(transports),
-    createdAt,
-    lastUsedAt: null,
-    revokedAt: null,
-  } as const;
-
-  const record = {
-    id: randomId("psk"),
-    ...baseRecord,
-  } as const;
-
-  try {
-    await db.insert(passkeys).values(record);
-  } catch (error) {
-    if (isPasskeyCredentialConflictError(error)) {
-      throw new ApiError(409, "Passkey already registered");
-    }
-    throw error;
-  }
+  const verification = await verifyRegistration(
+    config,
+    challenge.challenge,
+    response,
+  );
+  const passkey = await persistPasskey(
+    env,
+    user.id,
+    challenge.name,
+    response,
+    verification,
+  );
 
   return {
-    passkey: mapPasskeyRow(record),
-    clearCookie: serializeExpiredPasskeyRegistrationCookie(secure),
+    passkey,
+    clearCookie: serializeExpiredPasskeyRegistrationCookie(
+      config.APP_ENV === "production",
+    ),
+  };
+};
+
+export const createPasskeyInviteRegistrationOptions = async (
+  config: RuntimeConfig,
+  request: Request,
+  input: {
+    inviteCode: string;
+    nickname: string;
+    passkeyName: string;
+  },
+) => {
+  const { rpID, rpName } = resolvePasskeyRequestConfig(config, request);
+  const options = await generateRegistrationOptions({
+    rpName,
+    rpID,
+    userName: `pending-${randomId("usr")}`,
+    userDisplayName: input.nickname,
+    userID: encoder.encode(randomId("pending")),
+    attestationType: "none",
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: "required",
+    },
+  });
+
+  return {
+    options,
+    cookie: await issueChallengeCookie(
+      config,
+      PASSKEY_INVITE_REGISTRATION_COOKIE,
+      {
+        kind: "invite-registration",
+        challenge: options.challenge,
+        name: input.passkeyName,
+        nickname: input.nickname,
+        inviteCode: input.inviteCode,
+      },
+    ),
+  };
+};
+
+export const createPasskeyPendingRegistrationToken = async (
+  config: RuntimeConfig,
+  input: {
+    inviteCode?: string;
+  },
+) => {
+  const now = Math.floor(Date.now() / 1000);
+  return signPayload<PendingRegistrationPayload>(
+    {
+      method: "passkey",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteCode: input.inviteCode?.trim() || null,
+      iat: now,
+      exp: now + PASSKEY_PENDING_REGISTRATION_TTL_SECONDS,
+    },
+    config.SESSION_SECRET,
+  );
+};
+
+export const createPasskeyInviteRegistrationOptionsForCompletion = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+  input: {
+    inviteCode?: string;
+    nickname: string;
+    passkeyName: string;
+    pendingToken: string;
+  },
+) => {
+  const requirement = await resolvePasskeyRegistrationRequirement(
+    env,
+    input.inviteCode,
+  );
+  if (requirement.inviteRequired && !requirement.invitePrevalidated) {
+    throw new ApiError(403, "Invite required");
+  }
+
+  const { rpID, rpName } = resolvePasskeyRequestConfig(config, request);
+  const options = await generateRegistrationOptions({
+    rpName,
+    rpID,
+    userName: `pending-${randomId("usr")}`,
+    userDisplayName: input.nickname,
+    userID: encoder.encode(randomId("pending")),
+    attestationType: "none",
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: "required",
+    },
+  });
+
+  return {
+    options,
+    cookie: await issueChallengeCookie(
+      config,
+      PASSKEY_INVITE_REGISTRATION_COOKIE,
+      {
+        kind: "invite-registration",
+        challenge: options.challenge,
+        name: input.passkeyName,
+        nickname: input.nickname,
+        inviteCode: input.inviteCode,
+        pendingToken: input.pendingToken,
+      },
+    ),
+  };
+};
+
+export const verifyPasskeyInviteRegistration = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+  response: RegistrationResponseJSON,
+) => {
+  const challenge = await resolveChallengePayload(
+    request,
+    config,
+    PASSKEY_INVITE_REGISTRATION_COOKIE,
+    "invite-registration",
+  );
+  if (!challenge.name || !challenge.nickname || !challenge.inviteCode) {
+    throw new ApiError(400, "Passkey challenge is missing or expired");
+  }
+
+  const verification = await verifyRegistration(
+    config,
+    challenge.challenge,
+    response,
+  );
+  const db = getDb(env);
+  const existing = await db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(
+      and(eq(passkeys.credentialId, response.id), isNull(passkeys.revokedAt)),
+    )
+    .limit(1);
+  if (existing[0]) {
+    throw new ApiError(409, "Passkey already registered");
+  }
+  const user = await registerViaPasskeyInvite(
+    env,
+    challenge.inviteCode,
+    challenge.nickname,
+  );
+  const passkey = await persistPasskey(
+    env,
+    user.id,
+    challenge.name,
+    response,
+    verification,
+  );
+
+  return {
+    user: mapUserRow(user),
+    passkey,
+    clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
+      config.APP_ENV === "production",
+    ),
+  };
+};
+
+export const verifyPasskeyRegistrationFromCompletion = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+  response: RegistrationResponseJSON,
+) => {
+  const challenge = await resolveChallengePayload(
+    request,
+    config,
+    PASSKEY_INVITE_REGISTRATION_COOKIE,
+    "invite-registration",
+  );
+  if (!challenge.name || !challenge.nickname || !challenge.pendingToken) {
+    throw new ApiError(400, "Passkey challenge is missing or expired");
+  }
+
+  const pending = await verifyPayload<PendingRegistrationPayload>(
+    challenge.pendingToken,
+    config.SESSION_SECRET,
+  );
+  if (!pending || pending.method !== "passkey") {
+    throw new ApiError(400, "Registration state expired");
+  }
+
+  const requirement = await resolvePasskeyRegistrationRequirement(
+    env,
+    challenge.inviteCode ?? pending.inviteCode,
+  );
+  if (requirement.inviteRequired && !requirement.invitePrevalidated) {
+    throw new ApiError(403, "Invite required");
+  }
+
+  const verification = await verifyRegistration(
+    config,
+    challenge.challenge,
+    response,
+  );
+  const db = getDb(env);
+  const existing = await db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(
+      and(eq(passkeys.credentialId, response.id), isNull(passkeys.revokedAt)),
+    )
+    .limit(1);
+  if (existing[0]) {
+    throw new ApiError(409, "Passkey already registered");
+  }
+  const user = await registerViaPasskeyInvite(
+    env,
+    challenge.inviteCode ?? pending.inviteCode ?? "",
+    challenge.nickname,
+  );
+  const passkey = await persistPasskey(
+    env,
+    user.id,
+    challenge.name,
+    response,
+    verification,
+  );
+
+  return {
+    user: mapUserRow(user),
+    passkey,
+    clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
+      config.APP_ENV === "production",
+    ),
   };
 };
 
 export const createPasskeyAuthenticationOptions = async (
   config: RuntimeConfig,
   request: Request,
+  metadata?: {
+    adminTransferIntentToken?: string;
+  },
 ): Promise<{
   cookie: string;
   options: PublicKeyCredentialRequestOptionsJSON;
 }> => {
   const { rpID } = resolvePasskeyRequestConfig(config, request);
-  const options = await generateAuthenticationOptions({
+  const generatedOptions = await generateAuthenticationOptions({
     rpID,
     userVerification: "required",
   });
 
   return {
-    options,
+    options: generatedOptions,
     cookie: await issueChallengeCookie(config, PASSKEY_AUTHENTICATION_COOKIE, {
       kind: "authentication",
-      challenge: options.challenge,
+      challenge: generatedOptions.challenge,
+      adminTransferIntentToken: metadata?.adminTransferIntentToken,
     }),
   };
 };
@@ -556,6 +835,7 @@ export const verifyPasskeyAuthentication = async (
 ): Promise<{
   clearCookie: string;
   user: AuthUser;
+  adminTransferIntentToken?: string;
 }> => {
   const challenge = await resolveChallengePayload(
     request,
@@ -575,9 +855,11 @@ export const verifyPasskeyAuthentication = async (
       publicKeyB64u: passkeys.publicKeyB64u,
       counter: passkeys.counter,
       transportsJson: passkeys.transportsJson,
-      email: users.email,
-      name: users.name,
+      id: users.id,
+      username: users.username,
+      nickname: users.nickname,
       role: users.role,
+      deletedAt: users.deletedAt,
     })
     .from(passkeys)
     .innerJoin(users, eq(passkeys.userId, users.id))
@@ -587,7 +869,7 @@ export const verifyPasskeyAuthentication = async (
     .limit(1);
 
   const row = rows[0];
-  if (!row) {
+  if (!row || row.deletedAt) {
     throw new ApiError(401, "Invalid passkey");
   }
 
@@ -615,9 +897,6 @@ export const verifyPasskeyAuthentication = async (
         },
       });
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
       throw new ApiError(401, "Invalid passkey", toApiErrorDetails(error));
     }
   })();
@@ -637,13 +916,9 @@ export const verifyPasskeyAuthentication = async (
     .where(eq(passkeys.id, row.passkeyId));
 
   return {
-    user: mapUserRow({
-      id: row.userId,
-      email: row.email,
-      name: row.name,
-      role: row.role,
-    }),
+    user: mapUserRow(row),
     clearCookie: serializeExpiredPasskeyAuthenticationCookie(secure),
+    adminTransferIntentToken: challenge.adminTransferIntentToken,
   };
 };
 
@@ -658,16 +933,23 @@ export const revokePasskeyForUser = async (
     .from(passkeys)
     .where(eq(passkeys.id, passkeyId))
     .limit(1);
-
   const record = rows[0];
-  if (!record) {
-    throw new ApiError(404, "Passkey not found");
-  }
-  if (record.userId !== user.id) {
-    throw new ApiError(403, "Forbidden");
-  }
-  if (record.revokedAt) {
-    return;
+  if (!record) throw new ApiError(404, "Passkey not found");
+  if (record.userId !== user.id) throw new ApiError(403, "Forbidden");
+  if (record.revokedAt) return;
+
+  const remainingRows = await db
+    .select({ value: passkeys.id })
+    .from(passkeys)
+    .where(and(eq(passkeys.userId, user.id), isNull(passkeys.revokedAt)));
+  if (remainingRows.length <= 1) {
+    const methodCount = await resolveInteractiveMethodCount(env, user.id);
+    if (methodCount <= 1) {
+      throw new ApiError(
+        409,
+        "Cannot remove the last interactive login method",
+      );
+    }
   }
 
   await db

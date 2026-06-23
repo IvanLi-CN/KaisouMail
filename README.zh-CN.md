@@ -11,7 +11,9 @@
 
 ## 核心能力
 
-- 多用户临时邮箱与 API Key 管理
+- 无邮箱、无密码的多用户身份体系，使用 `username + nickname`、API Key、Passkey 与第三方绑定
+- GitHub、LinuxDO、邀请码 Passkey 首登，以及空库首个管理员 bootstrap invite
+- 管理员邀请码、渠道注册开关、开放注册每日配额
 - 基于 D1 的多邮箱域名管理与 Cloudflare zone 实时发现
 - `/domains/bind` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
 - 直绑入口仅支持 apex：例如直接绑定 `example.com`；如果要 `user@mail.example.com` 这类地址，请绑定 apex 后在邮箱层使用 `subdomain=mail`
@@ -116,13 +118,19 @@ Worker 侧重点变量：
 
 - `CLOUDFLARE_ACCOUNT_ID`（运行时变量；`/domains` 的 apex 直绑必需）
 - `SESSION_SECRET`
-- `BOOTSTRAP_ADMIN_API_KEY`（仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
+- `BOOTSTRAP_ADMIN_INVITE_CODE`（仅在空库部署需要引导首个管理员时使用）
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_RUNTIME_API_TOKEN`
 - `EMAIL_WORKER_NAME`
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `50`；它只是每轮候选扫描窗口，不是 Cloudflare 配额）
 - `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE`（默认 `48`；限制每分钟 dispatcher 最多租约并入队多少个孤儿 host）
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- `GITHUB_OAUTH_SCOPES`
+- `LINUXDO_CLIENT_ID`
+- `LINUXDO_CLIENT_SECRET`
+- `LINUXDO_OAUTH_BASE_URL`
 - `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
 - `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
 
@@ -164,7 +172,7 @@ Catch-all 必须具备 wildcard 子域 DNS。开启 Catch-all 会把域名对账
 
 1. 创建或复用 `CF_PAGES_PROJECT_NAME` 指向的 Cloudflare Pages 项目
 2. 给 Pages 绑定一个或多个控制台域名（例如 `cfm.example.com`、`km.example.com`），同时给 API Worker 绑定对应的 API 自定义域（例如 `api.cfm.example.com`、`api.km.example.com`）
-3. 配置 Worker runtime secret `SESSION_SECRET`；只有在你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 做首次管理员引导时，才再配置 `BOOTSTRAP_ADMIN_API_KEY`
+3. 配置 Worker runtime secret `SESSION_SECRET`；若希望空库部署可用一次性邀请码引导首个管理员，再补 `BOOTSTRAP_ADMIN_INVITE_CODE`
 4. 把 `EMAIL_WORKER_NAME` 指向收信 Worker 脚本
 5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`；workflow 会在发布前把 `CLOUDFLARE_ACCOUNT_ID` 注入 API Worker 运行时配置，缺失时直接失败，而不是发布一个直绑入口被隐藏的版本
 6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=<你的 Pages 项目>`、`VITE_API_BASE_URL=<你的 canonical 直连 API 域名，用于 deploy smoke>`、`CF_PAGES_SMOKE_ORIGINS=<逗号分隔的控制台域名列表，用于 Pages 发布后的同源 /api/version smoke>`

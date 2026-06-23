@@ -276,8 +276,8 @@ describe("meta and auth routes", () => {
             limit: async () => [
               {
                 id: "usr_owner",
-                email: "owner@example.com",
-                name: "Owner",
+                username: "owner",
+                nickname: "Owner",
                 role: "admin",
               },
             ],
@@ -292,8 +292,8 @@ describe("meta and auth routes", () => {
     } as never;
     const sessionCookie = await issueSessionCookie(config, {
       id: "usr_owner",
-      email: "owner@example.com",
-      name: "Owner",
+      username: "owner",
+      nickname: "Owner",
       role: "admin",
     });
 

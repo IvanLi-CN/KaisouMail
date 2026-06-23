@@ -201,19 +201,19 @@ describe("demoApi", () => {
     expect(domains.some((domain) => domain.id === bound.id)).toBe(false);
   });
 
-  it("creates api keys and users with an initial key", async () => {
+  it("creates api keys and admin invites", async () => {
     const apiKey = await demoApi.createApiKey({
       name: "CI Bot",
       scopes: ["messages:read"],
     });
     expect(apiKey.apiKey).toContain("_secret");
 
-    const createdUser = await demoApi.createUser({
-      email: "new-user@example.com",
-      name: "New User",
-      role: "member",
+    const createdInvite = await demoApi.createInvite({
+      note: "QA onboarding",
+      count: 2,
     });
-    expect(createdUser.user.email).toBe("new-user@example.com");
-    expect(createdUser.initialKey.apiKey).toContain("_secret");
+    expect(createdInvite.invites).toHaveLength(2);
+    expect(createdInvite.invites[0]?.code).toContain("km_demo_");
+    expect(createdInvite.invites[0]?.note).toBe("QA onboarding");
   });
 });

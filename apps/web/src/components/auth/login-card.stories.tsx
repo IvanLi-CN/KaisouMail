@@ -1,18 +1,29 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { MemoryRouter } from "react-router-dom";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { LoginCard } from "@/components/auth/login-card";
+import { demoAuthProviders } from "@/mocks/data";
 
 const meta = {
   title: "Auth/LoginCard",
   component: LoginCard,
   tags: ["autodocs"],
+  decorators: [
+    (Story) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
   args: {
-    onSubmit: fn(),
     onPasskeySubmit: fn(),
-    error: null,
+    onProviderLogin: fn(),
     passkeyError: null,
     passkeySupported: true,
+    passkeyButtonLabel: "使用 Passkey 登录",
+    passkeySupportMessage: null,
+    providers: demoAuthProviders,
   },
 } satisfies Meta<typeof LoginCard>;
 
@@ -27,18 +38,13 @@ export const Default: Story = {
       canvas.getByRole("button", { name: "使用 Passkey 登录" }),
     );
     await expect(args.onPasskeySubmit).toHaveBeenCalled();
-    await userEvent.type(
-      canvas.getByLabelText("API Key"),
-      "cfm_storybook_login_key",
+    await userEvent.click(
+      canvas.getByRole("button", { name: "使用 GitHub 登录" }),
     );
-    await userEvent.click(canvas.getByRole("button", { name: "登录控制台" }));
-    await expect(args.onSubmit).toHaveBeenCalled();
-  },
-};
-
-export const ErrorState: Story = {
-  args: {
-    error: "Invalid API key",
+    await expect(args.onProviderLogin).toHaveBeenCalled();
+    await expect(
+      canvas.getByRole("button", { name: "使用 API Key 登录" }),
+    ).toBeInTheDocument();
   },
 };
 

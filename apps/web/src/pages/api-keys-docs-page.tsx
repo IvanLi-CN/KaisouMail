@@ -203,8 +203,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"
@@ -225,8 +225,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"
@@ -245,8 +245,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"

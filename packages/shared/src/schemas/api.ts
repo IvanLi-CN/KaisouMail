@@ -12,16 +12,24 @@ import {
   rootDomainRegex,
 } from "../consts";
 import {
+  adminTransferMethodSchema,
+  adminUserSchema,
   apiKeySchema,
+  authProviderStatusSchema,
   domainCatalogItemSchema,
   domainCutoverTaskSchema,
   domainSchema,
+  externalAccountSchema,
+  inviteSchema,
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
+  passkeyRegistrationModeSchema,
   passkeySchema,
+  pendingRegistrationSchema,
+  providerRegistrationModeSchema,
+  registrationSettingsSchema,
   sessionUserSchema,
-  userRoleSchema,
   userSchema,
 } from "./common";
 import { withMailDomainAliases } from "./mail-domain";
@@ -57,6 +65,89 @@ export const mailboxTagsInputSchema = z
 
 export const createPasskeyRequestSchema = z.object({
   name: z.string().trim().min(1).max(64),
+});
+
+export const updateAccountRequestSchema = z.object({
+  nickname: z.string().trim().min(1).max(64),
+});
+
+export const createInviteRequestSchema = z.object({
+  note: z.string().trim().max(160).optional(),
+  count: z.number().int().min(1).max(100).default(1),
+});
+
+export const createAdminTransferIntentResponseSchema = z.object({
+  intentToken: z.string().min(1),
+});
+
+export const adminTransferApiKeyReauthRequestSchema = z.object({
+  intentToken: z.string().min(1),
+  apiKey: z.string().min(16),
+});
+
+export const adminTransferPasskeyReauthRequestSchema = z.object({
+  intentToken: z.string().min(1),
+});
+
+export const adminTransferVerificationResponseSchema = z.object({
+  verificationToken: z.string().min(1),
+  method: adminTransferMethodSchema,
+});
+
+export const transferAdminRequestSchema = z.object({
+  verificationToken: z.string().min(1),
+});
+
+export const deleteInviteRequestSchema = z.object({
+  id: z.string().min(1),
+});
+
+export const updateRegistrationSettingsRequestSchema = z.object({
+  githubMode: providerRegistrationModeSchema,
+  githubDailyLimit: z.number().int().min(0).max(10_000),
+  linuxdoMode: providerRegistrationModeSchema,
+  linuxdoDailyLimit: z.number().int().min(0).max(10_000),
+  passkeyMode: passkeyRegistrationModeSchema,
+  deletedUserMailboxRetentionDays: z.number().int().min(0).max(30),
+});
+
+export const passkeyInviteRegistrationOptionsRequestSchema = z.object({
+  inviteCode: z.string().trim().min(4).max(128),
+  nickname: z.string().trim().min(1).max(64),
+  passkeyName: z.string().trim().min(1).max(64).default("Primary Passkey"),
+});
+
+export const startProviderRegistrationRequestSchema = z.object({
+  inviteCode: z.string().trim().max(128).optional(),
+  returnTo: z.string().trim().optional(),
+});
+
+export const startProviderRegistrationResponseSchema = z.object({
+  startUrl: z.string().min(1),
+});
+
+export const pendingRegistrationQuerySchema = z.object({
+  token: z.string().min(1),
+});
+
+export const pendingRegistrationResponseSchema = z.object({
+  registration: pendingRegistrationSchema,
+});
+
+export const completeExternalRegistrationRequestSchema = z.object({
+  token: z.string().min(1),
+  nickname: z.string().trim().min(1).max(64),
+  inviteCode: z.string().trim().max(128).optional(),
+});
+
+export const completePasskeyRegistrationRequestSchema = z.object({
+  inviteCode: z.string().trim().max(128).optional(),
+  nickname: z.string().trim().min(1).max(64),
+  passkeyName: z.string().trim().min(1).max(64).default("Primary Passkey"),
+});
+
+export const startPasskeyRegistrationRequestSchema = z.object({
+  inviteCode: z.string().trim().max(128).optional(),
 });
 
 export const createMailboxRequestSchema = withMailDomainAliases({
@@ -150,17 +241,6 @@ export const listMessagesQuerySchema = z.object({
   scope: listQueryScopeSchema.optional(),
 });
 
-export const createUserRequestSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(64),
-  role: userRoleSchema.default("member"),
-});
-
-export const createUserResponseSchema = z.object({
-  user: userSchema,
-  initialKey: createApiKeyResponseSchema,
-});
-
 export const createDomainRequestSchema = withMailDomainAliases(
   {
     zoneId: z.string().min(1).max(128),
@@ -229,7 +309,31 @@ export const listPasskeysResponseSchema = z.object({
 });
 
 export const listUsersResponseSchema = z.object({
-  users: z.array(userSchema),
+  users: z.array(adminUserSchema),
+});
+
+export const accountResponseSchema = z.object({
+  user: userSchema,
+});
+
+export const listExternalAccountsResponseSchema = z.object({
+  externalAccounts: z.array(externalAccountSchema),
+});
+
+export const listInvitesResponseSchema = z.object({
+  invites: z.array(inviteSchema),
+});
+
+export const createInviteResponseSchema = z.object({
+  invites: z.array(inviteSchema).min(1),
+});
+
+export const registrationSettingsResponseSchema = z.object({
+  settings: registrationSettingsSchema,
+});
+
+export const authProvidersResponseSchema = z.object({
+  providers: z.array(authProviderStatusSchema),
 });
 
 export const versionResponseSchema = z.object({

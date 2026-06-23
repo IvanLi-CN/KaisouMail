@@ -63,8 +63,8 @@ const withConfig = (overrides: Partial<RuntimeConfig>) =>
 
 const authUser = {
   id: "usr_owner",
-  email: "owner@example.com",
-  name: "Owner",
+  username: "owner",
+  nickname: "Owner",
   role: "admin",
 } as const;
 
@@ -639,14 +639,15 @@ describe("passkey service", () => {
             where: () =>
               createAwaitableQuery([
                 {
+                  id: authUser.id,
                   userId: authUser.id,
                   passkeyId: "psk_1",
                   credentialId: "credential_auth",
                   publicKeyB64u: "AQID",
                   counter: 1,
                   transportsJson: JSON.stringify(["internal"]),
-                  email: authUser.email,
-                  name: authUser.name,
+                  username: authUser.username,
+                  nickname: authUser.nickname,
                   role: authUser.role,
                 },
               ]),
@@ -693,7 +694,7 @@ describe("passkey service", () => {
       } as AuthenticationResponseJSON,
     );
 
-    expect(result.user.email).toBe(authUser.email);
+    expect(result.user.username).toBe(authUser.username);
     expect(verifyAuthenticationResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         requireUserVerification: true,
@@ -759,14 +760,15 @@ describe("passkey service", () => {
             where: () =>
               createAwaitableQuery([
                 {
+                  id: authUser.id,
                   userId: authUser.id,
                   passkeyId: "psk_1",
                   credentialId: "credential_auth",
                   publicKeyB64u: "AQID",
                   counter: 1,
                   transportsJson: JSON.stringify(["internal"]),
-                  email: authUser.email,
-                  name: authUser.name,
+                  username: authUser.username,
+                  nickname: authUser.nickname,
                   role: authUser.role,
                 },
               ]),
