@@ -21,6 +21,7 @@ import type {
   Mailbox,
   MessageDetail,
   MessageSummary,
+  PaginationMeta,
   PasskeyRecord,
   RegistrationSettings,
   SessionResponse,
@@ -30,7 +31,6 @@ import type {
 import {
   demoAdminUsers,
   demoApiKeys,
-  demoAuthProviders,
   demoCloudflareZones,
   demoDomains,
   demoExternalAccounts,
@@ -109,6 +109,29 @@ const createState = (): DemoState => ({
 
 let state = createState();
 
+const paginate = <T>(
+  items: T[],
+  input: {
+    page: number;
+    pageSize: number;
+  },
+) => {
+  const pageSize = Math.max(1, input.pageSize);
+  const totalItems = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const page = Math.min(Math.max(input.page, 1), totalPages);
+  const offset = (page - 1) * pageSize;
+  return {
+    items: items.slice(offset, offset + pageSize),
+    pagination: {
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
+    } satisfies PaginationMeta,
+  };
+};
+
 const buildDomainCatalog = (): DomainCatalogItem[] => {
   const localDomains = new Map(
     state.domains.map((domain) => [domain.rootDomain, domain] as const),
@@ -144,6 +167,51 @@ const buildDomainCatalog = (): DomainCatalogItem[] => {
         disabledAt: local?.disabledAt ?? null,
       } satisfies DomainCatalogItem;
     });
+};
+
+const buildDemoAuthProviders = () => {
+  const githubConfigured = Boolean(
+    state.registrationSettings.githubClientId.trim() &&
+      state.registrationSettings.githubClientSecret.trim(),
+  );
+  const linuxdoConfigured = Boolean(
+    state.registrationSettings.linuxdoClientId.trim() &&
+      state.registrationSettings.linuxdoClientSecret.trim() &&
+      state.registrationSettings.linuxdoOauthBaseUrl.trim(),
+  );
+
+  return [
+    {
+      provider: "github" as const,
+      configured: githubConfigured,
+      loginEnabled: githubConfigured,
+      registrationMode: state.registrationSettings.githubMode,
+      dailyLimit: state.registrationSettings.githubDailyLimit,
+      dailyUsed: 2,
+      dailyRemaining: Math.max(
+        state.registrationSettings.githubDailyLimit - 2,
+        0,
+      ),
+    },
+    {
+      provider: "linuxdo" as const,
+      configured: linuxdoConfigured,
+      loginEnabled: linuxdoConfigured,
+      registrationMode: state.registrationSettings.linuxdoMode,
+      dailyLimit: state.registrationSettings.linuxdoDailyLimit,
+      dailyUsed: 0,
+      dailyRemaining: state.registrationSettings.linuxdoDailyLimit,
+    },
+    {
+      provider: "passkey" as const,
+      configured: true,
+      loginEnabled: true,
+      registrationMode: state.registrationSettings.passkeyMode,
+      dailyLimit: null,
+      dailyUsed: 0,
+      dailyRemaining: null,
+    },
+  ];
 };
 
 const syncMetaDomains = () => {
@@ -322,7 +390,7 @@ export const demoApi = {
     );
   },
   async listAuthProviders() {
-    return clone(demoAuthProviders);
+    return clone(buildDemoAuthProviders());
   },
   getProviderStartUrl(
     provider: "github" | "linuxdo",
@@ -807,11 +875,19 @@ export const demoApi = {
     const apiKey = state.apiKeys.find((entry) => entry.id === id);
     if (apiKey) apiKey.revokedAt = new Date().toISOString();
   },
-  async listUsers() {
-    return clone(state.adminUsers);
+  async listUsers(input: { page: number; pageSize: number }) {
+    const result = paginate(state.adminUsers, input);
+    return clone({
+      users: result.items,
+      pagination: result.pagination,
+    });
   },
-  async listInvites() {
-    return clone(state.invites);
+  async listInvites(input: { page: number; pageSize: number }) {
+    const result = paginate(state.invites, input);
+    return clone({
+      invites: result.items,
+      pagination: result.pagination,
+    });
   },
   async createInvite(input: { note?: string; count: number }) {
     const invites = Array.from({ length: input.count }, () => ({
@@ -832,16 +908,34 @@ export const demoApi = {
     state.invites = state.invites.filter((entry) => entry.id !== id);
   },
   async getRegistrationSettings() {
-    return clone({ settings: state.registrationSettings });
+    return clone({
+      settings: {
+        ...state.registrationSettings,
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
+      },
+    });
   },
   async updateRegistrationSettings(
     input: Omit<RegistrationSettings, "updatedAt">,
   ) {
     state.registrationSettings = {
       ...input,
+      githubClientSecret:
+        input.githubClientSecret.trim() ||
+        state.registrationSettings.githubClientSecret,
+      linuxdoClientSecret:
+        input.linuxdoClientSecret.trim() ||
+        state.registrationSettings.linuxdoClientSecret,
       updatedAt: new Date().toISOString(),
     };
-    return clone({ settings: state.registrationSettings });
+    return clone({
+      settings: {
+        ...state.registrationSettings,
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
+      },
+    });
   },
   async transferAdmin(userId: string, verificationToken?: string) {
     if (!verificationToken?.includes(userId)) {

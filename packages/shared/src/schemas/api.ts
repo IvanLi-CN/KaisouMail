@@ -105,8 +105,14 @@ export const deleteInviteRequestSchema = z.object({
 export const updateRegistrationSettingsRequestSchema = z.object({
   githubMode: providerRegistrationModeSchema,
   githubDailyLimit: z.number().int().min(0).max(10_000),
+  githubClientId: z.string(),
+  githubClientSecret: z.string(),
+  githubOauthScopes: z.string(),
   linuxdoMode: providerRegistrationModeSchema,
   linuxdoDailyLimit: z.number().int().min(0).max(10_000),
+  linuxdoClientId: z.string(),
+  linuxdoClientSecret: z.string(),
+  linuxdoOauthBaseUrl: z.string(),
   passkeyMode: passkeyRegistrationModeSchema,
   deletedUserMailboxRetentionDays: z.number().int().min(0).max(30),
 });
@@ -241,6 +247,11 @@ export const listMessagesQuerySchema = z.object({
   scope: listQueryScopeSchema.optional(),
 });
 
+export const paginationQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
+});
+
 export const createDomainRequestSchema = withMailDomainAliases(
   {
     zoneId: z.string().min(1).max(128),
@@ -308,8 +319,16 @@ export const listPasskeysResponseSchema = z.object({
   passkeys: z.array(passkeySchema),
 });
 
+export const paginationMetaSchema = z.object({
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  totalItems: z.number().int().nonnegative(),
+  totalPages: z.number().int().min(1),
+});
+
 export const listUsersResponseSchema = z.object({
   users: z.array(adminUserSchema),
+  pagination: paginationMetaSchema,
 });
 
 export const accountResponseSchema = z.object({
@@ -322,6 +341,7 @@ export const listExternalAccountsResponseSchema = z.object({
 
 export const listInvitesResponseSchema = z.object({
   invites: z.array(inviteSchema),
+  pagination: paginationMetaSchema,
 });
 
 export const createInviteResponseSchema = z.object({

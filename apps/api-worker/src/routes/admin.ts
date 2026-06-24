@@ -7,6 +7,7 @@ import {
   createInviteRequestSchema,
   createInviteResponseSchema,
   listInvitesResponseSchema,
+  paginationQuerySchema,
   registrationSettingsResponseSchema,
   transferAdminRequestSchema,
   updateRegistrationSettingsRequestSchema,
@@ -25,7 +26,7 @@ import {
   createInvite,
   deleteInvite,
   getRegistrationSettings,
-  listInvites,
+  listInvitesPaginated,
   transferAdminRole,
   updateRegistrationSettings,
   verifyAdminTransferReauthSubject,
@@ -44,12 +45,15 @@ const adminTransferPasskeyVerificationRequestSchema = z.object({
 
 export const adminRoutes = new Hono<AppBindings>()
   .use("*", requireAuth({ admin: true, sessionOnly: true }))
-  .get("/invites", async (c) =>
-    c.json(
-      listInvitesResponseSchema.parse({
-        invites: await listInvites(c.env),
-      }),
-    ),
+  .get(
+    "/invites",
+    zValidator("query", paginationQuerySchema, apiValidationHook),
+    async (c) =>
+      c.json(
+        listInvitesResponseSchema.parse(
+          await listInvitesPaginated(c.env, c.req.valid("query")),
+        ),
+      ),
   )
   .post(
     "/invites",
@@ -71,7 +75,7 @@ export const adminRoutes = new Hono<AppBindings>()
   .get("/registration-settings", async (c) =>
     c.json(
       registrationSettingsResponseSchema.parse({
-        settings: await getRegistrationSettings(c.env),
+        settings: await getRegistrationSettings(c.env, c.get("runtimeConfig")),
       }),
     ),
   )

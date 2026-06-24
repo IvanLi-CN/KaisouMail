@@ -1,5 +1,16 @@
 import { startAuthentication } from "@simplewebauthn/browser";
-import { AlertTriangle, KeyRound, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Fingerprint,
+  Github,
+  KeyRound,
+  Network,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -22,6 +33,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import {
   Table,
   TableBody,
@@ -35,6 +48,7 @@ import type {
   AdminUserRecord,
   ExternalAccountRecord,
   InviteRecord,
+  PaginationMeta,
   RegistrationSettings,
   SessionUser,
 } from "@/lib/contracts";
@@ -51,46 +65,21 @@ const createInviteSchema = z.object({
 
 type CreateInviteValues = z.infer<typeof createInviteSchema>;
 export type SystemSection = "users" | "invites" | "registration";
-type PaginationState = {
-  page: number;
-  resetKey: string;
-};
 type RegistrationSettingsValues = Pick<
   RegistrationSettings,
   | "githubMode"
   | "githubDailyLimit"
+  | "githubClientId"
+  | "githubClientSecret"
+  | "githubOauthScopes"
   | "linuxdoMode"
   | "linuxdoDailyLimit"
+  | "linuxdoClientId"
+  | "linuxdoClientSecret"
+  | "linuxdoOauthBaseUrl"
   | "passkeyMode"
   | "deletedUserMailboxRetentionDays"
 >;
-
-const USERS_PER_PAGE = 10;
-const INVITES_PER_PAGE = 10;
-
-const clampPage = (page: number, totalPages: number) =>
-  Math.min(Math.max(page, 1), totalPages);
-
-const getPagination = <T,>(
-  items: T[],
-  pageSize: number,
-  state: PaginationState,
-  resetKey: string,
-) => {
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const page =
-    state.resetKey === resetKey ? clampPage(state.page, totalPages) : 1;
-  const pageStart = (page - 1) * pageSize;
-  const pageItems = items.slice(pageStart, pageStart + pageSize);
-
-  return {
-    page,
-    pageItems,
-    totalPages,
-    visibleRangeStart: items.length === 0 ? 0 : pageStart + 1,
-    visibleRangeEnd: pageStart + pageItems.length,
-  };
-};
 
 const PaginationControls = ({
   itemLabel,
@@ -153,6 +142,9 @@ const roleBadgeClassName = (role: AdminUserRecord["role"]) =>
 const channelCardClassName =
   "space-y-4 rounded-2xl border border-border/70 bg-card p-4";
 
+const feedbackCardClassName =
+  "rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm";
+
 const transferApiKeySchema = z.object({
   apiKey: z.string().trim().min(8, "请输入可用的 API Key"),
 });
@@ -184,10 +176,100 @@ const inviteKindLabel = (invite: InviteRecord) =>
 const inviteStatusLabel = (invite: InviteRecord) =>
   invite.usedAt ? "已使用" : "未使用";
 
+const DEFAULT_USERS_PAGE_SIZE = 10;
+const DEFAULT_INVITES_PAGE_SIZE = 10;
+
+const defaultPaginationMeta = (
+  totalItems: number,
+  pageSize: number,
+): PaginationMeta => ({
+  page: 1,
+  pageSize,
+  totalItems,
+  totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+});
+
+const clampPage = (page: number, totalPages: number) =>
+  Math.min(Math.max(page, 1), totalPages);
+
+const SliderField = ({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}) => (
+  <div className="space-y-3">
+    <div className="flex items-center justify-between gap-3">
+      <Label htmlFor={id}>{label}</Label>
+      <span className="rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground">
+        {value}
+      </span>
+    </div>
+    <div className="px-1">
+      <Slider
+        min={min}
+        max={max}
+        step={1}
+        value={[value]}
+        onValueChange={(nextValue) => onChange(nextValue[0] ?? min)}
+        aria-label={label}
+      />
+    </div>
+    <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <span>{min}</span>
+      <span>{max}</span>
+    </div>
+  </div>
+);
+
+const ChannelCardTitle = ({
+  icon: Icon,
+  title,
+}: {
+  icon: typeof Github;
+  title: string;
+}) => (
+  <div className="flex items-center gap-3">
+    <Icon className="h-5 w-5 shrink-0 text-primary" />
+    <p className="text-sm font-semibold text-foreground">{title}</p>
+  </div>
+);
+
+const modeLabel = (mode: RegistrationSettingsValues["githubMode"]) => {
+  switch (mode) {
+    case "off":
+      return "关闭";
+    case "invite-only":
+      return "仅邀请码";
+    case "open":
+      return "开放";
+  }
+};
+
+const providerConfigStatusLabel = (configured: boolean) =>
+  configured ? "已配置" : "未配置";
+
 export const UserTable = ({
   section = "users",
   users,
+  usersPagination = defaultPaginationMeta(
+    users.length,
+    DEFAULT_USERS_PAGE_SIZE,
+  ),
   invites,
+  invitesPagination = defaultPaginationMeta(
+    invites.length,
+    DEFAULT_INVITES_PAGE_SIZE,
+  ),
   settings,
   currentAdminUserId,
   currentAdmin,
@@ -197,10 +279,14 @@ export const UserTable = ({
   onDeleteInvite,
   onUpdateSettings,
   onTransferAdmin,
+  onUsersPageChange = () => undefined,
+  onInvitesPageChange = () => undefined,
 }: {
   section?: SystemSection;
   users: AdminUserRecord[];
+  usersPagination?: PaginationMeta;
   invites: InviteRecord[];
+  invitesPagination?: PaginationMeta;
   settings: RegistrationSettings;
   currentAdminUserId: string | null;
   currentAdmin: {
@@ -223,6 +309,8 @@ export const UserTable = ({
     userId: string;
     verificationToken: string;
   }) => Promise<void> | void;
+  onUsersPageChange?: (page: number) => void;
+  onInvitesPageChange?: (page: number) => void;
 }) => {
   const inviteForm = useForm<CreateInviteValues>({
     defaultValues: { note: "", count: 10 },
@@ -231,8 +319,14 @@ export const UserTable = ({
     useState<RegistrationSettingsValues>({
       githubMode: settings.githubMode,
       githubDailyLimit: settings.githubDailyLimit,
+      githubClientId: settings.githubClientId,
+      githubClientSecret: settings.githubClientSecret,
+      githubOauthScopes: settings.githubOauthScopes,
       linuxdoMode: settings.linuxdoMode,
       linuxdoDailyLimit: settings.linuxdoDailyLimit,
+      linuxdoClientId: settings.linuxdoClientId,
+      linuxdoClientSecret: settings.linuxdoClientSecret,
+      linuxdoOauthBaseUrl: settings.linuxdoOauthBaseUrl,
       passkeyMode: settings.passkeyMode,
       deletedUserMailboxRetentionDays: settings.deletedUserMailboxRetentionDays,
     });
@@ -247,10 +341,25 @@ export const UserTable = ({
     useState<ReauthMethod | null>(null);
   const [transferPendingMethod, setTransferPendingMethod] =
     useState<ReauthMethod | null>(null);
-  const [usersPaginationState, setUsersPaginationState] =
-    useState<PaginationState>({ page: 1, resetKey: "" });
-  const [invitesPaginationState, setInvitesPaginationState] =
-    useState<PaginationState>({ page: 1, resetKey: "" });
+  const [localUsersPage, setLocalUsersPage] = useState(1);
+  const [localInvitesPage, setLocalInvitesPage] = useState(1);
+  const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | AdminUserRecord["role"]>(
+    "all",
+  );
+  const [inviteActionMessage, setInviteActionMessage] = useState<string | null>(
+    null,
+  );
+  const [inviteActionError, setInviteActionError] = useState<string | null>(
+    null,
+  );
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [expandedProvider, setExpandedProvider] = useState<
+    "github" | "linuxdo" | "passkey" | null
+  >("github");
   const [transferError, setTransferError] = useState<string | null>(null);
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
@@ -262,8 +371,14 @@ export const UserTable = ({
     setSettingsDraft({
       githubMode: settings.githubMode,
       githubDailyLimit: settings.githubDailyLimit,
+      githubClientId: settings.githubClientId,
+      githubClientSecret: settings.githubClientSecret,
+      githubOauthScopes: settings.githubOauthScopes,
       linuxdoMode: settings.linuxdoMode,
       linuxdoDailyLimit: settings.linuxdoDailyLimit,
+      linuxdoClientId: settings.linuxdoClientId,
+      linuxdoClientSecret: settings.linuxdoClientSecret,
+      linuxdoOauthBaseUrl: settings.linuxdoOauthBaseUrl,
       passkeyMode: settings.passkeyMode,
       deletedUserMailboxRetentionDays: settings.deletedUserMailboxRetentionDays,
     });
@@ -300,34 +415,95 @@ export const UserTable = ({
     return methods;
   }, [currentAdmin.externalAccounts, currentAdmin.hasPasskeys]);
 
-  const usersPaginationResetKey = useMemo(
+  const usersAreServerPaginated = usersPagination.totalItems > users.length;
+  const invitesAreServerPaginated =
+    invitesPagination.totalItems > invites.length;
+  const derivedInvitesTotalPages = Math.max(
+    1,
+    Math.ceil(invites.length / Math.max(invitesPagination.pageSize, 1)),
+  );
+  const effectiveInvitesPage = invitesAreServerPaginated
+    ? invitesPagination.page
+    : clampPage(localInvitesPage, derivedInvitesTotalPages);
+  const visibleInvites = invitesAreServerPaginated
+    ? invites
+    : invites.slice(
+        (effectiveInvitesPage - 1) * invitesPagination.pageSize,
+        effectiveInvitesPage * invitesPagination.pageSize,
+      );
+  const effectiveInvitesPagination = invitesAreServerPaginated
+    ? invitesPagination
+    : {
+        page: effectiveInvitesPage,
+        pageSize: invitesPagination.pageSize,
+        totalItems: invites.length,
+        totalPages: derivedInvitesTotalPages,
+      };
+
+  useEffect(() => {
+    setLocalInvitesPage((current) =>
+      clampPage(current, derivedInvitesTotalPages),
+    );
+  }, [derivedInvitesTotalPages]);
+
+  useEffect(() => {
+    setSettingsMessage(null);
+    setSettingsError(null);
+  }, []);
+
+  const providerConfigured = {
+    github: Boolean(settings.githubClientId),
+    linuxdo: Boolean(settings.linuxdoClientId && settings.linuxdoOauthBaseUrl),
+    passkey: settings.passkeyMode !== "off",
+  };
+
+  const normalizedUserSearch = userSearch.trim().toLowerCase();
+  const filteredUsers = useMemo(
     () =>
-      users
-        .map((user) => `${user.id}:${user.updatedAt}:${user.deletedAt ?? ""}`)
-        .join("|"),
-    [users],
+      users.filter((user) => {
+        const matchesRole = roleFilter === "all" || user.role === roleFilter;
+        const matchesSearch =
+          normalizedUserSearch.length === 0 ||
+          user.nickname.toLowerCase().includes(normalizedUserSearch) ||
+          user.username.toLowerCase().includes(normalizedUserSearch) ||
+          user.externalAccounts.some((account) =>
+            [
+              account.provider,
+              account.providerUsername,
+              account.providerNickname,
+            ]
+              .filter(Boolean)
+              .some((value) =>
+                value?.toLowerCase().includes(normalizedUserSearch),
+              ),
+          );
+        return matchesRole && matchesSearch;
+      }),
+    [normalizedUserSearch, roleFilter, users],
   );
-  const usersPagination = getPagination(
-    users,
-    USERS_PER_PAGE,
-    usersPaginationState,
-    usersPaginationResetKey,
+
+  const usersVisibleSource = usersAreServerPaginated ? users : filteredUsers;
+  const filteredUsersTotalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / Math.max(usersPagination.pageSize, 1)),
   );
-  const invitesPaginationResetKey = useMemo(
-    () =>
-      invites
-        .map(
-          (invite) => `${invite.id}:${invite.createdAt}:${invite.usedAt ?? ""}`,
-        )
-        .join("|"),
-    [invites],
-  );
-  const invitesPagination = getPagination(
-    invites,
-    INVITES_PER_PAGE,
-    invitesPaginationState,
-    invitesPaginationResetKey,
-  );
+  const effectiveUsersPageResolved = usersAreServerPaginated
+    ? usersPagination.page
+    : clampPage(localUsersPage, filteredUsersTotalPages);
+  const visibleUsers = usersAreServerPaginated
+    ? usersVisibleSource
+    : usersVisibleSource.slice(
+        (effectiveUsersPageResolved - 1) * usersPagination.pageSize,
+        effectiveUsersPageResolved * usersPagination.pageSize,
+      );
+  const effectiveUsersPagination = usersAreServerPaginated
+    ? usersPagination
+    : {
+        page: effectiveUsersPageResolved,
+        pageSize: usersPagination.pageSize,
+        totalItems: filteredUsers.length,
+        totalPages: filteredUsersTotalPages,
+      };
 
   const closeTransferDialog = () => {
     setTransferTargetId(null);
@@ -452,22 +628,143 @@ export const UserTable = ({
     }
   };
 
-  const parseIntField = (value: string, max: number) => {
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < 0) return 0;
-    return Math.min(parsed, max);
+  const handleCreateInvite = inviteForm.handleSubmit(async (values) => {
+    try {
+      setIsCreatingInvite(true);
+      setInviteActionError(null);
+      setInviteActionMessage(null);
+      const parsed = createInviteSchema.parse(values);
+      await onCreateInvite(parsed);
+      inviteForm.reset({
+        note: parsed.note ?? "",
+        count: parsed.count,
+      });
+      setInviteActionMessage(
+        parsed.count === 1
+          ? "邀请码已生成。"
+          : `已生成 ${parsed.count} 个邀请码。`,
+      );
+    } catch (error) {
+      setInviteActionError(
+        error instanceof Error ? error.message : "生成邀请码失败",
+      );
+    } finally {
+      setIsCreatingInvite(false);
+    }
+  });
+
+  const handleSaveSettings = async () => {
+    try {
+      setIsSavingSettings(true);
+      setSettingsError(null);
+      setSettingsMessage(null);
+      await onUpdateSettings({
+        ...settingsDraft,
+        githubClientSecret: settingsDraft.githubClientSecret.trim(),
+        linuxdoClientSecret: settingsDraft.linuxdoClientSecret.trim(),
+      });
+      setSettingsMessage("注册设置已保存。");
+    } catch (error) {
+      setSettingsError(
+        error instanceof Error ? error.message : "保存注册设置失败",
+      );
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
+
+  const hasUnsavedSettings =
+    settingsDraft.githubMode !== settings.githubMode ||
+    settingsDraft.githubDailyLimit !== settings.githubDailyLimit ||
+    settingsDraft.githubClientId !== settings.githubClientId ||
+    settingsDraft.githubClientSecret.trim().length > 0 ||
+    settingsDraft.githubOauthScopes !== settings.githubOauthScopes ||
+    settingsDraft.linuxdoMode !== settings.linuxdoMode ||
+    settingsDraft.linuxdoDailyLimit !== settings.linuxdoDailyLimit ||
+    settingsDraft.linuxdoClientId !== settings.linuxdoClientId ||
+    settingsDraft.linuxdoClientSecret.trim().length > 0 ||
+    settingsDraft.linuxdoOauthBaseUrl !== settings.linuxdoOauthBaseUrl ||
+    settingsDraft.passkeyMode !== settings.passkeyMode ||
+    settingsDraft.deletedUserMailboxRetentionDays !==
+      settings.deletedUserMailboxRetentionDays;
 
   return (
     <div className="space-y-6">
       {section === "users" ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Users</CardTitle>
+          <CardHeader className="space-y-4">
+            <div className="space-y-1">
+              <CardTitle>用户</CardTitle>
+              <CardDescription>
+                查看当前页账号、绑定状态与管理员转移入口。
+              </CardDescription>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={userSearch}
+                  onChange={(event) => {
+                    setUserSearch(event.target.value);
+                    setLocalUsersPage(1);
+                  }}
+                  className="pl-9"
+                  placeholder="筛选当前页用户、用户名或绑定账号"
+                  aria-label="筛选当前页用户"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="system-user-role-filter">角色</Label>
+                <Select
+                  id="system-user-role-filter"
+                  value={roleFilter}
+                  onChange={(event) => {
+                    setRoleFilter(
+                      event.target.value as "all" | AdminUserRecord["role"],
+                    );
+                    setLocalUsersPage(1);
+                  }}
+                >
+                  <option value="all">全部角色</option>
+                  <option value="admin">管理员</option>
+                  <option value="member">成员</option>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
+            {normalizedUserSearch.length > 0 || roleFilter !== "all" ? (
+              <div
+                className={`${feedbackCardClassName} mb-5 flex items-center justify-between gap-3`}
+              >
+                <p className="text-muted-foreground">
+                  当前筛出 {filteredUsers.length} 个用户。
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-10"
+                  onClick={() => {
+                    setUserSearch("");
+                    setRoleFilter("all");
+                  }}
+                >
+                  清除筛选
+                </Button>
+              </div>
+            ) : null}
+            {visibleUsers.length === 0 ? (
+              <div
+                className={`${feedbackCardClassName} flex items-center justify-between gap-3`}
+              >
+                <p className="text-muted-foreground">
+                  当前页没有符合条件的用户。
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-3 md:hidden">
-              {usersPagination.pageItems.map((user) => {
+              {visibleUsers.map((user) => {
                 const canTransfer = user.id !== currentAdminUserId;
                 return (
                   <div
@@ -516,7 +813,7 @@ export const UserTable = ({
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
                           <p className="text-xs font-medium text-muted-foreground">
-                            Passkeys
+                            Passkey
                           </p>
                           <p className="text-foreground">{user.passkeyCount}</p>
                         </div>
@@ -553,7 +850,7 @@ export const UserTable = ({
                   <TableRow>
                     <TableHeaderCell>账号</TableHeaderCell>
                     <TableHeaderCell>外部绑定</TableHeaderCell>
-                    <TableHeaderCell>Passkeys</TableHeaderCell>
+                    <TableHeaderCell>Passkey</TableHeaderCell>
                     <TableHeaderCell>状态</TableHeaderCell>
                     <TableHeaderCell className="text-right">
                       操作
@@ -561,7 +858,7 @@ export const UserTable = ({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {usersPagination.pageItems.map((user) => {
+                  {visibleUsers.map((user) => {
                     const canTransfer = user.id !== currentAdminUserId;
                     return (
                       <TableRow key={user.id}>
@@ -633,17 +930,30 @@ export const UserTable = ({
             </div>
             <PaginationControls
               itemLabel="用户"
-              page={usersPagination.page}
-              totalPages={usersPagination.totalPages}
-              totalItems={users.length}
-              visibleRangeStart={usersPagination.visibleRangeStart}
-              visibleRangeEnd={usersPagination.visibleRangeEnd}
-              onPageChange={(page) =>
-                setUsersPaginationState({
-                  page,
-                  resetKey: usersPaginationResetKey,
-                })
+              page={effectiveUsersPagination.page}
+              totalPages={effectiveUsersPagination.totalPages}
+              totalItems={effectiveUsersPagination.totalItems}
+              visibleRangeStart={
+                effectiveUsersPagination.totalItems === 0
+                  ? 0
+                  : (effectiveUsersPagination.page - 1) *
+                      effectiveUsersPagination.pageSize +
+                    1
               }
+              visibleRangeEnd={
+                effectiveUsersPagination.totalItems === 0
+                  ? 0
+                  : (effectiveUsersPagination.page - 1) *
+                      effectiveUsersPagination.pageSize +
+                    visibleUsers.length
+              }
+              onPageChange={(page) => {
+                if (usersAreServerPaginated) {
+                  onUsersPageChange(page);
+                  return;
+                }
+                setLocalUsersPage(page);
+              }}
             />
           </CardContent>
         </Card>
@@ -845,20 +1155,34 @@ export const UserTable = ({
       {section === "invites" ? (
         <Card>
           <CardHeader>
-            <CardTitle>Invites</CardTitle>
-            <CardDescription>邀请码列表与批量生成。</CardDescription>
+            <CardTitle>邀请</CardTitle>
+            <CardDescription>
+              批量生成邀请码，并查看当前分页列表。
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            {inviteActionMessage ? (
+              <div
+                className={`${feedbackCardClassName} flex items-center gap-3 text-foreground`}
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                <p>{inviteActionMessage}</p>
+              </div>
+            ) : null}
+            {inviteActionError ? (
+              <div
+                className={`${feedbackCardClassName} flex items-center gap-3 text-destructive`}
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <p>{inviteActionError}</p>
+              </div>
+            ) : null}
             <form
               className="rounded-2xl border border-border/70 bg-background/60 p-4"
-              onSubmit={inviteForm.handleSubmit(async (values) => {
-                const parsed = createInviteSchema.parse(values);
-                await onCreateInvite(parsed);
-                inviteForm.reset({
-                  note: parsed.note ?? "",
-                  count: parsed.count,
-                });
-              })}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleCreateInvite();
+              }}
             >
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_120px_180px]">
                 <div className="space-y-2">
@@ -887,8 +1211,12 @@ export const UserTable = ({
                   </p>
                 </div>
                 <div className="flex lg:pt-7">
-                  <Button type="submit" className="h-11 w-full">
-                    批量生成邀请码
+                  <Button
+                    type="submit"
+                    className="h-11 w-full"
+                    disabled={isCreatingInvite}
+                  >
+                    {isCreatingInvite ? "生成中…" : "批量生成邀请码"}
                   </Button>
                 </div>
               </div>
@@ -900,7 +1228,7 @@ export const UserTable = ({
               </div>
               <div className="md:hidden">
                 <div className="divide-y divide-border">
-                  {invitesPagination.pageItems.map((invite) => (
+                  {visibleInvites.map((invite) => (
                     <div key={invite.id} className="space-y-3 px-4 py-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
@@ -944,7 +1272,7 @@ export const UserTable = ({
                 </div>
               </div>
               <div className="hidden md:block">
-                <Table className="min-w-0">
+                <Table>
                   <TableHead>
                     <TableRow>
                       <TableHeaderCell>邀请码</TableHeaderCell>
@@ -960,7 +1288,7 @@ export const UserTable = ({
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {invitesPagination.pageItems.map((invite) => (
+                    {visibleInvites.map((invite) => (
                       <TableRow key={invite.id}>
                         <TableCell className="font-medium text-foreground">
                           {invite.code}
@@ -998,17 +1326,30 @@ export const UserTable = ({
               <div className="px-4 pb-4">
                 <PaginationControls
                   itemLabel="邀请码"
-                  page={invitesPagination.page}
-                  totalPages={invitesPagination.totalPages}
-                  totalItems={invites.length}
-                  visibleRangeStart={invitesPagination.visibleRangeStart}
-                  visibleRangeEnd={invitesPagination.visibleRangeEnd}
-                  onPageChange={(page) =>
-                    setInvitesPaginationState({
-                      page,
-                      resetKey: invitesPaginationResetKey,
-                    })
+                  page={effectiveInvitesPagination.page}
+                  totalPages={effectiveInvitesPagination.totalPages}
+                  totalItems={effectiveInvitesPagination.totalItems}
+                  visibleRangeStart={
+                    effectiveInvitesPagination.totalItems === 0
+                      ? 0
+                      : (effectiveInvitesPagination.page - 1) *
+                          effectiveInvitesPagination.pageSize +
+                        1
                   }
+                  visibleRangeEnd={
+                    effectiveInvitesPagination.totalItems === 0
+                      ? 0
+                      : (effectiveInvitesPagination.page - 1) *
+                          effectiveInvitesPagination.pageSize +
+                        visibleInvites.length
+                  }
+                  onPageChange={(page) => {
+                    if (invitesAreServerPaginated) {
+                      onInvitesPageChange(page);
+                      return;
+                    }
+                    setLocalInvitesPage(page);
+                  }}
                 />
               </div>
             </div>
@@ -1018,170 +1359,367 @@ export const UserTable = ({
 
       {section === "registration" ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Registration</CardTitle>
+          <CardHeader className="space-y-3">
+            <div className="space-y-1">
+              <CardTitle>注册设置</CardTitle>
+              <CardDescription>
+                先看每个注册入口的当前状态，再按需展开配置。
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge className="border border-border bg-background/70 text-foreground">
+                更新于 {formatDateTime(settings.updatedAt)}
+              </Badge>
+              {hasUnsavedSettings ? (
+                <Badge className="border border-primary/40 bg-primary/10 text-primary">
+                  有未保存更改
+                </Badge>
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent>
             <form
-              className="grid gap-6 lg:grid-cols-3"
+              className="space-y-6"
               onSubmit={(event) => {
                 event.preventDefault();
-                void onUpdateSettings(settingsDraft);
+                void handleSaveSettings();
               }}
             >
-              <div className={channelCardClassName}>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    GitHub
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    `off | invite-only | open`
-                  </p>
+              {settingsMessage ? (
+                <div
+                  className={`${feedbackCardClassName} flex items-center gap-3 text-foreground`}
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                  <p>{settingsMessage}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="github-mode">模式</Label>
-                  <select
-                    id="github-mode"
-                    className="flex h-11 w-full rounded-lg border border-input bg-muted/40 px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    value={settingsDraft.githubMode}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        githubMode: event.target
-                          .value as RegistrationSettingsValues["githubMode"],
-                      }))
-                    }
-                  >
-                    <option value="off">off</option>
-                    <option value="invite-only">invite-only</option>
-                    <option value="open">open</option>
-                  </select>
+              ) : null}
+              {settingsError ? (
+                <div
+                  className={`${feedbackCardClassName} flex items-center gap-3 text-destructive`}
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <p>{settingsError}</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="github-limit">每日开放注册上限</Label>
-                  <Input
-                    id="github-limit"
-                    type="number"
-                    min={0}
-                    max={10000}
-                    value={settingsDraft.githubDailyLimit}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        githubDailyLimit: parseIntField(
-                          event.target.value,
-                          10_000,
-                        ),
-                      }))
-                    }
-                  />
+              ) : null}
+
+              <div className="space-y-4">
+                <div className={channelCardClassName}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <ChannelCardTitle icon={Github} title="GitHub" />
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {modeLabel(settingsDraft.githubMode)}
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          上限 {settingsDraft.githubDailyLimit}
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {providerConfigStatusLabel(providerConfigured.github)}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-11 shrink-0"
+                      onClick={() =>
+                        setExpandedProvider((current) =>
+                          current === "github" ? null : "github",
+                        )
+                      }
+                    >
+                      {expandedProvider === "github" ? (
+                        <ChevronUp className="mr-2 h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                      )}
+                      {expandedProvider === "github" ? "收起配置" : "展开配置"}
+                    </Button>
+                  </div>
+                  {expandedProvider === "github" ? (
+                    <div className="space-y-4 border-t border-border/70 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="github-mode">模式</Label>
+                        <Select
+                          id="github-mode"
+                          value={settingsDraft.githubMode}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              githubMode: event.target
+                                .value as RegistrationSettingsValues["githubMode"],
+                            }))
+                          }
+                        >
+                          <option value="off">关闭</option>
+                          <option value="invite-only">仅邀请码</option>
+                          <option value="open">开放</option>
+                        </Select>
+                      </div>
+                      <SliderField
+                        id="github-limit"
+                        label="每日开放注册上限"
+                        min={0}
+                        max={100}
+                        value={settingsDraft.githubDailyLimit}
+                        onChange={(value) =>
+                          setSettingsDraft((current) => ({
+                            ...current,
+                            githubDailyLimit: value,
+                          }))
+                        }
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="github-client-id">客户端 ID</Label>
+                        <Input
+                          id="github-client-id"
+                          value={settingsDraft.githubClientId}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              githubClientId: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-client-secret">客户端密钥</Label>
+                        <Input
+                          id="github-client-secret"
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="留空表示保持现有配置"
+                          value={settingsDraft.githubClientSecret}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              githubClientSecret: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="github-oauth-scopes">授权范围</Label>
+                        <Input
+                          id="github-oauth-scopes"
+                          value={settingsDraft.githubOauthScopes}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              githubOauthScopes: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={channelCardClassName}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <ChannelCardTitle icon={Network} title="LinuxDO" />
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {modeLabel(settingsDraft.linuxdoMode)}
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          上限 {settingsDraft.linuxdoDailyLimit}
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {providerConfigStatusLabel(
+                            providerConfigured.linuxdo,
+                          )}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-11 shrink-0"
+                      onClick={() =>
+                        setExpandedProvider((current) =>
+                          current === "linuxdo" ? null : "linuxdo",
+                        )
+                      }
+                    >
+                      {expandedProvider === "linuxdo" ? (
+                        <ChevronUp className="mr-2 h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                      )}
+                      {expandedProvider === "linuxdo" ? "收起配置" : "展开配置"}
+                    </Button>
+                  </div>
+                  {expandedProvider === "linuxdo" ? (
+                    <div className="space-y-4 border-t border-border/70 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="linuxdo-mode">模式</Label>
+                        <Select
+                          id="linuxdo-mode"
+                          value={settingsDraft.linuxdoMode}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              linuxdoMode: event.target
+                                .value as RegistrationSettingsValues["linuxdoMode"],
+                            }))
+                          }
+                        >
+                          <option value="off">关闭</option>
+                          <option value="invite-only">仅邀请码</option>
+                          <option value="open">开放</option>
+                        </Select>
+                      </div>
+                      <SliderField
+                        id="linuxdo-limit"
+                        label="每日开放注册上限"
+                        min={0}
+                        max={100}
+                        value={settingsDraft.linuxdoDailyLimit}
+                        onChange={(value) =>
+                          setSettingsDraft((current) => ({
+                            ...current,
+                            linuxdoDailyLimit: value,
+                          }))
+                        }
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="linuxdo-client-id">客户端 ID</Label>
+                        <Input
+                          id="linuxdo-client-id"
+                          value={settingsDraft.linuxdoClientId}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              linuxdoClientId: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="linuxdo-client-secret">
+                          客户端密钥
+                        </Label>
+                        <Input
+                          id="linuxdo-client-secret"
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder="留空表示保持现有配置"
+                          value={settingsDraft.linuxdoClientSecret}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              linuxdoClientSecret: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="linuxdo-oauth-base-url">
+                          OAuth 入口 URL
+                        </Label>
+                        <Input
+                          id="linuxdo-oauth-base-url"
+                          value={settingsDraft.linuxdoOauthBaseUrl}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              linuxdoOauthBaseUrl: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={channelCardClassName}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <ChannelCardTitle icon={Fingerprint} title="Passkey" />
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {modeLabel(settingsDraft.passkeyMode)}
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          保留 {settingsDraft.deletedUserMailboxRetentionDays}{" "}
+                          天
+                        </Badge>
+                        <Badge className="border border-border bg-background/70 text-foreground">
+                          {providerConfigStatusLabel(
+                            providerConfigured.passkey,
+                          )}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-11 shrink-0"
+                      onClick={() =>
+                        setExpandedProvider((current) =>
+                          current === "passkey" ? null : "passkey",
+                        )
+                      }
+                    >
+                      {expandedProvider === "passkey" ? (
+                        <ChevronUp className="mr-2 h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="mr-2 h-4 w-4" />
+                      )}
+                      {expandedProvider === "passkey" ? "收起配置" : "展开配置"}
+                    </Button>
+                  </div>
+                  {expandedProvider === "passkey" ? (
+                    <div className="space-y-4 border-t border-border/70 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="passkey-mode">模式</Label>
+                        <Select
+                          id="passkey-mode"
+                          value={settingsDraft.passkeyMode}
+                          onChange={(event) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              passkeyMode: event.target
+                                .value as RegistrationSettingsValues["passkeyMode"],
+                            }))
+                          }
+                        >
+                          <option value="off">关闭</option>
+                          <option value="invite-only">仅邀请码</option>
+                        </Select>
+                      </div>
+                      <SliderField
+                        id="retention-days"
+                        label="注销后邮箱保留天数"
+                        min={0}
+                        max={30}
+                        value={settingsDraft.deletedUserMailboxRetentionDays}
+                        onChange={(value) =>
+                          setSettingsDraft((current) => ({
+                            ...current,
+                            deletedUserMailboxRetentionDays: value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
-              <div className={channelCardClassName}>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    LinuxDO
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    `off | invite-only | open`
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="linuxdo-mode">模式</Label>
-                  <select
-                    id="linuxdo-mode"
-                    className="flex h-11 w-full rounded-lg border border-input bg-muted/40 px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    value={settingsDraft.linuxdoMode}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        linuxdoMode: event.target
-                          .value as RegistrationSettingsValues["linuxdoMode"],
-                      }))
-                    }
-                  >
-                    <option value="off">off</option>
-                    <option value="invite-only">invite-only</option>
-                    <option value="open">open</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="linuxdo-limit">每日开放注册上限</Label>
-                  <Input
-                    id="linuxdo-limit"
-                    type="number"
-                    min={0}
-                    max={10000}
-                    value={settingsDraft.linuxdoDailyLimit}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        linuxdoDailyLimit: parseIntField(
-                          event.target.value,
-                          10_000,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className={channelCardClassName}>
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-foreground">
-                    Passkey
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    首登只支持邀请码。
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="passkey-mode">模式</Label>
-                  <select
-                    id="passkey-mode"
-                    className="flex h-11 w-full rounded-lg border border-input bg-muted/40 px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    value={settingsDraft.passkeyMode}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        passkeyMode: event.target
-                          .value as RegistrationSettingsValues["passkeyMode"],
-                      }))
-                    }
-                  >
-                    <option value="off">off</option>
-                    <option value="invite-only">invite-only</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="retention-days">注销后邮箱保留天数</Label>
-                  <Input
-                    id="retention-days"
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={settingsDraft.deletedUserMailboxRetentionDays}
-                    onChange={(event) =>
-                      setSettingsDraft((current) => ({
-                        ...current,
-                        deletedUserMailboxRetentionDays: parseIntField(
-                          event.target.value,
-                          30,
-                        ),
-                      }))
-                    }
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  当前配置更新于 {formatDateTime(settings.updatedAt)}
-                </p>
-              </div>
-
-              <div className="lg:col-span-3">
-                <Button type="submit" className="min-h-11">
-                  保存注册策略
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="submit"
+                  className="min-h-11"
+                  disabled={isSavingSettings || !hasUnsavedSettings}
+                >
+                  {isSavingSettings ? "保存中…" : "保存注册设置"}
                 </Button>
+                <p className="text-sm text-muted-foreground">
+                  未填写的新密钥会保持现有配置，不会回显。
+                </p>
               </div>
             </form>
           </CardContent>

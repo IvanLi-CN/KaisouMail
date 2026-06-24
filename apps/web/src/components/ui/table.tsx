@@ -12,9 +12,12 @@ export const Table = ({
   className,
   ...props
 }: TableHTMLAttributes<HTMLTableElement>) => (
-  <div className="overflow-x-auto rounded-xl border border-border bg-card">
+  <div className="w-full overflow-x-auto rounded-xl border border-border bg-card">
     <table
-      className={cn("min-w-full border-collapse text-left text-sm", className)}
+      className={cn(
+        "w-full min-w-full border-collapse text-left text-sm",
+        className,
+      )}
       {...props}
     />
   </div>

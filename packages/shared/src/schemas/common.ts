@@ -292,8 +292,14 @@ export const inviteSchema = z.object({
 export const registrationSettingsSchema = z.object({
   githubMode: providerRegistrationModeSchema,
   githubDailyLimit: z.number().int().nonnegative(),
+  githubClientId: z.string(),
+  githubClientSecret: z.string(),
+  githubOauthScopes: z.string(),
   linuxdoMode: providerRegistrationModeSchema,
   linuxdoDailyLimit: z.number().int().nonnegative(),
+  linuxdoClientId: z.string(),
+  linuxdoClientSecret: z.string(),
+  linuxdoOauthBaseUrl: z.string(),
   passkeyMode: passkeyRegistrationModeSchema,
   deletedUserMailboxRetentionDays: z
     .number()

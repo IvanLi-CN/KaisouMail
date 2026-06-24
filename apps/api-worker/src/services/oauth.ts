@@ -6,9 +6,11 @@ import {
   bindExternalAccount,
   consumeInviteForAuthenticatedUser,
   findUserByExternalAccount,
+  getRegistrationSettings,
   markExternalAccountUsed,
   registerViaExternalProvider,
   resolveExternalRegistrationRequirement,
+  resolveStoredOauthConfig,
   verifyAdminTransferReauthSubject,
 } from "./identity";
 
@@ -110,32 +112,38 @@ const redirectToAdminTransfer = (
   return url.pathname + url.search;
 };
 
-const getProviderConfig = (config: RuntimeConfig, provider: Provider) => {
+const getProviderConfig = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  provider: Provider,
+) => {
+  const settings = await getRegistrationSettings(env);
+  const oauth = resolveStoredOauthConfig(settings, config);
   if (provider === "github") {
-    if (!config.GITHUB_CLIENT_ID || !config.GITHUB_CLIENT_SECRET) {
+    if (!oauth.githubClientId || !oauth.githubClientSecret) {
       throw new ApiError(503, "GitHub auth is not configured");
     }
     return {
       authorizeUrl: "https://github.com/login/oauth/authorize",
       tokenUrl: "https://github.com/login/oauth/access_token",
       userUrl: "https://api.github.com/user",
-      clientId: config.GITHUB_CLIENT_ID,
-      clientSecret: config.GITHUB_CLIENT_SECRET,
-      scopes: config.GITHUB_OAUTH_SCOPES ?? ["read:user"],
+      clientId: oauth.githubClientId,
+      clientSecret: oauth.githubClientSecret,
+      scopes: oauth.githubOauthScopes.split(/[,\s]+/).filter(Boolean),
     };
   }
 
-  if (!config.LINUXDO_CLIENT_ID || !config.LINUXDO_CLIENT_SECRET) {
+  if (!oauth.linuxdoClientId || !oauth.linuxdoClientSecret) {
     throw new ApiError(503, "LinuxDO auth is not configured");
   }
 
-  const base = config.LINUXDO_OAUTH_BASE_URL ?? "https://connect.linux.do";
+  const base = oauth.linuxdoOauthBaseUrl;
   return {
     authorizeUrl: `${base}/oauth2/authorize`,
     tokenUrl: `${base}/oauth2/token`,
     userUrl: `${base}/api/user`,
-    clientId: config.LINUXDO_CLIENT_ID,
-    clientSecret: config.LINUXDO_CLIENT_SECRET,
+    clientId: oauth.linuxdoClientId,
+    clientSecret: oauth.linuxdoClientSecret,
     scopes: ["read"],
   };
 };
@@ -169,6 +177,7 @@ const verifyState = async (config: RuntimeConfig, state: string) => {
 export const buildProviderStartUrl = async (
   config: RuntimeConfig,
   request: Request,
+  env: WorkerEnv,
   providerValue: string,
   options: {
     intent: Intent;
@@ -179,7 +188,7 @@ export const buildProviderStartUrl = async (
   },
 ) => {
   const provider = ensureProvider(providerValue);
-  const providerConfig = getProviderConfig(config, provider);
+  const providerConfig = await getProviderConfig(env, config, provider);
   const baseOrigin = resolveBaseOrigin(request);
   const callbackUrl = `${baseOrigin}/api/auth/${provider}/callback`;
   const state = await signState(config, {
@@ -323,12 +332,13 @@ export const completePendingExternalRegistration = async (
 };
 
 const exchangeCodeForToken = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   request: Request,
   provider: Provider,
   code: string,
 ) => {
-  const providerConfig = getProviderConfig(config, provider);
+  const providerConfig = await getProviderConfig(env, config, provider);
   const callbackUrl = `${resolveBaseOrigin(request)}/api/auth/${provider}/callback`;
   const response = await fetch(providerConfig.tokenUrl, {
     method: "POST",
@@ -355,13 +365,15 @@ const exchangeCodeForToken = async (
 };
 
 const fetchProviderProfile = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   request: Request,
   provider: Provider,
   code: string,
 ): Promise<ProviderProfile> => {
-  const providerConfig = getProviderConfig(config, provider);
+  const providerConfig = await getProviderConfig(env, config, provider);
   const accessToken = await exchangeCodeForToken(
+    env,
     config,
     request,
     provider,
@@ -439,7 +451,13 @@ export const completeProviderCallback = async (
   }
   if (!code) throw new ApiError(400, "Missing OAuth code");
 
-  const profile = await fetchProviderProfile(config, request, provider, code);
+  const profile = await fetchProviderProfile(
+    env,
+    config,
+    request,
+    provider,
+    code,
+  );
   if (state.intent === "bind") {
     if (!state.userId) {
       throw new ApiError(401, "Authentication required");

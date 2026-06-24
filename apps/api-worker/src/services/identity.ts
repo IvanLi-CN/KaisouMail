@@ -37,6 +37,10 @@ type ExternalProvider = "github" | "linuxdo";
 type RegistrationMode = "off" | "invite-only" | "open";
 type PasskeyMode = "off" | "invite-only";
 type AdminTransferMethod = "github" | "linuxdo" | "passkey" | "api-key";
+type PaginationInput = {
+  page: number;
+  pageSize: number;
+};
 
 type AdminTransferIntentPayload = {
   kind: "admin-transfer-intent";
@@ -75,6 +79,8 @@ type ExternalAccountRecord = {
   profileUrl?: string | null;
 };
 
+type ResolvedRegistrationSettings = ReturnType<typeof mapSettingsRow>;
+
 const mapExternalAccountRow = (row: typeof externalAccounts.$inferSelect) =>
   externalAccountSchema.parse({
     id: row.id,
@@ -105,12 +111,40 @@ const mapSettingsRow = (row: typeof registrationSettings.$inferSelect) =>
   registrationSettingsSchema.parse({
     githubMode: row.githubMode,
     githubDailyLimit: row.githubDailyLimit,
+    githubClientId: row.githubClientId,
+    githubClientSecret: row.githubClientSecret,
+    githubOauthScopes: row.githubOauthScopes,
     linuxdoMode: row.linuxdoMode,
     linuxdoDailyLimit: row.linuxdoDailyLimit,
+    linuxdoClientId: row.linuxdoClientId,
+    linuxdoClientSecret: row.linuxdoClientSecret,
+    linuxdoOauthBaseUrl: row.linuxdoOauthBaseUrl,
     passkeyMode: row.passkeyMode,
     deletedUserMailboxRetentionDays: row.deletedUserMailboxRetentionDays,
     updatedAt: row.updatedAt,
   });
+
+export const resolveStoredOauthConfig = (
+  settings: ResolvedRegistrationSettings,
+  config: RuntimeConfig,
+) => ({
+  githubClientId:
+    settings.githubClientId.trim() || (config.GITHUB_CLIENT_ID ?? ""),
+  githubClientSecret:
+    settings.githubClientSecret.trim() || (config.GITHUB_CLIENT_SECRET ?? ""),
+  githubOauthScopes:
+    settings.githubOauthScopes.trim() ||
+    config.GITHUB_OAUTH_SCOPES?.join(" ") ||
+    "read:user",
+  linuxdoClientId:
+    settings.linuxdoClientId.trim() || (config.LINUXDO_CLIENT_ID ?? ""),
+  linuxdoClientSecret:
+    settings.linuxdoClientSecret.trim() || (config.LINUXDO_CLIENT_SECRET ?? ""),
+  linuxdoOauthBaseUrl:
+    settings.linuxdoOauthBaseUrl.trim() ||
+    config.LINUXDO_OAUTH_BASE_URL ||
+    "https://connect.linux.do",
+});
 
 const shanghaiDateKey = (date = new Date()) => {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -139,8 +173,14 @@ export const ensureRegistrationSettings = async (env: WorkerEnv) => {
     return registrationSettingsSchema.parse({
       githubMode: "invite-only",
       githubDailyLimit: 10,
+      githubClientId: "",
+      githubClientSecret: "",
+      githubOauthScopes: "read:user",
       linuxdoMode: "invite-only",
       linuxdoDailyLimit: 10,
+      linuxdoClientId: "",
+      linuxdoClientSecret: "",
+      linuxdoOauthBaseUrl: "https://connect.linux.do",
       passkeyMode: "invite-only",
       deletedUserMailboxRetentionDays: 7,
       updatedAt: nowIso(),
@@ -158,8 +198,14 @@ export const ensureRegistrationSettings = async (env: WorkerEnv) => {
     id: SETTINGS_ROW_ID,
     githubMode: "invite-only",
     githubDailyLimit: 10,
+    githubClientId: "",
+    githubClientSecret: "",
+    githubOauthScopes: "read:user",
     linuxdoMode: "invite-only",
     linuxdoDailyLimit: 10,
+    linuxdoClientId: "",
+    linuxdoClientSecret: "",
+    linuxdoOauthBaseUrl: "https://connect.linux.do",
     passkeyMode: "invite-only",
     deletedUserMailboxRetentionDays: 7,
     updatedAt: nowIso(),
@@ -168,27 +214,60 @@ export const ensureRegistrationSettings = async (env: WorkerEnv) => {
   return mapSettingsRow(record);
 };
 
-export const getRegistrationSettings = async (env: WorkerEnv) =>
-  ensureRegistrationSettings(env);
+export const getRegistrationSettings = async (
+  env: WorkerEnv,
+  config?: RuntimeConfig,
+) => {
+  const settings = await ensureRegistrationSettings(env);
+  if (!config) {
+    return settings;
+  }
+
+  const oauth = resolveStoredOauthConfig(settings, config);
+  return registrationSettingsSchema.parse({
+    ...settings,
+    githubClientId: oauth.githubClientId,
+    githubClientSecret: "",
+    githubOauthScopes: oauth.githubOauthScopes,
+    linuxdoClientId: oauth.linuxdoClientId,
+    linuxdoClientSecret: "",
+    linuxdoOauthBaseUrl: oauth.linuxdoOauthBaseUrl,
+  });
+};
 
 export const updateRegistrationSettings = async (
   env: WorkerEnv,
   input: {
     githubMode: RegistrationMode;
     githubDailyLimit: number;
+    githubClientId: string;
+    githubClientSecret: string;
+    githubOauthScopes: string;
     linuxdoMode: RegistrationMode;
     linuxdoDailyLimit: number;
+    linuxdoClientId: string;
+    linuxdoClientSecret: string;
+    linuxdoOauthBaseUrl: string;
     passkeyMode: PasskeyMode;
     deletedUserMailboxRetentionDays: number;
   },
 ) => {
   const db = getDb(env);
-  await ensureRegistrationSettings(env);
+  const existing = await ensureRegistrationSettings(env);
   const updatedAt = nowIso();
   await db
     .update(registrationSettings)
     .set({
       ...input,
+      githubClientId: input.githubClientId.trim(),
+      githubClientSecret:
+        input.githubClientSecret.trim() || existing.githubClientSecret,
+      githubOauthScopes: input.githubOauthScopes.trim() || "read:user",
+      linuxdoClientId: input.linuxdoClientId.trim(),
+      linuxdoClientSecret:
+        input.linuxdoClientSecret.trim() || existing.linuxdoClientSecret,
+      linuxdoOauthBaseUrl:
+        input.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
       updatedAt,
     })
     .where(eq(registrationSettings.id, SETTINGS_ROW_ID));
@@ -227,6 +306,35 @@ export const listInvites = async (env: WorkerEnv) => {
     .from(invites)
     .orderBy(sql`${invites.createdAt} desc`);
   return rows.map(mapInviteRow);
+};
+
+export const listInvitesPaginated = async (
+  env: WorkerEnv,
+  input: PaginationInput,
+) => {
+  const db = getDb(env);
+  const page = Math.max(1, input.page);
+  const pageSize = Math.max(1, input.pageSize);
+  const totalRows = await db.select({ value: count() }).from(invites);
+  const totalItems = totalRows[0]?.value ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const normalizedPage = Math.min(page, totalPages);
+  const normalizedOffset = (normalizedPage - 1) * pageSize;
+  const rows = await db
+    .select()
+    .from(invites)
+    .orderBy(sql`${invites.createdAt} desc`)
+    .limit(pageSize)
+    .offset(normalizedOffset);
+  return {
+    invites: rows.map(mapInviteRow),
+    pagination: {
+      page: normalizedPage,
+      pageSize,
+      totalItems,
+      totalPages,
+    },
+  };
 };
 
 export const deleteInvite = async (env: WorkerEnv, inviteId: string) => {
@@ -345,17 +453,9 @@ const consumeDailyOpenRegistration = async (
 };
 
 const getProviderMode = (
-  settings: Awaited<ReturnType<typeof getRegistrationSettings>>,
+  settings: ResolvedRegistrationSettings,
   provider: ExternalProvider,
 ) => (provider === "github" ? settings.githubMode : settings.linuxdoMode);
-
-const _getProviderDailyLimit = (
-  settings: Awaited<ReturnType<typeof getRegistrationSettings>>,
-  provider: ExternalProvider,
-) =>
-  provider === "github"
-    ? settings.githubDailyLimit
-    : settings.linuxdoDailyLimit;
 
 export const resolveExternalRegistrationRequirement = async (
   env: WorkerEnv,
@@ -843,6 +943,83 @@ export const listAdminUsers = async (env: WorkerEnv) => {
   );
 };
 
+export const listAdminUsersPaginated = async (
+  env: WorkerEnv,
+  input: PaginationInput,
+) => {
+  const db = getDb(env);
+  const page = Math.max(1, input.page);
+  const pageSize = Math.max(1, input.pageSize);
+  const totalRows = await db.select({ value: count() }).from(users);
+  const totalItems = totalRows[0]?.value ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const normalizedPage = Math.min(page, totalPages);
+  const normalizedOffset = (normalizedPage - 1) * pageSize;
+  const userRows = await db
+    .select()
+    .from(users)
+    .orderBy(sql`${users.createdAt} asc`)
+    .limit(pageSize)
+    .offset(normalizedOffset);
+  const userIds = userRows.map((row) => row.id);
+  const externalRows = userIds.length
+    ? await db
+        .select()
+        .from(externalAccounts)
+        .where(
+          and(
+            inArray(externalAccounts.userId, userIds),
+            isNull(externalAccounts.releasedAt),
+          ),
+        )
+    : [];
+  const passkeyCounts = userIds.length
+    ? await db
+        .select({
+          userId: passkeys.userId,
+          value: count(),
+        })
+        .from(passkeys)
+        .where(
+          and(inArray(passkeys.userId, userIds), isNull(passkeys.revokedAt)),
+        )
+        .groupBy(passkeys.userId)
+    : [];
+  const externalByUser = new Map<
+    string,
+    ReturnType<typeof mapExternalAccountRow>[]
+  >();
+  for (const row of externalRows) {
+    const current = externalByUser.get(row.userId) ?? [];
+    current.push(mapExternalAccountRow(row));
+    externalByUser.set(row.userId, current);
+  }
+  const passkeyCountByUser = new Map(
+    passkeyCounts.map((row) => [row.userId, row.value]),
+  );
+  return {
+    users: userRows.map((row) =>
+      adminUserSchema.parse({
+        id: row.id,
+        username: row.username,
+        nickname: row.nickname,
+        role: row.role,
+        deletedAt: row.deletedAt,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        externalAccounts: externalByUser.get(row.id) ?? [],
+        passkeyCount: passkeyCountByUser.get(row.id) ?? 0,
+      }),
+    ),
+    pagination: {
+      page: normalizedPage,
+      pageSize,
+      totalItems,
+      totalPages,
+    },
+  };
+};
+
 const ensureTransferParticipants = async (
   env: WorkerEnv,
   currentAdminId: string,
@@ -1062,6 +1239,7 @@ export const buildAuthProviderStatuses = async (
 ) => {
   const db = getDb(env);
   const settings = await getRegistrationSettings(env);
+  const oauth = resolveStoredOauthConfig(settings, config);
   const dateKey = shanghaiDateKey();
   const counterRows = await db
     .select()
@@ -1071,12 +1249,12 @@ export const buildAuthProviderStatuses = async (
     counterRows.map((row) => [row.provider, row.createdCount]),
   );
   const githubConfigured = Boolean(
-    config.GITHUB_CLIENT_ID && config.GITHUB_CLIENT_SECRET,
+    oauth.githubClientId && oauth.githubClientSecret,
   );
   const linuxdoConfigured = Boolean(
-    config.LINUXDO_CLIENT_ID &&
-      config.LINUXDO_CLIENT_SECRET &&
-      config.LINUXDO_OAUTH_BASE_URL,
+    oauth.linuxdoClientId &&
+      oauth.linuxdoClientSecret &&
+      oauth.linuxdoOauthBaseUrl,
   );
   return [
     {

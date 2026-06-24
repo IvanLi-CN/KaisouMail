@@ -80,8 +80,16 @@ export const registrationSettings = sqliteTable("registration_settings", {
   id: integer("id").primaryKey(),
   githubMode: text("github_mode").notNull(),
   githubDailyLimit: integer("github_daily_limit").notNull(),
+  githubClientId: text("github_client_id").notNull().default(""),
+  githubClientSecret: text("github_client_secret").notNull().default(""),
+  githubOauthScopes: text("github_oauth_scopes").notNull().default("read:user"),
   linuxdoMode: text("linuxdo_mode").notNull(),
   linuxdoDailyLimit: integer("linuxdo_daily_limit").notNull(),
+  linuxdoClientId: text("linuxdo_client_id").notNull().default(""),
+  linuxdoClientSecret: text("linuxdo_client_secret").notNull().default(""),
+  linuxdoOauthBaseUrl: text("linuxdo_oauth_base_url")
+    .notNull()
+    .default("https://connect.linux.do"),
   passkeyMode: text("passkey_mode").notNull(),
   deletedUserMailboxRetentionDays: integer(
     "deleted_user_mailbox_retention_days",

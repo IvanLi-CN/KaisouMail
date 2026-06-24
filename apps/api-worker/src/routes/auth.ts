@@ -123,6 +123,7 @@ export const authRoutes = new Hono<AppBindings>()
       const url = await buildProviderStartUrl(
         c.get("runtimeConfig"),
         c.req.raw,
+        c.env,
         params.provider,
         {
           intent: "login",
@@ -178,6 +179,7 @@ export const authRoutes = new Hono<AppBindings>()
       const url = await buildProviderStartUrl(
         c.get("runtimeConfig"),
         c.req.raw,
+        c.env,
         c.req.param("provider"),
         {
           intent: query.intent,

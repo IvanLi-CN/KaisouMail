@@ -24,6 +24,8 @@ import type {
 
 const primaryRootDomain = "relay.example.test";
 const primaryMailboxAddress = `build@alpha.${primaryRootDomain}`;
+const daysToMilliseconds = 24 * 60 * 60 * 1000;
+const atUtc = (value: string) => new Date(value).toISOString();
 
 const baseUser: SessionUser = {
   id: "usr_demo_admin",
@@ -41,6 +43,24 @@ const memberUser: UserRecord = {
   createdAt: "2026-04-01T08:00:00.000Z",
   updatedAt: "2026-04-01T08:00:00.000Z",
 };
+
+const extraDemoUsers: UserRecord[] = Array.from({ length: 10 }, (_, index) => {
+  const number = index + 3;
+  const createdAt = atUtc(
+    new Date(
+      Date.parse("2026-04-03T08:00:00.000Z") + index * daysToMilliseconds,
+    ).toISOString(),
+  );
+  return {
+    id: `usr_demo_member_${number}`,
+    username: `member${number}`,
+    nickname: `Member ${number}`,
+    role: "member",
+    deletedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+  };
+});
 
 export const demoExternalAccounts: ExternalAccountRecord[] = [
   {
@@ -75,6 +95,7 @@ export const demoUsers: UserRecord[] = [
     updatedAt: "2026-04-01T08:00:00.000Z",
   },
   memberUser,
+  ...extraDemoUsers,
 ];
 
 export const demoAdminUsers: AdminUserRecord[] = [
@@ -88,6 +109,11 @@ export const demoAdminUsers: AdminUserRecord[] = [
     externalAccounts: [demoExternalAccounts[1]],
     passkeyCount: 0,
   },
+  ...extraDemoUsers.map((user, index) => ({
+    ...user,
+    externalAccounts: [],
+    passkeyCount: index % 3 === 0 ? 1 : 0,
+  })),
 ];
 
 export const demoApiKeys: ApiKeyRecord[] = [
@@ -269,13 +295,38 @@ export const demoInvites: InviteRecord[] = [
     usedAt: "2026-04-04T12:00:00.000Z",
     usedByUserId: memberUser.id,
   },
+  ...Array.from({ length: 11 }, (_, index) => {
+    const number = index + 3;
+    const createdAt = atUtc(
+      new Date(
+        Date.parse("2026-04-03T08:00:00.000Z") - index * daysToMilliseconds,
+      ).toISOString(),
+    );
+    return {
+      id: `inv_member_${number}`,
+      code: `km_demo_invite_${number}`,
+      kind: "standard",
+      role: "member",
+      note: `Invite batch ${number}`,
+      createdByUserId: baseUser.id,
+      createdAt,
+      usedAt: null,
+      usedByUserId: null,
+    } satisfies InviteRecord;
+  }),
 ];
 
 export const demoRegistrationSettings: RegistrationSettings = {
   githubMode: "open",
   githubDailyLimit: 5,
+  githubClientId: "demo-github-client-id",
+  githubClientSecret: "demo-github-client-secret",
+  githubOauthScopes: "read:user user:email",
   linuxdoMode: "invite-only",
   linuxdoDailyLimit: 3,
+  linuxdoClientId: "demo-linuxdo-client-id",
+  linuxdoClientSecret: "demo-linuxdo-client-secret",
+  linuxdoOauthBaseUrl: "https://connect.linux.do",
   passkeyMode: "invite-only",
   deletedUserMailboxRetentionDays: 7,
   updatedAt: "2026-04-05T08:00:00.000Z",

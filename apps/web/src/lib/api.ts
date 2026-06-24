@@ -706,23 +706,31 @@ export const apiClient = {
     if (!response.ok && response.status !== 204)
       throw new Error("Failed to revoke API key");
   },
-  async listUsers() {
-    if (DEMO_MODE) return demoApi.listUsers();
+  async listUsers(input: { page: number; pageSize: number }) {
+    const params = new URLSearchParams({
+      page: String(input.page),
+      pageSize: String(input.pageSize),
+    });
+    if (DEMO_MODE) return demoApi.listUsers(input);
     const payload = await requestJson(
-      "/api/users",
+      `/api/users?${params.toString()}`,
       { method: "GET" },
       (value) => listUsersResponseSchema.parse(value),
     );
-    return payload.users;
+    return payload;
   },
-  async listInvites() {
-    if (DEMO_MODE) return demoApi.listInvites();
+  async listInvites(input: { page: number; pageSize: number }) {
+    const params = new URLSearchParams({
+      page: String(input.page),
+      pageSize: String(input.pageSize),
+    });
+    if (DEMO_MODE) return demoApi.listInvites(input);
     const payload = await requestJson(
-      "/api/admin/invites",
+      `/api/admin/invites?${params.toString()}`,
       { method: "GET" },
       (value) => listInvitesResponseSchema.parse(value),
     );
-    return payload.invites;
+    return payload;
   },
   async createInvite(input: { note?: string; count: number }) {
     const payload = createInviteRequestSchema.parse(input);
@@ -754,8 +762,14 @@ export const apiClient = {
   async updateRegistrationSettings(input: {
     githubMode: "off" | "invite-only" | "open";
     githubDailyLimit: number;
+    githubClientId: string;
+    githubClientSecret: string;
+    githubOauthScopes: string;
     linuxdoMode: "off" | "invite-only" | "open";
     linuxdoDailyLimit: number;
+    linuxdoClientId: string;
+    linuxdoClientSecret: string;
+    linuxdoOauthBaseUrl: string;
     passkeyMode: "off" | "invite-only";
     deletedUserMailboxRetentionDays: number;
   }) {

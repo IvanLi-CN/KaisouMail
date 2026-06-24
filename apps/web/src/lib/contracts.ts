@@ -20,9 +20,11 @@ import type {
   listDomainCatalogResponseSchema,
   listExternalAccountsResponseSchema,
   listInvitesResponseSchema,
+  listUsersResponseSchema,
   mailboxSchema,
   messageDetailSchema,
   messageSummarySchema,
+  paginationMetaSchema,
   passkeySchema,
   pendingRegistrationResponseSchema,
   pendingRegistrationSchema,
@@ -67,6 +69,7 @@ export type PendingRegistration = z.infer<typeof pendingRegistrationSchema>;
 export type PendingRegistrationResponse = z.infer<
   typeof pendingRegistrationResponseSchema
 >;
+export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
 export type StartProviderRegistrationResult = z.infer<
   typeof startProviderRegistrationResponseSchema
 >;
@@ -76,6 +79,7 @@ export type AccountResponse = z.infer<typeof accountResponseSchema>;
 export type ListExternalAccountsResponse = z.infer<
   typeof listExternalAccountsResponseSchema
 >;
+export type ListUsersResponse = z.infer<typeof listUsersResponseSchema>;
 export type ListInvitesResponse = z.infer<typeof listInvitesResponseSchema>;
 export type CreateInviteResponse = z.infer<typeof createInviteResponseSchema>;
 export type RegistrationSettingsResponse = z.infer<

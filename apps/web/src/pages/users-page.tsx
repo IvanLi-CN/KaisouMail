@@ -1,6 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { LayoutList, RefreshCw, UserRound, UserRoundCog } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-
 import {
   ErrorState,
   type ErrorStateVariant,
@@ -8,8 +8,11 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { type SystemSection, UserTable } from "@/components/users/user-table";
-import { useSessionQuery } from "@/hooks/use-session";
+import { usePasskeysQuery } from "@/hooks/use-passkeys";
+import { useAccountQuery, useSessionQuery } from "@/hooks/use-session";
 import {
+  INVITES_PAGE_SIZE,
+  USERS_PAGE_SIZE,
   useCreateInviteMutation,
   useDeleteInviteMutation,
   useInvitesQuery,
@@ -18,15 +21,25 @@ import {
   useUpdateRegistrationSettingsMutation,
   useUsersQuery,
 } from "@/hooks/use-users";
+import { apiClient } from "@/lib/api";
 import { getErrorDetails } from "@/lib/error-utils";
 import { appRoutes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
+
+const defaultPaginationMeta = (totalItems: number, pageSize: number) => ({
+  page: 1,
+  pageSize,
+  totalItems,
+  totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+});
 
 type UsersPageViewProps = {
   section?: SystemSection;
   onSectionChange?: (section: SystemSection) => void;
   users: Parameters<typeof UserTable>[0]["users"];
+  usersPagination?: Parameters<typeof UserTable>[0]["usersPagination"];
   invites: Parameters<typeof UserTable>[0]["invites"];
+  invitesPagination?: Parameters<typeof UserTable>[0]["invitesPagination"];
   settings: Parameters<typeof UserTable>[0]["settings"];
   currentAdminUserId: string | null;
   currentAdmin: Parameters<typeof UserTable>[0]["currentAdmin"];
@@ -45,6 +58,8 @@ type UsersPageViewProps = {
   onDeleteInvite: Parameters<typeof UserTable>[0]["onDeleteInvite"];
   onUpdateSettings: Parameters<typeof UserTable>[0]["onUpdateSettings"];
   onTransferAdmin: Parameters<typeof UserTable>[0]["onTransferAdmin"];
+  onUsersPageChange?: Parameters<typeof UserTable>[0]["onUsersPageChange"];
+  onInvitesPageChange?: Parameters<typeof UserTable>[0]["onInvitesPageChange"];
 };
 
 const systemSections = [
@@ -52,21 +67,25 @@ const systemSections = [
     id: "users",
     label: "用户",
     icon: UserRound,
+    description: "查看账号与管理员转移。",
   },
   {
     id: "invites",
     label: "邀请",
     icon: LayoutList,
+    description: "管理邀请码与批量发放。",
   },
   {
     id: "registration",
     label: "注册",
     icon: UserRoundCog,
+    description: "管理注册入口与 OAuth 配置。",
   },
 ] satisfies ReadonlyArray<{
   id: SystemSection;
   label: string;
   icon: typeof UserRound;
+  description: string;
 }>;
 
 const resolveSystemSection = (value: string | null): SystemSection =>
@@ -74,11 +93,21 @@ const resolveSystemSection = (value: string | null): SystemSection =>
     ? (value as SystemSection)
     : "users";
 
+const resolvePositivePage = (value: string | null) => {
+  const page = Number(value);
+  if (!Number.isInteger(page) || page < 1) {
+    return 1;
+  }
+  return page;
+};
+
 export const UsersPageView = ({
   section = "users",
   onSectionChange,
   users,
+  usersPagination = defaultPaginationMeta(users.length, USERS_PAGE_SIZE),
   invites,
+  invitesPagination = defaultPaginationMeta(invites.length, INVITES_PAGE_SIZE),
   settings,
   currentAdminUserId,
   currentAdmin,
@@ -90,10 +119,15 @@ export const UsersPageView = ({
   onDeleteInvite,
   onUpdateSettings,
   onTransferAdmin,
+  onUsersPageChange = () => undefined,
+  onInvitesPageChange = () => undefined,
 }: UsersPageViewProps) => {
+  const activeSection =
+    systemSections.find((item) => item.id === section) ?? systemSections[0];
+
   return (
     <div className="space-y-6">
-      <PageHeader title="系统" description="用户、邀请与注册设置。" />
+      <PageHeader title="系统" description="系统设置。" />
       {error ? (
         <ErrorState
           variant={error.variant}
@@ -117,6 +151,9 @@ export const UsersPageView = ({
       ) : (
         <div className="grid gap-6 xl:grid-cols-[176px_minmax(0,1fr)]">
           <aside className="space-y-3">
+            <p className="px-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              系统内导航
+            </p>
             <nav
               aria-label="系统模块导航"
               className="grid gap-2 md:grid-cols-3 xl:grid-cols-1"
@@ -124,15 +161,15 @@ export const UsersPageView = ({
               {systemSections.map((item) => {
                 const isActive = item.id === section;
                 return (
-                  <button
+                  <Button
                     key={item.id}
-                    type="button"
                     aria-pressed={isActive}
+                    variant="ghost"
                     className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "w-full min-h-11 justify-start gap-3 rounded-xl border text-left transition-colors",
                       isActive
-                        ? "bg-secondary text-foreground"
-                        : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                        ? "border-border bg-muted/30 text-foreground"
+                        : "border-transparent text-muted-foreground hover:border-border/50 hover:bg-muted/15 hover:text-foreground",
                     )}
                     onClick={() => {
                       onSectionChange?.(item.id);
@@ -140,17 +177,27 @@ export const UsersPageView = ({
                   >
                     <item.icon className="h-4 w-4 shrink-0" />
                     <span>{item.label}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </nav>
           </aside>
 
           <section className="space-y-4">
+            <div className="space-y-1 px-1">
+              <p className="text-lg font-semibold text-foreground">
+                {activeSection.label}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {activeSection.description}
+              </p>
+            </div>
             <UserTable
               section={section}
               users={users}
+              usersPagination={usersPagination}
               invites={invites}
+              invitesPagination={invitesPagination}
               settings={settings}
               currentAdminUserId={currentAdminUserId}
               currentAdmin={currentAdmin}
@@ -162,6 +209,8 @@ export const UsersPageView = ({
               onDeleteInvite={onDeleteInvite}
               onUpdateSettings={onUpdateSettings}
               onTransferAdmin={onTransferAdmin}
+              onUsersPageChange={onUsersPageChange}
+              onInvitesPageChange={onInvitesPageChange}
             />
           </section>
         </div>
@@ -173,18 +222,25 @@ export const UsersPageView = ({
 export const UsersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const section = resolveSystemSection(searchParams.get("section"));
+  const usersPage = resolvePositivePage(searchParams.get("usersPage"));
+  const invitesPage = resolvePositivePage(searchParams.get("invitesPage"));
   const sessionQuery = useSessionQuery();
-  const usersQuery = useUsersQuery();
-  const invitesQuery = useInvitesQuery();
+  const accountQuery = useAccountQuery();
+  const externalAccountsQuery = useQuery({
+    queryKey: ["account", "external-accounts"],
+    queryFn: () => apiClient.listExternalAccounts(),
+    enabled: sessionQuery.data?.user.role === "admin",
+  });
+  const passkeysQuery = usePasskeysQuery(
+    sessionQuery.data?.user.role === "admin",
+  );
+  const usersQuery = useUsersQuery(usersPage, USERS_PAGE_SIZE);
+  const invitesQuery = useInvitesQuery(invitesPage, INVITES_PAGE_SIZE);
   const settingsQuery = useRegistrationSettingsQuery();
   const createInviteMutation = useCreateInviteMutation();
   const deleteInviteMutation = useDeleteInviteMutation();
   const updateSettingsMutation = useUpdateRegistrationSettingsMutation();
   const transferAdminMutation = useTransferAdminMutation();
-  const currentAdminRecord =
-    (usersQuery.data ?? []).find(
-      (user) => user.id === sessionQuery.data?.user.id,
-    ) ?? null;
   const pendingTransferVerification = (() => {
     const verificationToken = searchParams.get("transferVerification");
     const targetUserId = searchParams.get("transferTarget");
@@ -238,19 +294,37 @@ export const UsersPage = () => {
       <UsersPageView
         section={section}
         users={[]}
+        usersPagination={{
+          page: 1,
+          pageSize: USERS_PAGE_SIZE,
+          totalItems: 0,
+          totalPages: 1,
+        }}
         invites={[]}
+        invitesPagination={{
+          page: 1,
+          pageSize: INVITES_PAGE_SIZE,
+          totalItems: 0,
+          totalPages: 1,
+        }}
         settings={{
           githubMode: "off",
           githubDailyLimit: 0,
+          githubClientId: "",
+          githubClientSecret: "",
+          githubOauthScopes: "read:user",
           linuxdoMode: "off",
           linuxdoDailyLimit: 0,
+          linuxdoClientId: "",
+          linuxdoClientSecret: "",
+          linuxdoOauthBaseUrl: "https://connect.linux.do",
           passkeyMode: "off",
           deletedUserMailboxRetentionDays: 7,
           updatedAt: new Date(0).toISOString(),
         }}
         currentAdminUserId={sessionQuery.data?.user.id ?? null}
         currentAdmin={{
-          user: sessionQuery.data?.user ?? null,
+          user: accountQuery.data?.user ?? sessionQuery.data?.user ?? null,
           externalAccounts: [],
           hasPasskeys: false,
         }}
@@ -270,6 +344,8 @@ export const UsersPage = () => {
         onDeleteInvite={async () => undefined}
         onUpdateSettings={async () => undefined}
         onTransferAdmin={async () => undefined}
+        onUsersPageChange={() => undefined}
+        onInvitesPageChange={() => undefined}
       />
     );
   }
@@ -288,14 +364,36 @@ export const UsersPage = () => {
           return next;
         });
       }}
-      users={usersQuery.data ?? []}
-      invites={invitesQuery.data ?? []}
+      users={usersQuery.data?.users ?? []}
+      usersPagination={
+        usersQuery.data?.pagination ?? {
+          page: usersPage,
+          pageSize: USERS_PAGE_SIZE,
+          totalItems: 0,
+          totalPages: 1,
+        }
+      }
+      invites={invitesQuery.data?.invites ?? []}
+      invitesPagination={
+        invitesQuery.data?.pagination ?? {
+          page: invitesPage,
+          pageSize: INVITES_PAGE_SIZE,
+          totalItems: 0,
+          totalPages: 1,
+        }
+      }
       settings={
         settingsQuery.data?.settings ?? {
           githubMode: "off",
           githubDailyLimit: 0,
+          githubClientId: "",
+          githubClientSecret: "",
+          githubOauthScopes: "read:user",
           linuxdoMode: "off",
           linuxdoDailyLimit: 0,
+          linuxdoClientId: "",
+          linuxdoClientSecret: "",
+          linuxdoOauthBaseUrl: "https://connect.linux.do",
           passkeyMode: "off",
           deletedUserMailboxRetentionDays: 7,
           updatedAt: new Date().toISOString(),
@@ -303,9 +401,9 @@ export const UsersPage = () => {
       }
       currentAdminUserId={sessionQuery.data?.user.id ?? null}
       currentAdmin={{
-        user: sessionQuery.data?.user ?? null,
-        externalAccounts: currentAdminRecord?.externalAccounts ?? [],
-        hasPasskeys: (currentAdminRecord?.passkeyCount ?? 0) > 0,
+        user: accountQuery.data?.user ?? sessionQuery.data?.user ?? null,
+        externalAccounts: externalAccountsQuery.data ?? [],
+        hasPasskeys: (passkeysQuery.data?.length ?? 0) > 0,
       }}
       pendingTransferVerification={pendingTransferVerification}
       onConsumePendingTransferVerification={consumePendingTransferVerification}
@@ -320,6 +418,28 @@ export const UsersPage = () => {
       }}
       onTransferAdmin={async ({ userId, verificationToken }) => {
         await transferAdminMutation.mutateAsync({ userId, verificationToken });
+      }}
+      onUsersPageChange={(page) => {
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          if (page <= 1) {
+            next.delete("usersPage");
+          } else {
+            next.set("usersPage", String(page));
+          }
+          return next;
+        });
+      }}
+      onInvitesPageChange={(page) => {
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          if (page <= 1) {
+            next.delete("invitesPage");
+          } else {
+            next.set("invitesPage", String(page));
+          }
+          return next;
+        });
       }}
     />
   );
