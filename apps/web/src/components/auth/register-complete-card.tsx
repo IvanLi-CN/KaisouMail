@@ -1,9 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Fingerprint, UserPlus } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import { AuthActionButton } from "@/components/auth/auth-action-button";
 import {
   Card,
   CardContent,
@@ -117,10 +118,17 @@ export const RegisterCompleteCard = ({
             " "}
         </p>
 
-        <Button
+        <AuthActionButton
           type="button"
+          icon={isPasskey ? Fingerprint : UserPlus}
+          label={
+            isPending
+              ? "提交中…"
+              : isPasskey
+                ? "使用 Passkey 创建账号"
+                : "创建账号"
+          }
           size="lg"
-          className="min-h-11 w-full"
           aria-disabled={submitSoftDisabled || undefined}
           onClick={(event) => {
             if (preventSoftDisabledAction(event, submitSoftDisabled)) {
@@ -129,13 +137,7 @@ export const RegisterCompleteCard = ({
 
             void form.handleSubmit((values) => onSubmit(values))(event);
           }}
-        >
-          {isPending
-            ? "提交中…"
-            : isPasskey
-              ? "使用 Passkey 创建账号"
-              : "创建账号"}
-        </Button>
+        />
       </CardContent>
       <CardFooter className="flex justify-center pt-2">
         <Link

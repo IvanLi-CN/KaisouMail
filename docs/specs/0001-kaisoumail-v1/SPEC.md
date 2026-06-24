@@ -386,6 +386,10 @@ PR: include
 PR: include
 ![Desktop register page with separated third-party signup flows and passkey invite registration](./assets/register-page-identity-rebuild-desktop.png)
 
+![Desktop API Key login page with the aligned login CTA button icon treatment](./assets/login-api-key-page-desktop.png)
+
+![Desktop complete-registration page with the aligned account creation CTA button icon treatment](./assets/register-complete-page-desktop.png)
+
 PR: include
 ![Desktop identity auth page showing account profile, connected accounts, passkeys, and API key management in one surface](./assets/identity-auth-account-center-desktop.png)
 

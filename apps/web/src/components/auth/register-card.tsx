@@ -1,9 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Fingerprint, Github } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import { AuthActionButton } from "@/components/auth/auth-action-button";
+import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
 import {
   Card,
   CardContent,
@@ -92,10 +94,11 @@ export const RegisterCard = ({
     ? (passkeySupportMessage ?? "当前浏览器或上下文不支持 WebAuthn。")
     : null;
   const passkeyButton = (
-    <Button
+    <AuthActionButton
       type="button"
+      icon={Fingerprint}
+      label={`使用 ${providerLabel("passkey")} 继续`}
       variant="outline"
-      className="min-h-11 w-full justify-center"
       aria-disabled={passkeySoftDisabled || undefined}
       onClick={(event) => {
         if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
@@ -104,9 +107,7 @@ export const RegisterCard = ({
 
         void submitPasskey();
       }}
-    >
-      使用 {providerLabel("passkey")} 继续
-    </Button>
+    />
   );
 
   return (
@@ -140,11 +141,12 @@ export const RegisterCard = ({
               } => provider.provider !== "passkey",
             )
             .map((provider) => (
-              <Button
+              <AuthActionButton
                 key={provider.provider}
                 type="button"
+                icon={provider.provider === "github" ? Github : LinuxDoIcon}
+                label={`使用 ${providerLabel(provider.provider)} 继续`}
                 variant="outline"
-                className="min-h-11 w-full justify-center"
                 aria-disabled={!provider.configured || isPending || undefined}
                 onClick={(event) => {
                   if (
@@ -158,9 +160,7 @@ export const RegisterCard = ({
 
                   void submitWithProvider(provider.provider)();
                 }}
-              >
-                使用 {providerLabel(provider.provider)} 继续
-              </Button>
+              />
             ))}
           {providerEntries.some(
             (provider) => provider.provider === "passkey",

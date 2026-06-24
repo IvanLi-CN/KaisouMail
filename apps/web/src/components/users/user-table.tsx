@@ -7,14 +7,14 @@ import {
   Fingerprint,
   Github,
   KeyRound,
-  Network,
   Search,
   ShieldCheck,
 } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
+import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +53,7 @@ import type {
   SessionUser,
 } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const createInviteSchema = z.object({
   note: z.string().trim().max(160, "备注最多 160 个字符").optional(),
@@ -234,12 +235,14 @@ const SliderField = ({
 const ChannelCardTitle = ({
   icon: Icon,
   title,
+  iconClassName,
 }: {
-  icon: typeof Github;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
+  iconClassName?: string;
 }) => (
   <div className="flex items-center gap-3">
-    <Icon className="h-5 w-5 shrink-0 text-primary" />
+    <Icon className={cn("h-5 w-5 shrink-0 text-primary", iconClassName)} />
     <p className="text-sm font-semibold text-foreground">{title}</p>
   </div>
 );
@@ -1519,7 +1522,11 @@ export const UserTable = ({
                 <div className={channelCardClassName}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
-                      <ChannelCardTitle icon={Network} title="LinuxDO" />
+                      <ChannelCardTitle
+                        icon={LinuxDoIcon}
+                        title="LinuxDO"
+                        iconClassName="text-foreground"
+                      />
                       <div className="flex flex-wrap gap-2">
                         <Badge className="border border-border bg-background/70 text-foreground">
                           {modeLabel(settingsDraft.linuxdoMode)}

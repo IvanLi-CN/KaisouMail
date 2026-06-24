@@ -1,8 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { LogIn } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
+import { AuthActionButton } from "@/components/auth/auth-action-button";
 import {
   Card,
   CardContent,
@@ -57,9 +58,12 @@ export const ApiKeyLoginCard = ({
               {form.formState.errors.apiKey?.message ?? error ?? " "}
             </p>
           </div>
-          <Button type="submit" size="lg" className="min-h-11 w-full">
-            {isPending ? "登录中…" : "登录控制台"}
-          </Button>
+          <AuthActionButton
+            type="submit"
+            size="lg"
+            icon={LogIn}
+            label={isPending ? "登录中…" : "登录控制台"}
+          />
         </form>
       </CardContent>
       <CardFooter className="flex justify-center pt-2">

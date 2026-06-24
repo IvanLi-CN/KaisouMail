@@ -1,6 +1,8 @@
+import { Fingerprint, Github, KeyRound } from "lucide-react";
 import type { MouseEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { AuthActionButton } from "@/components/auth/auth-action-button";
+import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
 import {
   Card,
   CardContent,
@@ -64,11 +66,12 @@ export const LoginCard = ({
     return true;
   };
   const passkeyButton = (
-    <Button
+    <AuthActionButton
       id="passkey-signin"
       type="button"
+      icon={Fingerprint}
+      label={isPasskeyPending ? "Passkey 登录中…" : "使用 Passkey 登录"}
       size="lg"
-      className="min-h-11 w-full"
       aria-disabled={passkeySoftDisabled || undefined}
       onClick={(event) => {
         if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
@@ -77,9 +80,7 @@ export const LoginCard = ({
 
         void onPasskeySubmit?.();
       }}
-    >
-      {isPasskeyPending ? "Passkey 登录中…" : "使用 Passkey 登录"}
-    </Button>
+    />
   );
 
   return (
@@ -113,12 +114,13 @@ export const LoginCard = ({
               ) : null}
             </div>
             {providerEntries.map((provider) => (
-              <Button
+              <AuthActionButton
                 key={provider.provider}
                 type="button"
+                icon={provider.provider === "github" ? Github : LinuxDoIcon}
+                label={`使用 ${providerLabel(provider.provider)} 登录`}
                 variant="outline"
                 size="lg"
-                className="min-h-11 w-full justify-center"
                 aria-disabled={
                   !provider.configured || isProviderPending || undefined
                 }
@@ -134,21 +136,18 @@ export const LoginCard = ({
 
                   onProviderLogin?.(provider.provider);
                 }}
-              >
-                使用 {providerLabel(provider.provider)} 登录
-              </Button>
+              />
             ))}
-            <Button
+            <AuthActionButton
               type="button"
+              icon={KeyRound}
+              label="使用 API Key 登录"
               variant="outline"
               size="lg"
-              className="min-h-11 w-full justify-center"
               onClick={() => {
                 navigate(appRoutes.loginApiKey);
               }}
-            >
-              使用 API Key 登录
-            </Button>
+            />
           </div>
         </section>
       </CardContent>
