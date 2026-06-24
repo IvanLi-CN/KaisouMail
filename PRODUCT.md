@@ -19,9 +19,16 @@ delivery infrastructure through a compact Web console.
 ### Login
 
 - `/login`
-- Unified login and registration surface.
-- Supports API key browser fallback, passkey login, GitHub login, LinuxDO login,
-  invite-based passkey registration, and provider-driven auto registration.
+- Sign-in surface only.
+- Supports passkey login, GitHub login, LinuxDO login, and API key browser
+  fallback.
+
+### Register
+
+- `/register`
+- Account-creation surface only.
+- Supports invite/open signup flows, provider-driven auto registration, and
+  passkey-first account creation.
 
 ### Account Center
 
