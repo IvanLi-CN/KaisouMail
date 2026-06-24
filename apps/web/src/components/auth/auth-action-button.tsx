@@ -22,7 +22,7 @@ export const AuthActionButton = ({
         <span aria-hidden="true" className="h-4 w-4" />
       </span>
       <span className="inline-flex items-center justify-center gap-2">
-        <Icon aria-hidden="true" className="h-4 w-4 shrink-0 opacity-80" />
+        <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
         <span>{label}</span>
       </span>
       <span
