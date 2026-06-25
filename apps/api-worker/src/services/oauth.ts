@@ -15,7 +15,7 @@ import {
 } from "./identity";
 
 type Provider = "github" | "linuxdo";
-type Intent = "login" | "bind" | "admin-transfer";
+type Intent = "login" | "register" | "bind" | "admin-transfer";
 
 type OAuthStatePayload = {
   provider: Provider;

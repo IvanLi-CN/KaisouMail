@@ -395,7 +395,7 @@ export const demoApi = {
   getProviderStartUrl(
     provider: "github" | "linuxdo",
     options?: {
-      intent?: "login" | "bind" | "admin-transfer";
+      intent?: "login" | "register" | "bind" | "admin-transfer";
       inviteCode?: string;
       intentToken?: string;
     },
@@ -412,7 +412,7 @@ export const demoApi = {
   ) {
     return {
       startUrl: this.getProviderStartUrl(provider, {
-        intent: "login",
+        intent: "register",
         inviteCode: options?.inviteCode,
       }),
     };

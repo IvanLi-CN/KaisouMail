@@ -126,7 +126,7 @@ export const authRoutes = new Hono<AppBindings>()
         c.env,
         params.provider,
         {
-          intent: "login",
+          intent: "register",
           inviteCode: body.inviteCode,
           returnTo: body.returnTo ?? "/register",
         },

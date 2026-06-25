@@ -310,7 +310,7 @@ export const apiClient = {
   getProviderStartUrl(
     provider: "github" | "linuxdo",
     options?: {
-      intent?: "login" | "bind" | "admin-transfer";
+      intent?: "login" | "register" | "bind" | "admin-transfer";
       inviteCode?: string;
       returnTo?: string;
       intentToken?: string;
