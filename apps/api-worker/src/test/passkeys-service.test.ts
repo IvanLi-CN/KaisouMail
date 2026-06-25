@@ -35,11 +35,13 @@ vi.mock("../db/client", () => ({
 
 import {
   createPasskeyAuthenticationOptions,
+  createPasskeyInviteRegistrationOptions,
   createPasskeyInviteRegistrationOptionsForCompletion,
   createPasskeyRegistrationOptionsForUser,
   isPasskeyAuthConfigured,
   revokePasskeyForUser,
   verifyPasskeyAuthentication,
+  verifyPasskeyInviteRegistration,
   verifyPasskeyRegistrationForUser,
 } from "../services/passkeys";
 
@@ -714,6 +716,147 @@ describe("passkey service", () => {
       message: "Passkey registration failed",
       status: 400,
     });
+  });
+
+  it("rolls back a newly created invite-registration user when passkey persistence fails", async () => {
+    generateRegistrationOptions.mockResolvedValue({
+      challenge: "invite_registration_options",
+    });
+    verifyRegistrationResponse.mockResolvedValue({
+      verified: true,
+      registrationInfo: {
+        credential: {
+          id: "credential_invite",
+          publicKey: new Uint8Array([1, 2, 3]),
+          counter: 0,
+          transports: ["internal"],
+        },
+        credentialDeviceType: "multiDevice",
+        credentialBackedUp: true,
+      },
+    });
+
+    const deletedUserIds: string[] = [];
+    const insertedTables: string[] = [];
+    getDb.mockReturnValue({
+      select: (...args: unknown[]) => ({
+        from: (table?: Record<PropertyKey, unknown>) => {
+          const tableName = tableNameOf(table);
+          if (tableName === "passkeys") {
+            return {
+              where: () => createAwaitableQuery([]),
+            };
+          }
+          if (tableName === "users") {
+            if (
+              args.length > 0 &&
+              typeof args[0] === "object" &&
+              args[0] &&
+              "value" in (args[0] as Record<string, unknown>)
+            ) {
+              return [{ value: 1 }];
+            }
+            return {
+              where: () => ({
+                limit: async () => [],
+              }),
+            };
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "invite-only",
+                    githubDailyLimit: 5,
+                    githubClientId: "",
+                    githubClientSecret: "",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          if (tableName === "invites") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: "inv_standard",
+                    code: "km_demo_invite",
+                    role: "member",
+                    usedAt: null,
+                  },
+                ],
+              }),
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: (table?: Record<PropertyKey, unknown>) => ({
+        values: async (_row: unknown) => {
+          const tableName = tableNameOf(table);
+          insertedTables.push(tableName);
+          if (tableName === "passkeys") {
+            throw new Error("passkey insert failed");
+          }
+        },
+      }),
+      delete: (table?: Record<PropertyKey, unknown>) => ({
+        where: async (_predicate: unknown) => {
+          if (tableNameOf(table) === "users") {
+            deletedUserIds.push("deleted");
+          }
+        },
+      }),
+    });
+
+    const options = await createPasskeyInviteRegistrationOptions(
+      baseConfig,
+      createRequest({ origin: "https://cfm.707979.xyz" }),
+      {
+        inviteCode: "km_demo_invite",
+        nickname: "Octo",
+        passkeyName: "Primary Passkey",
+      },
+    );
+    const inviteCookie = options.cookie.split(";")[0] ?? "";
+
+    await expect(
+      verifyPasskeyInviteRegistration(
+        {} as never,
+        baseConfig,
+        createRequest({ cookie: inviteCookie }),
+        {
+          id: "credential_invite",
+          rawId: "credential_invite",
+          response: {
+            attestationObject: "attestation",
+            clientDataJSON: "client-data",
+          },
+          clientExtensionResults: {},
+          type: "public-key",
+        } as RegistrationResponseJSON,
+      ),
+    ).rejects.toThrow("passkey insert failed");
+
+    expect(insertedTables).toContain("users");
+    expect(insertedTables).toContain("passkeys");
+    expect(deletedUserIds).toHaveLength(1);
   });
 
   it("updates counter and lastUsedAt after verified authentication", async () => {

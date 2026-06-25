@@ -682,7 +682,7 @@ export const createUserRecord = async (
   return record;
 };
 
-const deleteUserRecord = async (env: WorkerEnv, userId: string) => {
+export const deleteUserRecord = async (env: WorkerEnv, userId: string) => {
   const db = getDb(env);
   await db.delete(users).where(eq(users.id, userId));
 };
@@ -1390,7 +1390,14 @@ export const registerViaExternalProvider = async (
   }
 };
 
-export const registerViaPasskeyInvite = async (
+export type PreparedPasskeyInviteUser = {
+  user: Awaited<ReturnType<typeof createUserRecord>>;
+  inviteCode: string;
+  inviteId: string | null;
+  bootstrap: boolean;
+};
+
+export const preparePasskeyInviteUser = async (
   env: WorkerEnv,
   inviteCode: string,
   nickname: string,
@@ -1408,15 +1415,42 @@ export const registerViaPasskeyInvite = async (
     nickname,
     role,
   });
+  return {
+    user,
+    inviteCode,
+    inviteId,
+    bootstrap: inviteResolution.bootstrap === true,
+  } satisfies PreparedPasskeyInviteUser;
+};
+
+export const finalizePreparedPasskeyInviteUser = async (
+  env: WorkerEnv,
+  prepared: PreparedPasskeyInviteUser,
+) => {
+  if (prepared.inviteId) {
+    await claimInvite(env, prepared.inviteId, prepared.user.id);
+    return;
+  }
+  if (prepared.bootstrap) {
+    await consumeInviteForAuthenticatedUser(
+      env,
+      prepared.user.id,
+      prepared.inviteCode,
+    );
+  }
+};
+
+export const registerViaPasskeyInvite = async (
+  env: WorkerEnv,
+  inviteCode: string,
+  nickname: string,
+) => {
+  const prepared = await preparePasskeyInviteUser(env, inviteCode, nickname);
   try {
-    if (inviteId) {
-      await claimInvite(env, inviteId, user.id);
-    } else if (inviteResolution.bootstrap) {
-      await consumeInviteForAuthenticatedUser(env, user.id, inviteCode);
-    }
-    return user;
+    await finalizePreparedPasskeyInviteUser(env, prepared);
+    return prepared.user;
   } catch (error) {
-    await deleteUserRecord(env, user.id);
+    await deleteUserRecord(env, prepared.user.id);
     throw error;
   }
 };

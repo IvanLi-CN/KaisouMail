@@ -27,7 +27,9 @@ import {
 import { ApiError } from "../lib/errors";
 import type { AuthUser } from "../types";
 import {
-  registerViaPasskeyInvite,
+  deleteUserRecord,
+  finalizePreparedPasskeyInviteUser,
+  preparePasskeyInviteUser,
   resolveInteractiveMethodCount,
   resolvePasskeyRegistrationRequirement,
 } from "./identity";
@@ -719,26 +721,32 @@ export const verifyPasskeyInviteRegistration = async (
   if (existing[0]) {
     throw new ApiError(409, "Passkey already registered");
   }
-  const user = await registerViaPasskeyInvite(
+  const prepared = await preparePasskeyInviteUser(
     env,
     challenge.inviteCode,
     challenge.nickname,
   );
-  const passkey = await persistPasskey(
-    env,
-    user.id,
-    challenge.name,
-    response,
-    verification,
-  );
+  try {
+    const passkey = await persistPasskey(
+      env,
+      prepared.user.id,
+      challenge.name,
+      response,
+      verification,
+    );
+    await finalizePreparedPasskeyInviteUser(env, prepared);
 
-  return {
-    user: mapUserRow(user),
-    passkey,
-    clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
-      config.APP_ENV === "production",
-    ),
-  };
+    return {
+      user: mapUserRow(prepared.user),
+      passkey,
+      clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
+        config.APP_ENV === "production",
+      ),
+    };
+  } catch (error) {
+    await deleteUserRecord(env, prepared.user.id);
+    throw error;
+  }
 };
 
 export const verifyPasskeyRegistrationFromCompletion = async (
@@ -789,26 +797,32 @@ export const verifyPasskeyRegistrationFromCompletion = async (
   if (existing[0]) {
     throw new ApiError(409, "Passkey already registered");
   }
-  const user = await registerViaPasskeyInvite(
+  const prepared = await preparePasskeyInviteUser(
     env,
     challenge.inviteCode ?? pending.inviteCode ?? "",
     challenge.nickname,
   );
-  const passkey = await persistPasskey(
-    env,
-    user.id,
-    challenge.name,
-    response,
-    verification,
-  );
+  try {
+    const passkey = await persistPasskey(
+      env,
+      prepared.user.id,
+      challenge.name,
+      response,
+      verification,
+    );
+    await finalizePreparedPasskeyInviteUser(env, prepared);
 
-  return {
-    user: mapUserRow(user),
-    passkey,
-    clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
-      config.APP_ENV === "production",
-    ),
-  };
+    return {
+      user: mapUserRow(prepared.user),
+      passkey,
+      clearCookie: serializeExpiredPasskeyInviteRegistrationCookie(
+        config.APP_ENV === "production",
+      ),
+    };
+  } catch (error) {
+    await deleteUserRecord(env, prepared.user.id);
+    throw error;
+  }
 };
 
 export const createPasskeyAuthenticationOptions = async (
