@@ -196,6 +196,14 @@ const requestJson = async <T>(
   return parser(payload);
 };
 
+// Passkey registration depends on the server-issued challenge cookie being
+// stored by the browser between the options and verify requests.
+const requestCookieBoundJson = async <T>(
+  path: string,
+  init: RequestInit,
+  parser: (value: unknown) => T,
+) => requestJson(path, { ...init, credentials: "include" }, parser);
+
 const getDomainCutoverTask = async (taskId: string) =>
   requestJson(
     `/api/domain-cutover-tasks/${taskId}`,
@@ -634,7 +642,7 @@ export const apiClient = {
     const payload = passkeyInviteRegistrationOptionsRequestSchema.parse(input);
     if (DEMO_MODE)
       return demoApi.createPasskeyInviteRegistrationOptions(payload);
-    return requestJson(
+    return requestCookieBoundJson(
       "/api/auth/passkey/register/options",
       { method: "POST", body: JSON.stringify(payload) },
       (value) => value as PublicKeyCredentialCreationOptionsJSON,
@@ -642,7 +650,7 @@ export const apiClient = {
   },
   async verifyPasskeyInviteRegistration(response: RegistrationResponseJSON) {
     if (DEMO_MODE) return demoApi.verifyPasskeyInviteRegistration();
-    return requestJson(
+    return requestCookieBoundJson(
       "/api/auth/passkey/register/verify",
       { method: "POST", body: JSON.stringify({ response }) },
       (value) => sessionResponseSchema.parse(value),
@@ -658,7 +666,7 @@ export const apiClient = {
     if (DEMO_MODE) {
       return demoApi.createPasskeyRegistrationCompletionOptions(payload);
     }
-    return requestJson(
+    return requestCookieBoundJson(
       "/api/auth/registration/passkey/options",
       { method: "POST", body: JSON.stringify(payload) },
       (value) => value as PublicKeyCredentialCreationOptionsJSON,
@@ -668,7 +676,7 @@ export const apiClient = {
     response: RegistrationResponseJSON,
   ) {
     if (DEMO_MODE) return demoApi.verifyPasskeyRegistrationCompletion();
-    return requestJson(
+    return requestCookieBoundJson(
       "/api/auth/registration/passkey/verify",
       { method: "POST", body: JSON.stringify({ response }) },
       (value) => sessionResponseSchema.parse(value),
