@@ -255,7 +255,6 @@ export const updateRegistrationSettings = async (
 ) => {
   const db = getDb(env);
   const existing = await ensureRegistrationSettings(env);
-  const resolvedExistingOauth = resolveStoredOauthConfig(existing, config);
   const updatedAt = nowIso();
   await db
     .update(registrationSettings)
@@ -263,15 +262,11 @@ export const updateRegistrationSettings = async (
       ...input,
       githubClientId: input.githubClientId.trim(),
       githubClientSecret:
-        input.githubClientSecret.trim() ||
-        existing.githubClientSecret.trim() ||
-        resolvedExistingOauth.githubClientSecret,
+        input.githubClientSecret.trim() || existing.githubClientSecret.trim(),
       githubOauthScopes: input.githubOauthScopes.trim() || "read:user",
       linuxdoClientId: input.linuxdoClientId.trim(),
       linuxdoClientSecret:
-        input.linuxdoClientSecret.trim() ||
-        existing.linuxdoClientSecret.trim() ||
-        resolvedExistingOauth.linuxdoClientSecret,
+        input.linuxdoClientSecret.trim() || existing.linuxdoClientSecret.trim(),
       linuxdoOauthBaseUrl:
         input.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
       updatedAt,
@@ -1355,6 +1350,9 @@ export const registerViaExternalProvider = async (
     profile.providerUsername || profile.providerNickname || provider,
     provider,
   );
+  if (inviteResolution.inviteRequired && !inviteResolution.invitePrevalidated) {
+    throw new ApiError(403, "Invite required");
+  }
   if (!inviteResolution.invitePrevalidated) {
     await consumeDailyOpenRegistration(env, provider);
   }

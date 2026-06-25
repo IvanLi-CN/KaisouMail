@@ -13,6 +13,7 @@ vi.mock("../db/client", () => ({
 import {
   consumeDailyOpenRegistration,
   getRegistrationSettings,
+  registerViaExternalProvider,
   registerViaPasskeyInvite,
   resolveExternalRegistrationRequirement,
   updateRegistrationSettings,
@@ -71,7 +72,7 @@ describe("identity service", () => {
     vi.clearAllMocks();
   });
 
-  it("preserves runtime OAuth secrets when admins save blank secret fields", async () => {
+  it("does not persist runtime OAuth secrets when admins save blank secret fields", async () => {
     const persistedUpdates: unknown[] = [];
     getDb.mockReturnValue({
       select: () => ({
@@ -108,8 +109,8 @@ describe("identity service", () => {
     expect(persistedUpdates).toHaveLength(1);
     expect(persistedUpdates[0]).toEqual(
       expect.objectContaining({
-        githubClientSecret: "env-github-secret",
-        linuxdoClientSecret: "env-linuxdo-secret",
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
       }),
     );
   });
@@ -177,6 +178,78 @@ describe("identity service", () => {
       ),
     ).rejects.toMatchObject({
       message: "Registration is disabled",
+      status: 403,
+    });
+  });
+
+  it("rejects external registration completion without an invite in invite-only mode", async () => {
+    getDb.mockReturnValue({
+      select: (...args: unknown[]) => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = tableNameOf(table);
+          if (tableName === "external_accounts") {
+            return {
+              innerJoin: () => ({
+                where: () => ({
+                  limit: async () => [],
+                }),
+              }),
+              where: () => ({
+                limit: async () => [],
+              }),
+            };
+          }
+          if (tableName === "users") {
+            if (
+              args.length > 0 &&
+              typeof args[0] === "object" &&
+              args[0] &&
+              "value" in (args[0] as Record<string, unknown>)
+            ) {
+              return [{ value: 1 }];
+            }
+            return {
+              where: () => ({
+                limit: async () => [],
+              }),
+            };
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    ...currentSettingsRow,
+                    githubMode: "invite-only",
+                  },
+                ],
+              }),
+            };
+          }
+          return [];
+        },
+      }),
+      insert: () => ({
+        values: async () => undefined,
+      }),
+    });
+
+    await expect(
+      registerViaExternalProvider(
+        {} as never,
+        "github",
+        {
+          provider: "github",
+          providerUserId: "gh_123",
+          providerUsername: "octo",
+          providerNickname: "Octo Cat",
+        },
+        {
+          nickname: "Octo Cat",
+        },
+      ),
+    ).rejects.toMatchObject({
+      message: "Invite required",
       status: 403,
     });
   });
