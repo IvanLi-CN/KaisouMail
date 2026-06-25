@@ -669,6 +669,8 @@ export const createUserRecord = async (
   const now = nowIso();
   const record = {
     id: randomId("usr"),
+    email: `${randomId("released")}@released.invalid`,
+    name: input.nickname,
     username: input.username,
     nickname: input.nickname,
     role: input.role ?? "member",

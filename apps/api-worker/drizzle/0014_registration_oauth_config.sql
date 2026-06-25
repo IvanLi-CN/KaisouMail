@@ -1,42 +1,17 @@
-PRAGMA foreign_keys=OFF;
+ALTER TABLE `users` ADD COLUMN `username` text NOT NULL DEFAULT '';
+ALTER TABLE `users` ADD COLUMN `nickname` text NOT NULL DEFAULT '';
+ALTER TABLE `users` ADD COLUMN `deleted_at` text;
 
-CREATE TABLE `users_identity_new` (
-  `id` text PRIMARY KEY NOT NULL,
-  `email` text NOT NULL DEFAULT '',
-  `name` text NOT NULL DEFAULT '',
-  `username` text NOT NULL,
-  `nickname` text NOT NULL,
-  `role` text NOT NULL,
-  `deleted_at` text,
-  `created_at` text NOT NULL,
-  `updated_at` text NOT NULL
-);
-
-INSERT INTO `users_identity_new` (
-  `id`,
-  `email`,
-  `name`,
-  `username`,
-  `nickname`,
-  `role`,
-  `deleted_at`,
-  `created_at`,
-  `updated_at`
-)
-SELECT
-  `id`,
-  COALESCE(`email`, ''),
-  COALESCE(`name`, ''),
-  replace(lower(`id`), '_', '-'),
-  COALESCE(NULLIF(trim(`name`), ''), replace(lower(`id`), '_', '-')),
-  `role`,
-  NULL,
-  `created_at`,
-  `updated_at`
-FROM `users`;
-
-DROP TABLE `users`;
-ALTER TABLE `users_identity_new` RENAME TO `users`;
+UPDATE `users`
+SET
+  `username` = CASE
+    WHEN trim(`username`) = '' THEN replace(lower(`id`), '_', '-')
+    ELSE trim(`username`)
+  END,
+  `nickname` = CASE
+    WHEN trim(`nickname`) = '' THEN COALESCE(NULLIF(trim(`name`), ''), replace(lower(`id`), '_', '-'))
+    ELSE trim(`nickname`)
+  END;
 
 CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);
 CREATE INDEX `users_role_deleted_idx` ON `users` (`role`, `deleted_at`);
@@ -103,5 +78,3 @@ CREATE TABLE `daily_signup_counters` (
 );
 CREATE UNIQUE INDEX `daily_signup_counters_provider_date_unique`
 ON `daily_signup_counters` (`provider`, `date_key`);
-
-PRAGMA foreign_keys=ON;

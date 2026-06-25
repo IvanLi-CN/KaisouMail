@@ -12,6 +12,8 @@ export const users = sqliteTable(
   "users",
   {
     id: text("id").primaryKey(),
+    email: text("email").notNull().default(""),
+    name: text("name").notNull().default(""),
     username: text("username").notNull(),
     nickname: text("nickname").notNull(),
     role: text("role").notNull(),
