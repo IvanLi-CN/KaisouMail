@@ -274,6 +274,49 @@ describe("users page view", () => {
     expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
   });
 
+  it("keeps server pagination controls bound to the supplied page metadata", () => {
+    const onUsersPageChange = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="users"
+          users={buildAdminUsers(2)}
+          usersPagination={{
+            page: 2,
+            pageSize: 10,
+            totalItems: 12,
+            totalPages: 2,
+          }}
+          usersPaginationMode="server"
+          invites={demoInvites}
+          invitesPagination={{
+            page: 1,
+            pageSize: 10,
+            totalItems: demoInvites.length,
+            totalPages: 1,
+          }}
+          invitesPaginationMode="server"
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+          onUsersPageChange={onUsersPageChange}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("显示 11-12 / 12 个用户")).toBeInTheDocument();
+    expect(screen.getByText("第 2 / 2 页")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+
+    expect(onUsersPageChange).toHaveBeenCalledWith(1);
+  });
+
   it("switches between system subsections", () => {
     const onSectionChange = vi.fn();
 

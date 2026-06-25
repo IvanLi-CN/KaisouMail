@@ -66,6 +66,7 @@ const createInviteSchema = z.object({
 
 type CreateInviteValues = z.infer<typeof createInviteSchema>;
 export type SystemSection = "users" | "invites" | "registration";
+type PaginationMode = "local" | "server";
 type RegistrationSettingsValues = Pick<
   RegistrationSettings,
   | "githubMode"
@@ -284,12 +285,16 @@ export const UserTable = ({
   onTransferAdmin,
   onUsersPageChange = () => undefined,
   onInvitesPageChange = () => undefined,
+  usersPaginationMode = "local",
+  invitesPaginationMode = "local",
 }: {
   section?: SystemSection;
   users: AdminUserRecord[];
   usersPagination?: PaginationMeta;
+  usersPaginationMode?: PaginationMode;
   invites: InviteRecord[];
   invitesPagination?: PaginationMeta;
+  invitesPaginationMode?: PaginationMode;
   settings: RegistrationSettings;
   currentAdminUserId: string | null;
   currentAdmin: {
@@ -418,9 +423,8 @@ export const UserTable = ({
     return methods;
   }, [currentAdmin.externalAccounts, currentAdmin.hasPasskeys]);
 
-  const usersAreServerPaginated = usersPagination.totalItems > users.length;
-  const invitesAreServerPaginated =
-    invitesPagination.totalItems > invites.length;
+  const usersAreServerPaginated = usersPaginationMode === "server";
+  const invitesAreServerPaginated = invitesPaginationMode === "server";
   const derivedInvitesTotalPages = Math.max(
     1,
     Math.ceil(invites.length / Math.max(invitesPagination.pageSize, 1)),
@@ -485,7 +489,7 @@ export const UserTable = ({
     [normalizedUserSearch, roleFilter, users],
   );
 
-  const usersVisibleSource = usersAreServerPaginated ? users : filteredUsers;
+  const usersVisibleSource = filteredUsers;
   const filteredUsersTotalPages = Math.max(
     1,
     Math.ceil(filteredUsers.length / Math.max(usersPagination.pageSize, 1)),

@@ -38,8 +38,12 @@ type UsersPageViewProps = {
   onSectionChange?: (section: SystemSection) => void;
   users: Parameters<typeof UserTable>[0]["users"];
   usersPagination?: Parameters<typeof UserTable>[0]["usersPagination"];
+  usersPaginationMode?: Parameters<typeof UserTable>[0]["usersPaginationMode"];
   invites: Parameters<typeof UserTable>[0]["invites"];
   invitesPagination?: Parameters<typeof UserTable>[0]["invitesPagination"];
+  invitesPaginationMode?: Parameters<
+    typeof UserTable
+  >[0]["invitesPaginationMode"];
   settings: Parameters<typeof UserTable>[0]["settings"];
   currentAdminUserId: string | null;
   currentAdmin: Parameters<typeof UserTable>[0]["currentAdmin"];
@@ -106,8 +110,10 @@ export const UsersPageView = ({
   onSectionChange,
   users,
   usersPagination = defaultPaginationMeta(users.length, USERS_PAGE_SIZE),
+  usersPaginationMode = "local",
   invites,
   invitesPagination = defaultPaginationMeta(invites.length, INVITES_PAGE_SIZE),
+  invitesPaginationMode = "local",
   settings,
   currentAdminUserId,
   currentAdmin,
@@ -196,8 +202,10 @@ export const UsersPageView = ({
               section={section}
               users={users}
               usersPagination={usersPagination}
+              usersPaginationMode={usersPaginationMode}
               invites={invites}
               invitesPagination={invitesPagination}
+              invitesPaginationMode={invitesPaginationMode}
               settings={settings}
               currentAdminUserId={currentAdminUserId}
               currentAdmin={currentAdmin}
@@ -300,6 +308,7 @@ export const UsersPage = () => {
           totalItems: 0,
           totalPages: 1,
         }}
+        usersPaginationMode="server"
         invites={[]}
         invitesPagination={{
           page: 1,
@@ -307,6 +316,7 @@ export const UsersPage = () => {
           totalItems: 0,
           totalPages: 1,
         }}
+        invitesPaginationMode="server"
         settings={{
           githubMode: "off",
           githubDailyLimit: 0,
@@ -373,6 +383,7 @@ export const UsersPage = () => {
           totalPages: 1,
         }
       }
+      usersPaginationMode="server"
       invites={invitesQuery.data?.invites ?? []}
       invitesPagination={
         invitesQuery.data?.pagination ?? {
@@ -382,6 +393,7 @@ export const UsersPage = () => {
           totalPages: 1,
         }
       }
+      invitesPaginationMode="server"
       settings={
         settingsQuery.data?.settings ?? {
           githubMode: "off",

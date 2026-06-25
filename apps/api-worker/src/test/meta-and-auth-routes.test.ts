@@ -9,6 +9,9 @@ const { listActiveRootDomains } = vi.hoisted(() => ({
 const { listPasskeysForUser } = vi.hoisted(() => ({
   listPasskeysForUser: vi.fn(),
 }));
+const { verifyPasskeyInviteRegistration } = vi.hoisted(() => ({
+  verifyPasskeyInviteRegistration: vi.fn(),
+}));
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
@@ -42,6 +45,7 @@ vi.mock("../services/passkeys", async () => {
   return {
     ...actual,
     listPasskeysForUser,
+    verifyPasskeyInviteRegistration,
   };
 });
 
@@ -89,6 +93,18 @@ describe("meta and auth routes", () => {
     vi.clearAllMocks();
     listActiveRootDomains.mockResolvedValue(["707979.xyz", "mail.example.net"]);
     listPasskeysForUser.mockResolvedValue([]);
+    verifyPasskeyInviteRegistration.mockResolvedValue({
+      user: {
+        id: "usr_passkey",
+        username: "passkey-user",
+        nickname: "Passkey User",
+        role: "member",
+      },
+      clearCookie: "kaisoumail_passkey_invite_registration=; Max-Age=0",
+      passkey: {
+        id: "psk_demo",
+      },
+    });
     getDb.mockReturnValue({});
     resolvePendingRegistration.mockResolvedValue({
       token: "pending_token",
@@ -355,6 +371,42 @@ describe("meta and auth routes", () => {
       error: "Invite required",
       details: null,
     });
+  });
+
+  it("keeps invite passkey verification on the direct invite-registration path", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/verify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie:
+            "kaisoumail_passkey_invite_registration=demo-cookie; Path=/; HttpOnly",
+          origin: "http://localhost:5173",
+        },
+        body: JSON.stringify({
+          response: {
+            id: "credential_demo",
+          },
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      } as never,
+    );
+
+    expect(response.status).toBe(201);
+    expect(verifyPasskeyInviteRegistration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      }),
+      expect.any(Request),
+      expect.objectContaining({
+        id: "credential_demo",
+      }),
+    );
   });
 
   it("rejects bearer API keys on /api/passkeys even when the key itself is valid", async () => {
