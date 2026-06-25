@@ -256,8 +256,8 @@ export const updateRegistrationSettings = async (
   const db = getDb(env);
   const existing = await ensureRegistrationSettings(env);
   const updatedAt = nowIso();
-  await db
-    .update(registrationSettings)
+  const updateBuilder = db.update(registrationSettings);
+  await updateBuilder
     .set({
       ...input,
       githubClientId: input.githubClientId.trim(),

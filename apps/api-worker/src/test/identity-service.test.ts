@@ -74,6 +74,13 @@ describe("identity service", () => {
 
   it("does not persist runtime OAuth secrets when admins save blank secret fields", async () => {
     const persistedUpdates: unknown[] = [];
+    const update = vi.fn(() => ({
+      set: (values: unknown) => ({
+        where: async () => {
+          persistedUpdates.push(values);
+        },
+      }),
+    }));
     getDb.mockReturnValue({
       select: () => ({
         from: () => ({
@@ -82,13 +89,7 @@ describe("identity service", () => {
           }),
         }),
       }),
-      update: () => ({
-        set: (values: unknown) => ({
-          where: async () => {
-            persistedUpdates.push(values);
-          },
-        }),
-      }),
+      update,
     });
 
     await updateRegistrationSettings({} as never, baseConfig, {
@@ -113,6 +114,8 @@ describe("identity service", () => {
         linuxdoClientSecret: "",
       }),
     );
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]).toHaveLength(1);
   });
 
   it("keeps secret fields blank in the admin-facing registration settings payload", async () => {
