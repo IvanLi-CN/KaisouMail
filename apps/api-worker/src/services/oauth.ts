@@ -74,10 +74,35 @@ const resolveBaseOrigin = (request: Request) => {
   return new URL(request.url).origin;
 };
 
+const decodeReturnToValue = (value: string) => {
+  let decoded = value;
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) {
+        break;
+      }
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+};
+
+const isSafeReturnTo = (value: string) => {
+  if (!value.startsWith("/")) {
+    return false;
+  }
+
+  const normalized = decodeReturnToValue(value).replace(/\\/g, "/");
+  return !normalized.startsWith("//");
+};
+
 const resolveSafeReturnTo = (
   value: string | null | undefined,
   fallback: string,
-) => (value?.startsWith("/") ? value : fallback);
+) => (value && isSafeReturnTo(value) ? value : fallback);
 
 const redirectWithError = (path: string, message: string) => {
   const url = new URL(path, "https://redirect.local");

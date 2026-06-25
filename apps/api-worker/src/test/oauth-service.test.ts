@@ -193,4 +193,67 @@ describe("oauth service", () => {
       username: "existing",
     });
   });
+
+  it("falls back to the default returnTo when a register start request uses a scheme-relative path", async () => {
+    const startUrl = await buildProviderStartUrl(
+      baseConfig,
+      new Request("https://api.example.test/api/auth/github/start"),
+      {} as never,
+      "github",
+      {
+        intent: "register",
+        inviteCode: "km_demo_invite",
+        returnTo: "//attacker.example/landing",
+      },
+    );
+
+    const state = new URL(startUrl).searchParams.get("state");
+    if (!state) {
+      throw new Error("Missing oauth state");
+    }
+
+    const result = await completeProviderCallback(
+      {} as never,
+      baseConfig,
+      new Request("https://api.example.test/api/auth/github/callback"),
+      "github",
+      new URLSearchParams({
+        code: "oauth_code",
+        state,
+      }),
+    );
+
+    expect(result.redirectTo).toBe("/workspace");
+  });
+
+  it("rejects encoded scheme-relative returnTo values", async () => {
+    const startUrl = await buildProviderStartUrl(
+      baseConfig,
+      new Request("https://api.example.test/api/auth/github/start"),
+      {} as never,
+      "github",
+      {
+        intent: "login",
+        returnTo: "/%2F%2Fattacker.example",
+      },
+    );
+
+    const state = new URL(startUrl).searchParams.get("state");
+    if (!state) {
+      throw new Error("Missing oauth state");
+    }
+
+    const result = await completeProviderCallback(
+      {} as never,
+      baseConfig,
+      new Request("https://api.example.test/api/auth/github/callback"),
+      "github",
+      new URLSearchParams({
+        code: "oauth_code",
+        state,
+      }),
+    );
+
+    expect(result.redirectTo).toBe("/workspace");
+  });
 });
