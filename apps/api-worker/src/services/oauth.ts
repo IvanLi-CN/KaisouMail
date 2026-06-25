@@ -518,7 +518,9 @@ export const completeProviderCallback = async (
     profile.providerUserId,
   );
   if (existing && !existing.deletedAt) {
-    if (state.inviteCode) {
+    // Register-intent invite links still burn a one-time invite even when the
+    // provider account is already bound, per the product onboarding rules.
+    if (state.intent === "register" && state.inviteCode) {
       await consumeInviteForAuthenticatedUser(
         env,
         existing.id,
