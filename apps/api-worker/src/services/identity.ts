@@ -258,17 +258,22 @@ export const updateRegistrationSettings = async (
   const db = getDb(env);
   const existing = await ensureRegistrationSettings(env);
   const updatedAt = nowIso();
+  const {
+    clearGithubClientSecret,
+    clearLinuxdoClientSecret,
+    ...persistedInput
+  } = input;
   const updateBuilder = db.update(registrationSettings);
   await updateBuilder
     .set({
-      ...input,
+      ...persistedInput,
       githubClientId: input.githubClientId.trim(),
-      githubClientSecret: input.clearGithubClientSecret
+      githubClientSecret: clearGithubClientSecret
         ? ""
         : input.githubClientSecret.trim() || existing.githubClientSecret.trim(),
       githubOauthScopes: input.githubOauthScopes.trim() || "read:user",
       linuxdoClientId: input.linuxdoClientId.trim(),
-      linuxdoClientSecret: input.clearLinuxdoClientSecret
+      linuxdoClientSecret: clearLinuxdoClientSecret
         ? ""
         : input.linuxdoClientSecret.trim() ||
           existing.linuxdoClientSecret.trim(),

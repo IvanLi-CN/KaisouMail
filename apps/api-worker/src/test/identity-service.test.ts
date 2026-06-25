@@ -116,6 +116,8 @@ describe("identity service", () => {
         linuxdoClientSecret: "",
       }),
     );
+    expect(persistedUpdates[0]).not.toHaveProperty("clearGithubClientSecret");
+    expect(persistedUpdates[0]).not.toHaveProperty("clearLinuxdoClientSecret");
     expect(update).toHaveBeenCalledTimes(1);
     expect(update.mock.calls[0]).toHaveLength(1);
   });
@@ -168,6 +170,8 @@ describe("identity service", () => {
         linuxdoClientSecret: "",
       }),
     );
+    expect(persistedUpdates[0]).not.toHaveProperty("clearGithubClientSecret");
+    expect(persistedUpdates[0]).not.toHaveProperty("clearLinuxdoClientSecret");
   });
 
   it("keeps secret fields blank in the admin-facing registration settings payload", async () => {
