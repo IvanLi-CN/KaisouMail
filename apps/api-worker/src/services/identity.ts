@@ -413,47 +413,34 @@ export const consumeDailyOpenRegistration = async (
   env: WorkerEnv,
   provider: ExternalProvider,
 ) => {
-  const db = getDb(env);
   const settings = await getRegistrationSettings(env);
   const dateKey = shanghaiDateKey();
-  const rows = await db
-    .select()
-    .from(dailySignupCounters)
-    .where(
-      and(
-        eq(dailySignupCounters.provider, provider),
-        eq(dailySignupCounters.dateKey, dateKey),
-      ),
-    )
-    .limit(1);
-  const current = rows[0];
   const limit =
     provider === "github"
       ? settings.githubDailyLimit
       : settings.linuxdoDailyLimit;
-  const currentCount = current?.createdCount ?? 0;
-  if (currentCount >= limit) {
+  if (limit <= 0) {
     throw new ApiError(429, "Daily signup quota exceeded");
   }
+  const result = await env.DB.prepare(
+    `INSERT INTO daily_signup_counters (
+      id,
+      provider,
+      date_key,
+      created_count,
+      updated_at
+    ) VALUES (?, ?, ?, 1, ?)
+    ON CONFLICT(provider, date_key) DO UPDATE SET
+      created_count = daily_signup_counters.created_count + 1,
+      updated_at = excluded.updated_at
+    WHERE daily_signup_counters.created_count < ?`,
+  )
+    .bind(randomId("dsc"), provider, dateKey, nowIso(), limit)
+    .run();
 
-  if (current) {
-    await db
-      .update(dailySignupCounters)
-      .set({
-        createdCount: currentCount + 1,
-        updatedAt: nowIso(),
-      })
-      .where(eq(dailySignupCounters.id, current.id));
-    return;
+  if ((result.meta?.changes ?? 0) !== 1) {
+    throw new ApiError(429, "Daily signup quota exceeded");
   }
-
-  await db.insert(dailySignupCounters).values({
-    id: randomId("dsc"),
-    provider,
-    dateKey,
-    createdCount: 1,
-    updatedAt: nowIso(),
-  });
 };
 
 const getProviderMode = (

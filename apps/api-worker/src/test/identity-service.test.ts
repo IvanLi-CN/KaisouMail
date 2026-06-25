@@ -261,18 +261,6 @@ describe("identity service", () => {
     getDb.mockReturnValue({
       select: createSelectMock({
         users: [{ value: 1 }],
-        daily_signup_counters: {
-          where: () => ({
-            limit: async () => [
-              {
-                id: "dsc_1",
-                provider: "github",
-                dateKey: "2026-06-25",
-                createdCount: 5,
-              },
-            ],
-          }),
-        },
         registration_settings: {
           where: () => ({
             limit: async () => [
@@ -285,17 +273,66 @@ describe("identity service", () => {
           }),
         },
       }),
-      insert: () => ({
-        values: async () => undefined,
-      }),
     });
+    const prepare = vi.fn(() => ({
+      bind: vi.fn(() => ({
+        run: vi.fn(async () => ({ meta: { changes: 0 } })),
+      })),
+    }));
 
     await expect(
-      consumeDailyOpenRegistration({} as never, "github"),
+      consumeDailyOpenRegistration({ DB: { prepare } } as never, "github"),
     ).rejects.toMatchObject({
       message: "Daily signup quota exceeded",
       status: 429,
     });
+    expect(prepare).toHaveBeenCalledTimes(1);
+  });
+
+  it("consumes open-registration quota atomically through a conditional upsert", async () => {
+    getDb.mockReturnValue({
+      select: createSelectMock({
+        registration_settings: {
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                githubMode: "open",
+                githubDailyLimit: 5,
+              },
+            ],
+          }),
+        },
+      }),
+    });
+    const run = vi.fn(async () => ({ meta: { changes: 1 } }));
+    const bind = vi.fn(
+      (..._args: unknown[]) =>
+        ({
+          run,
+        }) as const,
+    );
+    const prepare = vi.fn(
+      (_statement: string) =>
+        ({
+          bind,
+        }) as const,
+    );
+
+    await expect(
+      consumeDailyOpenRegistration({ DB: { prepare } } as never, "github"),
+    ).resolves.toBeUndefined();
+
+    const quotaStatement = prepare.mock.calls.at(0)?.[0] ?? "";
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(quotaStatement).toContain(
+      "ON CONFLICT(provider, date_key) DO UPDATE",
+    );
+    expect(quotaStatement).toContain(
+      "WHERE daily_signup_counters.created_count < ?",
+    );
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 
   it("rolls back the newly created user when invite claiming loses a race", async () => {
