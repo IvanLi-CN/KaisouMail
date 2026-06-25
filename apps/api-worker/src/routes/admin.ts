@@ -91,6 +91,7 @@ export const adminRoutes = new Hono<AppBindings>()
         registrationSettingsResponseSchema.parse({
           settings: await updateRegistrationSettings(
             c.env,
+            c.get("runtimeConfig"),
             c.req.valid("json"),
           ),
         }),

@@ -649,6 +649,7 @@ export const apiClient = {
     );
   },
   async createPasskeyRegistrationCompletionOptions(input: {
+    token: string;
     inviteCode?: string;
     nickname: string;
     passkeyName: string;

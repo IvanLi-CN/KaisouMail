@@ -12,6 +12,9 @@ const { listPasskeysForUser } = vi.hoisted(() => ({
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
 }));
+const { resolvePendingRegistration } = vi.hoisted(() => ({
+  resolvePendingRegistration: vi.fn(),
+}));
 
 vi.mock("../services/bootstrap", () => ({
   ensureBootstrapAdmin: vi.fn(),
@@ -53,6 +56,17 @@ vi.mock("../services/auth", async () => {
   };
 });
 
+vi.mock("../services/oauth", async () => {
+  const actual =
+    await vi.importActual<typeof import("../services/oauth")>(
+      "../services/oauth",
+    );
+  return {
+    ...actual,
+    resolvePendingRegistration,
+  };
+});
+
 import { createApp } from "../app";
 import { issueSessionCookie } from "../services/auth";
 
@@ -75,6 +89,17 @@ describe("meta and auth routes", () => {
     listActiveRootDomains.mockResolvedValue(["707979.xyz", "mail.example.net"]);
     listPasskeysForUser.mockResolvedValue([]);
     getDb.mockReturnValue({});
+    resolvePendingRegistration.mockResolvedValue({
+      token: "pending_token",
+      method: "passkey",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteRequired: true,
+      invitePrevalidated: false,
+      canComplete: true,
+      suggestedNickname: null,
+      error: null,
+    });
   });
 
   it("returns runtime metadata from /api/meta", async () => {
@@ -215,6 +240,29 @@ describe("meta and auth routes", () => {
     expect(payload.cloudflareCatchAllEnablementEnabled).toBe(true);
   });
 
+  it("routes passkey registration start through the static auth handler", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      registration: {
+        method: "passkey",
+        sourceIntent: "register",
+        inviteRequired: true,
+      },
+    });
+  });
+
   it("returns the unified auth failure envelope for invalid api keys", async () => {
     authenticateApiKey.mockResolvedValue(null);
 
@@ -235,6 +283,64 @@ describe("meta and auth routes", () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({
       error: "Invalid API key",
+      details: null,
+    });
+  });
+
+  it("rejects unauthenticated provider bind starts before redirecting", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/github/start?intent=bind"),
+      env as never,
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Authentication required",
+      details: null,
+    });
+  });
+
+  it("verifies the existing pending token before creating passkey completion options", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => [
+          {
+            value: 1,
+          },
+        ],
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/registration/passkey/options", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost:5173",
+        },
+        body: JSON.stringify({
+          token: "pending_from_query",
+          nickname: "Ivan",
+          passkeyName: "Primary Passkey",
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      } as never,
+    );
+
+    expect(response.status).toBe(403);
+    expect(resolvePendingRegistration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      }),
+      "pending_from_query",
+    );
+    await expect(response.json()).resolves.toEqual({
+      error: "Invite required",
       details: null,
     });
   });

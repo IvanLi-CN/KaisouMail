@@ -147,6 +147,7 @@ export const completeExternalRegistrationRequestSchema = z.object({
 });
 
 export const completePasskeyRegistrationRequestSchema = z.object({
+  token: z.string().min(1),
   inviteCode: z.string().trim().max(128).optional(),
   nickname: z.string().trim().min(1).max(64),
   passkeyName: z.string().trim().min(1).max(64).default("Primary Passkey"),

@@ -806,6 +806,7 @@ export const demoApi = {
     return clone(state.session);
   },
   async createPasskeyRegistrationCompletionOptions(_input: {
+    token: string;
     inviteCode?: string;
     nickname: string;
     passkeyName: string;

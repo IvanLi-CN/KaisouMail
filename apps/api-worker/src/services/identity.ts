@@ -237,6 +237,7 @@ export const getRegistrationSettings = async (
 
 export const updateRegistrationSettings = async (
   env: WorkerEnv,
+  config: RuntimeConfig,
   input: {
     githubMode: RegistrationMode;
     githubDailyLimit: number;
@@ -254,6 +255,7 @@ export const updateRegistrationSettings = async (
 ) => {
   const db = getDb(env);
   const existing = await ensureRegistrationSettings(env);
+  const resolvedExistingOauth = resolveStoredOauthConfig(existing, config);
   const updatedAt = nowIso();
   await db
     .update(registrationSettings)
@@ -261,17 +263,21 @@ export const updateRegistrationSettings = async (
       ...input,
       githubClientId: input.githubClientId.trim(),
       githubClientSecret:
-        input.githubClientSecret.trim() || existing.githubClientSecret,
+        input.githubClientSecret.trim() ||
+        existing.githubClientSecret.trim() ||
+        resolvedExistingOauth.githubClientSecret,
       githubOauthScopes: input.githubOauthScopes.trim() || "read:user",
       linuxdoClientId: input.linuxdoClientId.trim(),
       linuxdoClientSecret:
-        input.linuxdoClientSecret.trim() || existing.linuxdoClientSecret,
+        input.linuxdoClientSecret.trim() ||
+        existing.linuxdoClientSecret.trim() ||
+        resolvedExistingOauth.linuxdoClientSecret,
       linuxdoOauthBaseUrl:
         input.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
       updatedAt,
     })
     .where(eq(registrationSettings.id, SETTINGS_ROW_ID));
-  return getRegistrationSettings(env);
+  return getRegistrationSettings(env, config);
 };
 
 export const createInvite = async (

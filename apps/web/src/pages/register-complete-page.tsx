@@ -51,6 +51,7 @@ export const RegisterCompletePage = () => {
     mutationFn: async (values: CompleteRegistrationValues) => {
       const options =
         await apiClient.createPasskeyRegistrationCompletionOptions({
+          token,
           nickname: values.nickname,
           inviteCode: values.inviteCode,
           passkeyName: values.passkeyName || "Primary Passkey",

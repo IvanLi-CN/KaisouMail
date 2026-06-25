@@ -110,35 +110,6 @@ export const authRoutes = new Hono<AppBindings>()
     ),
   )
   .post(
-    "/:provider/register/start",
-    zValidator("param", providerRegistrationParamsSchema, apiValidationHook),
-    zValidator(
-      "json",
-      startProviderRegistrationRequestSchema,
-      apiValidationHook,
-    ),
-    async (c) => {
-      const params = c.req.valid("param");
-      const body = c.req.valid("json");
-      const url = await buildProviderStartUrl(
-        c.get("runtimeConfig"),
-        c.req.raw,
-        c.env,
-        params.provider,
-        {
-          intent: "register",
-          inviteCode: body.inviteCode,
-          returnTo: body.returnTo ?? "/register",
-        },
-      );
-      return c.json(
-        startProviderRegistrationResponseSchema.parse({
-          startUrl: url,
-        }),
-      );
-    },
-  )
-  .post(
     "/passkey/register/start",
     zValidator(
       "json",
@@ -167,6 +138,35 @@ export const authRoutes = new Hono<AppBindings>()
       );
     },
   )
+  .post(
+    "/:provider/register/start",
+    zValidator("param", providerRegistrationParamsSchema, apiValidationHook),
+    zValidator(
+      "json",
+      startProviderRegistrationRequestSchema,
+      apiValidationHook,
+    ),
+    async (c) => {
+      const params = c.req.valid("param");
+      const body = c.req.valid("json");
+      const url = await buildProviderStartUrl(
+        c.get("runtimeConfig"),
+        c.req.raw,
+        c.env,
+        params.provider,
+        {
+          intent: "register",
+          inviteCode: body.inviteCode,
+          returnTo: body.returnTo ?? "/register",
+        },
+      );
+      return c.json(
+        startProviderRegistrationResponseSchema.parse({
+          startUrl: url,
+        }),
+      );
+    },
+  )
   .get(
     "/:provider/start",
     zValidator("query", providerStartQuerySchema, apiValidationHook),
@@ -176,6 +176,15 @@ export const authRoutes = new Hono<AppBindings>()
         query.intent === "bind" || query.intent === "admin-transfer"
           ? await resolveSessionUser(c.env, c.get("runtimeConfig"), c.req.raw)
           : null;
+      if (
+        (query.intent === "bind" || query.intent === "admin-transfer") &&
+        !sessionUser
+      ) {
+        return c.json(
+          buildApiErrorPayload("Authentication required", null),
+          401,
+        );
+      }
       const url = await buildProviderStartUrl(
         c.get("runtimeConfig"),
         c.req.raw,
@@ -263,19 +272,17 @@ export const authRoutes = new Hono<AppBindings>()
     ),
     async (c) => {
       const config = c.get("runtimeConfig");
-      const pendingToken = await createPasskeyPendingRegistrationToken(
-        config,
-        c.req.valid("json"),
-      );
+      const body = c.req.valid("json");
+      await resolvePendingRegistration(c.env, config, body.token);
       const result = await createPasskeyInviteRegistrationOptionsForCompletion(
         c.env,
         config,
         c.req.raw,
         {
-          inviteCode: c.req.valid("json").inviteCode,
-          nickname: c.req.valid("json").nickname,
-          passkeyName: c.req.valid("json").passkeyName,
-          pendingToken,
+          inviteCode: body.inviteCode,
+          nickname: body.nickname,
+          passkeyName: body.passkeyName,
+          pendingToken: body.token,
         },
       );
       c.header("Set-Cookie", result.cookie);
