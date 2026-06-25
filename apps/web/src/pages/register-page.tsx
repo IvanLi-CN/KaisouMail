@@ -43,7 +43,7 @@ export const RegisterPage = () => {
           try {
             const result = await apiClient.startProviderRegistration(provider, {
               inviteCode: values.inviteCode,
-              returnTo: "/register",
+              returnTo: redirectTarget,
             });
             window.location.href = result.startUrl;
           } catch (reason) {
