@@ -90,6 +90,8 @@ export const ApiKeyTable = ({
   );
   const visibleRangeStart = sortedApiKeys.length === 0 ? 0 : pageStart + 1;
   const visibleRangeEnd = pageStart + paginatedApiKeys.length;
+  const renderStatusLabel = (apiKey: ApiKeyRecord) =>
+    apiKey.revokedAt ? `已撤销 · ${formatDateTime(apiKey.revokedAt)}` : "可用";
 
   return (
     <div className="grid gap-6 2xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -121,15 +123,13 @@ export const ApiKeyTable = ({
                 {form.formState.errors.name?.message ?? " "}
               </p>
             </div>
-            <Button className="w-full" type="submit">
+            <Button className="h-11 w-full" type="submit">
               生成 Key
             </Button>
           </form>
           {latestSecret ? (
             <div className="rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                仅展示一次
-              </p>
+              <p className="text-xs font-semibold text-primary">仅展示一次</p>
               <p className="mt-2 break-all text-foreground">{latestSecret}</p>
             </div>
           ) : null}
@@ -144,46 +144,109 @@ export const ApiKeyTable = ({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>名称</TableHeaderCell>
-                <TableHeaderCell>Prefix</TableHeaderCell>
-                <TableHeaderCell>Scopes</TableHeaderCell>
-                <TableHeaderCell>最近使用</TableHeaderCell>
-                <TableHeaderCell className="text-right">操作</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedApiKeys.map((apiKey) => (
-                <TableRow key={apiKey.id}>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="font-medium text-foreground">
-                        {apiKey.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        创建于 {formatDateTime(apiKey.createdAt)}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>{apiKey.prefix}</TableCell>
-                  <TableCell>{apiKey.scopes.join(", ")}</TableCell>
-                  <TableCell>{formatDateTime(apiKey.lastUsedAt)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => onRevoke(apiKey.id)}
-                      disabled={Boolean(apiKey.revokedAt)}
-                    >
-                      {apiKey.revokedAt ? "已撤销" : "撤销"}
-                    </Button>
-                  </TableCell>
+          <div className="space-y-3 md:hidden">
+            {paginatedApiKeys.map((apiKey) => (
+              <div
+                key={apiKey.id}
+                className="rounded-2xl border border-border/70 bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium text-foreground">{apiKey.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      创建于 {formatDateTime(apiKey.createdAt)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="min-h-11 shrink-0"
+                    onClick={() => onRevoke(apiKey.id)}
+                    disabled={Boolean(apiKey.revokedAt)}
+                  >
+                    {apiKey.revokedAt ? "已撤销" : "撤销"}
+                  </Button>
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm">
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground">
+                      Prefix
+                    </dt>
+                    <dd className="break-all text-foreground">
+                      {apiKey.prefix}
+                    </dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground">
+                      Scopes
+                    </dt>
+                    <dd className="text-foreground">
+                      {apiKey.scopes.join(", ")}
+                    </dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground">
+                      最近使用
+                    </dt>
+                    <dd className="text-foreground">
+                      {formatDateTime(apiKey.lastUsedAt)}
+                    </dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-xs font-medium text-muted-foreground">
+                      状态
+                    </dt>
+                    <dd className="text-foreground">
+                      {renderStatusLabel(apiKey)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>名称</TableHeaderCell>
+                  <TableHeaderCell>Prefix</TableHeaderCell>
+                  <TableHeaderCell>Scopes</TableHeaderCell>
+                  <TableHeaderCell>最近使用</TableHeaderCell>
+                  <TableHeaderCell className="text-right">操作</TableHeaderCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {paginatedApiKeys.map((apiKey) => (
+                  <TableRow key={apiKey.id}>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <p className="font-medium text-foreground">
+                          {apiKey.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          创建于 {formatDateTime(apiKey.createdAt)}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell>{apiKey.prefix}</TableCell>
+                    <TableCell>{apiKey.scopes.join(", ")}</TableCell>
+                    <TableCell>{formatDateTime(apiKey.lastUsedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="min-h-10"
+                        onClick={() => onRevoke(apiKey.id)}
+                        disabled={Boolean(apiKey.revokedAt)}
+                      >
+                        {apiKey.revokedAt ? "已撤销" : "撤销"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           {totalPages > 1 ? (
             <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <p>
@@ -197,6 +260,7 @@ export const ApiKeyTable = ({
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-11"
                   onClick={() =>
                     setPaginationState({
                       page: page - 1,
@@ -210,6 +274,7 @@ export const ApiKeyTable = ({
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-11"
                   onClick={() =>
                     setPaginationState({
                       page: page + 1,

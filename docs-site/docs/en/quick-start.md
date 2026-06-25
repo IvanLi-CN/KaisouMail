@@ -18,9 +18,11 @@ Minimum variables:
 
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
-  - `BOOTSTRAP_ADMIN_API_KEY` (optional; only if `BOOTSTRAP_ADMIN_EMAIL` is set for first-admin bootstrap)
+  - `BOOTSTRAP_ADMIN_INVITE_CODE` (optional; only if you want an empty local database to bootstrap the first admin via invite)
   - `WEB_APP_ORIGIN` (required for browser passkeys; it provides the primary trusted WebAuthn origin and the RP ID when you only keep one origin, and local passkey development must use `http://localhost:4173` instead of an IP literal)
   - `WEB_APP_ORIGINS` (optional; add it when multiple production control-plane aliases must stay trusted for passkeys and need one shared non-public RP ID suffix)
+  - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` (optional; enables GitHub login)
+  - `LINUXDO_CLIENT_ID` / `LINUXDO_CLIENT_SECRET` (optional; enables LinuxDO login)
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -47,7 +49,8 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## Login options
 
-- Browser users can register a passkey inside `/api-keys` after their first sign-in
+- Third-party sign-in and registration now converge on `/login`
+- Passkey first-time registration requires an invite, while linked passkeys can sign in directly afterward
 - Automation and recovery flows should keep using API Keys
 - When you validate passkeys locally, open the control plane from `localhost` instead of `127.0.0.1`
 

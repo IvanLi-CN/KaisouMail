@@ -12,6 +12,8 @@ import {
 import { randomId } from "./lib/crypto";
 import { ApiError, buildApiErrorPayload } from "./lib/errors";
 import { logOperationalEvent } from "./lib/observability";
+import { accountRoutes } from "./routes/account";
+import { adminRoutes } from "./routes/admin";
 import { apiKeyRoutes } from "./routes/apiKeys";
 import { authRoutes } from "./routes/auth";
 import { domainCutoverTaskRoutes } from "./routes/domain-cutover-tasks";
@@ -25,6 +27,7 @@ import {
   ensureBootstrapAdmin,
   ensureBootstrapDomains,
 } from "./services/bootstrap";
+import { ensureRegistrationSettings } from "./services/identity";
 import type { AppBindings } from "./types";
 
 const resolveFallbackCorsOrigin = (
@@ -107,6 +110,7 @@ export const createApp = () => {
     const runtimeConfig = c.get("runtimeConfig");
     await ensureBootstrapAdmin(db, runtimeConfig);
     await ensureBootstrapDomains(db, runtimeConfig);
+    await ensureRegistrationSettings(c.env);
     await next();
   });
 
@@ -138,6 +142,8 @@ export const createApp = () => {
     c.json(versionResponseSchema.parse(versionInfo)),
   );
   app.route("/api/auth", authRoutes);
+  app.route("/api/account", accountRoutes);
+  app.route("/api/admin", adminRoutes);
   app.route("/api/api-keys", apiKeyRoutes);
   app.route("/api/passkeys", passkeyRoutes);
   app.route("/api/domains", domainRoutes);

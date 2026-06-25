@@ -18,9 +18,11 @@ cp apps/web/.env.example apps/web/.env
 
 - `apps/api-worker/.dev.vars`
   - `SESSION_SECRET`
-  - `BOOTSTRAP_ADMIN_API_KEY`（可选；仅当你同时设置 `BOOTSTRAP_ADMIN_EMAIL` 用于首次管理员引导时才需要）
+  - `BOOTSTRAP_ADMIN_INVITE_CODE`（可选；仅当你希望空库本地环境可通过邀请码引导首个管理员时才需要）
   - `WEB_APP_ORIGIN`（passkey 必需；它提供主 WebAuthn 可信来源，单来源时也直接决定 RP ID；本地调试 passkey 时必须使用 `http://localhost:4173`，不要用 IP 字面量）
   - `WEB_APP_ORIGINS`（可选；如果要同时保留多个生产控制台域名给 passkey 使用，并共享一套非 public suffix 的 RP ID 后缀，就在这里补充）
+  - `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`（可选；启用 GitHub 登录）
+  - `LINUXDO_CLIENT_ID` / `LINUXDO_CLIENT_SECRET`（可选；启用 LinuxDO 登录）
 - `apps/web/.env`
   - `VITE_API_BASE_URL`
 
@@ -47,7 +49,8 @@ STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
 
 ## 登录方式
 
-- 浏览器用户首次登录后，可在 `/api-keys` 页面注册 passkey，后续直接在登录页用 passkey 登录
+- 第三方登录与注册统一收敛到 `/login`
+- Passkey 首次注册必须走邀请码；绑定完成后可直接用于后续登录
 - 自动化与应急恢复流程继续使用 API Key
 - 本地验 passkey 时，请从 `localhost` 打开控制台，不要用 `127.0.0.1`
 

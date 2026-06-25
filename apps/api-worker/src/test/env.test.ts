@@ -45,11 +45,11 @@ describe("runtime config parsing", () => {
     expect(config.CLOUDFLARE_RUNTIME_API_TOKEN).toBeUndefined();
   });
 
-  it("parses without BOOTSTRAP_ADMIN_API_KEY when bootstrap is disabled", () => {
+  it("accepts legacy bootstrap env vars as optional compatibility inputs", () => {
     const result = safeParseRuntimeConfig({
       ...baseEnv,
-      BOOTSTRAP_ADMIN_EMAIL: undefined,
-      BOOTSTRAP_ADMIN_API_KEY: undefined,
+      BOOTSTRAP_ADMIN_EMAIL: "owner@example.com",
+      BOOTSTRAP_ADMIN_API_KEY: "cfm_legacy_bootstrap_key_123456",
     } as never);
 
     expect(result.success).toBe(true);

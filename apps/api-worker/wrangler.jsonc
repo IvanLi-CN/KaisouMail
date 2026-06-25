@@ -65,8 +65,6 @@
     "SUBDOMAIN_CLEANUP_BATCH_SIZE": "50",
     "SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE": "48",
     "EMAIL_ROUTING_MANAGEMENT_ENABLED": "true",
-    "BOOTSTRAP_ADMIN_EMAIL": "owner@707979.xyz",
-    "BOOTSTRAP_ADMIN_NAME": "Ivan",
     "CF_ROUTE_RULESET_TAG": "kaisoumail",
     "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },

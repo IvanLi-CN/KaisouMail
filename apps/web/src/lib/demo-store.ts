@@ -8,31 +8,39 @@ import {
   type mailboxStatuses,
   recommendApexMailboxBinding,
 } from "@kaisoumail/shared";
-
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import type {
+  AdminUserRecord,
   ApiKeyRecord,
   ApiMeta,
   CreateApiKeyResult,
-  CreateUserResult,
   DomainCatalogItem,
   DomainRecord,
+  ExternalAccountRecord,
+  InviteRecord,
   Mailbox,
   MessageDetail,
   MessageSummary,
+  PaginationMeta,
   PasskeyRecord,
+  RegistrationSettings,
   SessionResponse,
   UserRecord,
   VersionInfo,
 } from "@/lib/contracts";
 import {
+  demoAdminUsers,
   demoApiKeys,
   demoCloudflareZones,
   demoDomains,
+  demoExternalAccounts,
+  demoInvites,
   demoMailboxes,
   demoMessageDetails,
   demoMessages,
   demoMeta,
   demoPasskeys,
+  demoRegistrationSettings,
   demoSessionUser,
   demoUsers,
   demoVersion,
@@ -60,9 +68,13 @@ const pickRandomRootDomain = (domains: string[]) => {
 
 interface DemoState {
   session: SessionResponse | null;
+  externalAccounts: ExternalAccountRecord[];
   apiKeys: ApiKeyRecord[];
   passkeys: PasskeyRecord[];
   users: UserRecord[];
+  adminUsers: AdminUserRecord[];
+  invites: InviteRecord[];
+  registrationSettings: RegistrationSettings;
   cloudflareZones: Array<{
     id: string;
     rootDomain: string;
@@ -79,9 +91,13 @@ interface DemoState {
 
 const createState = (): DemoState => ({
   session: null,
+  externalAccounts: clone(demoExternalAccounts),
   apiKeys: clone(demoApiKeys),
   passkeys: clone(demoPasskeys),
   users: clone(demoUsers),
+  adminUsers: clone(demoAdminUsers),
+  invites: clone(demoInvites),
+  registrationSettings: clone(demoRegistrationSettings),
   cloudflareZones: clone(demoCloudflareZones),
   domains: clone(demoDomains),
   mailboxes: clone(demoMailboxes),
@@ -92,6 +108,29 @@ const createState = (): DemoState => ({
 });
 
 let state = createState();
+
+const paginate = <T>(
+  items: T[],
+  input: {
+    page: number;
+    pageSize: number;
+  },
+) => {
+  const pageSize = Math.max(1, input.pageSize);
+  const totalItems = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const page = Math.min(Math.max(input.page, 1), totalPages);
+  const offset = (page - 1) * pageSize;
+  return {
+    items: items.slice(offset, offset + pageSize),
+    pagination: {
+      page,
+      pageSize,
+      totalItems,
+      totalPages,
+    } satisfies PaginationMeta,
+  };
+};
 
 const buildDomainCatalog = (): DomainCatalogItem[] => {
   const localDomains = new Map(
@@ -128,6 +167,51 @@ const buildDomainCatalog = (): DomainCatalogItem[] => {
         disabledAt: local?.disabledAt ?? null,
       } satisfies DomainCatalogItem;
     });
+};
+
+const buildDemoAuthProviders = () => {
+  const githubConfigured = Boolean(
+    state.registrationSettings.githubClientId.trim() &&
+      state.registrationSettings.githubClientSecret.trim(),
+  );
+  const linuxdoConfigured = Boolean(
+    state.registrationSettings.linuxdoClientId.trim() &&
+      state.registrationSettings.linuxdoClientSecret.trim() &&
+      state.registrationSettings.linuxdoOauthBaseUrl.trim(),
+  );
+
+  return [
+    {
+      provider: "github" as const,
+      configured: githubConfigured,
+      loginEnabled: githubConfigured,
+      registrationMode: state.registrationSettings.githubMode,
+      dailyLimit: state.registrationSettings.githubDailyLimit,
+      dailyUsed: 2,
+      dailyRemaining: Math.max(
+        state.registrationSettings.githubDailyLimit - 2,
+        0,
+      ),
+    },
+    {
+      provider: "linuxdo" as const,
+      configured: linuxdoConfigured,
+      loginEnabled: linuxdoConfigured,
+      registrationMode: state.registrationSettings.linuxdoMode,
+      dailyLimit: state.registrationSettings.linuxdoDailyLimit,
+      dailyUsed: 0,
+      dailyRemaining: state.registrationSettings.linuxdoDailyLimit,
+    },
+    {
+      provider: "passkey" as const,
+      configured: true,
+      loginEnabled: true,
+      registrationMode: state.registrationSettings.passkeyMode,
+      dailyLimit: null,
+      dailyUsed: 0,
+      dailyRemaining: null,
+    },
+  ];
 };
 
 const syncMetaDomains = () => {
@@ -196,8 +280,201 @@ export const demoApi = {
     };
     return clone(state.session);
   },
+  async createAdminTransferIntent(userId: string) {
+    return {
+      intentToken: `demo-transfer-intent:${userId}`,
+    };
+  },
+  async verifyAdminTransferApiKey(
+    userId: string,
+    input: {
+      intentToken: string;
+      apiKey: string;
+    },
+  ) {
+    if (!input.intentToken.endsWith(userId)) {
+      throw new Error("Admin transfer target mismatch");
+    }
+    if (input.apiKey.trim().length < 8) {
+      throw new Error("Invalid API key");
+    }
+    return {
+      verificationToken: `demo-transfer-verification:${userId}:api-key`,
+      method: "api-key" as const,
+    };
+  },
+  async verifyAdminTransferPasskey(
+    userId: string,
+    input: {
+      intentToken: string;
+      response: { id: string };
+    },
+  ) {
+    if (!input.intentToken.endsWith(userId) || !input.response.id) {
+      throw new Error("Admin transfer verification failed");
+    }
+    state.session = {
+      user: clone(demoSessionUser),
+      authenticatedAt: new Date().toISOString(),
+    };
+    return {
+      verificationToken: `demo-transfer-verification:${userId}:passkey`,
+      method: "passkey" as const,
+    };
+  },
+  async createAdminTransferPasskeyOptions(userId: string, intentToken: string) {
+    if (!intentToken.endsWith(userId)) {
+      throw new Error("Admin transfer verification failed");
+    }
+    return {
+      challenge: `demo-admin-transfer-passkey:${userId}`,
+      rpId: "localhost",
+      timeout: 60000,
+      userVerification: "required",
+    };
+  },
   async logout() {
     state.session = null;
+  },
+  async getAccount() {
+    return clone({
+      user:
+        state.users.find((user) => user.id === demoSessionUser.id) ??
+        demoUsers[0],
+    });
+  },
+  async updateAccount(input: { nickname: string }) {
+    const user = state.users.find((entry) => entry.id === demoSessionUser.id);
+    if (!user) throw new Error("User not found");
+    user.nickname = input.nickname;
+    user.updatedAt = new Date().toISOString();
+    const adminUser = state.adminUsers.find((entry) => entry.id === user.id);
+    if (adminUser) {
+      adminUser.nickname = user.nickname;
+      adminUser.updatedAt = user.updatedAt;
+    }
+    return clone({ user });
+  },
+  async deleteAccount() {
+    state.session = null;
+    const deletedAt = new Date().toISOString();
+    const user = state.users.find((entry) => entry.id === demoSessionUser.id);
+    if (user) {
+      user.deletedAt = deletedAt;
+      user.nickname = `${user.nickname} (deleted)`;
+      user.updatedAt = deletedAt;
+    }
+    state.externalAccounts = state.externalAccounts.filter(
+      (entry) => entry.providerUserId !== "10001",
+    );
+    state.passkeys = state.passkeys.map((entry) =>
+      entry.revokedAt ? entry : { ...entry, revokedAt: deletedAt },
+    );
+    state.apiKeys = state.apiKeys.map((entry) =>
+      entry.revokedAt ? entry : { ...entry, revokedAt: deletedAt },
+    );
+  },
+  async listExternalAccounts() {
+    return clone(
+      state.externalAccounts.filter((entry) =>
+        state.session?.user.id
+          ? entry.id === "ext_github_owner" &&
+            state.session.user.id === demoSessionUser.id
+          : false,
+      ),
+    );
+  },
+  async unlinkExternalAccount(id: string) {
+    state.externalAccounts = state.externalAccounts.filter(
+      (entry) => entry.id !== id,
+    );
+  },
+  async listAuthProviders() {
+    return clone(buildDemoAuthProviders());
+  },
+  getProviderStartUrl(
+    provider: "github" | "linuxdo",
+    options?: {
+      intent?: "login" | "register" | "bind" | "admin-transfer";
+      inviteCode?: string;
+      intentToken?: string;
+    },
+  ) {
+    const params = new URLSearchParams();
+    if (options?.intent) params.set("intent", options.intent);
+    if (options?.inviteCode) params.set("inviteCode", options.inviteCode);
+    if (options?.intentToken) params.set("intentToken", options.intentToken);
+    return `/api/auth/${provider}/start?${params.toString()}`;
+  },
+  async startProviderRegistration(
+    provider: "github" | "linuxdo",
+    options?: { inviteCode?: string; returnTo?: string },
+  ) {
+    return {
+      startUrl: this.getProviderStartUrl(provider, {
+        intent: "register",
+        inviteCode: options?.inviteCode,
+      }),
+    };
+  },
+  async startPasskeyRegistration(input?: { inviteCode?: string }) {
+    return {
+      registration: {
+        token: "demo-passkey-pending",
+        method: "passkey",
+        sourceIntent: "register",
+        redirectTo: "/workspace",
+        inviteRequired: true,
+        invitePrevalidated: Boolean(input?.inviteCode?.trim()),
+        canComplete: true,
+        suggestedNickname: null,
+        error: null,
+      },
+    };
+  },
+  async getPendingRegistration(token: string) {
+    if (token === "demo-passkey-pending") {
+      return {
+        registration: {
+          token,
+          method: "passkey",
+          sourceIntent: "register",
+          redirectTo: "/workspace",
+          inviteRequired: true,
+          invitePrevalidated: false,
+          canComplete: true,
+          suggestedNickname: null,
+          error: null,
+        },
+      };
+    }
+    return {
+      registration: {
+        token,
+        method: "github",
+        sourceIntent: "register",
+        redirectTo: "/workspace",
+        inviteRequired: false,
+        invitePrevalidated: false,
+        canComplete: true,
+        suggestedNickname: "Ivan Owner",
+        error: null,
+      },
+    };
+  },
+  async completeExternalRegistration(input: {
+    token: string;
+    nickname: string;
+    inviteCode?: string;
+  }) {
+    state.session = {
+      user: {
+        ...demoSessionUser,
+        nickname: input.nickname,
+      },
+      authenticatedAt: new Date().toISOString(),
+    };
+    return clone(state.session);
   },
   async getVersion() {
     return clone(state.version);
@@ -495,6 +772,54 @@ export const demoApi = {
   async listPasskeys() {
     return clone(state.passkeys);
   },
+  async createPasskeyInviteRegistrationOptions(_input: {
+    inviteCode: string;
+    nickname: string;
+    passkeyName: string;
+  }) {
+    return {
+      challenge: "demo-passkey-register",
+      rp: {
+        name: "KaisouMail",
+        id: "localhost",
+      },
+      user: {
+        id: "demo-passkey-user",
+        name: "demo-user",
+        displayName: "Demo User",
+      },
+      pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+      timeout: 60000,
+      attestation: "none",
+      excludeCredentials: [],
+      authenticatorSelection: {
+        residentKey: "required",
+        userVerification: "required",
+      },
+    } satisfies PublicKeyCredentialCreationOptionsJSON;
+  },
+  async verifyPasskeyInviteRegistration() {
+    state.session = {
+      user: clone(demoSessionUser),
+      authenticatedAt: new Date().toISOString(),
+    };
+    return clone(state.session);
+  },
+  async createPasskeyRegistrationCompletionOptions(_input: {
+    token: string;
+    inviteCode?: string;
+    nickname: string;
+    passkeyName: string;
+  }) {
+    return this.createPasskeyInviteRegistrationOptions({
+      inviteCode: _input.inviteCode ?? "km_demo_invite_1",
+      nickname: _input.nickname,
+      passkeyName: _input.passkeyName,
+    });
+  },
+  async verifyPasskeyRegistrationCompletion() {
+    return this.verifyPasskeyInviteRegistration();
+  },
   async registerPasskey(name: string) {
     const createdAt = new Date().toISOString();
     const passkey: PasskeyRecord = {
@@ -551,8 +876,91 @@ export const demoApi = {
     const apiKey = state.apiKeys.find((entry) => entry.id === id);
     if (apiKey) apiKey.revokedAt = new Date().toISOString();
   },
-  async listUsers() {
-    return clone(state.users);
+  async listUsers(input: { page: number; pageSize: number }) {
+    const result = paginate(state.adminUsers, input);
+    return clone({
+      users: result.items,
+      pagination: result.pagination,
+    });
+  },
+  async listInvites(input: { page: number; pageSize: number }) {
+    const result = paginate(state.invites, input);
+    return clone({
+      invites: result.items,
+      pagination: result.pagination,
+    });
+  },
+  async createInvite(input: { note?: string; count: number }) {
+    const invites = Array.from({ length: input.count }, () => ({
+      id: randomId("inv"),
+      code: `km_demo_${Math.random().toString(36).slice(2, 10)}`,
+      kind: "standard" as const,
+      role: "member" as const,
+      note: input.note?.trim() || null,
+      createdByUserId: demoSessionUser.id,
+      createdAt: new Date().toISOString(),
+      usedAt: null,
+      usedByUserId: null,
+    })) satisfies InviteRecord[];
+    state.invites = [...invites, ...state.invites];
+    return clone({ invites });
+  },
+  async deleteInvite(id: string) {
+    state.invites = state.invites.filter((entry) => entry.id !== id);
+  },
+  async getRegistrationSettings() {
+    return clone({
+      settings: {
+        ...state.registrationSettings,
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
+      },
+    });
+  },
+  async updateRegistrationSettings(
+    input: Omit<RegistrationSettings, "updatedAt"> & {
+      clearGithubClientSecret: boolean;
+      clearLinuxdoClientSecret: boolean;
+    },
+  ) {
+    state.registrationSettings = {
+      ...input,
+      githubClientSecret: input.clearGithubClientSecret
+        ? ""
+        : input.githubClientSecret.trim() ||
+          state.registrationSettings.githubClientSecret,
+      linuxdoClientSecret: input.clearLinuxdoClientSecret
+        ? ""
+        : input.linuxdoClientSecret.trim() ||
+          state.registrationSettings.linuxdoClientSecret,
+      updatedAt: new Date().toISOString(),
+    };
+    return clone({
+      settings: {
+        ...state.registrationSettings,
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
+      },
+    });
+  },
+  async transferAdmin(userId: string, verificationToken?: string) {
+    if (!verificationToken?.includes(userId)) {
+      throw new Error("Admin transfer verification expired");
+    }
+    state.users = state.users.map((user) =>
+      user.id === demoSessionUser.id
+        ? { ...user, role: "member", updatedAt: new Date().toISOString() }
+        : user.id === userId
+          ? { ...user, role: "admin", updatedAt: new Date().toISOString() }
+          : user,
+    );
+    state.adminUsers = state.adminUsers.map((user) =>
+      user.id === demoSessionUser.id
+        ? { ...user, role: "member", updatedAt: new Date().toISOString() }
+        : user.id === userId
+          ? { ...user, role: "admin", updatedAt: new Date().toISOString() }
+          : user,
+    );
   },
   async listDomains() {
     return clone(state.domains);
@@ -758,26 +1166,5 @@ export const demoApi = {
     domain.lastProvisionedAt = domain.updatedAt;
     syncMetaDomains();
     return clone(domain);
-  },
-  async createUser(input: {
-    email: string;
-    name: string;
-    role: "admin" | "member";
-  }): Promise<CreateUserResult> {
-    const now = new Date().toISOString();
-    const user: UserRecord = {
-      id: randomId("usr"),
-      email: input.email,
-      name: input.name,
-      role: input.role,
-      createdAt: now,
-      updatedAt: now,
-    };
-    state.users.unshift(user);
-    const initialKey = await this.createApiKey({
-      name: `${input.name} initial key`,
-      scopes: ["mailboxes:write", "messages:read"],
-    });
-    return { user: clone(user), initialKey };
   },
 };

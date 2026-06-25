@@ -1,4 +1,14 @@
 export const userRoles = ["admin", "member"] as const;
+export const authProviders = ["github", "linuxdo", "passkey"] as const;
+export const providerRegistrationModes = [
+  "off",
+  "invite-only",
+  "open",
+] as const;
+export const passkeyRegistrationModes = ["off", "invite-only"] as const;
+export const inviteKinds = ["standard", "bootstrap_admin"] as const;
+export const defaultDeletedUserMailboxRetentionDays = 7;
+export const maxDeletedUserMailboxRetentionDays = 30;
 export const mailboxStatuses = [
   "active",
   "expired",

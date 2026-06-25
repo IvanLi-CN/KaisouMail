@@ -55,7 +55,13 @@ export const RootLayout = () => {
       );
     }
 
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return (
+      <Navigate
+        to={appRoutes.login}
+        replace
+        state={{ from: location.pathname }}
+      />
+    );
   }
 
   return (

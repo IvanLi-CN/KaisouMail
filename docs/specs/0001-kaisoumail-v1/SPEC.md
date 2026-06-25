@@ -11,7 +11,8 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ### Auth
 - `/login`
-- Passkey-first browser sign-in with API key fallback that exchanges credentials for the same browser session cookie
+- `/register`
+- Login and registration are independent browser surfaces: `/login` is strictly for sign-in via Passkey, third-party providers, or API key fallback, while `/register` is reserved for invite/open signup flows and Passkey-first account creation
 
 ### Workspace
 - `/workspace`
@@ -183,6 +184,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-12: Moved the mobile AppShell drawer trigger back onto the top brand row so phone layouts no longer leave a second orphaned button line under the lockup, then refreshed the collapsed mobile shell evidence.
 - 2026-04-12: Re-stacked the non-mobile AppShell header so the account/logout utilities return to the top brand row on tablet and desktop, while primary navigation stays on its own line below, then refreshed the related shell evidence.
 - 2026-04-12: Added domain-level Catch All controls with Cloudflare catch-all snapshot/restore, auto-materialized `source=catch_all` mailboxes for unregistered addresses, refreshed the mailbox/domain/API docs surfaces, and updated the workspace/mailboxes rails to a two-line dense layout with Catch All badges.
+- 2026-06-22: Split authentication into independent `/login` and `/register` pages after the unified auth card proved too dense, then refreshed auth visual evidence so sign-in and account creation no longer share one panel.
 - 2026-04-11: Branded `/login` with the KaisouMail lockup, flattened the passkey section back into the primary sign-in card, and refreshed auth visual evidence for the final single-card layout.
 - 2026-04-11: Refined the workspace verification-copy feedback so success tooltips use neutral animated checkmark feedback inside the existing dark console palette, then refreshed the stored workspace evidence.
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
@@ -377,6 +379,22 @@ PR: include
 ![Mailbox detail page](./assets/mailbox-detail.png)
 
 ### Identity Auth
+
+PR: include
+![Desktop login page with sign-in-only surface for Passkey, third-party login, and API key fallback](./assets/login-page-identity-rebuild-desktop.png)
+
+PR: include
+![Desktop register page with separated third-party signup flows and passkey invite registration](./assets/register-page-identity-rebuild-desktop.png)
+
+![Desktop API Key login page with the aligned login CTA button icon treatment](./assets/login-api-key-page-desktop.png)
+
+![Desktop complete-registration page with the aligned account creation CTA button icon treatment](./assets/register-complete-page-desktop.png)
+
+PR: include
+![Desktop identity auth page showing account profile, connected accounts, passkeys, and API key management in one surface](./assets/identity-auth-account-center-desktop.png)
+
+PR: include
+![Desktop admin users console with user list, invite codes, and registration policy controls](./assets/users-admin-console-desktop.png)
 
 ![Identity auth page with the API Keys tab selected](./assets/api-keys-page-docs-entry.png)
 

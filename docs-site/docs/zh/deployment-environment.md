@@ -17,7 +17,7 @@
 
 | 名称 | 用途 |
 | --- | --- |
-| `BOOTSTRAP_ADMIN_API_KEY` | 首次引导管理员 API Key；仅当同时设置 `BOOTSTRAP_ADMIN_EMAIL` 时才需要 |
+| `BOOTSTRAP_ADMIN_INVITE_CODE` | 一次性 bootstrap 邀请码；仅用于空库部署创建首个管理员 |
 
 ## Worker 运行变量
 
@@ -29,8 +29,12 @@
 | `CLEANUP_BATCH_SIZE` | 清理批次大小 |
 | `EMAIL_ROUTING_MANAGEMENT_ENABLED` | 是否允许项目直接改 Cloudflare Email Routing |
 | `CLOUDFLARE_ACCOUNT_ID` | 暴露给 API Worker 运行时的 Cloudflare 账户 ID；`/domains` 直绑新域名必需 |
-| `BOOTSTRAP_ADMIN_EMAIL` | 首个管理员邮箱 |
-| `BOOTSTRAP_ADMIN_NAME` | 首个管理员名称 |
+| `GITHUB_CLIENT_ID` | GitHub OAuth client id |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
+| `GITHUB_OAUTH_SCOPES` | 可选 GitHub OAuth scopes，默认 `read:user` |
+| `LINUXDO_CLIENT_ID` | LinuxDO OAuth client id |
+| `LINUXDO_CLIENT_SECRET` | LinuxDO OAuth client secret |
+| `LINUXDO_OAUTH_BASE_URL` | LinuxDO OAuth issuer base URL |
 | `CF_ROUTE_RULESET_TAG` | Worker route 管理标记 |
 | `WEB_APP_ORIGIN` | passkey 使用的主控制台来源；如果只配置单一来源，它的 host 会直接成为 RP ID；passkey 只接受 `localhost` 或域名来源，不接受 IP 字面量 |
 | `WEB_APP_ORIGINS` | 需要同时保留多个生产控制台域名时使用的逗号分隔来源列表；passkey 会信任这里全部 origin，并从整组 host 推导共享的非 public suffix RP ID 后缀 |

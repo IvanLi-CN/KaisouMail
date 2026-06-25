@@ -39,10 +39,10 @@ vi.mock("@/components/layout/app-shell", () => ({
     user,
   }: {
     children: ReactNode;
-    user: { email: string };
+    user: { username: string };
   }) => (
     <div>
-      <div data-testid="shell-user">{user.email}</div>
+      <div data-testid="shell-user">{user.username}</div>
       {children}
     </div>
   ),
@@ -72,7 +72,7 @@ describe("root layout", () => {
     );
 
     expect(screen.getByTestId("shell-user")).toHaveTextContent(
-      demoSessionUser.email,
+      demoSessionUser.username,
     );
     expect(screen.getByText("workspace child")).toBeInTheDocument();
     expect(

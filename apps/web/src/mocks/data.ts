@@ -4,14 +4,19 @@ import {
 } from "@kaisoumail/shared";
 
 import type {
+  AdminUserRecord,
   ApiKeyRecord,
   ApiMeta,
+  AuthProviderStatus,
   DomainCatalogItem,
   DomainRecord,
+  ExternalAccountRecord,
+  InviteRecord,
   Mailbox,
   MessageDetail,
   MessageSummary,
   PasskeyRecord,
+  RegistrationSettings,
   SessionUser,
   UserRecord,
   VersionInfo,
@@ -19,30 +24,96 @@ import type {
 
 const primaryRootDomain = "relay.example.test";
 const primaryMailboxAddress = `build@alpha.${primaryRootDomain}`;
+const daysToMilliseconds = 24 * 60 * 60 * 1000;
+const atUtc = (value: string) => new Date(value).toISOString();
 
 const baseUser: SessionUser = {
   id: "usr_demo_admin",
-  email: "owner@example.com",
-  name: "Ivan Owner",
+  username: "ivan",
+  nickname: "Ivan Owner",
   role: "admin",
 };
 
 const memberUser: UserRecord = {
   id: "usr_demo_member",
-  email: "teammate@example.com",
-  name: "Teammate",
+  username: "teammate",
+  nickname: "Teammate",
   role: "member",
+  deletedAt: null,
   createdAt: "2026-04-01T08:00:00.000Z",
   updatedAt: "2026-04-01T08:00:00.000Z",
 };
 
+const extraDemoUsers: UserRecord[] = Array.from({ length: 10 }, (_, index) => {
+  const number = index + 3;
+  const createdAt = atUtc(
+    new Date(
+      Date.parse("2026-04-03T08:00:00.000Z") + index * daysToMilliseconds,
+    ).toISOString(),
+  );
+  return {
+    id: `usr_demo_member_${number}`,
+    username: `member${number}`,
+    nickname: `Member ${number}`,
+    role: "member",
+    deletedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+  };
+});
+
+export const demoExternalAccounts: ExternalAccountRecord[] = [
+  {
+    id: "ext_github_owner",
+    provider: "github",
+    providerUserId: "10001",
+    providerUsername: "ivanli-cn",
+    providerNickname: "Ivan Li",
+    avatarUrl: "https://avatars.example.test/ivan.png",
+    profileUrl: "https://github.com/ivanli-cn",
+    createdAt: "2026-04-01T08:00:00.000Z",
+    lastUsedAt: "2026-04-05T08:00:00.000Z",
+  },
+  {
+    id: "ext_linuxdo_member",
+    provider: "linuxdo",
+    providerUserId: "20001",
+    providerUsername: "teammate",
+    providerNickname: "Teammate",
+    avatarUrl: null,
+    profileUrl: null,
+    createdAt: "2026-04-02T08:00:00.000Z",
+    lastUsedAt: null,
+  },
+];
+
 export const demoUsers: UserRecord[] = [
   {
     ...baseUser,
+    deletedAt: null,
     createdAt: "2026-04-01T08:00:00.000Z",
     updatedAt: "2026-04-01T08:00:00.000Z",
   },
   memberUser,
+  ...extraDemoUsers,
+];
+
+export const demoAdminUsers: AdminUserRecord[] = [
+  {
+    ...demoUsers[0],
+    externalAccounts: [demoExternalAccounts[0]],
+    passkeyCount: 2,
+  },
+  {
+    ...demoUsers[1],
+    externalAccounts: [demoExternalAccounts[1]],
+    passkeyCount: 0,
+  },
+  ...extraDemoUsers.map((user, index) => ({
+    ...user,
+    externalAccounts: [],
+    passkeyCount: index % 3 === 0 ? 1 : 0,
+  })),
 ];
 
 export const demoApiKeys: ApiKeyRecord[] = [
@@ -198,6 +269,96 @@ export const demoPasskeys: PasskeyRecord[] = [
     createdAt: "2026-04-02T09:10:00.000Z",
     lastUsedAt: "2026-04-02T10:00:00.000Z",
     revokedAt: "2026-04-04T11:10:00.000Z",
+  },
+];
+
+export const demoInvites: InviteRecord[] = [
+  {
+    id: "inv_member_a",
+    code: "km_demo_invite_1",
+    kind: "standard",
+    role: "member",
+    note: "QA onboarding",
+    createdByUserId: baseUser.id,
+    createdAt: "2026-04-05T08:00:00.000Z",
+    usedAt: null,
+    usedByUserId: null,
+  },
+  {
+    id: "inv_member_b",
+    code: "km_demo_invite_2",
+    kind: "standard",
+    role: "member",
+    note: null,
+    createdByUserId: baseUser.id,
+    createdAt: "2026-04-04T08:00:00.000Z",
+    usedAt: "2026-04-04T12:00:00.000Z",
+    usedByUserId: memberUser.id,
+  },
+  ...Array.from({ length: 11 }, (_, index) => {
+    const number = index + 3;
+    const createdAt = atUtc(
+      new Date(
+        Date.parse("2026-04-03T08:00:00.000Z") - index * daysToMilliseconds,
+      ).toISOString(),
+    );
+    return {
+      id: `inv_member_${number}`,
+      code: `km_demo_invite_${number}`,
+      kind: "standard",
+      role: "member",
+      note: `Invite batch ${number}`,
+      createdByUserId: baseUser.id,
+      createdAt,
+      usedAt: null,
+      usedByUserId: null,
+    } satisfies InviteRecord;
+  }),
+];
+
+export const demoRegistrationSettings: RegistrationSettings = {
+  githubMode: "open",
+  githubDailyLimit: 5,
+  githubClientId: "demo-github-client-id",
+  githubClientSecret: "demo-github-client-secret",
+  githubOauthScopes: "read:user user:email",
+  linuxdoMode: "invite-only",
+  linuxdoDailyLimit: 3,
+  linuxdoClientId: "demo-linuxdo-client-id",
+  linuxdoClientSecret: "demo-linuxdo-client-secret",
+  linuxdoOauthBaseUrl: "https://connect.linux.do",
+  passkeyMode: "invite-only",
+  deletedUserMailboxRetentionDays: 7,
+  updatedAt: "2026-04-05T08:00:00.000Z",
+};
+
+export const demoAuthProviders: AuthProviderStatus[] = [
+  {
+    provider: "github",
+    configured: true,
+    loginEnabled: true,
+    registrationMode: "open",
+    dailyLimit: 5,
+    dailyUsed: 2,
+    dailyRemaining: 3,
+  },
+  {
+    provider: "linuxdo",
+    configured: true,
+    loginEnabled: true,
+    registrationMode: "invite-only",
+    dailyLimit: 3,
+    dailyUsed: 0,
+    dailyRemaining: 3,
+  },
+  {
+    provider: "passkey",
+    configured: true,
+    loginEnabled: true,
+    registrationMode: "invite-only",
+    dailyLimit: null,
+    dailyUsed: 0,
+    dailyRemaining: null,
   },
 ];
 

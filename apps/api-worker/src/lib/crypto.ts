@@ -36,8 +36,8 @@ export const randomSecret = (bytes = 24) => {
 
 export interface SessionPayload {
   sub: string;
-  email: string;
-  name: string;
+  username: string;
+  nickname: string;
   role: string;
   iat: number;
   exp: number;
