@@ -317,6 +317,49 @@ describe("users page view", () => {
     expect(onUsersPageChange).toHaveBeenCalledWith(1);
   });
 
+  it("hides local user filters when server pagination is active", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="users"
+          users={buildAdminUsers(2)}
+          usersPagination={{
+            page: 2,
+            pageSize: 10,
+            totalItems: 12,
+            totalPages: 2,
+          }}
+          usersPaginationMode="server"
+          invites={demoInvites}
+          invitesPagination={{
+            page: 1,
+            pageSize: 10,
+            totalItems: demoInvites.length,
+            totalPages: 1,
+          }}
+          invitesPaginationMode="server"
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+          onUsersPageChange={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("textbox", { name: "筛选当前页用户" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "当前按服务端分页展示完整结果，暂不提供页内搜索或角色筛选。",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("switches between system subsections", () => {
     const onSectionChange = vi.fn();
 

@@ -425,6 +425,7 @@ export const UserTable = ({
 
   const usersAreServerPaginated = usersPaginationMode === "server";
   const invitesAreServerPaginated = invitesPaginationMode === "server";
+  const userFiltersEnabled = !usersAreServerPaginated;
   const derivedInvitesTotalPages = Math.max(
     1,
     Math.ceil(invites.length / Math.max(invitesPagination.pageSize, 1)),
@@ -465,29 +466,27 @@ export const UserTable = ({
   };
 
   const normalizedUserSearch = userSearch.trim().toLowerCase();
-  const filteredUsers = useMemo(
-    () =>
-      users.filter((user) => {
-        const matchesRole = roleFilter === "all" || user.role === roleFilter;
-        const matchesSearch =
-          normalizedUserSearch.length === 0 ||
-          user.nickname.toLowerCase().includes(normalizedUserSearch) ||
-          user.username.toLowerCase().includes(normalizedUserSearch) ||
-          user.externalAccounts.some((account) =>
-            [
-              account.provider,
-              account.providerUsername,
-              account.providerNickname,
-            ]
-              .filter(Boolean)
-              .some((value) =>
-                value?.toLowerCase().includes(normalizedUserSearch),
-              ),
-          );
-        return matchesRole && matchesSearch;
-      }),
-    [normalizedUserSearch, roleFilter, users],
-  );
+  const filteredUsers = useMemo(() => {
+    if (!userFiltersEnabled) {
+      return users;
+    }
+
+    return users.filter((user) => {
+      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const matchesSearch =
+        normalizedUserSearch.length === 0 ||
+        user.nickname.toLowerCase().includes(normalizedUserSearch) ||
+        user.username.toLowerCase().includes(normalizedUserSearch) ||
+        user.externalAccounts.some((account) =>
+          [account.provider, account.providerUsername, account.providerNickname]
+            .filter(Boolean)
+            .some((value) =>
+              value?.toLowerCase().includes(normalizedUserSearch),
+            ),
+        );
+      return matchesRole && matchesSearch;
+    });
+  }, [normalizedUserSearch, roleFilter, userFiltersEnabled, users]);
 
   const usersVisibleSource = filteredUsers;
   const filteredUsersTotalPages = Math.max(
@@ -706,41 +705,48 @@ export const UserTable = ({
                 查看当前页账号、绑定状态与管理员转移入口。
               </CardDescription>
             </div>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={userSearch}
-                  onChange={(event) => {
-                    setUserSearch(event.target.value);
-                    setLocalUsersPage(1);
-                  }}
-                  className="pl-9"
-                  placeholder="筛选当前页用户、用户名或绑定账号"
-                  aria-label="筛选当前页用户"
-                />
+            {userFiltersEnabled ? (
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={userSearch}
+                    onChange={(event) => {
+                      setUserSearch(event.target.value);
+                      setLocalUsersPage(1);
+                    }}
+                    className="pl-9"
+                    placeholder="筛选当前页用户、用户名或绑定账号"
+                    aria-label="筛选当前页用户"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="system-user-role-filter">角色</Label>
+                  <Select
+                    id="system-user-role-filter"
+                    value={roleFilter}
+                    onChange={(event) => {
+                      setRoleFilter(
+                        event.target.value as "all" | AdminUserRecord["role"],
+                      );
+                      setLocalUsersPage(1);
+                    }}
+                  >
+                    <option value="all">全部角色</option>
+                    <option value="admin">管理员</option>
+                    <option value="member">成员</option>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="system-user-role-filter">角色</Label>
-                <Select
-                  id="system-user-role-filter"
-                  value={roleFilter}
-                  onChange={(event) => {
-                    setRoleFilter(
-                      event.target.value as "all" | AdminUserRecord["role"],
-                    );
-                    setLocalUsersPage(1);
-                  }}
-                >
-                  <option value="all">全部角色</option>
-                  <option value="admin">管理员</option>
-                  <option value="member">成员</option>
-                </Select>
+            ) : (
+              <div className={`${feedbackCardClassName} text-muted-foreground`}>
+                当前按服务端分页展示完整结果，暂不提供页内搜索或角色筛选。
               </div>
-            </div>
+            )}
           </CardHeader>
           <CardContent>
-            {normalizedUserSearch.length > 0 || roleFilter !== "all" ? (
+            {userFiltersEnabled &&
+            (normalizedUserSearch.length > 0 || roleFilter !== "all") ? (
               <div
                 className={`${feedbackCardClassName} mb-5 flex items-center justify-between gap-3`}
               >
@@ -766,7 +772,9 @@ export const UserTable = ({
                 className={`${feedbackCardClassName} flex items-center justify-between gap-3`}
               >
                 <p className="text-muted-foreground">
-                  当前页没有符合条件的用户。
+                  {userFiltersEnabled
+                    ? "当前页没有符合条件的用户。"
+                    : "当前页没有用户。"}
                 </p>
               </div>
             ) : null}
