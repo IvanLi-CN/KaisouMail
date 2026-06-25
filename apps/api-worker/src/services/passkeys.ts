@@ -571,6 +571,7 @@ export const verifyPasskeyRegistrationForUser = async (
 };
 
 export const createPasskeyInviteRegistrationOptions = async (
+  env: WorkerEnv,
   config: RuntimeConfig,
   request: Request,
   input: {
@@ -579,6 +580,13 @@ export const createPasskeyInviteRegistrationOptions = async (
     passkeyName: string;
   },
 ) => {
+  const requirement = await resolvePasskeyRegistrationRequirement(
+    env,
+    input.inviteCode,
+  );
+  if (requirement.inviteRequired && !requirement.invitePrevalidated) {
+    throw new ApiError(403, "Invite required");
+  }
   const { rpID, rpName } = resolvePasskeyRequestConfig(config, request);
   const options = await generateRegistrationOptions({
     rpName,

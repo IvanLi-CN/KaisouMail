@@ -277,6 +277,68 @@ describe("passkey service", () => {
     );
   });
 
+  it("rejects invite passkey registration options before challenge creation when the invite is invalid", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table?: Record<PropertyKey, unknown>) => {
+          const tableName = tableNameOf(table);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "invite-only",
+                    githubDailyLimit: 5,
+                    githubClientId: "",
+                    githubClientSecret: "",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: async () => undefined,
+      }),
+    });
+
+    await expect(
+      createPasskeyInviteRegistrationOptions(
+        {} as never,
+        baseConfig,
+        createRequest({ origin: "https://cfm.707979.xyz" }),
+        {
+          inviteCode: "km_invalid",
+          nickname: "Ivan",
+          passkeyName: "Primary Passkey",
+        },
+      ),
+    ).rejects.toMatchObject({
+      message: "Invite not found",
+      status: 404,
+    });
+    expect(generateRegistrationOptions).not.toHaveBeenCalled();
+  });
+
   it("uses localhost as the RP ID for single-origin local development", async () => {
     generateAuthenticationOptions.mockResolvedValue({
       challenge: "authentication_options",
@@ -826,6 +888,7 @@ describe("passkey service", () => {
     });
 
     const options = await createPasskeyInviteRegistrationOptions(
+      {} as never,
       baseConfig,
       createRequest({ origin: "https://cfm.707979.xyz" }),
       {

@@ -97,11 +97,13 @@ describe("identity service", () => {
       githubDailyLimit: 8,
       githubClientId: "stored-github-client-id",
       githubClientSecret: "",
+      clearGithubClientSecret: false,
       githubOauthScopes: "read:user",
       linuxdoMode: "open",
       linuxdoDailyLimit: 4,
       linuxdoClientId: "stored-linuxdo-client-id",
       linuxdoClientSecret: "",
+      clearLinuxdoClientSecret: false,
       linuxdoOauthBaseUrl: "https://connect.linux.do",
       passkeyMode: "invite-only",
       deletedUserMailboxRetentionDays: 9,
@@ -116,6 +118,56 @@ describe("identity service", () => {
     );
     expect(update).toHaveBeenCalledTimes(1);
     expect(update.mock.calls[0]).toHaveLength(1);
+  });
+
+  it("clears stored OAuth secrets when admins explicitly request removal", async () => {
+    const persistedUpdates: unknown[] = [];
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                githubClientSecret: "stored-secret",
+                linuxdoClientSecret: "stored-linuxdo-secret",
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => ({
+          where: async () => {
+            persistedUpdates.push(values);
+          },
+        }),
+      }),
+    });
+
+    await updateRegistrationSettings({} as never, baseConfig, {
+      githubMode: "open",
+      githubDailyLimit: 8,
+      githubClientId: "stored-github-client-id",
+      githubClientSecret: "",
+      clearGithubClientSecret: true,
+      githubOauthScopes: "read:user",
+      linuxdoMode: "open",
+      linuxdoDailyLimit: 4,
+      linuxdoClientId: "stored-linuxdo-client-id",
+      linuxdoClientSecret: "",
+      clearLinuxdoClientSecret: true,
+      linuxdoOauthBaseUrl: "https://connect.linux.do",
+      passkeyMode: "invite-only",
+      deletedUserMailboxRetentionDays: 9,
+    });
+
+    expect(persistedUpdates[0]).toEqual(
+      expect.objectContaining({
+        githubClientSecret: "",
+        linuxdoClientSecret: "",
+      }),
+    );
   });
 
   it("keeps secret fields blank in the admin-facing registration settings payload", async () => {

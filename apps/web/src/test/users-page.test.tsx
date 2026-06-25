@@ -385,4 +385,44 @@ describe("users page view", () => {
 
     expect(onSectionChange).toHaveBeenCalledWith("invites");
   });
+
+  it("submits explicit OAuth secret clear flags from the registration section", async () => {
+    const onUpdateSettings = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="registration"
+          users={demoAdminUsers}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={onUpdateSettings}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const clearButtons = screen.getAllByRole("button", {
+      name: "清空已存密钥",
+    });
+    const githubClearButton = clearButtons[0];
+    if (!githubClearButton) {
+      throw new Error("Expected GitHub clear secret button");
+    }
+    fireEvent.click(githubClearButton);
+    fireEvent.click(screen.getByRole("button", { name: "保存注册设置" }));
+
+    await waitFor(() =>
+      expect(onUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clearGithubClientSecret: true,
+          clearLinuxdoClientSecret: false,
+        }),
+      ),
+    );
+  });
 });

@@ -213,6 +213,16 @@ export const buildProviderStartUrl = async (
   },
 ) => {
   const provider = ensureProvider(providerValue);
+  if (options.intent === "register") {
+    const requirement = await resolveExternalRegistrationRequirement(
+      env,
+      provider,
+      options.inviteCode,
+    );
+    if (requirement.inviteRequired && !requirement.invitePrevalidated) {
+      throw new ApiError(403, "Invite required");
+    }
+  }
   const providerConfig = await getProviderConfig(env, config, provider);
   const baseOrigin = resolveBaseOrigin(request);
   const callbackUrl = `${baseOrigin}/api/auth/${provider}/callback`;

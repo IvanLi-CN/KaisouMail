@@ -81,7 +81,10 @@ type RegistrationSettingsValues = Pick<
   | "linuxdoOauthBaseUrl"
   | "passkeyMode"
   | "deletedUserMailboxRetentionDays"
->;
+> & {
+  clearGithubClientSecret: boolean;
+  clearLinuxdoClientSecret: boolean;
+};
 
 const PaginationControls = ({
   itemLabel,
@@ -329,11 +332,13 @@ export const UserTable = ({
       githubDailyLimit: settings.githubDailyLimit,
       githubClientId: settings.githubClientId,
       githubClientSecret: settings.githubClientSecret,
+      clearGithubClientSecret: false,
       githubOauthScopes: settings.githubOauthScopes,
       linuxdoMode: settings.linuxdoMode,
       linuxdoDailyLimit: settings.linuxdoDailyLimit,
       linuxdoClientId: settings.linuxdoClientId,
       linuxdoClientSecret: settings.linuxdoClientSecret,
+      clearLinuxdoClientSecret: false,
       linuxdoOauthBaseUrl: settings.linuxdoOauthBaseUrl,
       passkeyMode: settings.passkeyMode,
       deletedUserMailboxRetentionDays: settings.deletedUserMailboxRetentionDays,
@@ -381,11 +386,13 @@ export const UserTable = ({
       githubDailyLimit: settings.githubDailyLimit,
       githubClientId: settings.githubClientId,
       githubClientSecret: settings.githubClientSecret,
+      clearGithubClientSecret: false,
       githubOauthScopes: settings.githubOauthScopes,
       linuxdoMode: settings.linuxdoMode,
       linuxdoDailyLimit: settings.linuxdoDailyLimit,
       linuxdoClientId: settings.linuxdoClientId,
       linuxdoClientSecret: settings.linuxdoClientSecret,
+      clearLinuxdoClientSecret: false,
       linuxdoOauthBaseUrl: settings.linuxdoOauthBaseUrl,
       passkeyMode: settings.passkeyMode,
       deletedUserMailboxRetentionDays: settings.deletedUserMailboxRetentionDays,
@@ -667,7 +674,9 @@ export const UserTable = ({
       await onUpdateSettings({
         ...settingsDraft,
         githubClientSecret: settingsDraft.githubClientSecret.trim(),
+        clearGithubClientSecret: settingsDraft.clearGithubClientSecret,
         linuxdoClientSecret: settingsDraft.linuxdoClientSecret.trim(),
+        clearLinuxdoClientSecret: settingsDraft.clearLinuxdoClientSecret,
       });
       setSettingsMessage("注册设置已保存。");
     } catch (error) {
@@ -684,11 +693,13 @@ export const UserTable = ({
     settingsDraft.githubDailyLimit !== settings.githubDailyLimit ||
     settingsDraft.githubClientId !== settings.githubClientId ||
     settingsDraft.githubClientSecret.trim().length > 0 ||
+    settingsDraft.clearGithubClientSecret ||
     settingsDraft.githubOauthScopes !== settings.githubOauthScopes ||
     settingsDraft.linuxdoMode !== settings.linuxdoMode ||
     settingsDraft.linuxdoDailyLimit !== settings.linuxdoDailyLimit ||
     settingsDraft.linuxdoClientId !== settings.linuxdoClientId ||
     settingsDraft.linuxdoClientSecret.trim().length > 0 ||
+    settingsDraft.clearLinuxdoClientSecret ||
     settingsDraft.linuxdoOauthBaseUrl !== settings.linuxdoOauthBaseUrl ||
     settingsDraft.passkeyMode !== settings.passkeyMode ||
     settingsDraft.deletedUserMailboxRetentionDays !==
@@ -1504,15 +1515,33 @@ export const UserTable = ({
                           id="github-client-secret"
                           type="password"
                           autoComplete="new-password"
-                          placeholder="留空表示保持现有配置"
+                          placeholder="输入新密钥"
                           value={settingsDraft.githubClientSecret}
                           onChange={(event) =>
                             setSettingsDraft((current) => ({
                               ...current,
                               githubClientSecret: event.target.value,
+                              clearGithubClientSecret: false,
                             }))
                           }
                         />
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="min-h-10"
+                            onClick={() =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                githubClientSecret: "",
+                                clearGithubClientSecret: true,
+                              }))
+                            }
+                          >
+                            清空已存密钥
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="github-oauth-scopes">授权范围</Label>
@@ -1625,15 +1654,33 @@ export const UserTable = ({
                           id="linuxdo-client-secret"
                           type="password"
                           autoComplete="new-password"
-                          placeholder="留空表示保持现有配置"
+                          placeholder="输入新密钥"
                           value={settingsDraft.linuxdoClientSecret}
                           onChange={(event) =>
                             setSettingsDraft((current) => ({
                               ...current,
                               linuxdoClientSecret: event.target.value,
+                              clearLinuxdoClientSecret: false,
                             }))
                           }
                         />
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="min-h-10"
+                            onClick={() =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                linuxdoClientSecret: "",
+                                clearLinuxdoClientSecret: true,
+                              }))
+                            }
+                          >
+                            清空已存密钥
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="linuxdo-oauth-base-url">

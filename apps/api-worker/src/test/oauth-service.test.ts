@@ -11,12 +11,14 @@ const {
   consumeInviteForAuthenticatedUser,
   markExternalAccountUsed,
   getRegistrationSettings,
+  resolveExternalRegistrationRequirement,
   resolveStoredOauthConfig,
 } = vi.hoisted(() => ({
   findUserByExternalAccount: vi.fn(),
   consumeInviteForAuthenticatedUser: vi.fn(),
   markExternalAccountUsed: vi.fn(),
   getRegistrationSettings: vi.fn(),
+  resolveExternalRegistrationRequirement: vi.fn(),
   resolveStoredOauthConfig: vi.fn(),
 }));
 
@@ -30,6 +32,7 @@ vi.mock("../services/identity", async () => {
     consumeInviteForAuthenticatedUser,
     markExternalAccountUsed,
     getRegistrationSettings,
+    resolveExternalRegistrationRequirement,
     resolveStoredOauthConfig,
   };
 });
@@ -105,6 +108,10 @@ describe("oauth service", () => {
       linuxdoClientId: "linuxdo-client-id",
       linuxdoClientSecret: "linuxdo-client-secret",
       linuxdoOauthBaseUrl: "https://connect.linux.do",
+    });
+    resolveExternalRegistrationRequirement.mockResolvedValue({
+      inviteRequired: false,
+      invitePrevalidated: false,
     });
     findUserByExternalAccount.mockResolvedValue(existingUser);
     markExternalAccountUsed.mockResolvedValue(undefined);
@@ -191,6 +198,30 @@ describe("oauth service", () => {
     expect(result.user).toMatchObject({
       id: "usr_existing",
       username: "existing",
+    });
+  });
+
+  it("rejects register starts before redirecting when provider registration is disabled", async () => {
+    resolveExternalRegistrationRequirement.mockRejectedValue({
+      message: "Registration is disabled",
+      status: 403,
+    });
+
+    await expect(
+      buildProviderStartUrl(
+        baseConfig,
+        new Request("https://api.example.test/api/auth/github/start"),
+        {} as never,
+        "github",
+        {
+          intent: "register",
+          inviteCode: "km_demo_invite",
+          returnTo: "/register",
+        },
+      ),
+    ).rejects.toMatchObject({
+      message: "Registration is disabled",
+      status: 403,
     });
   });
 

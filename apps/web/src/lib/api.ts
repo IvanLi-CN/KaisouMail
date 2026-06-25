@@ -773,11 +773,13 @@ export const apiClient = {
     githubDailyLimit: number;
     githubClientId: string;
     githubClientSecret: string;
+    clearGithubClientSecret: boolean;
     githubOauthScopes: string;
     linuxdoMode: "off" | "invite-only" | "open";
     linuxdoDailyLimit: number;
     linuxdoClientId: string;
     linuxdoClientSecret: string;
+    clearLinuxdoClientSecret: boolean;
     linuxdoOauthBaseUrl: string;
     passkeyMode: "off" | "invite-only";
     deletedUserMailboxRetentionDays: number;

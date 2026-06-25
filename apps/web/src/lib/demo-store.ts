@@ -918,16 +918,21 @@ export const demoApi = {
     });
   },
   async updateRegistrationSettings(
-    input: Omit<RegistrationSettings, "updatedAt">,
+    input: Omit<RegistrationSettings, "updatedAt"> & {
+      clearGithubClientSecret: boolean;
+      clearLinuxdoClientSecret: boolean;
+    },
   ) {
     state.registrationSettings = {
       ...input,
-      githubClientSecret:
-        input.githubClientSecret.trim() ||
-        state.registrationSettings.githubClientSecret,
-      linuxdoClientSecret:
-        input.linuxdoClientSecret.trim() ||
-        state.registrationSettings.linuxdoClientSecret,
+      githubClientSecret: input.clearGithubClientSecret
+        ? ""
+        : input.githubClientSecret.trim() ||
+          state.registrationSettings.githubClientSecret,
+      linuxdoClientSecret: input.clearLinuxdoClientSecret
+        ? ""
+        : input.linuxdoClientSecret.trim() ||
+          state.registrationSettings.linuxdoClientSecret,
       updatedAt: new Date().toISOString(),
     };
     return clone({

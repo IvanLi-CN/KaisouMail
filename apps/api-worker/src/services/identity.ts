@@ -243,11 +243,13 @@ export const updateRegistrationSettings = async (
     githubDailyLimit: number;
     githubClientId: string;
     githubClientSecret: string;
+    clearGithubClientSecret: boolean;
     githubOauthScopes: string;
     linuxdoMode: RegistrationMode;
     linuxdoDailyLimit: number;
     linuxdoClientId: string;
     linuxdoClientSecret: string;
+    clearLinuxdoClientSecret: boolean;
     linuxdoOauthBaseUrl: string;
     passkeyMode: PasskeyMode;
     deletedUserMailboxRetentionDays: number;
@@ -261,12 +263,15 @@ export const updateRegistrationSettings = async (
     .set({
       ...input,
       githubClientId: input.githubClientId.trim(),
-      githubClientSecret:
-        input.githubClientSecret.trim() || existing.githubClientSecret.trim(),
+      githubClientSecret: input.clearGithubClientSecret
+        ? ""
+        : input.githubClientSecret.trim() || existing.githubClientSecret.trim(),
       githubOauthScopes: input.githubOauthScopes.trim() || "read:user",
       linuxdoClientId: input.linuxdoClientId.trim(),
-      linuxdoClientSecret:
-        input.linuxdoClientSecret.trim() || existing.linuxdoClientSecret.trim(),
+      linuxdoClientSecret: input.clearLinuxdoClientSecret
+        ? ""
+        : input.linuxdoClientSecret.trim() ||
+          existing.linuxdoClientSecret.trim(),
       linuxdoOauthBaseUrl:
         input.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
       updatedAt,

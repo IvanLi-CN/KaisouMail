@@ -328,6 +328,148 @@ describe("meta and auth routes", () => {
     });
   });
 
+  it("rejects passkey invite registration options before returning a challenge when the invite is invalid", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "invite-only",
+                    githubDailyLimit: 5,
+                    githubClientId: "",
+                    githubClientSecret: "",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: vi.fn(),
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/options", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          inviteCode: "km_invalid",
+          nickname: "Ivan",
+          passkeyName: "Primary Passkey",
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+      } as never,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invite not found",
+      details: null,
+    });
+  });
+
+  it("rejects provider registration starts before redirecting when the channel is disabled", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "off",
+                    githubDailyLimit: 5,
+                    githubClientId: "github-client-id",
+                    githubClientSecret: "github-client-secret",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          if (tableName === "daily_signup_counters") {
+            return {
+              where: async () => [],
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: vi.fn(),
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/github/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          returnTo: "/register",
+        }),
+      }),
+      {
+        ...env,
+        GITHUB_CLIENT_ID: "github-client-id",
+        GITHUB_CLIENT_SECRET: "github-client-secret",
+      } as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Registration is disabled",
+      details: null,
+    });
+  });
+
   it("returns the unified auth failure envelope for invalid api keys", async () => {
     authenticateApiKey.mockResolvedValue(null);
 

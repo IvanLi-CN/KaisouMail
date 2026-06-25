@@ -374,6 +374,7 @@ export const authRoutes = new Hono<AppBindings>()
     async (c) => {
       const config = c.get("runtimeConfig");
       const result = await createPasskeyInviteRegistrationOptions(
+        c.env,
         config,
         c.req.raw,
         c.req.valid("json"),
