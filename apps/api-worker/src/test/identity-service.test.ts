@@ -11,7 +11,10 @@ vi.mock("../db/client", () => ({
 }));
 
 import {
+  consumeDailyOpenRegistration,
   getRegistrationSettings,
+  registerViaPasskeyInvite,
+  resolveExternalRegistrationRequirement,
   updateRegistrationSettings,
 } from "../services/identity";
 
@@ -43,6 +46,24 @@ const currentSettingsRow = {
   passkeyMode: "invite-only",
   deletedUserMailboxRetentionDays: 7,
   updatedAt: "2026-04-05T16:00:00.000Z",
+};
+
+const tableNameOf = (table: Record<PropertyKey, unknown>) =>
+  String(table[Symbol.for("drizzle:Name")]);
+
+const createSelectMock = (handlers: Record<string, unknown>) => {
+  return (...args: unknown[]) => {
+    const mode = args.length > 0 ? "aggregate" : "regular";
+    return {
+      from: (table: Record<PropertyKey, unknown>) => {
+        const handler = handlers[tableNameOf(table)];
+        if (typeof handler === "function") {
+          return (handler as (mode: "aggregate" | "regular") => unknown)(mode);
+        }
+        return handler ?? [];
+      },
+    };
+  };
 };
 
 describe("identity service", () => {
@@ -114,5 +135,174 @@ describe("identity service", () => {
 
     expect(settings.githubClientSecret).toBe("");
     expect(settings.linuxdoClientSecret).toBe("");
+  });
+
+  it("rejects invite-based external registration when the provider mode is off", async () => {
+    getDb.mockReturnValue({
+      select: createSelectMock({
+        users: [{ value: 1 }],
+        invites: {
+          where: () => ({
+            limit: async () => [
+              {
+                id: "inv_1",
+                code: "km_demo_invite",
+                role: "member",
+                usedAt: null,
+              },
+            ],
+          }),
+        },
+        registration_settings: {
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                githubMode: "off",
+              },
+            ],
+          }),
+        },
+      }),
+      insert: () => ({
+        values: async () => undefined,
+      }),
+    });
+
+    await expect(
+      resolveExternalRegistrationRequirement(
+        {} as never,
+        "github",
+        "km_demo_invite",
+      ),
+    ).rejects.toMatchObject({
+      message: "Registration is disabled",
+      status: 403,
+    });
+  });
+
+  it("raises quota errors before any later registration work can proceed", async () => {
+    getDb.mockReturnValue({
+      select: createSelectMock({
+        users: [{ value: 1 }],
+        daily_signup_counters: {
+          where: () => ({
+            limit: async () => [
+              {
+                id: "dsc_1",
+                provider: "github",
+                dateKey: "2026-06-25",
+                createdCount: 5,
+              },
+            ],
+          }),
+        },
+        registration_settings: {
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                githubMode: "open",
+                githubDailyLimit: 5,
+              },
+            ],
+          }),
+        },
+      }),
+      insert: () => ({
+        values: async () => undefined,
+      }),
+    });
+
+    await expect(
+      consumeDailyOpenRegistration({} as never, "github"),
+    ).rejects.toMatchObject({
+      message: "Daily signup quota exceeded",
+      status: 429,
+    });
+  });
+
+  it("rolls back the newly created user when invite claiming loses a race", async () => {
+    const deletedUserIds: string[] = [];
+    getDb.mockReturnValue({
+      select: (...args: unknown[]) => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = tableNameOf(table);
+          if (tableName === "users") {
+            if (
+              args.length > 0 &&
+              typeof args[0] === "object" &&
+              args[0] &&
+              "value" in (args[0] as Record<string, unknown>)
+            ) {
+              return [{ value: 2 }];
+            }
+            return {
+              where: () => ({
+                limit: async () => [],
+              }),
+            };
+          }
+          if (tableName === "invites") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: "inv_race",
+                    code: "km_demo_invite",
+                    role: "member",
+                    usedAt: null,
+                  },
+                ],
+              }),
+            };
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [currentSettingsRow],
+              }),
+            };
+          }
+          if (tableName === "external_accounts") {
+            return {
+              where: () => ({
+                limit: async () => [],
+              }),
+            };
+          }
+          return [];
+        },
+      }),
+      insert: (_table: Record<PropertyKey, unknown>) => ({
+        values: async (_value: unknown) => undefined,
+      }),
+      update: (table: Record<PropertyKey, unknown>) => ({
+        set: (_values: unknown) => ({
+          where: async () => {
+            if (tableNameOf(table) === "invites") {
+              return { meta: { changes: 0 } };
+            }
+            return { meta: { changes: 1 } };
+          },
+        }),
+      }),
+      delete: (table: Record<PropertyKey, unknown>) => ({
+        where: async (_predicate: unknown) => {
+          if (tableNameOf(table) === "users") {
+            deletedUserIds.push("deleted");
+          }
+        },
+      }),
+    });
+
+    await expect(
+      registerViaPasskeyInvite({} as never, "km_demo_invite", "Octo"),
+    ).rejects.toMatchObject({
+      message: "Invite already used",
+      status: 409,
+    });
+
+    expect(deletedUserIds).toHaveLength(1);
   });
 });

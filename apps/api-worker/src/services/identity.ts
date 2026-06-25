@@ -378,13 +378,16 @@ const claimInvite = async (
   userId: string,
 ) => {
   const db = getDb(env);
-  await db
+  const result = await db
     .update(invites)
     .set({
       usedAt: nowIso(),
       usedByUserId: userId,
     })
-    .where(eq(invites.id, inviteId));
+    .where(and(eq(invites.id, inviteId), isNull(invites.usedAt)));
+  if ((result.meta?.changes ?? 0) !== 1) {
+    throw new ApiError(409, "Invite already used");
+  }
 };
 
 const usernameExists = async (env: WorkerEnv, username: string) => {
@@ -411,7 +414,7 @@ export const generateUsername = async (
   return `${fallbackPrefix}-${randomId("u").slice(-8)}`;
 };
 
-const consumeDailyOpenRegistration = async (
+export const consumeDailyOpenRegistration = async (
   env: WorkerEnv,
   provider: ExternalProvider,
 ) => {
@@ -500,6 +503,10 @@ export const resolveExternalRegistrationRequirement = async (
     };
   }
 
+  const settings = await getRegistrationSettings(env);
+  const mode = getProviderMode(settings, provider);
+  if (mode === "off") throw new ApiError(403, "Registration is disabled");
+
   if (normalizedInvite) {
     const invite = await resolveInviteForCode(env, normalizedInvite);
     if (!invite) throw new ApiError(404, "Invite not found");
@@ -513,9 +520,6 @@ export const resolveExternalRegistrationRequirement = async (
     };
   }
 
-  const settings = await getRegistrationSettings(env);
-  const mode = getProviderMode(settings, provider);
-  if (mode === "off") throw new ApiError(403, "Registration is disabled");
   if (mode === "invite-only") {
     return {
       inviteRequired: true,
@@ -679,6 +683,11 @@ export const createUserRecord = async (
   } satisfies typeof users.$inferInsert;
   await db.insert(users).values(record);
   return record;
+};
+
+const deleteUserRecord = async (env: WorkerEnv, userId: string) => {
+  const db = getDb(env);
+  await db.delete(users).where(eq(users.id, userId));
 };
 
 export const getAccountForUser = async (env: WorkerEnv, userId: string) => {
@@ -1346,36 +1355,39 @@ export const registerViaExternalProvider = async (
     profile.providerUsername || profile.providerNickname || provider,
     provider,
   );
+  if (!inviteResolution.invitePrevalidated) {
+    await consumeDailyOpenRegistration(env, provider);
+  }
   const user = await createUserRecord(env, {
     username,
     nickname,
     role,
   });
-  if (!inviteResolution.invitePrevalidated) {
-    await consumeDailyOpenRegistration(env, provider);
-  } else if (!consumedInviteId && !isBootstrap) {
-    await consumeDailyOpenRegistration(env, provider);
+  try {
+    const boundAccount = await bindExternalAccount(env, user.id, profile);
+    if (consumedInviteId) {
+      await claimInvite(env, consumedInviteId, user.id);
+    } else if (isBootstrap) {
+      await consumeInviteForAuthenticatedUser(
+        env,
+        user.id,
+        options?.inviteCode ?? null,
+      );
+    }
+    return {
+      user: {
+        id: user.id,
+        username: user.username,
+        nickname: user.nickname,
+        role: user.role,
+      } satisfies AuthUser,
+      externalAccount: boundAccount,
+      created: true,
+    };
+  } catch (error) {
+    await deleteUserRecord(env, user.id);
+    throw error;
   }
-  const boundAccount = await bindExternalAccount(env, user.id, profile);
-  if (consumedInviteId) {
-    await claimInvite(env, consumedInviteId, user.id);
-  } else if (isBootstrap) {
-    await consumeInviteForAuthenticatedUser(
-      env,
-      user.id,
-      options?.inviteCode ?? null,
-    );
-  }
-  return {
-    user: {
-      id: user.id,
-      username: user.username,
-      nickname: user.nickname,
-      role: user.role,
-    } satisfies AuthUser,
-    externalAccount: boundAccount,
-    created: true,
-  };
 };
 
 export const registerViaPasskeyInvite = async (
@@ -1396,10 +1408,15 @@ export const registerViaPasskeyInvite = async (
     nickname,
     role,
   });
-  if (inviteId) {
-    await claimInvite(env, inviteId, user.id);
-  } else if (inviteResolution.bootstrap) {
-    await consumeInviteForAuthenticatedUser(env, user.id, inviteCode);
+  try {
+    if (inviteId) {
+      await claimInvite(env, inviteId, user.id);
+    } else if (inviteResolution.bootstrap) {
+      await consumeInviteForAuthenticatedUser(env, user.id, inviteCode);
+    }
+    return user;
+  } catch (error) {
+    await deleteUserRecord(env, user.id);
+    throw error;
   }
-  return user;
 };
