@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { domains, mailboxes, subdomains } from "../db/schema";
+import { apiKeys, domains, mailboxes, subdomains, users } from "../db/schema";
+import { sha256Hex } from "../lib/crypto";
 import {
+  ensureBootstrapAdmin,
   ensureBootstrapDomains,
   resolveBootstrapLegacyDomainState,
 } from "../services/bootstrap";
@@ -39,9 +41,92 @@ const createBootstrapDb = (existingDomains: unknown[]) => {
   };
 };
 
+const createBootstrapAdminDb = ({ userCount = 0 } = {}) => {
+  const inserts: Array<{ table: unknown; values: Record<string, unknown> }> =
+    [];
+
+  return {
+    inserts,
+    db: {
+      select: vi.fn(() => ({
+        from: vi.fn(async (table: unknown) => {
+          if (table === users) {
+            return [{ value: userCount }];
+          }
+          return [];
+        }),
+      })),
+      insert: vi.fn((table: unknown) => ({
+        values: vi.fn(async (values: Record<string, unknown>) => {
+          inserts.push({ table, values });
+        }),
+      })),
+    },
+  };
+};
+
 describe("bootstrap legacy domain state", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("creates a legacy bootstrap admin when only legacy bootstrap credentials are configured", async () => {
+    const { db, inserts } = createBootstrapAdminDb();
+    const bootstrapApiKey = "cfm_legacy_bootstrap_key_123456";
+
+    await ensureBootstrapAdmin(db as never, {
+      APP_ENV: "production",
+      DEFAULT_MAILBOX_TTL_MINUTES: 60,
+      CLEANUP_BATCH_SIZE: 3,
+      SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+      BOOTSTRAP_ADMIN_EMAIL: "owner@example.com",
+      BOOTSTRAP_ADMIN_API_KEY: bootstrapApiKey,
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      SESSION_SECRET: "super-secret-session-key",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+    });
+
+    const userInsert = inserts.find((entry) => entry.table === users);
+    const apiKeyInsert = inserts.find((entry) => entry.table === apiKeys);
+
+    expect(userInsert?.values).toMatchObject({
+      email: "owner@example.com",
+      name: "Ivan",
+      username: "owner",
+      nickname: "Ivan",
+      role: "admin",
+      deletedAt: null,
+    });
+    expect(apiKeyInsert?.values).toMatchObject({
+      userId: userInsert?.values.id,
+      name: "Bootstrap Admin",
+      prefix: bootstrapApiKey.slice(0, 12),
+      scopes: JSON.stringify(["*"]),
+      lastUsedAt: null,
+      revokedAt: null,
+    });
+    expect(apiKeyInsert?.values.keyHash).toBe(await sha256Hex(bootstrapApiKey));
+  });
+
+  it("keeps invite bootstrap as the only bootstrap path when the invite secret is configured", async () => {
+    const { db, inserts } = createBootstrapAdminDb();
+
+    await ensureBootstrapAdmin(db as never, {
+      APP_ENV: "production",
+      DEFAULT_MAILBOX_TTL_MINUTES: 60,
+      CLEANUP_BATCH_SIZE: 3,
+      SUBDOMAIN_CLEANUP_BATCH_SIZE: 1,
+      EMAIL_ROUTING_MANAGEMENT_ENABLED: false,
+      BOOTSTRAP_ADMIN_INVITE_CODE: "km_bootstrap_secret",
+      BOOTSTRAP_ADMIN_EMAIL: "owner@example.com",
+      BOOTSTRAP_ADMIN_API_KEY: "cfm_legacy_bootstrap_key_123456",
+      BOOTSTRAP_ADMIN_NAME: "Ivan",
+      SESSION_SECRET: "super-secret-session-key",
+      CF_ROUTE_RULESET_TAG: "kaisoumail",
+    });
+
+    expect(inserts).toHaveLength(0);
   });
 
   it("keeps legacy domains non-active until a zone id exists in live mode", () => {

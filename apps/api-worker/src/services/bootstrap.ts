@@ -1,9 +1,20 @@
 import { count, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { domains, mailboxes, subdomains, users } from "../db/schema";
+import { apiKeys, domains, mailboxes, subdomains, users } from "../db/schema";
 import type { RuntimeConfig } from "../env";
-import { nowIso, randomId } from "../lib/crypto";
+import { nowIso, randomId, sha256Hex } from "../lib/crypto";
 import { normalizeRootDomain } from "../lib/email";
+
+const resolveBootstrapUsername = (email: string) => {
+  const localPart = email.split("@")[0] ?? "";
+  const normalized = localPart
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+  return normalized || "owner";
+};
 
 export const ensureBootstrapAdmin = async (
   db: Database,
@@ -11,7 +22,43 @@ export const ensureBootstrapAdmin = async (
 ) => {
   const existing = await db.select({ value: count() }).from(users);
   if ((existing[0]?.value ?? 0) > 0) return;
-  if (!config.BOOTSTRAP_ADMIN_INVITE_CODE) return;
+  if (config.BOOTSTRAP_ADMIN_INVITE_CODE) return;
+  if (!config.BOOTSTRAP_ADMIN_EMAIL || !config.BOOTSTRAP_ADMIN_API_KEY) {
+    return;
+  }
+
+  // Keep fresh deployments on older env bundles operable until they migrate to
+  // the explicit bootstrap invite flow.
+  const createdAt = nowIso();
+  const userId = randomId("usr");
+  const apiKey = config.BOOTSTRAP_ADMIN_API_KEY;
+  const displayName =
+    config.BOOTSTRAP_ADMIN_NAME?.trim() ||
+    resolveBootstrapUsername(config.BOOTSTRAP_ADMIN_EMAIL);
+
+  await db.insert(users).values({
+    id: userId,
+    email: config.BOOTSTRAP_ADMIN_EMAIL,
+    name: displayName,
+    username: resolveBootstrapUsername(config.BOOTSTRAP_ADMIN_EMAIL),
+    nickname: displayName,
+    role: "admin",
+    deletedAt: null,
+    createdAt,
+    updatedAt: createdAt,
+  });
+
+  await db.insert(apiKeys).values({
+    id: randomId("key"),
+    userId,
+    name: "Bootstrap Admin",
+    prefix: apiKey.slice(0, 12),
+    keyHash: await sha256Hex(apiKey),
+    scopes: JSON.stringify(["*"]),
+    createdAt,
+    lastUsedAt: null,
+    revokedAt: null,
+  });
 };
 
 export const resolveBootstrapLegacyDomainState = (

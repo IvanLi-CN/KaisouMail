@@ -61,6 +61,8 @@ const runtimeConfigSchema = z.object({
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_RUNTIME_API_TOKEN: z.string().optional(),
   BOOTSTRAP_ADMIN_INVITE_CODE: z.string().min(8).optional(),
+  BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
+  BOOTSTRAP_ADMIN_API_KEY: z.string().min(16).optional(),
   BOOTSTRAP_ADMIN_NAME: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
@@ -97,6 +99,8 @@ export interface WorkerEnv {
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_RUNTIME_API_TOKEN?: string;
   BOOTSTRAP_ADMIN_INVITE_CODE?: string;
+  BOOTSTRAP_ADMIN_EMAIL?: string;
+  BOOTSTRAP_ADMIN_API_KEY?: string;
   BOOTSTRAP_ADMIN_NAME?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
