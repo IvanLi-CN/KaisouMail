@@ -29,7 +29,10 @@ import {
   serializeExpiredSessionCookie,
   serializeSessionCookie,
 } from "../services/auth";
-import { buildAuthProviderStatuses } from "../services/identity";
+import {
+  buildAuthProviderStatuses,
+  resolvePasskeyRegistrationRequirement,
+} from "../services/identity";
 import {
   buildProviderStartUrl,
   completePendingExternalRegistration,
@@ -117,9 +120,14 @@ export const authRoutes = new Hono<AppBindings>()
       apiValidationHook,
     ),
     async (c) => {
+      const body = c.req.valid("json");
+      const requirement = await resolvePasskeyRegistrationRequirement(
+        c.env,
+        body.inviteCode,
+      );
       const token = await createPasskeyPendingRegistrationToken(
         c.get("runtimeConfig"),
-        c.req.valid("json"),
+        body,
       );
       return c.json(
         pendingRegistrationResponseSchema.parse({
@@ -128,8 +136,8 @@ export const authRoutes = new Hono<AppBindings>()
             method: "passkey",
             sourceIntent: "register",
             redirectTo: "/workspace",
-            inviteRequired: true,
-            invitePrevalidated: Boolean(c.req.valid("json").inviteCode?.trim()),
+            inviteRequired: requirement.inviteRequired,
+            invitePrevalidated: requirement.invitePrevalidated,
             canComplete: true,
             suggestedNickname: null,
             error: null,

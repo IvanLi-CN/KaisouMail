@@ -258,6 +258,15 @@ describe("meta and auth routes", () => {
   });
 
   it("routes passkey registration start through the static auth handler", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => [
+          {
+            value: 1,
+          },
+        ],
+      }),
+    });
     const app = createApp();
     const response = await app.fetch(
       new Request("http://localhost/api/auth/passkey/register/start", {
@@ -277,6 +286,45 @@ describe("meta and auth routes", () => {
         sourceIntent: "register",
         inviteRequired: true,
       },
+    });
+  });
+
+  it("rejects passkey registration start early when bootstrap registration is impossible", async () => {
+    const values = vi.fn();
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 0 }];
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values,
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Bootstrap invite required",
+      details: null,
     });
   });
 
