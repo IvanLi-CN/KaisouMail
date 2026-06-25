@@ -111,7 +111,7 @@ The Worker expects these bindings and variables:
 
 ### Optional bootstrap secrets
 
-- `BOOTSTRAP_ADMIN_INVITE_CODE` (one-time code that can create the first admin in an empty deployment)
+- `BOOTSTRAP_ADMIN_INVITE_CODE` (one-time code that can create the first admin in an empty deployment; do not commit a shared default value)
 
 ### Optional live-management runtime config
 
@@ -320,7 +320,7 @@ To use the public docs workflow, enable GitHub Pages for this repository and kee
 
 1. Create or reuse the Cloudflare Pages project referenced by `CF_PAGES_PROJECT_NAME`
 2. Bind one or more control-plane origins (for example `cfm.example.com` and `km.example.com`) to Pages, and attach the matching API custom domains (for example `api.cfm.example.com` and `api.km.example.com`) to the API Worker
-3. Set the Worker runtime secret `SESSION_SECRET`, and set `BOOTSTRAP_ADMIN_INVITE_CODE` when you want an empty deployment to mint its very first admin through a one-time bootstrap invite
+3. Set the Worker runtime secret `SESSION_SECRET`, and only set `BOOTSTRAP_ADMIN_INVITE_CODE` as a deployment-specific secret when you want an empty deployment to mint its very first admin through a one-time bootstrap invite
 4. Set `EMAIL_WORKER_NAME` to the Email Worker script that should receive routed mail
 5. Set GitHub secret `CLOUDFLARE_DEPLOY_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (or fall back to shared `CLOUDFLARE_API_TOKEN`), and ensure the deploy/shared token includes `Account: Workers R2 Storage: Edit`; the workflow injects `CLOUDFLARE_ACCOUNT_ID` into the API Worker runtime config during deploy, so leaving the secret unset now fails closed instead of publishing a version with direct domain binding disabled
 6. Set GitHub vars `CF_PAGES_PROJECT_NAME=<your Pages project>`, `VITE_API_BASE_URL=<your canonical direct API origin for deploy smoke>`, and `CF_PAGES_SMOKE_ORIGINS=<comma-separated Pages origins that must pass same-origin /api/version smoke after deploy>`
