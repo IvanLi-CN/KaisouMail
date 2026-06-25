@@ -68,6 +68,7 @@ vi.mock("../services/oauth", async () => {
 });
 
 import { createApp } from "../app";
+import { signPayload } from "../lib/crypto";
 import { issueSessionCookie } from "../services/auth";
 
 const env = {
@@ -311,6 +312,17 @@ describe("meta and auth routes", () => {
         ],
       }),
     });
+    const signedPendingToken = await signPayload(
+      {
+        method: "passkey",
+        sourceIntent: "register",
+        redirectTo: "/workspace",
+        inviteCode: null,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 300,
+      },
+      env.SESSION_SECRET,
+    );
     const app = createApp();
     const response = await app.fetch(
       new Request("http://localhost/api/auth/registration/passkey/options", {
@@ -320,7 +332,7 @@ describe("meta and auth routes", () => {
           origin: "http://localhost:5173",
         },
         body: JSON.stringify({
-          token: "pending_from_query",
+          token: signedPendingToken,
           nickname: "Ivan",
           passkeyName: "Primary Passkey",
         }),
@@ -337,7 +349,7 @@ describe("meta and auth routes", () => {
       expect.objectContaining({
         WEB_APP_ORIGIN: "http://localhost:5173",
       }),
-      "pending_from_query",
+      signedPendingToken,
     );
     await expect(response.json()).resolves.toEqual({
       error: "Invite required",

@@ -638,9 +638,19 @@ export const createPasskeyInviteRegistrationOptionsForCompletion = async (
     pendingToken: string;
   },
 ) => {
+  const pending = await verifyPayload<PendingRegistrationPayload>(
+    input.pendingToken,
+    config.SESSION_SECRET,
+  );
+  if (!pending || pending.method !== "passkey") {
+    throw new ApiError(400, "Registration state expired");
+  }
+
+  const resolvedInviteCode =
+    input.inviteCode ?? pending.inviteCode ?? undefined;
   const requirement = await resolvePasskeyRegistrationRequirement(
     env,
-    input.inviteCode,
+    resolvedInviteCode,
   );
   if (requirement.inviteRequired && !requirement.invitePrevalidated) {
     throw new ApiError(403, "Invite required");
@@ -670,7 +680,7 @@ export const createPasskeyInviteRegistrationOptionsForCompletion = async (
         challenge: options.challenge,
         name: input.passkeyName,
         nickname: input.nickname,
-        inviteCode: input.inviteCode,
+        inviteCode: resolvedInviteCode,
         pendingToken: input.pendingToken,
       },
     ),

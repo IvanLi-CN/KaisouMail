@@ -35,6 +35,7 @@ vi.mock("../db/client", () => ({
 
 import {
   createPasskeyAuthenticationOptions,
+  createPasskeyInviteRegistrationOptionsForCompletion,
   createPasskeyRegistrationOptionsForUser,
   isPasskeyAuthConfigured,
   revokePasskeyForUser,
@@ -85,6 +86,9 @@ const createRequest = ({
 const createAwaitableQuery = <T>(rows: T[]) => ({
   limit: async (count: number) => rows.slice(0, count),
 });
+
+const tableNameOf = (table: Record<PropertyKey, unknown> | undefined) =>
+  String(table?.[Symbol.for("drizzle:Name")] ?? "");
 
 describe("passkey service", () => {
   beforeEach(() => {
@@ -174,6 +178,99 @@ describe("passkey service", () => {
       expect.objectContaining({
         rpID: "707979.xyz",
         userVerification: "required",
+      }),
+    );
+  });
+
+  it("reuses the pending invite code during passkey completion when the form omits it", async () => {
+    generateRegistrationOptions.mockResolvedValue({
+      challenge: "invite_completion_challenge",
+    });
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table?: Record<PropertyKey, unknown>) => {
+          const tableName = tableNameOf(table);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "invites") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: "inv_prevalidated",
+                    code: "km_prevalidated",
+                    role: "member",
+                    usedAt: null,
+                  },
+                ],
+              }),
+            };
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "invite-only",
+                    githubDailyLimit: 5,
+                    githubClientId: "",
+                    githubClientSecret: "",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: async () => undefined,
+      }),
+    });
+
+    const pendingToken = await (await import("../lib/crypto")).signPayload(
+      {
+        method: "passkey",
+        sourceIntent: "register",
+        redirectTo: "/workspace",
+        inviteCode: "km_prevalidated",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 300,
+      },
+      baseConfig.SESSION_SECRET,
+    );
+
+    const result = await createPasskeyInviteRegistrationOptionsForCompletion(
+      {} as never,
+      baseConfig,
+      createRequest({ origin: "https://cfm.707979.xyz" }),
+      {
+        nickname: "Owner",
+        passkeyName: "Primary Passkey",
+        pendingToken,
+      },
+    );
+
+    expect(result.options.challenge).toBe("invite_completion_challenge");
+    expect(generateRegistrationOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpID: "707979.xyz",
+        userDisplayName: "Owner",
       }),
     );
   });
