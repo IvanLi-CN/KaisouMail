@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check": "biome check src",
+    "check": "node ../../node_modules/@biomejs/biome/bin/biome check src",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

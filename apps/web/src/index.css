@@ -231,14 +231,14 @@ body {
 }
 
 .workspace-mailbox-item[data-active="true"]:not(
-  [data-highlighted="true"]
-):focus-visible {
+    [data-highlighted="true"]
+  ):focus-visible {
   background: hsl(var(--primary) / 0.12);
 }
 
 .workspace-mailbox-item[data-active="true"]:not(
-  [data-highlighted="true"]
-):focus-within {
+    [data-highlighted="true"]
+  ):focus-within {
   background: hsl(var(--primary) / 0.12);
 }
 
