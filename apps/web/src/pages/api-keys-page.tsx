@@ -166,7 +166,7 @@ export const ApiKeysPageView = ({
                 <TabsTrigger
                   key={tab.id}
                   value={tab.id}
-                  className="min-h-11 min-w-0 whitespace-normal rounded-xl !border-transparent !bg-transparent px-3 py-2 text-center text-sm font-medium leading-5 sm:min-h-10 sm:whitespace-nowrap"
+                  className="min-h-11 min-w-0 whitespace-normal rounded-xl border-transparent bg-transparent px-3 py-2 text-center text-sm font-medium leading-5 transition-all hover:bg-[rgba(255,255,255,0.03)] hover:text-foreground data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)] sm:min-h-10 sm:whitespace-nowrap"
                 >
                   {tab.label}
                 </TabsTrigger>

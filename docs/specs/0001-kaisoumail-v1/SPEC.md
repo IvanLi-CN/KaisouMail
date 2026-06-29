@@ -424,9 +424,17 @@ PR: include
 
 ![Identity auth page with the Passkey tab selected](./assets/api-keys-page-passkey-tab.png)
 
-![Identity auth tabs component with the API Keys tab selected](./assets/identity-auth-tabs-api-keys-story.png)
+PR: include
+![Identity auth page with the API Keys tab selected and the account / connected accounts / passkeys / api keys layout visible](./assets/pages-identity-auth-api-keys-trim.png)
 
-![Identity auth tabs component with the Passkey tab selected](./assets/identity-auth-tabs-passkey-story.png)
+PR: include
+![Identity auth page with the Passkeys tab selected and the passkey registration / list split visible](./assets/pages-identity-auth-passkeys-trim.png)
+
+PR: include
+![Identity auth tabs component with the API Keys tab selected](./assets/identity-auth-tabs-api-keys-selected-trim.png)
+
+PR: include
+![Identity auth tabs component with the Passkey tab selected](./assets/identity-auth-tabs-passkey-selected-trim.png)
 
 ![Identity auth tabs with the repaired focus halo](./assets/identity-auth-tabs-focus-ring.png)
 

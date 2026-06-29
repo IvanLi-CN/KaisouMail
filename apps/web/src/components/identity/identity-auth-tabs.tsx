@@ -29,7 +29,7 @@ export const IdentityAuthTabsList = () => {
         <TabsTrigger
           key={tab.id}
           value={tab.id}
-          className="rounded-lg !border-transparent !bg-transparent px-3 py-2 text-sm font-medium !text-[hsl(var(--muted-foreground))] transition-all duration-200 hover:!bg-[rgba(255,255,255,0.03)] hover:!text-[hsl(var(--foreground))] data-[state=inactive]:opacity-75 data-[state=active]:!bg-[hsl(var(--secondary))] data-[state=active]:!text-[hsl(var(--foreground))] data-[state=active]:!shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] data-[state=active]:opacity-100"
+          className="rounded-lg bg-transparent px-3 py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] shadow-none transition-all duration-200 hover:bg-[rgba(255,255,255,0.03)] hover:text-[hsl(var(--foreground))] data-[state=inactive]:opacity-75 data-[state=active]:bg-white/10 data-[state=active]:text-foreground data-[state=active]:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.14),0_1px_1px_rgba(0,0,0,0.18)] data-[state=active]:opacity-100"
         >
           {tab.label}
         </TabsTrigger>
