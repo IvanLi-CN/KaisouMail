@@ -77,16 +77,16 @@ export const PasskeySelected: Story = {
 export const InteractiveSwitch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const apiKeysTab = canvas.getByRole("tab", { name: "API Keys" });
     const passkeyTab = canvas.getByRole("tab", { name: "Passkey" });
 
-    await expect(canvas.getByRole("tab", { name: "API Keys" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await expect(apiKeysTab).toHaveAttribute("aria-selected", "true");
+    await expect(apiKeysTab).toHaveClass("data-[state=active]:bg-white/10");
 
     await userEvent.click(passkeyTab);
 
     await expect(passkeyTab).toHaveAttribute("aria-selected", "true");
+    await expect(passkeyTab).toHaveClass("data-[state=active]:bg-white/10");
     await expect(
       canvas.getByText("用于浏览器登录、设备绑定与后续便捷会话恢复。"),
     ).toBeInTheDocument();

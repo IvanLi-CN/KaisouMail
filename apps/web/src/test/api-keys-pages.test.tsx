@@ -184,6 +184,9 @@ describe("api key integration docs", () => {
       "aria-selected",
       "true",
     );
+    expect(screen.getByRole("tab", { name: /API Keys/i })).toHaveClass(
+      "data-[state=active]:bg-white/10",
+    );
     expect(
       screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
     ).toBeInTheDocument();
@@ -194,6 +197,7 @@ describe("api key integration docs", () => {
     await waitFor(() => {
       expect(passkeyTab).toHaveAttribute("aria-selected", "true");
     });
+    expect(passkeyTab).toHaveClass("data-[state=active]:bg-white/10");
     expect(
       screen.getByRole("heading", { name: "注册 Passkey", level: 2 }),
     ).toBeInTheDocument();
