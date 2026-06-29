@@ -126,7 +126,11 @@ describe("identity page view", () => {
 
     render(
       <MemoryRouter>
-        <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
+        <AppShell
+          user={demoSessionUser}
+          version={demoVersion}
+          onLogout={vi.fn()}
+        >
           <ApiKeysPageView
             account={account}
             externalAccounts={externalAccount ? [externalAccount] : []}

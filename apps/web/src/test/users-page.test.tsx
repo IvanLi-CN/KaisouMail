@@ -446,7 +446,9 @@ describe("users page view", () => {
     );
 
     expect(screen.getByTestId("users-page-skeleton")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "用户", level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "用户", level: 2 }),
+    ).toBeInTheDocument();
   });
 
   it("shows an invites skeleton while the invite list is still loading", () => {

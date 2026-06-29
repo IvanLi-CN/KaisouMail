@@ -776,140 +776,49 @@ export const UserTable = ({
               />
             ) : (
               <>
-            {userFiltersEnabled &&
-            (normalizedUserSearch.length > 0 || roleFilter !== "all") ? (
-              <div
-                className={`${feedbackCardClassName} mb-5 flex items-center justify-between gap-3`}
-              >
-                <p className="text-muted-foreground">
-                  当前筛出 {filteredUsers.length} 个用户。
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-10"
-                  onClick={() => {
-                    setUserSearch("");
-                    setRoleFilter("all");
-                  }}
-                >
-                  清除筛选
-                </Button>
-              </div>
-            ) : null}
-            {visibleUsers.length === 0 ? (
-              <div
-                className={`${feedbackCardClassName} flex items-center justify-between gap-3`}
-              >
-                <p className="text-muted-foreground">
-                  {userFiltersEnabled
-                    ? "当前页没有符合条件的用户。"
-                    : "当前页没有用户。"}
-                </p>
-              </div>
-            ) : null}
-            <div className="space-y-3 md:hidden">
-              {visibleUsers.map((user) => {
-                const canTransfer = user.id !== currentAdminUserId;
-                return (
+                {userFiltersEnabled &&
+                (normalizedUserSearch.length > 0 || roleFilter !== "all") ? (
                   <div
-                    key={user.id}
-                    className="rounded-2xl border border-border/70 bg-card p-4"
+                    className={`${feedbackCardClassName} mb-5 flex items-center justify-between gap-3`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-foreground">
-                          {user.nickname}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          @{user.username}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          创建于 {formatDateTime(user.createdAt)}
-                        </p>
-                      </div>
-                      <Badge className={roleBadgeClassName(user.role)}>
-                        {user.role}
-                      </Badge>
-                    </div>
-                    <div className="mt-4 space-y-3 text-sm">
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          外部绑定
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {user.externalAccounts.length > 0 ? (
-                            user.externalAccounts.map((account) => (
-                              <Badge
-                                key={account.id}
-                                className="border border-border"
-                              >
-                                {account.provider}
-                                {account.providerUsername
-                                  ? ` · ${account.providerUsername}`
-                                  : ""}
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">无</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Passkey
-                          </p>
-                          <p className="text-foreground">{user.passkeyCount}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            状态
-                          </p>
-                          <p className="text-foreground">
-                            {user.deletedAt
-                              ? `已注销 · ${formatDateTime(user.deletedAt)}`
-                              : `更新于 ${formatDateTime(user.updatedAt)}`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-muted-foreground">
+                      当前筛出 {filteredUsers.length} 个用户。
+                    </p>
                     <Button
-                      variant="outline"
+                      type="button"
+                      variant="ghost"
                       size="sm"
-                      className="mt-4 min-h-11 w-full"
+                      className="min-h-10"
                       onClick={() => {
-                        void openTransferDialog(user.id);
+                        setUserSearch("");
+                        setRoleFilter("all");
                       }}
-                      disabled={!canTransfer || Boolean(user.deletedAt)}
                     >
-                      {canTransfer ? "转移管理员" : "当前管理员"}
+                      清除筛选
                     </Button>
                   </div>
-                );
-              })}
-            </div>
-            <div className="hidden md:block">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableHeaderCell>账号</TableHeaderCell>
-                    <TableHeaderCell>外部绑定</TableHeaderCell>
-                    <TableHeaderCell>Passkey</TableHeaderCell>
-                    <TableHeaderCell>状态</TableHeaderCell>
-                    <TableHeaderCell className="text-right">
-                      操作
-                    </TableHeaderCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+                ) : null}
+                {visibleUsers.length === 0 ? (
+                  <div
+                    className={`${feedbackCardClassName} flex items-center justify-between gap-3`}
+                  >
+                    <p className="text-muted-foreground">
+                      {userFiltersEnabled
+                        ? "当前页没有符合条件的用户。"
+                        : "当前页没有用户。"}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="space-y-3 md:hidden">
                   {visibleUsers.map((user) => {
                     const canTransfer = user.id !== currentAdminUserId;
                     return (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <div className="space-y-1">
+                      <div
+                        key={user.id}
+                        className="rounded-2xl border border-border/70 bg-card p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
                             <p className="font-medium text-foreground">
                               {user.nickname}
                             </p>
@@ -920,87 +829,186 @@ export const UserTable = ({
                               创建于 {formatDateTime(user.createdAt)}
                             </p>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {user.externalAccounts.length > 0 ? (
-                              user.externalAccounts.map((account) => (
-                                <Badge
-                                  key={account.id}
-                                  className="border border-border"
-                                >
-                                  {account.provider}
-                                  {account.providerUsername
-                                    ? ` · ${account.providerUsername}`
-                                    : ""}
-                                </Badge>
-                              ))
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                无
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{user.passkeyCount}</TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <Badge className={roleBadgeClassName(user.role)}>
-                              {user.role}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground">
-                              {user.deletedAt
-                                ? `已注销 · ${formatDateTime(user.deletedAt)}`
-                                : `更新于 ${formatDateTime(user.updatedAt)}`}
+                          <Badge className={roleBadgeClassName(user.role)}>
+                            {user.role}
+                          </Badge>
+                        </div>
+                        <div className="mt-4 space-y-3 text-sm">
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              外部绑定
                             </p>
+                            <div className="flex flex-wrap gap-2">
+                              {user.externalAccounts.length > 0 ? (
+                                user.externalAccounts.map((account) => (
+                                  <Badge
+                                    key={account.id}
+                                    className="border border-border"
+                                  >
+                                    {account.provider}
+                                    {account.providerUsername
+                                      ? ` · ${account.providerUsername}`
+                                      : ""}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  无
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="min-h-10"
-                            onClick={() => {
-                              void openTransferDialog(user.id);
-                            }}
-                            disabled={!canTransfer || Boolean(user.deletedAt)}
-                          >
-                            {canTransfer ? "转移管理员" : "当前管理员"}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Passkey
+                              </p>
+                              <p className="text-foreground">
+                                {user.passkeyCount}
+                              </p>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                状态
+                              </p>
+                              <p className="text-foreground">
+                                {user.deletedAt
+                                  ? `已注销 · ${formatDateTime(user.deletedAt)}`
+                                  : `更新于 ${formatDateTime(user.updatedAt)}`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4 min-h-11 w-full"
+                          onClick={() => {
+                            void openTransferDialog(user.id);
+                          }}
+                          disabled={!canTransfer || Boolean(user.deletedAt)}
+                        >
+                          {canTransfer ? "转移管理员" : "当前管理员"}
+                        </Button>
+                      </div>
                     );
                   })}
-                </TableBody>
-              </Table>
-            </div>
-            <PaginationControls
-              itemLabel="用户"
-              page={effectiveUsersPagination.page}
-              totalPages={effectiveUsersPagination.totalPages}
-              totalItems={effectiveUsersPagination.totalItems}
-              visibleRangeStart={
-                effectiveUsersPagination.totalItems === 0
-                  ? 0
-                  : (effectiveUsersPagination.page - 1) *
-                      effectiveUsersPagination.pageSize +
-                    1
-              }
-              visibleRangeEnd={
-                effectiveUsersPagination.totalItems === 0
-                  ? 0
-                  : (effectiveUsersPagination.page - 1) *
-                      effectiveUsersPagination.pageSize +
-                    visibleUsers.length
-              }
-              onPageChange={(page) => {
-                if (usersAreServerPaginated) {
-                  onUsersPageChange(page);
-                  return;
-                }
-                setLocalUsersPage(page);
-              }}
-            />
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeaderCell>账号</TableHeaderCell>
+                        <TableHeaderCell>外部绑定</TableHeaderCell>
+                        <TableHeaderCell>Passkey</TableHeaderCell>
+                        <TableHeaderCell>状态</TableHeaderCell>
+                        <TableHeaderCell className="text-right">
+                          操作
+                        </TableHeaderCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {visibleUsers.map((user) => {
+                        const canTransfer = user.id !== currentAdminUserId;
+                        return (
+                          <TableRow key={user.id}>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="font-medium text-foreground">
+                                  {user.nickname}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  @{user.username}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  创建于 {formatDateTime(user.createdAt)}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-2">
+                                {user.externalAccounts.length > 0 ? (
+                                  user.externalAccounts.map((account) => (
+                                    <Badge
+                                      key={account.id}
+                                      className="border border-border"
+                                    >
+                                      {account.provider}
+                                      {account.providerUsername
+                                        ? ` · ${account.providerUsername}`
+                                        : ""}
+                                    </Badge>
+                                  ))
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">
+                                    无
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{user.passkeyCount}</TableCell>
+                            <TableCell>
+                              <div className="space-y-2">
+                                <Badge
+                                  className={roleBadgeClassName(user.role)}
+                                >
+                                  {user.role}
+                                </Badge>
+                                <p className="text-xs text-muted-foreground">
+                                  {user.deletedAt
+                                    ? `已注销 · ${formatDateTime(user.deletedAt)}`
+                                    : `更新于 ${formatDateTime(user.updatedAt)}`}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="min-h-10"
+                                onClick={() => {
+                                  void openTransferDialog(user.id);
+                                }}
+                                disabled={
+                                  !canTransfer || Boolean(user.deletedAt)
+                                }
+                              >
+                                {canTransfer ? "转移管理员" : "当前管理员"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <PaginationControls
+                  itemLabel="用户"
+                  page={effectiveUsersPagination.page}
+                  totalPages={effectiveUsersPagination.totalPages}
+                  totalItems={effectiveUsersPagination.totalItems}
+                  visibleRangeStart={
+                    effectiveUsersPagination.totalItems === 0
+                      ? 0
+                      : (effectiveUsersPagination.page - 1) *
+                          effectiveUsersPagination.pageSize +
+                        1
+                  }
+                  visibleRangeEnd={
+                    effectiveUsersPagination.totalItems === 0
+                      ? 0
+                      : (effectiveUsersPagination.page - 1) *
+                          effectiveUsersPagination.pageSize +
+                        visibleUsers.length
+                  }
+                  onPageChange={(page) => {
+                    if (usersAreServerPaginated) {
+                      onUsersPageChange(page);
+                      return;
+                    }
+                    setLocalUsersPage(page);
+                  }}
+                />
               </>
             )}
           </CardContent>
@@ -1466,351 +1474,361 @@ export const UserTable = ({
                 ) : null}
 
                 <div className="space-y-4">
-                <div className={channelCardClassName}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <ChannelCardTitle icon={Github} title="GitHub" />
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {modeLabel(settingsDraft.githubMode)}
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          上限 {settingsDraft.githubDailyLimit}
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {providerConfigStatusLabel(providerConfigured.github)}
-                        </Badge>
+                  <div className={channelCardClassName}>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-3">
+                        <ChannelCardTitle icon={Github} title="GitHub" />
+                        <div className="flex flex-wrap gap-2">
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {modeLabel(settingsDraft.githubMode)}
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            上限 {settingsDraft.githubDailyLimit}
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {providerConfigStatusLabel(
+                              providerConfigured.github,
+                            )}
+                          </Badge>
+                        </div>
                       </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-11 shrink-0"
-                      onClick={() =>
-                        setExpandedProvider((current) =>
-                          current === "github" ? null : "github",
-                        )
-                      }
-                    >
-                      {expandedProvider === "github" ? (
-                        <ChevronUp className="mr-2 h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="mr-2 h-4 w-4" />
-                      )}
-                      {expandedProvider === "github" ? "收起配置" : "展开配置"}
-                    </Button>
-                  </div>
-                  {expandedProvider === "github" ? (
-                    <div className="space-y-4 border-t border-border/70 pt-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="github-mode">模式</Label>
-                        <Select
-                          id="github-mode"
-                          value={settingsDraft.githubMode}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              githubMode: event.target
-                                .value as RegistrationSettingsValues["githubMode"],
-                            }))
-                          }
-                        >
-                          <option value="off">关闭</option>
-                          <option value="invite-only">仅邀请码</option>
-                          <option value="open">开放</option>
-                        </Select>
-                      </div>
-                      <SliderField
-                        id="github-limit"
-                        label="每日开放注册上限"
-                        min={0}
-                        max={100}
-                        value={settingsDraft.githubDailyLimit}
-                        onChange={(value) =>
-                          setSettingsDraft((current) => ({
-                            ...current,
-                            githubDailyLimit: value,
-                          }))
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 shrink-0"
+                        onClick={() =>
+                          setExpandedProvider((current) =>
+                            current === "github" ? null : "github",
+                          )
                         }
-                      />
-                      <div className="space-y-2">
-                        <Label htmlFor="github-client-id">客户端 ID</Label>
-                        <Input
-                          id="github-client-id"
-                          value={settingsDraft.githubClientId}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              githubClientId: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="github-client-secret">客户端密钥</Label>
-                        <Input
-                          id="github-client-secret"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="输入新密钥"
-                          value={settingsDraft.githubClientSecret}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              githubClientSecret: event.target.value,
-                              clearGithubClientSecret: false,
-                            }))
-                          }
-                        />
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="min-h-10"
-                            onClick={() =>
+                      >
+                        {expandedProvider === "github" ? (
+                          <ChevronUp className="mr-2 h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="mr-2 h-4 w-4" />
+                        )}
+                        {expandedProvider === "github"
+                          ? "收起配置"
+                          : "展开配置"}
+                      </Button>
+                    </div>
+                    {expandedProvider === "github" ? (
+                      <div className="space-y-4 border-t border-border/70 pt-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="github-mode">模式</Label>
+                          <Select
+                            id="github-mode"
+                            value={settingsDraft.githubMode}
+                            onChange={(event) =>
                               setSettingsDraft((current) => ({
                                 ...current,
-                                githubClientSecret: "",
-                                clearGithubClientSecret: true,
+                                githubMode: event.target
+                                  .value as RegistrationSettingsValues["githubMode"],
                               }))
                             }
                           >
-                            清空已存密钥
-                          </Button>
+                            <option value="off">关闭</option>
+                            <option value="invite-only">仅邀请码</option>
+                            <option value="open">开放</option>
+                          </Select>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="github-oauth-scopes">授权范围</Label>
-                        <Input
-                          id="github-oauth-scopes"
-                          value={settingsDraft.githubOauthScopes}
-                          onChange={(event) =>
+                        <SliderField
+                          id="github-limit"
+                          label="每日开放注册上限"
+                          min={0}
+                          max={100}
+                          value={settingsDraft.githubDailyLimit}
+                          onChange={(value) =>
                             setSettingsDraft((current) => ({
                               ...current,
-                              githubOauthScopes: event.target.value,
+                              githubDailyLimit: value,
                             }))
                           }
                         />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className={channelCardClassName}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <ChannelCardTitle
-                        icon={LinuxDoIcon}
-                        title="LinuxDO"
-                        iconClassName="text-foreground"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {modeLabel(settingsDraft.linuxdoMode)}
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          上限 {settingsDraft.linuxdoDailyLimit}
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {providerConfigStatusLabel(
-                            providerConfigured.linuxdo,
-                          )}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-11 shrink-0"
-                      onClick={() =>
-                        setExpandedProvider((current) =>
-                          current === "linuxdo" ? null : "linuxdo",
-                        )
-                      }
-                    >
-                      {expandedProvider === "linuxdo" ? (
-                        <ChevronUp className="mr-2 h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="mr-2 h-4 w-4" />
-                      )}
-                      {expandedProvider === "linuxdo" ? "收起配置" : "展开配置"}
-                    </Button>
-                  </div>
-                  {expandedProvider === "linuxdo" ? (
-                    <div className="space-y-4 border-t border-border/70 pt-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="linuxdo-mode">模式</Label>
-                        <Select
-                          id="linuxdo-mode"
-                          value={settingsDraft.linuxdoMode}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              linuxdoMode: event.target
-                                .value as RegistrationSettingsValues["linuxdoMode"],
-                            }))
-                          }
-                        >
-                          <option value="off">关闭</option>
-                          <option value="invite-only">仅邀请码</option>
-                          <option value="open">开放</option>
-                        </Select>
-                      </div>
-                      <SliderField
-                        id="linuxdo-limit"
-                        label="每日开放注册上限"
-                        min={0}
-                        max={100}
-                        value={settingsDraft.linuxdoDailyLimit}
-                        onChange={(value) =>
-                          setSettingsDraft((current) => ({
-                            ...current,
-                            linuxdoDailyLimit: value,
-                          }))
-                        }
-                      />
-                      <div className="space-y-2">
-                        <Label htmlFor="linuxdo-client-id">客户端 ID</Label>
-                        <Input
-                          id="linuxdo-client-id"
-                          value={settingsDraft.linuxdoClientId}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              linuxdoClientId: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="linuxdo-client-secret">
-                          客户端密钥
-                        </Label>
-                        <Input
-                          id="linuxdo-client-secret"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="输入新密钥"
-                          value={settingsDraft.linuxdoClientSecret}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              linuxdoClientSecret: event.target.value,
-                              clearLinuxdoClientSecret: false,
-                            }))
-                          }
-                        />
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="min-h-10"
-                            onClick={() =>
+                        <div className="space-y-2">
+                          <Label htmlFor="github-client-id">客户端 ID</Label>
+                          <Input
+                            id="github-client-id"
+                            value={settingsDraft.githubClientId}
+                            onChange={(event) =>
                               setSettingsDraft((current) => ({
                                 ...current,
-                                linuxdoClientSecret: "",
-                                clearLinuxdoClientSecret: true,
+                                githubClientId: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="github-client-secret">
+                            客户端密钥
+                          </Label>
+                          <Input
+                            id="github-client-secret"
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="输入新密钥"
+                            value={settingsDraft.githubClientSecret}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                githubClientSecret: event.target.value,
+                                clearGithubClientSecret: false,
+                              }))
+                            }
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="min-h-10"
+                              onClick={() =>
+                                setSettingsDraft((current) => ({
+                                  ...current,
+                                  githubClientSecret: "",
+                                  clearGithubClientSecret: true,
+                                }))
+                              }
+                            >
+                              清空已存密钥
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="github-oauth-scopes">授权范围</Label>
+                          <Input
+                            id="github-oauth-scopes"
+                            value={settingsDraft.githubOauthScopes}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                githubOauthScopes: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className={channelCardClassName}>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-3">
+                        <ChannelCardTitle
+                          icon={LinuxDoIcon}
+                          title="LinuxDO"
+                          iconClassName="text-foreground"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {modeLabel(settingsDraft.linuxdoMode)}
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            上限 {settingsDraft.linuxdoDailyLimit}
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {providerConfigStatusLabel(
+                              providerConfigured.linuxdo,
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 shrink-0"
+                        onClick={() =>
+                          setExpandedProvider((current) =>
+                            current === "linuxdo" ? null : "linuxdo",
+                          )
+                        }
+                      >
+                        {expandedProvider === "linuxdo" ? (
+                          <ChevronUp className="mr-2 h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="mr-2 h-4 w-4" />
+                        )}
+                        {expandedProvider === "linuxdo"
+                          ? "收起配置"
+                          : "展开配置"}
+                      </Button>
+                    </div>
+                    {expandedProvider === "linuxdo" ? (
+                      <div className="space-y-4 border-t border-border/70 pt-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="linuxdo-mode">模式</Label>
+                          <Select
+                            id="linuxdo-mode"
+                            value={settingsDraft.linuxdoMode}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                linuxdoMode: event.target
+                                  .value as RegistrationSettingsValues["linuxdoMode"],
                               }))
                             }
                           >
-                            清空已存密钥
-                          </Button>
+                            <option value="off">关闭</option>
+                            <option value="invite-only">仅邀请码</option>
+                            <option value="open">开放</option>
+                          </Select>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="linuxdo-oauth-base-url">
-                          OAuth 入口 URL
-                        </Label>
-                        <Input
-                          id="linuxdo-oauth-base-url"
-                          value={settingsDraft.linuxdoOauthBaseUrl}
-                          onChange={(event) =>
+                        <SliderField
+                          id="linuxdo-limit"
+                          label="每日开放注册上限"
+                          min={0}
+                          max={100}
+                          value={settingsDraft.linuxdoDailyLimit}
+                          onChange={(value) =>
                             setSettingsDraft((current) => ({
                               ...current,
-                              linuxdoOauthBaseUrl: event.target.value,
+                              linuxdoDailyLimit: value,
+                            }))
+                          }
+                        />
+                        <div className="space-y-2">
+                          <Label htmlFor="linuxdo-client-id">客户端 ID</Label>
+                          <Input
+                            id="linuxdo-client-id"
+                            value={settingsDraft.linuxdoClientId}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                linuxdoClientId: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="linuxdo-client-secret">
+                            客户端密钥
+                          </Label>
+                          <Input
+                            id="linuxdo-client-secret"
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="输入新密钥"
+                            value={settingsDraft.linuxdoClientSecret}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                linuxdoClientSecret: event.target.value,
+                                clearLinuxdoClientSecret: false,
+                              }))
+                            }
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="min-h-10"
+                              onClick={() =>
+                                setSettingsDraft((current) => ({
+                                  ...current,
+                                  linuxdoClientSecret: "",
+                                  clearLinuxdoClientSecret: true,
+                                }))
+                              }
+                            >
+                              清空已存密钥
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="linuxdo-oauth-base-url">
+                            OAuth 入口 URL
+                          </Label>
+                          <Input
+                            id="linuxdo-oauth-base-url"
+                            value={settingsDraft.linuxdoOauthBaseUrl}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                linuxdoOauthBaseUrl: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className={channelCardClassName}>
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-3">
+                        <ChannelCardTitle icon={Fingerprint} title="Passkey" />
+                        <div className="flex flex-wrap gap-2">
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {modeLabel(settingsDraft.passkeyMode)}
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            保留 {settingsDraft.deletedUserMailboxRetentionDays}{" "}
+                            天
+                          </Badge>
+                          <Badge className="border border-border bg-background/70 text-foreground">
+                            {providerConfigStatusLabel(
+                              providerConfigured.passkey,
+                            )}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11 shrink-0"
+                        onClick={() =>
+                          setExpandedProvider((current) =>
+                            current === "passkey" ? null : "passkey",
+                          )
+                        }
+                      >
+                        {expandedProvider === "passkey" ? (
+                          <ChevronUp className="mr-2 h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="mr-2 h-4 w-4" />
+                        )}
+                        {expandedProvider === "passkey"
+                          ? "收起配置"
+                          : "展开配置"}
+                      </Button>
+                    </div>
+                    {expandedProvider === "passkey" ? (
+                      <div className="space-y-4 border-t border-border/70 pt-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="passkey-mode">模式</Label>
+                          <Select
+                            id="passkey-mode"
+                            value={settingsDraft.passkeyMode}
+                            onChange={(event) =>
+                              setSettingsDraft((current) => ({
+                                ...current,
+                                passkeyMode: event.target
+                                  .value as RegistrationSettingsValues["passkeyMode"],
+                              }))
+                            }
+                          >
+                            <option value="off">关闭</option>
+                            <option value="invite-only">仅邀请码</option>
+                          </Select>
+                        </div>
+                        <SliderField
+                          id="retention-days"
+                          label="注销后邮箱保留天数"
+                          min={0}
+                          max={30}
+                          value={settingsDraft.deletedUserMailboxRetentionDays}
+                          onChange={(value) =>
+                            setSettingsDraft((current) => ({
+                              ...current,
+                              deletedUserMailboxRetentionDays: value,
                             }))
                           }
                         />
                       </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className={channelCardClassName}>
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="space-y-3">
-                      <ChannelCardTitle icon={Fingerprint} title="Passkey" />
-                      <div className="flex flex-wrap gap-2">
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {modeLabel(settingsDraft.passkeyMode)}
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          保留 {settingsDraft.deletedUserMailboxRetentionDays}{" "}
-                          天
-                        </Badge>
-                        <Badge className="border border-border bg-background/70 text-foreground">
-                          {providerConfigStatusLabel(
-                            providerConfigured.passkey,
-                          )}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="min-h-11 shrink-0"
-                      onClick={() =>
-                        setExpandedProvider((current) =>
-                          current === "passkey" ? null : "passkey",
-                        )
-                      }
-                    >
-                      {expandedProvider === "passkey" ? (
-                        <ChevronUp className="mr-2 h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="mr-2 h-4 w-4" />
-                      )}
-                      {expandedProvider === "passkey" ? "收起配置" : "展开配置"}
-                    </Button>
+                    ) : null}
                   </div>
-                  {expandedProvider === "passkey" ? (
-                    <div className="space-y-4 border-t border-border/70 pt-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="passkey-mode">模式</Label>
-                        <Select
-                          id="passkey-mode"
-                          value={settingsDraft.passkeyMode}
-                          onChange={(event) =>
-                            setSettingsDraft((current) => ({
-                              ...current,
-                              passkeyMode: event.target
-                                .value as RegistrationSettingsValues["passkeyMode"],
-                            }))
-                          }
-                        >
-                          <option value="off">关闭</option>
-                          <option value="invite-only">仅邀请码</option>
-                        </Select>
-                      </div>
-                      <SliderField
-                        id="retention-days"
-                        label="注销后邮箱保留天数"
-                        min={0}
-                        max={30}
-                        value={settingsDraft.deletedUserMailboxRetentionDays}
-                        onChange={(value) =>
-                          setSettingsDraft((current) => ({
-                            ...current,
-                            deletedUserMailboxRetentionDays: value,
-                          }))
-                        }
-                      />
-                    </div>
-                  ) : null}
                 </div>
-              </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                   <Button
