@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent, within } from "storybook/test";
 import { AppShell } from "@/components/layout/app-shell";
 import { MessageRefreshControl } from "@/components/messages/message-refresh-control";
 import {
@@ -188,6 +188,15 @@ export const LoadingMeta: Story = {
   },
 };
 
+export const LoadingList: Story = {
+  args: {
+    meta: demoMeta,
+    isListLoading: true,
+    mailboxes: [],
+    messageStatsByMailbox: new Map(),
+  },
+};
+
 export const CreateFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
@@ -198,6 +207,7 @@ export const CreateFlow: Story = {
       canvas.getByLabelText("邮箱域名"),
       "mail.example.net",
     );
+    await userEvent.type(canvas.getByLabelText("Tags"), "ci ops");
     await userEvent.dblClick(canvas.getByLabelText("生命周期值"));
     await userEvent.clear(canvas.getByLabelText("生命周期值"));
     await userEvent.type(canvas.getByLabelText("生命周期值"), "90m");
@@ -208,9 +218,70 @@ export const CreateFlow: Story = {
       subdomain: "ops.alpha",
       rootDomain: "mail.example.net",
       expiresInMinutes: 90,
+      tags: ["ci", "ops"],
     });
     await expect(
       canvas.getByRole("link", { name: "打开邮件工作台" }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const TagsManagement: Story = {
+  args: {
+    tagFilter: "ci",
+    editingTagsMailbox: demoMailboxes[0],
+    tagsDraft: "ci build",
+    onEditTags: fn(),
+    onSaveTags: fn(),
+    onTagsDraftChange: fn(),
+    onTagFilterChange: fn(),
+    onCancelEditTags: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByLabelText("按 Tag 筛选")).toHaveTextContent("ci");
+    await userEvent.click(canvas.getByLabelText("按 Tag 筛选"));
+    await expect(screen.getByLabelText("搜索 Tag")).toHaveAttribute(
+      "autocomplete",
+      "new-password",
+    );
+    await userEvent.type(screen.getByLabelText("搜索 Tag"), "bui");
+    await expect(
+      screen.getByRole("option", { name: "筛选 Tag build" }),
+    ).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.getByText("ci")).toBeInTheDocument();
+    await expect(canvas.getByText("build")).toBeInTheDocument();
+    await expect(canvas.getByText("Web")).toBeInTheDocument();
+    await expect(canvas.getByText("Deploy Bot")).toBeInTheDocument();
+
+    await userEvent.click(
+      canvas.getAllByRole("button", { name: "编辑 Tags" })[0],
+    );
+    await expect(args.onEditTags).toHaveBeenCalled();
+    await userEvent.type(canvas.getByLabelText("邮箱 Tags"), "smoke{enter}");
+    await expect(args.onTagsDraftChange).toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole("button", { name: "保存 Tags" }));
+    await expect(args.onSaveTags).toHaveBeenCalled();
+  },
+};
+
+export const FilteredListKeepsCreateTagSuggestions: Story = {
+  args: {
+    mailboxes: demoMailboxes.filter((mailbox) => mailbox.tags.includes("auth")),
+    tagFilter: "auth",
+    tagSuggestionMailboxes: demoMailboxes,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByLabelText("Tags"));
+    await expect(
+      screen.getByRole("option", { name: "添加 Tag build" }),
+    ).toBeInTheDocument();
+    await expect(
+      screen.getByRole("option", { name: "添加 Tag ops" }),
     ).toBeInTheDocument();
   },
 };

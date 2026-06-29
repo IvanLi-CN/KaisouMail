@@ -1,7 +1,6 @@
 import { sessionUserSchema } from "@kaisoumail/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import { z } from "zod";
 
 import { getDb } from "../db/client";
 import { apiKeys, users } from "../db/schema";
@@ -16,20 +15,11 @@ import {
   verifySession,
 } from "../lib/crypto";
 import { ApiError } from "../lib/errors";
-import type { AppBindings, AuthUser } from "../types";
+import type { AppBindings, AuthContext, AuthUser } from "../types";
 import { ensureBootstrapAdmin } from "./bootstrap";
 
 const SESSION_COOKIE = "kaisoumail_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
-
-const authUserSchema = sessionUserSchema;
-
-const mapUserRow = (row: {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-}): AuthUser => authUserSchema.parse(row);
 
 const parseCookies = (cookieHeader: string) =>
   Object.fromEntries(
@@ -46,6 +36,28 @@ const parseCookies = (cookieHeader: string) =>
         ];
       }),
   );
+
+const authUserSchema = sessionUserSchema;
+const resolveUsername = (user: AuthUser) =>
+  user.username ?? user.email ?? user.id;
+const resolveNickname = (user: AuthUser) =>
+  user.nickname ?? user.name ?? resolveUsername(user);
+
+type UserRow = {
+  id: string;
+  username: string;
+  nickname: string;
+  role: string;
+  deletedAt: string | null;
+};
+
+const mapUserRow = (row: UserRow): AuthUser =>
+  authUserSchema.parse({
+    id: row.id,
+    username: row.username,
+    nickname: row.nickname,
+    role: row.role,
+  });
 
 export const serializeSessionCookie = (token: string, secure: boolean) => {
   const parts = [
@@ -71,16 +83,6 @@ export const serializeExpiredSessionCookie = (secure: boolean) => {
   return parts.join("; ");
 };
 
-const getUserById = async (env: WorkerEnv, userId: string) => {
-  const db = getDb(env);
-  const rows = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  return rows[0] ? mapUserRow(rows[0]) : null;
-};
-
 export const issueSessionCookie = async (
   config: RuntimeConfig,
   user: AuthUser,
@@ -88,8 +90,8 @@ export const issueSessionCookie = async (
   const now = Math.floor(Date.now() / 1000);
   const payload: SessionPayload = {
     sub: user.id,
-    email: user.email,
-    name: user.name,
+    username: resolveUsername(user),
+    nickname: resolveNickname(user),
     role: user.role,
     iat: now,
     exp: now + SESSION_TTL_SECONDS,
@@ -141,46 +143,13 @@ export const createApiKeyForUser = async (
   };
 };
 
-export const authenticateApiKey = async (
-  env: WorkerEnv,
-  config: RuntimeConfig,
-  apiKey: string,
-) => {
-  const db = getDb(env);
-  await ensureBootstrapAdmin(db, config);
-  const keyHash = await sha256Hex(apiKey);
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      apiKeyId: apiKeys.id,
-    })
-    .from(apiKeys)
-    .innerJoin(users, eq(apiKeys.userId, users.id))
-    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return null;
-  await db
-    .update(apiKeys)
-    .set({ lastUsedAt: nowIso() })
-    .where(eq(apiKeys.id, row.apiKeyId));
-  return mapUserRow({
-    id: row.userId,
-    email: row.email,
-    name: row.name,
-    role: row.role,
-  });
-};
-
 export const listApiKeysForUser = async (env: WorkerEnv, userId: string) => {
   const db = getDb(env);
   const rows = await db
     .select()
     .from(apiKeys)
     .where(eq(apiKeys.userId, userId));
+
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -203,68 +172,114 @@ export const revokeApiKeyForUser = async (
     .from(apiKeys)
     .where(eq(apiKeys.id, keyId))
     .limit(1);
+
   const record = rows[0];
   if (!record) throw new ApiError(404, "API key not found");
-  if (record.userId !== user.id && user.role !== "admin")
+  if (record.userId !== user.id && user.role !== "admin") {
     throw new ApiError(403, "Forbidden");
+  }
+
   await db
     .update(apiKeys)
     .set({ revokedAt: nowIso() })
     .where(eq(apiKeys.id, keyId));
 };
 
-export const createUser = async (
+export const revokeAllApiKeysForUser = async (
   env: WorkerEnv,
-  input: { email: string; name: string; role: string },
+  userId: string,
 ) => {
   const db = getDb(env);
-  const existing = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, input.email))
-    .limit(1);
-  if (existing[0]) throw new ApiError(409, "User already exists");
+  await db
+    .update(apiKeys)
+    .set({ revokedAt: nowIso() })
+    .where(and(eq(apiKeys.userId, userId), isNull(apiKeys.revokedAt)));
+};
 
-  const now = nowIso();
-  const id = randomId("usr");
-  const role = z.enum(["admin", "member"]).parse(input.role);
-  await db.insert(users).values({
-    id,
-    email: input.email,
-    name: input.name,
-    role,
-    createdAt: now,
-    updatedAt: now,
+export const getUserById = async (env: WorkerEnv, userId: string) => {
+  const db = getDb(env);
+  const rows = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      nickname: users.nickname,
+      role: users.role,
+      deletedAt: users.deletedAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row || row.deletedAt) return null;
+  return mapUserRow({
+    id: row.id,
+    username: row.username,
+    nickname: row.nickname,
+    role: row.role,
+    deletedAt: row.deletedAt,
   });
-  const initialKey = await createApiKeyForUser(env, id, "Initial API Key", [
-    "mailboxes:write",
-    "messages:read",
-  ]);
+};
+
+export const authenticateApiKeyWithContext = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  apiKey: string,
+) => {
+  const db = getDb(env);
+  await ensureBootstrapAdmin(db, config);
+  const keyHash = await sha256Hex(apiKey);
+  const rows = await db
+    .select({
+      userId: users.id,
+      username: users.username,
+      nickname: users.nickname,
+      role: users.role,
+      deletedAt: users.deletedAt,
+      apiKeyId: apiKeys.id,
+      apiKeyName: apiKeys.name,
+      apiKeyPrefix: apiKeys.prefix,
+    })
+    .from(apiKeys)
+    .innerJoin(users, eq(apiKeys.userId, users.id))
+    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row || row.deletedAt) return null;
+
+  await db
+    .update(apiKeys)
+    .set({ lastUsedAt: nowIso() })
+    .where(eq(apiKeys.id, row.apiKeyId));
+
   return {
-    user: {
-      id,
-      email: input.email,
-      name: input.name,
-      role,
-      createdAt: now,
-      updatedAt: now,
-    },
-    initialKey,
+    user: mapUserRow({
+      id: row.userId,
+      username: row.username,
+      nickname: row.nickname,
+      role: row.role,
+      deletedAt: row.deletedAt,
+    }),
+    authContext: {
+      method: "api_key",
+      apiKey: {
+        id: row.apiKeyId,
+        name: row.apiKeyName,
+        prefix: row.apiKeyPrefix,
+      },
+    } satisfies AuthContext,
   };
 };
 
-export const listUsers = async (env: WorkerEnv) => {
-  const db = getDb(env);
-  const rows = await db.select().from(users).orderBy(users.createdAt);
-  return rows.map((row) => ({
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    role: z.enum(["admin", "member"]).parse(row.role),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }));
-};
+export const authenticateApiKey = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  apiKey: string,
+) =>
+  authenticateApiKeyWithContext(env, config, apiKey).then(
+    (resolved) => resolved?.user ?? null,
+  );
 
 export const resolveAuthUser = async (
   env: WorkerEnv,
@@ -274,7 +289,10 @@ export const resolveAuthUser = async (
   const bearer = parseAuthorizationHeader(
     request.headers.get("authorization") ?? undefined,
   );
-  if (bearer) return authenticateApiKey(env, config, bearer);
+  if (bearer) {
+    const resolved = await authenticateApiKeyWithContext(env, config, bearer);
+    return resolved?.user ?? null;
+  }
 
   const cookieHeader = request.headers.get("cookie") ?? "";
   const sessionCookie = parseCookies(cookieHeader)[SESSION_COOKIE];
@@ -282,6 +300,32 @@ export const resolveAuthUser = async (
   const payload = await verifySession(sessionCookie, config.SESSION_SECRET);
   if (!payload) return null;
   return getUserById(env, payload.sub);
+};
+
+export const resolveAuthContext = async (
+  env: WorkerEnv,
+  config: RuntimeConfig,
+  request: Request,
+) => {
+  const bearer = parseAuthorizationHeader(
+    request.headers.get("authorization") ?? undefined,
+  );
+  if (bearer) return authenticateApiKeyWithContext(env, config, bearer);
+
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const sessionCookie = parseCookies(cookieHeader)[SESSION_COOKIE];
+  if (!sessionCookie) return null;
+  const payload = await verifySession(sessionCookie, config.SESSION_SECRET);
+  if (!payload) return null;
+  const user = await getUserById(env, payload.sub);
+  if (!user) return null;
+  return {
+    user,
+    authContext: {
+      method: "web",
+      apiKey: null,
+    } satisfies AuthContext,
+  };
 };
 
 export const resolveSessionUser = async (
@@ -304,14 +348,31 @@ export const requireAuth = (options?: {
 }): MiddlewareHandler<AppBindings> => {
   return async (c, next) => {
     const config = c.get("runtimeConfig");
-    const user = options?.sessionOnly
-      ? await resolveSessionUser(c.env, config, c.req.raw)
-      : await resolveAuthUser(c.env, config, c.req.raw);
-    if (!user && !options?.optional)
+    const resolved = options?.sessionOnly
+      ? await resolveSessionUser(c.env, config, c.req.raw).then((user) =>
+          user
+            ? {
+                user,
+                authContext: {
+                  method: "web",
+                  apiKey: null,
+                } satisfies AuthContext,
+              }
+            : null,
+        )
+      : await resolveAuthContext(c.env, config, c.req.raw);
+    const user = resolved?.user ?? null;
+
+    if (!user && !options?.optional) {
       throw new ApiError(401, "Authentication required");
-    if (user) c.set("authUser", user);
-    if (options?.admin && user?.role !== "admin")
+    }
+    if (resolved) {
+      c.set("authUser", resolved.user);
+      c.set("authContext", resolved.authContext);
+    }
+    if (options?.admin && user?.role !== "admin") {
       throw new ApiError(403, "Admin access required");
+    }
     await next();
   };
 };

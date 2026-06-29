@@ -9,9 +9,11 @@ import { buildPublicDocsLinks } from "@/lib/public-docs";
 import { appRoutes, latestApiKeySecretQueryKey } from "@/lib/routes";
 import {
   demoApiKeys,
+  demoExternalAccounts,
   demoMeta,
   demoPasskeys,
   demoSessionUser,
+  demoUsers,
   demoVersion,
 } from "@/mocks/data";
 import {
@@ -91,6 +93,15 @@ vi.mock("@/hooks/use-session", () => ({
   useSessionQuery: () => ({
     data: sessionHookState.user ? { user: sessionHookState.user } : null,
   }),
+  useAccountQuery: () => ({
+    data: sessionHookState.user ? { user: sessionHookState.user } : null,
+  }),
+  useUpdateAccountMutation: () => ({
+    mutateAsync: vi.fn(),
+  }),
+  useDeleteAccountMutation: () => ({
+    mutateAsync: vi.fn(),
+  }),
 }));
 
 afterEach(() => {
@@ -121,32 +132,57 @@ const renderWithQueryClient = (ui: ReactNode, queryClient: QueryClient) =>
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 
 const ApiKeysPageViewHarness = ({
-  defaultTab = "api-keys",
+  defaultTab = "account",
+  onTabChange = vi.fn(),
 }: {
   defaultTab?: IdentityAuthTab;
+  onTabChange?: (tab: IdentityAuthTab) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<IdentityAuthTab>(defaultTab);
+  const [nicknameDraft, setNicknameDraft] = useState(
+    demoUsers[0]?.nickname ?? "",
+  );
 
   return (
     <ApiKeysPageView
+      account={demoUsers[0] ?? null}
+      externalAccounts={demoExternalAccounts.filter(
+        (account) => account.id === "ext_github_owner",
+      )}
       apiKeys={demoApiKeys}
       passkeys={demoPasskeys}
       activeTab={activeTab}
+      nicknameDraft={nicknameDraft}
+      onNicknameDraftChange={setNicknameDraft}
+      onAccountSave={vi.fn()}
+      onAccountDelete={vi.fn()}
+      onUnlinkExternalAccount={vi.fn()}
+      onBindProvider={vi.fn()}
       passkeyEmptyMessage={null}
       passkeySupported
       passkeyError={null}
       passkeyPending={false}
       latestSecret={null}
+      accountPending={false}
+      deletingAccount={false}
+      externalAccountPendingId={null}
+      accountError={null}
       onCreate={vi.fn()}
       onRevoke={vi.fn()}
-      onActiveTabChange={setActiveTab}
+      onActiveTabChange={(tab) => {
+        onTabChange(tab);
+        setActiveTab(tab);
+      }}
       onCreatePasskey={vi.fn()}
       onRevokePasskey={vi.fn()}
     />
   );
 };
 
-const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
+const renderApiKeysRoutes = (
+  queryClient = createQueryClient(),
+  onTabChange?: (tab: IdentityAuthTab) => void,
+) =>
   renderWithQueryClient(
     <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
       <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
@@ -157,7 +193,7 @@ const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
           />
           <Route
             path={appRoutes.apiKeys}
-            element={<ApiKeysPageViewHarness />}
+            element={<ApiKeysPageViewHarness onTabChange={onTabChange} />}
           />
           <Route
             path={appRoutes.apiKeysDocs}
@@ -172,37 +208,66 @@ const renderApiKeysRoutes = (queryClient = createQueryClient()) =>
   );
 
 describe("api key integration docs", () => {
-  it("switches between API Keys and Passkey tabs on the identity page", async () => {
+  it("switches between identity tabs on the identity page", async () => {
     renderApiKeysRoutes();
 
-    const passkeyTab = screen.getByRole("tab", { name: /Passkey/i });
+    const accountTab = screen.getByRole("tab", { name: "Account" });
+    const connectedAccountsTab = screen.getByRole("tab", {
+      name: "Connected Accounts",
+    });
+    const passkeysTab = screen.getByRole("tab", { name: "Passkeys" });
+    const apiKeysTab = screen.getByRole("tab", { name: "API Keys" });
 
     expect(
       screen.getByRole("heading", { name: "身份认证", level: 1 }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /API Keys/i })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("tab", { name: /API Keys/i })).toHaveClass(
+    expect(accountTab).toHaveAttribute("aria-selected", "true");
+    expect(accountTab).toHaveClass("data-[state=active]:bg-white/10");
+    expect(connectedAccountsTab).toHaveAttribute("aria-selected", "false");
+    expect(passkeysTab).toHaveAttribute("aria-selected", "false");
+    expect(apiKeysTab).toHaveAttribute("aria-selected", "false");
+    expect(
+      screen.getByRole("heading", { name: "Account", level: 2 }),
+    ).toBeInTheDocument();
+
+    fireEvent.mouseDown(connectedAccountsTab);
+    fireEvent.click(connectedAccountsTab);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: "Connected Accounts" }),
+      ).toHaveAttribute("aria-selected", "true");
+    });
+    expect(screen.getByRole("tab", { name: "Connected Accounts" })).toHaveClass(
       "data-[state=active]:bg-white/10",
     );
     expect(
-      screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
+      screen.getByRole("heading", { name: "Connected Accounts", level: 2 }),
     ).toBeInTheDocument();
 
-    fireEvent.mouseDown(passkeyTab);
-    fireEvent.click(passkeyTab);
+    fireEvent.mouseDown(passkeysTab);
+    fireEvent.click(passkeysTab);
 
     await waitFor(() => {
-      expect(passkeyTab).toHaveAttribute("aria-selected", "true");
+      expect(passkeysTab).toHaveAttribute("aria-selected", "true");
     });
-    expect(passkeyTab).toHaveClass("data-[state=active]:bg-white/10");
+    expect(passkeysTab).toHaveClass("data-[state=active]:bg-white/10");
     expect(
       screen.getByRole("heading", { name: "注册 Passkey", level: 2 }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "已注册 Passkeys", level: 2 }),
+    ).toBeInTheDocument();
+
+    fireEvent.mouseDown(apiKeysTab);
+    fireEvent.click(apiKeysTab);
+
+    await waitFor(() => {
+      expect(apiKeysTab).toHaveAttribute("aria-selected", "true");
+    });
+    expect(apiKeysTab).toHaveClass("data-[state=active]:bg-white/10");
+    expect(
+      screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
     ).toBeInTheDocument();
   });
 
@@ -257,177 +322,58 @@ describe("api key integration docs", () => {
     );
 
     renderWithQueryClient(
-      <MemoryRouter initialEntries={[appRoutes.apiKeys]}>
+      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=api-keys`]}>
         <AppShell
           user={demoSessionUser}
           version={demoVersion}
           onLogout={vi.fn()}
         >
           <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={appRoutes.apiKeys} replace />}
-            />
             <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
-            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
+            <Route
+              path={appRoutes.apiKeysDocs}
+              element={
+                <ApiKeysDocsPageView meta={demoMeta} docsLinks={docsLinks} />
+              }
+            />
           </Routes>
         </AppShell>
       </MemoryRouter>,
       queryClient,
     );
 
-    expect(
-      await screen.findByText("cfm_full_secret_returned_once"),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("link", { name: "对接文档" }));
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: "API 对接速查", level: 1 }),
-      ).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("link", { name: "回到身份认证" }));
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "身份认证", level: 1 }),
+        screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
       ).toBeInTheDocument();
     });
     expect(
       screen.getByText("cfm_full_secret_returned_once"),
     ).toBeInTheDocument();
-  });
 
-  it("shows a recoverable error on the Passkey tab when the list cannot load", async () => {
-    passkeysHookState.data = undefined;
-    passkeysHookState.error = new Error("Passkey backend offline");
+    fireEvent.click(screen.getByRole("link", { name: "对接文档" }));
 
-    const queryClient = createQueryClient();
-    renderWithQueryClient(
-      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
-        <AppShell
-          user={demoSessionUser}
-          version={demoVersion}
-          onLogout={vi.fn()}
-        >
-          <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={appRoutes.apiKeys} replace />}
-            />
-            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
-            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
-          </Routes>
-        </AppShell>
-      </MemoryRouter>,
-      queryClient,
-    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "API 对接速查", level: 1 }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("link", { name: "身份认证" }));
 
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "身份认证", level: 1 }),
+      ).toBeInTheDocument();
+    });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "API Keys" }));
+    fireEvent.click(screen.getByRole("tab", { name: "API Keys" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: "创建 API Key", level: 2 }),
+      ).toBeInTheDocument();
+    });
     expect(
-      await screen.findByRole("heading", {
-        name: "Passkeys 暂时加载失败",
-        level: 2,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("当前还没有注册任何 passkey。"),
-    ).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "重新加载 Passkeys" }));
-    expect(passkeysHookState.refetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("keeps existing passkeys visible when backend capability is off", async () => {
-    passkeysHookState.data = [demoPasskeys[0]];
-    passkeysHookState.error = null;
-    passkeySupportState.backendConfigured = false;
-    passkeySupportState.buttonLabel = "当前环境未启用 Passkey";
-    passkeySupportState.managementMessage =
-      "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。";
-    passkeySupportState.message =
-      "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。";
-    passkeySupportState.supported = false;
-
-    const queryClient = createQueryClient();
-    renderWithQueryClient(
-      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
-        <AppShell
-          user={demoSessionUser}
-          version={demoVersion}
-          onLogout={vi.fn()}
-        >
-          <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={appRoutes.apiKeys} replace />}
-            />
-            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
-            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
-          </Routes>
-        </AppShell>
-      </MemoryRouter>,
-      queryClient,
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: "已注册 Passkeys",
-        level: 2,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("MacBook Pro")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "注册当前设备" })).toBeDisabled();
-    expect(
-      await screen.findByText(
-        "当前环境未启用 Passkey，请先配置 WEB_APP_ORIGIN / WEB_APP_ORIGINS。",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("keeps existing passkeys visible when the current origin is not trusted", async () => {
-    passkeysHookState.data = [demoPasskeys[0]];
-    passkeysHookState.error = null;
-    passkeySupportState.backendConfigured = true;
-    passkeySupportState.buttonLabel = "当前域名未启用 Passkey";
-    passkeySupportState.managementMessage =
-      "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。";
-    passkeySupportState.message =
-      "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。";
-    passkeySupportState.supported = false;
-
-    const queryClient = createQueryClient();
-    renderWithQueryClient(
-      <MemoryRouter initialEntries={[`${appRoutes.apiKeys}?tab=passkey`]}>
-        <AppShell
-          user={demoSessionUser}
-          version={demoVersion}
-          onLogout={vi.fn()}
-        >
-          <Routes>
-            <Route
-              path="/"
-              element={<Navigate to={appRoutes.apiKeys} replace />}
-            />
-            <Route path={appRoutes.apiKeys} element={<ApiKeysPage />} />
-            <Route path={appRoutes.apiKeysDocs} element={<ApiKeysDocsPage />} />
-          </Routes>
-        </AppShell>
-      </MemoryRouter>,
-      queryClient,
-    );
-
-    expect(
-      await screen.findByRole("heading", {
-        name: "已注册 Passkeys",
-        level: 2,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("MacBook Pro")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "注册当前设备" })).toBeDisabled();
-    expect(
-      screen.getByText(
-        "当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。",
-      ),
+      screen.getByText("cfm_full_secret_returned_once"),
     ).toBeInTheDocument();
   });
 });

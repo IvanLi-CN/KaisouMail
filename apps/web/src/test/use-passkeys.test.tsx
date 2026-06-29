@@ -25,8 +25,8 @@ const sessionFor = (userId: string): SessionResponse => ({
   authenticatedAt: "2026-04-08T19:00:00.000Z",
   user: {
     id: userId,
-    email: `${userId}@example.com`,
-    name: userId,
+    username: userId,
+    nickname: userId,
     role: "admin",
   },
 });

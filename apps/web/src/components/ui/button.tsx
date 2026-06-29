@@ -5,20 +5,20 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
   {
     variants: {
       variant: {
         default:
-          "border-primary bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90",
+          "border-primary bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 aria-disabled:hover:bg-primary",
         secondary:
-          "border-secondary bg-secondary px-4 py-2 text-secondary-foreground hover:bg-secondary/85",
+          "border-secondary bg-secondary px-4 py-2 text-secondary-foreground hover:bg-secondary/85 aria-disabled:hover:bg-secondary",
         outline:
-          "border-border bg-transparent px-4 py-2 text-foreground hover:bg-white/5",
+          "border-border bg-transparent px-4 py-2 text-foreground hover:bg-white/5 aria-disabled:hover:bg-transparent",
         ghost:
-          "border-transparent px-3 py-2 text-muted-foreground hover:bg-white/5 hover:text-foreground",
+          "border-transparent px-3 py-2 text-muted-foreground hover:bg-white/5 hover:text-foreground aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground",
         destructive:
-          "border-destructive bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90",
+          "border-destructive bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90 aria-disabled:hover:bg-destructive",
       },
       size: {
         default: "h-9",

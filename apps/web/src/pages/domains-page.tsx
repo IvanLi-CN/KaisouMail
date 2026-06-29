@@ -7,6 +7,11 @@ import {
   ErrorState,
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
+import {
+  FormCardSkeleton,
+  LoadingShellContainer,
+  TableCardSkeleton,
+} from "@/components/shared/loading-shells";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +45,7 @@ import { appRoutes } from "@/lib/routes";
 type DomainsPageViewProps = {
   domains: DomainCatalogItem[];
   cloudflareSync?: CloudflareSync | null;
+  isLoading?: boolean;
   isDomainBindingEnabled?: boolean;
   isDomainLifecycleEnabled?: boolean;
   docsLinks?: PublicDocsLinks | null;
@@ -74,6 +80,7 @@ type DomainsPageViewProps = {
 export const DomainsPageView = ({
   domains,
   cloudflareSync = null,
+  isLoading = false,
   isDomainBindingEnabled = true,
   isDomainLifecycleEnabled = true,
   docsLinks = null,
@@ -118,6 +125,17 @@ export const DomainsPageView = ({
           </Button>
         }
       />
+    ) : isLoading ? (
+      <LoadingShellContainer data-testid="domains-page-skeleton">
+        {isDomainBindingEnabled ? (
+          <FormCardSkeleton fieldCount={2} testId="domain-bind-skeleton" />
+        ) : null}
+        <TableCardSkeleton
+          columnCount={6}
+          rowCount={5}
+          testId="domain-table-skeleton"
+        />
+      </LoadingShellContainer>
     ) : (
       <>
         {cloudflareSync?.status === "rate_limited" ? (
@@ -248,8 +266,9 @@ export const DomainsPage = () => {
     <DomainsPageView
       domains={domainCatalogQuery.data?.domains ?? []}
       cloudflareSync={domainCatalogQuery.data?.cloudflareSync ?? null}
+      isLoading={domainCatalogQuery.isLoading && !hasDomainCatalog}
       isDomainBindingEnabled={
-        metaQuery.data?.cloudflareDomainBindingEnabled ?? false
+        metaQuery.data?.cloudflareDomainBindingEnabled ?? metaQuery.isLoading
       }
       isDomainLifecycleEnabled={
         metaQuery.data?.cloudflareDomainLifecycleEnabled ?? false

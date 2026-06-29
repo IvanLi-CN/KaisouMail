@@ -106,6 +106,23 @@ describe("message detail page view", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a structured loading skeleton on first load", () => {
+    render(
+      <MemoryRouter>
+        <MessageDetailPageView
+          message={null}
+          isLoading
+          isRefreshing={false}
+          lastRefreshedAt={null}
+          mailboxHref="/mailboxes"
+          workspaceHref="/workspace"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("message-detail-skeleton")).toBeInTheDocument();
+  });
+
   it("keeps the current message visible when a detail refetch fails over cached data", () => {
     messageDetailHookState.data = demoMessageDetails.msg_alpha;
     messageDetailHookState.error = new Error("detail refetch failed");

@@ -5,12 +5,15 @@ DEFAULT_MAILBOX_TTL_MINUTES=60
 CLEANUP_BATCH_SIZE=3
 SUBDOMAIN_CLEANUP_BATCH_SIZE=500
 EMAIL_ROUTING_MANAGEMENT_ENABLED=false
-BOOTSTRAP_ADMIN_EMAIL=owner@707979.xyz
-BOOTSTRAP_ADMIN_NAME=Ivan
+BOOTSTRAP_ADMIN_INVITE_CODE=replace-with-a-bootstrap-admin-invite
 SESSION_SECRET=replace-with-a-long-random-secret
-BOOTSTRAP_ADMIN_API_KEY=replace-with-a-bootstrap-api-key
 CLOUDFLARE_ACCOUNT_ID=replace-with-your-account-id
 CLOUDFLARE_ZONE_ID=replace-with-your-zone-id
 CLOUDFLARE_API_TOKEN=replace-with-an-email-routing-token
 # Optional: use a dedicated runtime token instead of the shared quickstart token.
 # CLOUDFLARE_RUNTIME_API_TOKEN=replace-with-a-runtime-email-routing-token
+# Optional: enable third-party login providers for local auth testing.
+# GITHUB_CLIENT_ID=replace-with-your-github-client-id
+# GITHUB_CLIENT_SECRET=replace-with-your-github-client-secret
+# LINUXDO_CLIENT_ID=replace-with-your-linuxdo-client-id
+# LINUXDO_CLIENT_SECRET=replace-with-your-linuxdo-client-secret

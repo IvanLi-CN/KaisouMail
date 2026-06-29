@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "sh -c 'wrangler dev --test-scheduled --port ${WORKER_PORT:-8787}'",
-    "check": "biome check src drizzle.config.ts wrangler.jsonc wrangler.email.jsonc",
+    "check": "node ../../node_modules/@biomejs/biome/bin/biome check src drizzle.config.ts wrangler.jsonc wrangler.email.jsonc",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "build": "wrangler deploy --dry-run --config wrangler.jsonc && wrangler deploy --dry-run --config wrangler.email.jsonc",

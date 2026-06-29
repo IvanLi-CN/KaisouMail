@@ -658,6 +658,9 @@ const WorkspaceStoryHarness = ({
             rootDomain,
             address: `${localPart}@${subdomain}.${rootDomain}`,
             source: "registered",
+            createdVia: "web",
+            createdByApiKey: null,
+            tags: values.tags ?? [],
             status: "active",
             createdAt: "2026-04-05T08:16:00.000Z",
             lastReceivedAt: null,
@@ -1491,7 +1494,7 @@ export const SelectedMailboxTtlPopover: Story = {
     docs: {
       description: {
         story:
-          "The selected mailbox header keeps the settings action in the right-side title slot. Opening it shows a compact TTL popover initialized from the mailbox's current remaining lifetime.",
+          "The selected mailbox header keeps the settings action in the right-side title slot. Opening it shows mailbox tags plus a compact TTL control initialized from the mailbox's current remaining lifetime.",
       },
     },
   },
@@ -1500,16 +1503,22 @@ export const SelectedMailboxTtlPopover: Story = {
 
     await userEvent.click(
       within(canvasElement).getByRole("button", {
-        name: "设置邮箱过期时间",
+        name: "设置邮箱",
       }),
     );
 
     const popover = await body.findByRole("dialog", {
-      name: "设置过期时间",
+      name: "邮箱设置",
     });
     await expect(popover).toHaveTextContent(
       existingMailboxConflictStoryMailbox.address,
     );
+    const tagsInput = within(popover).getByLabelText("Tags");
+    await expect(tagsInput).toBeInTheDocument();
+    await expect(tagsInput).toHaveAttribute("autocomplete", "off");
+    await expect(tagsInput).toHaveAttribute("data-1p-ignore", "true");
+    await expect(tagsInput).toHaveAttribute("data-bwignore", "true");
+    await expect(tagsInput).toHaveAttribute("data-lpignore", "true");
     await expect(
       within(popover).getByLabelText("生命周期值"),
     ).not.toHaveTextContent("1 小时");
@@ -2121,6 +2130,25 @@ export const MessagePaneError: Story = {
     selectedMessageId: null,
     selectedMessage: null,
     messageDetailHref: null,
+  },
+};
+
+export const FirstLoadSkeletons: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction({ isOpen: false }),
+    visibleMailboxes: [],
+    totalMailboxCount: 0,
+    totalMessageCount: 0,
+    totalAggregatedMessageCount: 0,
+    mailboxMessageCounts: new Map(),
+    mailboxLatestVerificationCodes: new Map(),
+    messages: [],
+    selectedMessageId: null,
+    selectedMessage: null,
+    messageDetailHref: null,
+    isMailboxesLoading: true,
+    isMessagesLoading: true,
+    isMessageLoading: true,
   },
 };
 

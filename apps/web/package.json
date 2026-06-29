@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "sh -c 'vite --host 0.0.0.0 --port ${PORT:-4173}'",
-    "check": "biome check src functions .storybook vite.config.ts tailwind.config.ts wrangler.jsonc public/_routes.json components.json playwright.config.ts",
+    "check": "node ../../node_modules/@biomejs/biome/bin/biome check src functions .storybook vite.config.ts tailwind.config.ts wrangler.jsonc public/_routes.json components.json playwright.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "build": "vite build",
@@ -26,6 +26,7 @@
     "@tanstack/react-virtual": "^3.13.23",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

@@ -10,8 +10,8 @@ describe("session signing", () => {
     const token = await signSession(
       {
         sub: "usr_1",
-        email: "owner@example.com",
-        name: "Owner",
+        username: "owner",
+        nickname: "Owner",
         role: "admin",
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 60,

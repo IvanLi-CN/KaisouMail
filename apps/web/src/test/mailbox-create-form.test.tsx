@@ -60,6 +60,61 @@ describe("MailboxCreateForm", () => {
     expect(screen.getByRole("button", { name: "创建中…" })).toBeDisabled();
   });
 
+  it("submits normalized tags when provided", async () => {
+    const onSubmit = vi.fn();
+
+    render(
+      <MailboxCreateForm
+        defaultTtlMinutes={60}
+        domains={["relay.example.test"]}
+        maxTtlMinutes={1440}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Tags"), {
+      target: { value: "CI ops ci" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("Tags"), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        expiresInMinutes: 60,
+        tags: ["ci", "ops"],
+      });
+    });
+  });
+
+  it("suggests existing tags while still allowing custom tags", async () => {
+    const onSubmit = vi.fn();
+
+    render(
+      <MailboxCreateForm
+        defaultTtlMinutes={60}
+        domains={["relay.example.test"]}
+        maxTtlMinutes={1440}
+        onSubmit={onSubmit}
+        tagSuggestions={["ops", "ci"]}
+      />,
+    );
+
+    fireEvent.focus(screen.getByLabelText("Tags"));
+    fireEvent.click(screen.getByRole("option", { name: "添加 Tag ops" }));
+    fireEvent.change(screen.getByLabelText("Tags"), {
+      target: { value: "custom" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("Tags"), { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "创建邮箱" }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({
+        expiresInMinutes: 60,
+        tags: ["ops", "custom"],
+      });
+    });
+  });
+
   it("reports segmented preview changes when the selected root domain changes", async () => {
     const onPreviewChange = vi.fn();
 

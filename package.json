@@ -20,13 +20,13 @@
     "brand:generate": "python3 ./scripts/generate-brand-assets.py",
     "version:write": "node ./scripts/write-version.mjs",
     "check": "bun run check:root && bun run --cwd packages/shared check && bun run --cwd apps/api-worker check && bun run --cwd apps/web check && bun run --cwd docs-site check",
-    "check:root": "biome check .",
+    "check:root": "node ./node_modules/@biomejs/biome/bin/biome check .",
     "typecheck": "bun run version:write && bun run --cwd packages/shared typecheck && bun run --cwd apps/api-worker typecheck && bun run --cwd apps/web typecheck && bun run --cwd docs-site typecheck",
     "test": "bun run version:write && bun run --cwd apps/api-worker test && bun run --cwd apps/web test",
     "build": "bun run version:write && bun run --cwd apps/api-worker build && bun run --cwd apps/web build && bun run --cwd docs-site build",
     "build-storybook": "bun run version:write && bun run --cwd apps/web build-storybook",
     "build-docs-site": "bun run --cwd docs-site build",
-    "test:e2e": "bun run version:write && bun run --cwd apps/web test:e2e"
+    "test:e2e": "bun run --cwd apps/web playwright install --with-deps chromium && bun run version:write && bun run --cwd apps/web test:e2e"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

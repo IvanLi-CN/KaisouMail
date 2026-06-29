@@ -9,8 +9,14 @@ const { listActiveRootDomains } = vi.hoisted(() => ({
 const { listPasskeysForUser } = vi.hoisted(() => ({
   listPasskeysForUser: vi.fn(),
 }));
+const { verifyPasskeyInviteRegistration } = vi.hoisted(() => ({
+  verifyPasskeyInviteRegistration: vi.fn(),
+}));
 const { getDb } = vi.hoisted(() => ({
   getDb: vi.fn(),
+}));
+const { resolvePendingRegistration } = vi.hoisted(() => ({
+  resolvePendingRegistration: vi.fn(),
 }));
 
 vi.mock("../services/bootstrap", () => ({
@@ -39,6 +45,7 @@ vi.mock("../services/passkeys", async () => {
   return {
     ...actual,
     listPasskeysForUser,
+    verifyPasskeyInviteRegistration,
   };
 });
 
@@ -53,7 +60,19 @@ vi.mock("../services/auth", async () => {
   };
 });
 
+vi.mock("../services/oauth", async () => {
+  const actual =
+    await vi.importActual<typeof import("../services/oauth")>(
+      "../services/oauth",
+    );
+  return {
+    ...actual,
+    resolvePendingRegistration,
+  };
+});
+
 import { createApp } from "../app";
+import { signPayload } from "../lib/crypto";
 import { issueSessionCookie } from "../services/auth";
 
 const env = {
@@ -74,7 +93,30 @@ describe("meta and auth routes", () => {
     vi.clearAllMocks();
     listActiveRootDomains.mockResolvedValue(["707979.xyz", "mail.example.net"]);
     listPasskeysForUser.mockResolvedValue([]);
+    verifyPasskeyInviteRegistration.mockResolvedValue({
+      user: {
+        id: "usr_passkey",
+        username: "passkey-user",
+        nickname: "Passkey User",
+        role: "member",
+      },
+      clearCookie: "kaisoumail_passkey_invite_registration=; Max-Age=0",
+      passkey: {
+        id: "psk_demo",
+      },
+    });
     getDb.mockReturnValue({});
+    resolvePendingRegistration.mockResolvedValue({
+      token: "pending_token",
+      method: "passkey",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteRequired: true,
+      invitePrevalidated: false,
+      canComplete: true,
+      suggestedNickname: null,
+      error: null,
+    });
   });
 
   it("returns runtime metadata from /api/meta", async () => {
@@ -215,6 +257,219 @@ describe("meta and auth routes", () => {
     expect(payload.cloudflareCatchAllEnablementEnabled).toBe(true);
   });
 
+  it("routes passkey registration start through the static auth handler", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => [
+          {
+            value: 1,
+          },
+        ],
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      registration: {
+        method: "passkey",
+        sourceIntent: "register",
+        inviteRequired: true,
+      },
+    });
+  });
+
+  it("rejects passkey registration start early when bootstrap registration is impossible", async () => {
+    const values = vi.fn();
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 0 }];
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values,
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+      env as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Bootstrap invite required",
+      details: null,
+    });
+  });
+
+  it("rejects passkey invite registration options before returning a challenge when the invite is invalid", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "invite-only",
+                    githubDailyLimit: 5,
+                    githubClientId: "",
+                    githubClientSecret: "",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: vi.fn(),
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/options", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          inviteCode: "km_invalid",
+          nickname: "Ivan",
+          passkeyName: "Primary Passkey",
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "https://cfm.707979.xyz",
+      } as never,
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Invite not found",
+      details: null,
+    });
+  });
+
+  it("rejects provider registration starts before redirecting when the channel is disabled", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: (table: Record<PropertyKey, unknown>) => {
+          const tableName = String(table[Symbol.for("drizzle:Name")]);
+          if (tableName === "users") {
+            return [{ value: 1 }];
+          }
+          if (tableName === "registration_settings") {
+            return {
+              where: () => ({
+                limit: async () => [
+                  {
+                    id: 1,
+                    githubMode: "off",
+                    githubDailyLimit: 5,
+                    githubClientId: "github-client-id",
+                    githubClientSecret: "github-client-secret",
+                    githubOauthScopes: "read:user",
+                    linuxdoMode: "invite-only",
+                    linuxdoDailyLimit: 5,
+                    linuxdoClientId: "",
+                    linuxdoClientSecret: "",
+                    linuxdoOauthBaseUrl: "https://connect.linux.do",
+                    passkeyMode: "invite-only",
+                    deletedUserMailboxRetentionDays: 7,
+                    updatedAt: "2026-04-05T16:00:00.000Z",
+                  },
+                ],
+              }),
+            };
+          }
+          if (tableName === "daily_signup_counters") {
+            return {
+              where: async () => [],
+            };
+          }
+          return {
+            where: () => ({
+              limit: async () => [],
+            }),
+          };
+        },
+      }),
+      insert: () => ({
+        values: vi.fn(),
+      }),
+    });
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/github/register/start", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          returnTo: "/register",
+        }),
+      }),
+      {
+        ...env,
+        GITHUB_CLIENT_ID: "github-client-id",
+        GITHUB_CLIENT_SECRET: "github-client-secret",
+      } as never,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Registration is disabled",
+      details: null,
+    });
+  });
+
   it("returns the unified auth failure envelope for invalid api keys", async () => {
     authenticateApiKey.mockResolvedValue(null);
 
@@ -237,6 +492,111 @@ describe("meta and auth routes", () => {
       error: "Invalid API key",
       details: null,
     });
+  });
+
+  it("rejects unauthenticated provider bind starts before redirecting", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/github/start?intent=bind"),
+      env as never,
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "Authentication required",
+      details: null,
+    });
+  });
+
+  it("verifies the existing pending token before creating passkey completion options", async () => {
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => [
+          {
+            value: 1,
+          },
+        ],
+      }),
+    });
+    const signedPendingToken = await signPayload(
+      {
+        method: "passkey",
+        sourceIntent: "register",
+        redirectTo: "/workspace",
+        inviteCode: null,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 300,
+      },
+      env.SESSION_SECRET,
+    );
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/registration/passkey/options", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost:5173",
+        },
+        body: JSON.stringify({
+          token: signedPendingToken,
+          nickname: "Ivan",
+          passkeyName: "Primary Passkey",
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      } as never,
+    );
+
+    expect(response.status).toBe(403);
+    expect(resolvePendingRegistration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      }),
+      signedPendingToken,
+    );
+    await expect(response.json()).resolves.toEqual({
+      error: "Invite required",
+      details: null,
+    });
+  });
+
+  it("keeps invite passkey verification on the direct invite-registration path", async () => {
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://localhost/api/auth/passkey/register/verify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie:
+            "kaisoumail_passkey_invite_registration=demo-cookie; Path=/; HttpOnly",
+          origin: "http://localhost:5173",
+        },
+        body: JSON.stringify({
+          response: {
+            id: "credential_demo",
+          },
+        }),
+      }),
+      {
+        ...env,
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      } as never,
+    );
+
+    expect(response.status).toBe(201);
+    expect(verifyPasskeyInviteRegistration).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        WEB_APP_ORIGIN: "http://localhost:5173",
+      }),
+      expect.any(Request),
+      expect.objectContaining({
+        id: "credential_demo",
+      }),
+    );
   });
 
   it("rejects bearer API keys on /api/passkeys even when the key itself is valid", async () => {
@@ -276,8 +636,8 @@ describe("meta and auth routes", () => {
             limit: async () => [
               {
                 id: "usr_owner",
-                email: "owner@example.com",
-                name: "Owner",
+                username: "owner",
+                nickname: "Owner",
                 role: "admin",
               },
             ],
@@ -292,8 +652,8 @@ describe("meta and auth routes", () => {
     } as never;
     const sessionCookie = await issueSessionCookie(config, {
       id: "usr_owner",
-      email: "owner@example.com",
-      name: "Owner",
+      username: "owner",
+      nickname: "Owner",
       role: "admin",
     });
 

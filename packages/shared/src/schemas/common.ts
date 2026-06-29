@@ -2,12 +2,21 @@ import { z } from "zod";
 
 import {
   attachmentDispositions,
+  authProviders,
+  defaultDeletedUserMailboxRetentionDays,
   domainBindingSources,
   domainCatalogAvailabilities,
   domainProjectStatuses,
   domainStatuses,
+  inviteKinds,
+  mailboxCreatedVia,
   mailboxSources,
   mailboxStatuses,
+  mailboxTagRegex,
+  maxDeletedUserMailboxRetentionDays,
+  maxMailboxTags,
+  passkeyRegistrationModes,
+  providerRegistrationModes,
   recipientKinds,
   subdomainDnsModes,
   userRoles,
@@ -18,6 +27,16 @@ export const isoDateSchema = z.string().datetime({ offset: true });
 export const userRoleSchema = z.enum(userRoles);
 export const mailboxStatusSchema = z.enum(mailboxStatuses);
 export const mailboxSourceSchema = z.enum(mailboxSources);
+export const mailboxCreatedViaSchema = z.enum(mailboxCreatedVia);
+export const mailboxTagSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(mailboxTagRegex);
+export const mailboxTagsSchema = z
+  .array(mailboxTagSchema)
+  .max(maxMailboxTags)
+  .transform((tags) => [...new Set(tags)]);
 export const domainStatusSchema = z.enum(domainStatuses);
 export const passkeyDeviceTypeSchema = z.enum(["singleDevice", "multiDevice"]);
 export const domainBindingSourceSchema = z.enum(domainBindingSources);
@@ -70,10 +89,23 @@ export const verificationSchema = z.object({
   method: verificationMethodSchema,
 });
 
+export const authProviderSchema = z.enum(authProviders);
+export const externalAuthProviderSchema = z.enum(["github", "linuxdo"]);
+export const adminTransferMethodSchema = z.enum([
+  "github",
+  "linuxdo",
+  "passkey",
+  "api-key",
+]);
+export const providerRegistrationModeSchema = z.enum(providerRegistrationModes);
+export const passkeyRegistrationModeSchema = z.enum(passkeyRegistrationModes);
+export const inviteKindSchema = z.enum(inviteKinds);
+export const registrationSourceIntentSchema = z.enum(["login", "register"]);
+
 export const sessionUserSchema = z.object({
   id: z.string(),
-  email: z.string().email(),
-  name: z.string(),
+  username: z.string(),
+  nickname: z.string(),
   role: userRoleSchema,
 });
 
@@ -85,6 +117,12 @@ export const apiKeySchema = z.object({
   createdAt: isoDateSchema,
   lastUsedAt: isoDateSchema.nullable(),
   revokedAt: isoDateSchema.nullable(),
+});
+
+export const mailboxCreatedByApiKeySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
 });
 
 export const passkeySchema = z.object({
@@ -99,6 +137,18 @@ export const passkeySchema = z.object({
   revokedAt: isoDateSchema.nullable(),
 });
 
+export const externalAccountSchema = z.object({
+  id: z.string(),
+  provider: externalAuthProviderSchema,
+  providerUserId: z.string(),
+  providerUsername: z.string().nullable(),
+  providerNickname: z.string().nullable(),
+  avatarUrl: z.string().url().nullable(),
+  profileUrl: z.string().url().nullable(),
+  createdAt: isoDateSchema,
+  lastUsedAt: isoDateSchema.nullable(),
+});
+
 export const mailboxSchema = withMailDomainAliases(
   {
     id: z.string(),
@@ -107,6 +157,9 @@ export const mailboxSchema = withMailDomainAliases(
     subdomain: z.string(),
     address: z.string().email(),
     source: mailboxSourceSchema,
+    createdVia: mailboxCreatedViaSchema.default("unknown"),
+    createdByApiKey: mailboxCreatedByApiKeySchema.nullable().default(null),
+    tags: mailboxTagsSchema.default([]),
     status: mailboxStatusSchema,
     createdAt: isoDateSchema,
     lastReceivedAt: isoDateSchema.nullable(),
@@ -214,6 +267,67 @@ export const messageDetailSchema = messageSummarySchema.extend({
 });
 
 export const userSchema = sessionUserSchema.extend({
+  deletedAt: isoDateSchema.nullable(),
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema,
+});
+
+export const adminUserSchema = userSchema.extend({
+  externalAccounts: z.array(externalAccountSchema),
+  passkeyCount: z.number().int().nonnegative(),
+});
+
+export const inviteSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  kind: inviteKindSchema,
+  role: userRoleSchema,
+  note: z.string().nullable(),
+  createdByUserId: z.string().nullable(),
+  createdAt: isoDateSchema,
+  usedAt: isoDateSchema.nullable(),
+  usedByUserId: z.string().nullable(),
+});
+
+export const registrationSettingsSchema = z.object({
+  githubMode: providerRegistrationModeSchema,
+  githubDailyLimit: z.number().int().nonnegative(),
+  githubClientId: z.string(),
+  githubClientSecret: z.string(),
+  githubOauthScopes: z.string(),
+  linuxdoMode: providerRegistrationModeSchema,
+  linuxdoDailyLimit: z.number().int().nonnegative(),
+  linuxdoClientId: z.string(),
+  linuxdoClientSecret: z.string(),
+  linuxdoOauthBaseUrl: z.string(),
+  passkeyMode: passkeyRegistrationModeSchema,
+  deletedUserMailboxRetentionDays: z
+    .number()
+    .int()
+    .min(0)
+    .max(maxDeletedUserMailboxRetentionDays)
+    .default(defaultDeletedUserMailboxRetentionDays),
+  updatedAt: isoDateSchema,
+});
+
+export const authProviderStatusSchema = z.object({
+  provider: authProviderSchema,
+  configured: z.boolean(),
+  loginEnabled: z.boolean(),
+  registrationMode: providerRegistrationModeSchema,
+  dailyLimit: z.number().int().nonnegative().nullable(),
+  dailyUsed: z.number().int().nonnegative(),
+  dailyRemaining: z.number().int().nonnegative().nullable(),
+});
+
+export const pendingRegistrationSchema = z.object({
+  token: z.string().min(1),
+  method: authProviderSchema,
+  sourceIntent: registrationSourceIntentSchema,
+  redirectTo: z.string().min(1),
+  inviteRequired: z.boolean(),
+  invitePrevalidated: z.boolean(),
+  canComplete: z.boolean(),
+  suggestedNickname: z.string().nullable(),
+  error: z.string().nullable(),
 });

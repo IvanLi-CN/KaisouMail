@@ -2,7 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { demoSessionUser, demoUsers, demoVersion } from "@/mocks/data";
+import {
+  demoAdminUsers,
+  demoInvites,
+  demoRegistrationSettings,
+  demoSessionUser,
+  demoVersion,
+} from "@/mocks/data";
 import { UsersPageView } from "@/pages/users-page";
 
 const meta = {
@@ -10,9 +16,20 @@ const meta = {
   component: UsersPageView,
   tags: ["autodocs"],
   args: {
-    users: demoUsers,
-    latestKey: null,
-    onCreate: fn(),
+    section: "users",
+    users: demoAdminUsers,
+    invites: demoInvites,
+    settings: demoRegistrationSettings,
+    currentAdminUserId: demoSessionUser.id,
+    currentAdmin: {
+      user: demoSessionUser,
+      externalAccounts: demoAdminUsers[0]?.externalAccounts ?? [],
+      hasPasskeys: (demoAdminUsers[0]?.passkeyCount ?? 0) > 0,
+    },
+    onCreateInvite: fn(),
+    onDeleteInvite: fn(),
+    onUpdateSettings: fn(),
+    onTransferAdmin: fn(),
   },
   render: (args) => (
     <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
@@ -25,25 +42,59 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Overview: Story = {};
+export const Overview: Story = {
+  args: {},
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByText("@ivan").length).toBeGreaterThan(0);
+    await expect(canvas.getByRole("button", { name: "用户" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  },
+};
 
-export const LoadError: Story = {
+export const InviteFlow: Story = {
   args: {
-    users: [],
-    error: {
-      variant: "recoverable",
-      title: "用户目录加载失败",
-      description: "暂时无法获取用户列表，请重试后再继续操作。",
-      details:
-        '{\n  "error": "Request failed",\n  "details": "users offline"\n}',
+    section: "invites",
+    currentAdmin: {
+      user: demoSessionUser,
+      externalAccounts: demoAdminUsers[0]?.externalAccounts ?? [],
+      hasPasskeys: (demoAdminUsers[0]?.passkeyCount ?? 0) > 0,
     },
-    onRetry: fn(),
+    onCreateInvite: fn(),
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText("备注"), "QA onboarding");
+    await userEvent.clear(canvas.getByLabelText("数量"));
+    await userEvent.type(canvas.getByLabelText("数量"), "6");
     await userEvent.click(
-      canvas.getByRole("button", { name: "重新加载用户列表" }),
+      canvas.getByRole("button", { name: "批量生成邀请码" }),
     );
-    await expect(args.onRetry).toHaveBeenCalled();
+    await expect(args.onCreateInvite).toHaveBeenCalled();
+  },
+};
+
+export const UsersLoading: Story = {
+  args: {
+    section: "users",
+    users: [],
+    isUsersLoading: true,
+  },
+};
+
+export const InvitesLoading: Story = {
+  args: {
+    section: "invites",
+    invites: [],
+    isInvitesLoading: true,
+  },
+};
+
+export const RegistrationLoading: Story = {
+  args: {
+    section: "registration",
+    isSettingsLoading: true,
   },
 };

@@ -1,6 +1,6 @@
 export const versionInfo = {
   version: "0.1.0",
-  commitSha: "d627fcf",
-  branch: "th/workspace-mailbox-ttl-settings",
-  builtAt: "2026-05-06T19:03:21.729Z",
+  commitSha: "fde2b30",
+  branch: "th/mailbox-provenance-tags",
+  builtAt: "2026-05-18T08:25:45.748Z",
 } as const;

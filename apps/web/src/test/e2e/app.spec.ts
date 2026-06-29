@@ -29,6 +29,8 @@ test("demo console login and workspace mail flow", async ({ page }) => {
 
   await page.goto("/login");
 
+  await page.getByRole("button", { name: "使用 API Key 登录" }).click();
+  await expect(page).toHaveURL(/\/login\/api-key/);
   await page.getByLabel("API Key").fill("cfm_demo_secret_123456");
   await page.getByRole("button", { name: "登录控制台" }).click();
 

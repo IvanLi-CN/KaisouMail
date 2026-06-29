@@ -203,8 +203,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"
@@ -225,8 +225,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"
@@ -245,8 +245,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           responseBody: `{
   "user": {
     "id": "usr_xxx",
-    "email": "owner@example.com",
-    "name": "Ivan Owner",
+    "username": "ivan",
+    "nickname": "Ivan Owner",
     "role": "admin"
   },
   "authenticatedAt": "2026-04-03T12:00:00.000Z"
@@ -447,6 +447,13 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
+      "createdVia": "api_key",
+      "createdByApiKey": {
+        "id": "key_deploy",
+        "name": "Deploy Bot",
+        "prefix": "cfm_deploy9x"
+      },
+      "tags": ["ci", "ops"],
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
       "lastReceivedAt": null,
@@ -458,8 +465,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "列表响应包装在 `{ mailboxes: [...] }` 下。",
-            "字段集合由 `mailboxSchema` 定义，包含 `source`、`lastReceivedAt`、`expiresAt` 与 `routingRuleId`；Catch All 自动物化邮箱的 `source=catch_all`，长期邮箱的 `expiresAt` 会是 null。",
-            "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，排除 `expired`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条；可选 `status` 可按生命周期过滤。",
+            "字段集合由 `mailboxSchema` 定义，包含 `source`、`createdVia`、`createdByApiKey`、`tags`、`lastReceivedAt`、`expiresAt` 与 `routingRuleId`；Catch All 自动物化邮箱的 `source=catch_all`，长期邮箱的 `expiresAt` 会是 null。",
+            "可选 `scope=workspace` 会切换到工作区视图：始终保留 `active` / `destroying`，排除 `expired`，`destroyed` 只保留最近 7 天内、按 `destroyedAt` 倒序最多 50 条；可选 `status` 可按生命周期过滤，重复 `tag` 参数会按全部命中筛选。",
             "服务端会把大批量 D1 `IN (...)` 查询拆成每批最多 50 条，避免 admin 工作区因为历史邮箱过多而触发参数上限。",
           ],
         },
@@ -472,7 +479,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
   "localPart": "${localPartExample}",
   "subdomain": "${subdomainExample}",
   "mailDomain": "${rootDomainExample}",
-  "expiresInMinutes": ${ttl}
+  "expiresInMinutes": ${ttl},
+  "tags": ["ci", "ops"]
 }`,
           responseBody: `{
       "id": "mbx_alpha",
@@ -483,6 +491,13 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
+      "createdVia": "api_key",
+      "createdByApiKey": {
+        "id": "key_deploy",
+        "name": "Deploy Bot",
+        "prefix": "cfm_deploy9x"
+      },
+      "tags": ["ci", "ops"],
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
   "lastReceivedAt": null,
@@ -492,6 +507,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "`localPart` 与 `subdomain` 都是可选字段，但会经过 shared 正则校验。",
+            "`tags` 可选；服务端会 trim、小写化、去重，并限制为最多 20 个 `[a-z0-9_-]` tag。",
             "`mailDomain` 是当前推荐字段；`rootDomain` 作为兼容别名仍可继续使用，二者同时传入时必须一致。",
             "如果同时省略 `mailDomain` / `rootDomain`，服务端会从当前 active 域名里随机挑一个。",
             `expiresInMinutes 在有限模式下必须是 ${meta.minMailboxTtlMinutes} 到 ${maxTtl} 之间的整数；传 null 表示长期，未传时默认 ${ttl}。`,
@@ -507,7 +523,8 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           auth: "Bearer 或 `kaisoumail_session` cookie",
           requestBody: `{
   "address": "${addressExample}",
-  "expiresInMinutes": ${ttl}
+  "expiresInMinutes": ${ttl},
+  "tags": ["ci"]
 }`,
           responseBody: `{
       "id": "mbx_alpha",
@@ -518,6 +535,13 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
       "rootDomain": "${rootDomainExample}",
       "address": "${addressExample}",
       "source": "registered",
+      "createdVia": "api_key",
+      "createdByApiKey": {
+        "id": "key_deploy",
+        "name": "Deploy Bot",
+        "prefix": "cfm_deploy9x"
+      },
+      "tags": ["ci"],
       "status": "active",
       "createdAt": "2026-04-03T12:00:00.000Z",
   "lastReceivedAt": null,
@@ -527,6 +551,7 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
 }`,
           notes: [
             "locator 只能二选一：直接传 `address`，或传 `localPart` + `subdomain`，其中 `mailDomain` 可选，`rootDomain` 仍是兼容别名。",
+            "`tags` 只会在 ensure 创建新邮箱时写入；命中已有邮箱时不会隐式覆盖 tags，请使用 `PATCH /api/mailboxes/:id/tags`。",
             "命中现有 active / expired mailbox 时返回 `200`；创建新邮箱时返回 `201`。",
             "命中已有 active / expired mailbox 且携带 `expiresInMinutes` 时，只会延长有效期，不会缩短；延长 expired mailbox 会恢复为 active。",
             "同地址的 destroyed 记录不会被复用，也不会阻塞重新创建。",
@@ -567,6 +592,19 @@ const buildEndpointGroups = (meta: ApiMeta): EndpointGroup[] => {
           summary: "读取单个邮箱详情。",
           auth: "Bearer 或 `kaisoumail_session` cookie",
           notes: ["成功时直接返回 `mailboxSchema`，不会再额外包一层对象。"],
+        },
+        {
+          method: "PATCH",
+          path: "/api/mailboxes/:id/tags",
+          summary: "替换指定邮箱的 tags。",
+          auth: "Bearer 或 `kaisoumail_session` cookie",
+          requestBody: `{
+  "tags": ["ci", "ops"]
+}`,
+          notes: [
+            "成功时直接返回更新后的 `mailboxSchema`。",
+            "tags 会被 trim、小写化和去重；传空数组可清空 tags。",
+          ],
         },
         {
           method: "DELETE",

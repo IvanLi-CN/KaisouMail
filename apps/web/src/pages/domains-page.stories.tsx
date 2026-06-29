@@ -531,6 +531,13 @@ const DomainActionFeedbackGalleryStory = () => (
 
 export const Overview: Story = {};
 
+export const Loading: Story = {
+  args: {
+    domains: [],
+    isLoading: true,
+  },
+};
+
 export const BindSubmitError: Story = {
   args: {
     onBind: fn(async () => {

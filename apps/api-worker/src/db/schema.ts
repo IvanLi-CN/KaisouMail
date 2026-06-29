@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -11,13 +12,108 @@ export const users = sqliteTable(
   "users",
   {
     id: text("id").primaryKey(),
-    email: text("email").notNull(),
-    name: text("name").notNull(),
+    email: text("email").notNull().default(""),
+    name: text("name").notNull().default(""),
+    username: text("username").notNull(),
+    nickname: text("nickname").notNull(),
     role: text("role").notNull(),
+    deletedAt: text("deleted_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+  (table) => [
+    uniqueIndex("users_username_unique").on(table.username),
+    index("users_role_deleted_idx").on(table.role, table.deletedAt),
+  ],
+);
+
+export const externalAccounts = sqliteTable(
+  "external_accounts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    providerUsername: text("provider_username"),
+    providerNickname: text("provider_nickname"),
+    avatarUrl: text("avatar_url"),
+    profileUrl: text("profile_url"),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    releasedAt: text("released_at"),
+  },
+  (table) => [
+    uniqueIndex("external_accounts_provider_user_unique")
+      .on(table.provider, table.providerUserId)
+      .where(sql`${table.releasedAt} is null`),
+    uniqueIndex("external_accounts_user_provider_unique")
+      .on(table.userId, table.provider)
+      .where(sql`${table.releasedAt} is null`),
+    index("external_accounts_user_idx").on(table.userId),
+  ],
+);
+
+export const invites = sqliteTable(
+  "invites",
+  {
+    id: text("id").primaryKey(),
+    code: text("code").notNull(),
+    kind: text("kind").notNull(),
+    role: text("role").notNull(),
+    note: text("note"),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: text("created_at").notNull(),
+    usedAt: text("used_at"),
+    usedByUserId: text("used_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [
+    uniqueIndex("invites_code_unique").on(table.code),
+    index("invites_used_idx").on(table.usedAt, table.createdAt),
+  ],
+);
+
+export const registrationSettings = sqliteTable("registration_settings", {
+  id: integer("id").primaryKey(),
+  githubMode: text("github_mode").notNull(),
+  githubDailyLimit: integer("github_daily_limit").notNull(),
+  githubClientId: text("github_client_id").notNull().default(""),
+  githubClientSecret: text("github_client_secret").notNull().default(""),
+  githubOauthScopes: text("github_oauth_scopes").notNull().default("read:user"),
+  linuxdoMode: text("linuxdo_mode").notNull(),
+  linuxdoDailyLimit: integer("linuxdo_daily_limit").notNull(),
+  linuxdoClientId: text("linuxdo_client_id").notNull().default(""),
+  linuxdoClientSecret: text("linuxdo_client_secret").notNull().default(""),
+  linuxdoOauthBaseUrl: text("linuxdo_oauth_base_url")
+    .notNull()
+    .default("https://connect.linux.do"),
+  passkeyMode: text("passkey_mode").notNull(),
+  deletedUserMailboxRetentionDays: integer(
+    "deleted_user_mailbox_retention_days",
+  ).notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const dailySignupCounters = sqliteTable(
+  "daily_signup_counters",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    dateKey: text("date_key").notNull(),
+    createdCount: integer("created_count").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("daily_signup_counters_provider_date_unique").on(
+      table.provider,
+      table.dateKey,
+    ),
+  ],
 );
 
 export const apiKeys = sqliteTable(
@@ -199,6 +295,14 @@ export const mailboxes = sqliteTable(
     subdomain: text("subdomain").notNull(),
     address: text("address").notNull(),
     source: text("source").notNull().default("registered"),
+    createdVia: text("created_via").notNull().default("unknown"),
+    createdByApiKeyId: text("created_by_api_key_id").references(
+      () => apiKeys.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    tagsJson: text("tags_json").notNull().default("[]"),
     routingRuleId: text("routing_rule_id"),
     status: text("status").notNull(),
     createdAt: text("created_at").notNull(),
@@ -212,6 +316,7 @@ export const mailboxes = sqliteTable(
       .on(table.address)
       .where(sql`${table.status} != 'destroyed'`),
     index("mailboxes_user_idx").on(table.userId),
+    index("mailboxes_created_by_api_key_idx").on(table.createdByApiKeyId),
     index("mailboxes_domain_idx").on(table.domainId, table.status),
     index("mailboxes_domain_subdomain_status_idx").on(
       table.domainId,
@@ -224,6 +329,41 @@ export const mailboxes = sqliteTable(
       table.cleanupNextAttemptAt,
       table.createdAt,
     ),
+  ],
+);
+
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("tags_user_name_unique").on(table.userId, table.name),
+    index("tags_user_idx").on(table.userId, table.name),
+  ],
+);
+
+export const mailboxTags = sqliteTable(
+  "mailbox_tags",
+  {
+    mailboxId: text("mailbox_id")
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.mailboxId, table.tagId] }),
+    index("mailbox_tags_tag_idx").on(table.tagId, table.mailboxId),
+    index("mailbox_tags_mailbox_idx").on(table.mailboxId),
   ],
 );
 

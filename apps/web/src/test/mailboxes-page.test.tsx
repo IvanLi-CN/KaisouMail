@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -64,5 +64,123 @@ describe("mailboxes page view", () => {
       screen.getByRole("button", { name: "重新加载邮箱列表" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("暂无邮箱")).not.toBeInTheDocument();
+  });
+
+  it("shows a create skeleton while mailbox metadata is loading", () => {
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={null}
+          isMetaLoading
+          mailboxes={[]}
+          messageStatsByMailbox={new Map()}
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("mailbox-create-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText("正在加载邮箱规则")).not.toBeInTheDocument();
+  });
+
+  it("shows a list skeleton during the first mailbox list load", () => {
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={demoMeta}
+          isListLoading
+          mailboxes={[]}
+          messageStatsByMailbox={new Map()}
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("mailbox-list-skeleton")).toBeInTheDocument();
+  });
+
+  it("uses a searchable tag filter selector without browser autocomplete", () => {
+    const onTagFilterChange = vi.fn();
+
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={demoMeta}
+          mailboxes={demoMailboxes}
+          messageStatsByMailbox={
+            new Map(
+              demoMailboxes.map((mailbox) => [
+                mailbox.id,
+                {
+                  unread: 0,
+                  total: 0,
+                },
+              ]),
+            )
+          }
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+          onTagFilterChange={onTagFilterChange}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByLabelText("按 Tag 筛选"));
+
+    const searchInput = screen.getByLabelText("搜索 Tag");
+    expect(searchInput).toHaveAttribute("autocomplete", "off");
+    expect(searchInput).toHaveAttribute(
+      "name",
+      "mailbox-tag-filter-search-token",
+    );
+    expect(searchInput).toHaveAttribute("data-1p-ignore", "true");
+    expect(searchInput).toHaveAttribute("data-bwignore", "true");
+    expect(searchInput).toHaveAttribute("data-lpignore", "true");
+
+    fireEvent.change(searchInput, { target: { value: "op" } });
+    fireEvent.click(screen.getByRole("option", { name: "筛选 Tag ops" }));
+
+    expect(onTagFilterChange).toHaveBeenCalledWith("ops");
+  });
+
+  it("keeps create tag suggestions independent from the active list tag filter", () => {
+    const authOnlyMailboxes = demoMailboxes.filter((mailbox) =>
+      mailbox.tags.includes("auth"),
+    );
+
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={demoMeta}
+          mailboxes={authOnlyMailboxes}
+          tagFilter="auth"
+          tagSuggestionMailboxes={demoMailboxes}
+          messageStatsByMailbox={
+            new Map(
+              authOnlyMailboxes.map((mailbox) => [
+                mailbox.id,
+                {
+                  unread: 0,
+                  total: 0,
+                },
+              ]),
+            )
+          }
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.focus(screen.getByLabelText("Tags"));
+
+    expect(
+      screen.getByRole("option", { name: "添加 Tag ops" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "添加 Tag build" }),
+    ).toBeInTheDocument();
   });
 });

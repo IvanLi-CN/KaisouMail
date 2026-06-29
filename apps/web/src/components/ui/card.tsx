@@ -48,3 +48,10 @@ export const CardContent = ({
 }: HTMLAttributes<HTMLDivElement>) => (
   <div className={cn("space-y-4", className)} {...props} />
 );
+
+export const CardFooter = ({
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("mt-5", className)} {...props} />
+);

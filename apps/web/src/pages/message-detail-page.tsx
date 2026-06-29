@@ -7,6 +7,7 @@ import {
   ErrorState,
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
+import { DetailPageSkeleton } from "@/components/shared/loading-shells";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ export const MessageDetailPageView = ({
   workspaceHref,
 }: MessageDetailPageViewProps) => {
   if (isLoading) {
-    return <div className="text-muted-foreground">加载邮件详情中…</div>;
+    return <DetailPageSkeleton testId="message-detail-skeleton" />;
   }
 
   if (error) {

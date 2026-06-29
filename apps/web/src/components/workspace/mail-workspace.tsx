@@ -18,6 +18,7 @@ import {
   type MouseEvent,
   type ReactNode,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -29,6 +30,7 @@ import {
   buildMailboxCreateDomainHint,
   type MailboxCreatePreviewState,
 } from "@/components/mailboxes/mailbox-create-preview";
+import { MailboxTagsInput } from "@/components/mailboxes/mailbox-tags-input";
 import { MailboxTtlControl } from "@/components/mailboxes/mailbox-ttl-control";
 import { MessageReaderPane } from "@/components/messages/message-reader-pane";
 import {
@@ -41,11 +43,21 @@ import {
   ErrorState,
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
+import {
+  WorkspaceDetailPaneSkeleton,
+  WorkspaceListPaneSkeleton,
+} from "@/components/shared/loading-shells";
 import { PageHeader } from "@/components/shared/page-header";
 import { VerificationCopyButton } from "@/components/shared/verification-copy-button";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -59,6 +71,10 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { writeClipboardText } from "@/lib/clipboard";
 import type { Mailbox, MessageDetail, MessageSummary } from "@/lib/contracts";
 import { formatDateTime, formatMailboxExpiry } from "@/lib/format";
+import {
+  formatMailboxTagsInput,
+  parseMailboxTagInput,
+} from "@/lib/mailbox-tags";
 import { formatMailboxTtl } from "@/lib/mailbox-ttl";
 import { cn } from "@/lib/utils";
 import type { MailboxSortMode } from "@/lib/workspace";
@@ -186,6 +202,7 @@ type MailWorkspaceProps = {
       subdomain?: string;
       rootDomain?: string;
       expiresInMinutes: number | null;
+      tags?: string[];
     }) => Promise<void> | void;
   };
   updateMailboxTtlAction?: {
@@ -201,6 +218,12 @@ type MailWorkspaceProps = {
       expiresInMinutes: number | null,
     ) => Promise<void> | void;
   };
+  updateMailboxTagsAction?: {
+    error: string | null;
+    isPending: boolean;
+    onResetError: () => void;
+    onSubmit: (mailbox: Mailbox, tags: string[]) => Promise<void> | void;
+  };
   mailboxesError?: WorkspacePaneError | null;
   messagesError?: WorkspacePaneError | null;
   messageError?: WorkspacePaneError | null;
@@ -210,6 +233,7 @@ type MailWorkspaceProps = {
     content: ReactNode;
   } | null;
   visibleMailboxes: Mailbox[];
+  tagSuggestionMailboxes?: Mailbox[];
   totalMailboxCount: number;
   trashMailboxCount?: number;
   mailboxView?: "active" | "trash";
@@ -242,12 +266,14 @@ type MailWorkspaceProps = {
 export const MailWorkspace = ({
   createMailboxAction,
   updateMailboxTtlAction: providedUpdateMailboxTtlAction,
+  updateMailboxTagsAction: providedUpdateMailboxTagsAction,
   mailboxesError = null,
   messagesError = null,
   messageError = null,
   highlightedMailboxId = null,
   mailboxPrompt = null,
   visibleMailboxes,
+  tagSuggestionMailboxes,
   totalMailboxCount,
   trashMailboxCount = 0,
   mailboxView = "active",
@@ -286,16 +312,24 @@ export const MailWorkspace = ({
     onResetError: noop,
     onSubmit: noop,
   };
-  const selectedMessageSummary =
-    messages.find((message) => message.id === selectedMessageId) ?? null;
+  const updateMailboxTagsAction = providedUpdateMailboxTagsAction ?? {
+    error: null,
+    isPending: false,
+    onResetError: noop,
+    onSubmit: noop,
+  };
   const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
     mode: "segmented",
   });
-  const [isTtlDialogOpen, setIsTtlDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [ttlDialogValue, setTtlDialogValue] = useState<number | null>(
     createMailboxAction.defaultTtlMinutes,
   );
-  const ttlDialogInitializedMailboxIdRef = useRef<string | null>(null);
+  const [initialTtlDialogValue, setInitialTtlDialogValue] = useState<
+    number | null
+  >(createMailboxAction.defaultTtlMinutes);
+  const [tagsDialogValue, setTagsDialogValue] = useState("");
+  const settingsDialogInitializedMailboxIdRef = useRef<string | null>(null);
   const [mailboxAddressCopyState, setMailboxAddressCopyState] = useState<{
     address: string | null;
     state: CopyFeedbackState;
@@ -306,6 +340,29 @@ export const MailWorkspace = ({
   const mailboxAddressCopyResetRef = useRef<number | null>(null);
   const isDesktopThreePane = useMediaQuery("(min-width: 1280px)");
   const isTrashView = mailboxView === "trash";
+  const allMailboxTags = useMemo(
+    () =>
+      [
+        ...new Set(
+          (tagSuggestionMailboxes ?? visibleMailboxes).flatMap(
+            (mailbox) => mailbox.tags,
+          ),
+        ),
+      ].sort(),
+    [tagSuggestionMailboxes, visibleMailboxes],
+  );
+  const tagSuggestions = allMailboxTags;
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchTagSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return allMailboxTags
+      .filter((tag) => tag !== query)
+      .filter((tag) => !query || tag.includes(query))
+      .slice(0, 8);
+  }, [allMailboxTags, searchQuery]);
+  const showSearchTagSuggestions =
+    isSearchFocused && searchTagSuggestions.length > 0;
   const currentSortOption =
     sortOptions.find((option) => option.value === sortMode) ?? sortOptions[0];
   const nextSortOption =
@@ -329,6 +386,9 @@ export const MailWorkspace = ({
   const ttlMaxMinutes = updateMailboxTtlAction.maxTtlMinutes;
   const ttlMinMinutes = updateMailboxTtlAction.minTtlMinutes;
   const resetMailboxTtlError = updateMailboxTtlAction.onResetError;
+  const resetMailboxTagsError = updateMailboxTagsAction.onResetError;
+  const isSettingsPending =
+    updateMailboxTtlAction.isPending || updateMailboxTagsAction.isPending;
   const canUpdateSelectedMailboxTtl = Boolean(
     selectedMailbox?.status === "active" &&
       selectedMailbox.source === "registered",
@@ -344,58 +404,87 @@ export const MailWorkspace = ({
   );
 
   useEffect(() => {
-    if (!isTtlDialogOpen) {
-      ttlDialogInitializedMailboxIdRef.current = null;
+    if (!isSettingsDialogOpen) {
+      settingsDialogInitializedMailboxIdRef.current = null;
       return;
     }
     if (!selectedMailbox) return;
-    if (ttlDialogInitializedMailboxIdRef.current === selectedMailbox.id) {
+    if (settingsDialogInitializedMailboxIdRef.current === selectedMailbox.id) {
       return;
     }
 
-    ttlDialogInitializedMailboxIdRef.current = selectedMailbox.id;
-    setTtlDialogValue(
-      resolveMailboxRemainingTtlMinutes(selectedMailbox, {
+    settingsDialogInitializedMailboxIdRef.current = selectedMailbox.id;
+    const resolvedTtlValue = resolveMailboxRemainingTtlMinutes(
+      selectedMailbox,
+      {
         defaultTtlMinutes: ttlDefaultMinutes,
         maxTtlMinutes: ttlMaxMinutes,
         minTtlMinutes: ttlMinMinutes,
-      }),
+      },
     );
+    setTtlDialogValue(resolvedTtlValue);
+    setInitialTtlDialogValue(resolvedTtlValue);
+    setTagsDialogValue(formatMailboxTagsInput(selectedMailbox.tags));
     resetMailboxTtlError();
+    resetMailboxTagsError();
   }, [
-    isTtlDialogOpen,
+    isSettingsDialogOpen,
     resetMailboxTtlError,
+    resetMailboxTagsError,
     selectedMailbox,
     ttlDefaultMinutes,
     ttlMaxMinutes,
     ttlMinMinutes,
   ]);
 
-  const handleOpenTtlDialog = () => {
-    if (!selectedMailbox || !canUpdateSelectedMailboxTtl) return;
-    ttlDialogInitializedMailboxIdRef.current = selectedMailbox.id;
-    setTtlDialogValue(
-      resolveMailboxRemainingTtlMinutes(selectedMailbox, {
+  const handleOpenSettingsDialog = () => {
+    if (!selectedMailbox) return;
+    settingsDialogInitializedMailboxIdRef.current = selectedMailbox.id;
+    const resolvedTtlValue = resolveMailboxRemainingTtlMinutes(
+      selectedMailbox,
+      {
         defaultTtlMinutes: ttlDefaultMinutes,
         maxTtlMinutes: ttlMaxMinutes,
         minTtlMinutes: ttlMinMinutes,
-      }),
+      },
     );
+    setTtlDialogValue(resolvedTtlValue);
+    setInitialTtlDialogValue(resolvedTtlValue);
+    setTagsDialogValue(formatMailboxTagsInput(selectedMailbox.tags));
     resetMailboxTtlError();
-    setIsTtlDialogOpen(true);
+    resetMailboxTagsError();
+    setIsSettingsDialogOpen(true);
   };
 
-  const handleCloseTtlDialog = () => {
-    if (updateMailboxTtlAction.isPending) return;
-    ttlDialogInitializedMailboxIdRef.current = null;
-    setIsTtlDialogOpen(false);
+  const handleCloseSettingsDialog = () => {
+    if (isSettingsPending) return;
+    settingsDialogInitializedMailboxIdRef.current = null;
+    setIsSettingsDialogOpen(false);
     resetMailboxTtlError();
+    resetMailboxTagsError();
   };
 
-  const handleSubmitTtlDialog = async () => {
-    if (!selectedMailbox || !canUpdateSelectedMailboxTtl) return;
-    await updateMailboxTtlAction.onSubmit(selectedMailbox, ttlDialogValue);
-    setIsTtlDialogOpen(false);
+  const handleSubmitSettingsDialog = async () => {
+    if (!selectedMailbox) return;
+
+    const nextTags = parseMailboxTagInput(tagsDialogValue);
+    const currentTags = selectedMailbox.tags;
+    const shouldUpdateTags =
+      nextTags.length !== currentTags.length ||
+      nextTags.some((tag, index) => tag !== currentTags[index]);
+
+    if (shouldUpdateTags) {
+      await updateMailboxTagsAction.onSubmit(selectedMailbox, nextTags);
+    }
+
+    const shouldUpdateTtl =
+      canUpdateSelectedMailboxTtl && ttlDialogValue !== initialTtlDialogValue;
+
+    if (shouldUpdateTtl) {
+      await updateMailboxTtlAction.onSubmit(selectedMailbox, ttlDialogValue);
+    }
+
+    setIsSettingsDialogOpen(false);
   };
 
   const scheduleMailboxAddressCopyStateReset = () => {
@@ -513,11 +602,9 @@ export const MailWorkspace = ({
   );
 
   const renderMessagePaneContent = () => {
-    if (isMessageLoading && selectedMessageSummary) {
+    if (isMessageLoading && !selectedMessage) {
       return (
-        <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-          正在加载《{selectedMessageSummary.subject}》的正文…
-        </div>
+        <WorkspaceDetailPaneSkeleton testId="workspace-message-detail-skeleton" />
       );
     }
 
@@ -683,6 +770,7 @@ export const MailWorkspace = ({
                       createMailboxAction.supportsUnlimitedTtl
                     }
                     submitError={createMailboxAction.error}
+                    tagSuggestions={tagSuggestions}
                     ttlDensity="compact"
                     onCancel={createMailboxAction.onCancel}
                     onPreviewChange={setPreviewState}
@@ -738,18 +826,59 @@ export const MailWorkspace = ({
                 <label className="sr-only" htmlFor="workspace-mailbox-search">
                   搜索邮箱
                 </label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="workspace-mailbox-search"
-                    className="pl-9"
-                    placeholder="按邮箱地址搜索"
-                    value={searchQuery}
-                    onChange={(event) =>
-                      onSearchQueryChange(event.target.value)
-                    }
-                  />
-                </div>
+                <Popover open={showSearchTagSuggestions}>
+                  <PopoverAnchor asChild>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        aria-autocomplete="list"
+                        aria-controls="workspace-mailbox-search-suggestions"
+                        aria-expanded={showSearchTagSuggestions}
+                        className="pl-9"
+                        id="workspace-mailbox-search"
+                        name="workspace-mailbox-query-token"
+                        placeholder="按邮箱或 tag 搜索"
+                        role="combobox"
+                        spellCheck={false}
+                        value={searchQuery}
+                        onBlur={() => setIsSearchFocused(false)}
+                        onChange={(event) =>
+                          onSearchQueryChange(event.target.value)
+                        }
+                        onFocus={() => setIsSearchFocused(true)}
+                      />
+                    </div>
+                  </PopoverAnchor>
+                  <PopoverContent
+                    align="start"
+                    className="w-[var(--radix-popover-trigger-width)] rounded-xl p-1"
+                    hideArrow
+                    id="workspace-mailbox-search-suggestions"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                  >
+                    <Command shouldFilter={false}>
+                      <CommandList>
+                        <CommandGroup
+                          className="[&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-wrap [&_[cmdk-group-items]]:gap-1.5"
+                          heading="Tags"
+                        >
+                          {searchTagSuggestions.map((tag) => (
+                            <CommandItem
+                              aria-label={`按 Tag 搜索 ${tag}`}
+                              className="h-7 w-fit max-w-full rounded-full border border-primary/25 bg-primary/10 px-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary transition hover:border-primary/40 hover:bg-primary/15 data-[selected=true]:border-primary/40 data-[selected=true]:bg-primary/15 data-[selected=true]:text-primary"
+                              key={tag}
+                              value={tag}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onSelect={() => onSearchQueryChange(tag)}
+                            >
+                              {tag}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Tabs
@@ -823,9 +952,10 @@ export const MailWorkspace = ({
               </button>
 
               {isMailboxesLoading ? (
-                <div className="mx-3 mt-2 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                  正在加载邮箱列表…
-                </div>
+                <WorkspaceListPaneSkeleton
+                  className="mt-2"
+                  testId="workspace-mailboxes-skeleton"
+                />
               ) : mailboxesError ? (
                 <div className="mx-3 mt-3 xl:min-h-0 xl:flex-1">
                   {isDesktopThreePane ? (
@@ -1140,46 +1270,42 @@ export const MailWorkspace = ({
                     </div>
                   </div>
                   <Popover
-                    open={selectedMailbox ? isTtlDialogOpen : false}
+                    open={selectedMailbox ? isSettingsDialogOpen : false}
                     onOpenChange={(nextOpen) => {
                       if (nextOpen) {
-                        handleOpenTtlDialog();
+                        handleOpenSettingsDialog();
                         return;
                       }
-                      handleCloseTtlDialog();
+                      handleCloseSettingsDialog();
                     }}
                   >
                     <PopoverAnchor asChild>
                       <span className="inline-flex">
                         <ActionButton
-                          aria-expanded={isTtlDialogOpen}
+                          aria-expanded={isSettingsDialogOpen}
                           aria-haspopup="dialog"
                           density="dense"
-                          disabled={!canUpdateSelectedMailboxTtl}
+                          disabled={!selectedMailbox}
                           forceIconOnly
                           icon={Settings}
-                          label="设置邮箱过期时间"
+                          label="设置邮箱"
                           size="sm"
-                          tooltip={
-                            canUpdateSelectedMailboxTtl
-                              ? "设置当前邮箱过期时间"
-                              : "只有有效的注册邮箱可以设置过期时间"
-                          }
+                          tooltip="设置当前邮箱"
                           variant="outline"
                           onClick={
-                            isTtlDialogOpen
-                              ? handleCloseTtlDialog
-                              : handleOpenTtlDialog
+                            isSettingsDialogOpen
+                              ? handleCloseSettingsDialog
+                              : handleOpenSettingsDialog
                           }
                         />
                       </span>
                     </PopoverAnchor>
-                    {selectedMailbox && isTtlDialogOpen ? (
+                    {selectedMailbox && isSettingsDialogOpen ? (
                       <PopoverContent
-                        aria-labelledby="workspace-ttl-dialog-title"
+                        aria-labelledby="workspace-settings-dialog-title"
                         align="end"
-                        className="w-[min(calc(100vw-2rem),24rem)] space-y-3 p-4"
-                        data-testid="workspace-ttl-dialog"
+                        className="w-[min(calc(100vw-2rem),26rem)] space-y-4 p-4"
+                        data-testid="workspace-settings-dialog"
                         role="dialog"
                         side="bottom"
                         sideOffset={12}
@@ -1187,67 +1313,102 @@ export const MailWorkspace = ({
                         <div className="min-w-0 space-y-1">
                           <p
                             className="text-sm font-semibold text-foreground"
-                            id="workspace-ttl-dialog-title"
+                            id="workspace-settings-dialog-title"
                           >
-                            设置过期时间
+                            邮箱设置
                           </p>
                           <p className="break-all text-xs leading-5 text-muted-foreground">
                             {selectedMailbox.address}
                           </p>
                         </div>
 
-                        <div className="space-y-1 text-xs leading-5">
+                        <div className="space-y-2">
+                          <label
+                            className="text-xs font-semibold text-muted-foreground"
+                            htmlFor="workspace-mailbox-tags"
+                          >
+                            Tags
+                          </label>
+                          <MailboxTagsInput
+                            disabled={updateMailboxTagsAction.isPending}
+                            id="workspace-mailbox-tags"
+                            suggestions={tagSuggestions}
+                            value={parseMailboxTagInput(tagsDialogValue)}
+                            onChange={(tags) => {
+                              updateMailboxTagsAction.onResetError();
+                              setTagsDialogValue(formatMailboxTagsInput(tags));
+                            }}
+                          />
+                          {updateMailboxTagsAction.error ? (
+                            <p className="text-xs leading-5 text-destructive">
+                              {updateMailboxTagsAction.error}
+                            </p>
+                          ) : (
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              逗号或空格分隔；保存后会更新当前邮箱标签。
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1 border-t border-border pt-3 text-xs leading-5">
                           <p className="text-muted-foreground">
                             当前状态：
                             <span className="text-foreground">
                               {formatMailboxExpiry(selectedMailbox.expiresAt)}
                             </span>
                           </p>
-                          <p className="text-muted-foreground">
-                            保存后将从现在开始重设为{" "}
-                            <span className="font-semibold text-foreground">
-                              {formatMailboxTtl(ttlDialogValue)}
-                            </span>
-                            。
-                          </p>
+                          {canUpdateSelectedMailboxTtl ? (
+                            <p className="text-muted-foreground">
+                              保存后将从现在开始重设为{" "}
+                              <span className="font-semibold text-foreground">
+                                {formatMailboxTtl(ttlDialogValue)}
+                              </span>
+                              。
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground">
+                              只有有效的注册邮箱可以设置过期时间；Tags
+                              仍可保存。
+                            </p>
+                          )}
                         </div>
 
-                        <MailboxTtlControl
-                          density="compact"
-                          disabled={updateMailboxTtlAction.isPending}
-                          errorMessage={updateMailboxTtlAction.error}
-                          id="workspace-mailbox-ttl-value"
-                          maxMinutes={updateMailboxTtlAction.maxTtlMinutes}
-                          minMinutes={updateMailboxTtlAction.minTtlMinutes}
-                          supportsUnlimited={
-                            updateMailboxTtlAction.supportsUnlimitedTtl
-                          }
-                          value={ttlDialogValue}
-                          onChange={(nextValue) => {
-                            updateMailboxTtlAction.onResetError();
-                            setTtlDialogValue(nextValue);
-                          }}
-                        />
+                        {canUpdateSelectedMailboxTtl ? (
+                          <MailboxTtlControl
+                            density="compact"
+                            disabled={updateMailboxTtlAction.isPending}
+                            errorMessage={updateMailboxTtlAction.error}
+                            id="workspace-mailbox-ttl-value"
+                            maxMinutes={updateMailboxTtlAction.maxTtlMinutes}
+                            minMinutes={updateMailboxTtlAction.minTtlMinutes}
+                            supportsUnlimited={
+                              updateMailboxTtlAction.supportsUnlimitedTtl
+                            }
+                            value={ttlDialogValue}
+                            onChange={(nextValue) => {
+                              updateMailboxTtlAction.onResetError();
+                              setTtlDialogValue(nextValue);
+                            }}
+                          />
+                        ) : null}
 
                         <div className="flex flex-wrap justify-end gap-2">
                           <Button
-                            disabled={updateMailboxTtlAction.isPending}
+                            disabled={isSettingsPending}
                             size="sm"
                             type="button"
                             variant="ghost"
-                            onClick={handleCloseTtlDialog}
+                            onClick={handleCloseSettingsDialog}
                           >
                             取消
                           </Button>
                           <Button
-                            disabled={updateMailboxTtlAction.isPending}
+                            disabled={isSettingsPending}
                             size="sm"
                             type="button"
-                            onClick={() => void handleSubmitTtlDialog()}
+                            onClick={() => void handleSubmitSettingsDialog()}
                           >
-                            {updateMailboxTtlAction.isPending
-                              ? "保存中…"
-                              : "保存"}
+                            {isSettingsPending ? "保存中…" : "保存"}
                           </Button>
                         </div>
                       </PopoverContent>
@@ -1268,9 +1429,7 @@ export const MailWorkspace = ({
 
             <div className="py-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
               {isMessagesLoading ? (
-                <div className="mx-3 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                  正在加载邮件列表…
-                </div>
+                <WorkspaceListPaneSkeleton testId="workspace-messages-skeleton" />
               ) : messagesError ? (
                 <div className="mx-3 xl:min-h-0 xl:flex-1">
                   {isDesktopThreePane ? (

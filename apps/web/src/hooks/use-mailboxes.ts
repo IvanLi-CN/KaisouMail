@@ -20,6 +20,7 @@ type MailboxQueryOptions = {
   pollingIntervalMs?: number;
   scope?: MailboxListScope;
   status?: MailboxStatus | MailboxStatus[];
+  tags?: string[];
 };
 
 export const mailboxKeys = {
@@ -29,7 +30,8 @@ export const mailboxKeys = {
   listWithFilters: (
     scope: MailboxListScope = "default",
     status: MailboxQueryOptions["status"] | null = null,
-  ) => [...mailboxKeys.list(scope), { status }] as const,
+    tags: string[] = [],
+  ) => [...mailboxKeys.list(scope), { status, tags }] as const,
   detail: (id: string) => ["mailboxes", id] as const,
 };
 
@@ -40,11 +42,13 @@ export const useMailboxesQuery = (options?: MailboxQueryOptions) => {
     queryKey: mailboxKeys.listWithFilters(
       options?.scope,
       options?.status ?? null,
+      options?.tags ?? [],
     ),
     queryFn: () =>
       apiClient.listMailboxes({
         scope: options?.scope,
         status: options?.status,
+        tags: options?.tags,
       }),
     enabled: options?.enabled ?? true,
     refetchInterval: resolveAutoRefreshInterval({
@@ -156,6 +160,19 @@ export const useResetMailboxTtlMutation = () => {
       updateMailboxListCache(queryClient, mailbox);
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
       void queryClient.invalidateQueries({ queryKey: messageKeys.all });
+    },
+  });
+};
+
+export const useUpdateMailboxTagsMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ mailboxId, tags }: { mailboxId: string; tags: string[] }) =>
+      apiClient.updateMailboxTags(mailboxId, { tags }),
+    onSuccess: (mailbox) => {
+      queryClient.setQueryData(mailboxKeys.detail(mailbox.id), mailbox);
+      updateMailboxListCache(queryClient, mailbox);
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.all });
     },
   });
 };
