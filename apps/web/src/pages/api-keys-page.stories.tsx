@@ -89,6 +89,20 @@ export const AccountOverview: Story = {
   },
 };
 
+export const Loading: Story = {
+  args: {
+    apiKeys: [],
+    passkeys: [],
+    isApiKeysLoading: true,
+    isPasskeysLoading: true,
+  },
+  render: (args) => (
+    <AppShell user={demoSessionUser} version={demoVersion} onLogout={fn()}>
+      <InteractiveApiKeysPageView {...args} defaultTab="api-keys" />
+    </AppShell>
+  ),
+};
+
 export const ConnectedAccounts: Story = {
   args: {
     activeTab: "connected-accounts",

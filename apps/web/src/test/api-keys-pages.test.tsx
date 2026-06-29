@@ -113,4 +113,58 @@ describe("identity page view", () => {
       screen.getByRole("button", { name: "绑定 GitHub" }),
     ).toBeInTheDocument();
   });
+
+  it("shows skeletons on first load without hiding the create forms", async () => {
+    const [account] = demoUsers;
+    if (!account) {
+      throw new Error("Expected demo account fixture");
+    }
+
+    const [externalAccount] = demoExternalAccounts.filter(
+      (item) => item.id === "ext_github_owner",
+    );
+
+    render(
+      <MemoryRouter>
+        <AppShell user={demoSessionUser} version={demoVersion} onLogout={vi.fn()}>
+          <ApiKeysPageView
+            account={account}
+            externalAccounts={externalAccount ? [externalAccount] : []}
+            apiKeys={[]}
+            passkeys={[]}
+            activeTab="passkeys"
+            nicknameDraft={account.nickname}
+            passkeyEmptyMessage={null}
+            passkeySupported
+            passkeyError={null}
+            passkeyPending={false}
+            latestSecret={null}
+            accountPending={false}
+            deletingAccount={false}
+            externalAccountPendingId={null}
+            accountError={null}
+            isApiKeysLoading
+            isPasskeysLoading
+            onNicknameDraftChange={vi.fn()}
+            onAccountSave={vi.fn()}
+            onAccountDelete={vi.fn()}
+            onUnlinkExternalAccount={vi.fn()}
+            onBindProvider={vi.fn()}
+            onRetry={vi.fn()}
+            onRetryPasskeys={vi.fn()}
+            onActiveTabChange={vi.fn()}
+            onCreate={vi.fn()}
+            onRevoke={vi.fn()}
+            onCreatePasskey={vi.fn()}
+            onRevokePasskey={vi.fn()}
+          />
+        </AppShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("passkey-table-skeleton")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "注册 Passkey", level: 2 }),
+    ).toBeInTheDocument();
+  });
 });

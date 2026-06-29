@@ -15,6 +15,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
+import {
+  FormCardSkeleton,
+  LoadingShellContainer,
+  TableCardSkeleton,
+} from "@/components/shared/loading-shells";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -268,16 +273,19 @@ const providerConfigStatusLabel = (configured: boolean) =>
 export const UserTable = ({
   section = "users",
   users,
+  isUsersLoading = false,
   usersPagination = defaultPaginationMeta(
     users.length,
     DEFAULT_USERS_PAGE_SIZE,
   ),
   invites,
+  isInvitesLoading = false,
   invitesPagination = defaultPaginationMeta(
     invites.length,
     DEFAULT_INVITES_PAGE_SIZE,
   ),
   settings,
+  isSettingsLoading = false,
   currentAdminUserId,
   currentAdmin,
   pendingTransferVerification,
@@ -293,12 +301,15 @@ export const UserTable = ({
 }: {
   section?: SystemSection;
   users: AdminUserRecord[];
+  isUsersLoading?: boolean;
   usersPagination?: PaginationMeta;
   usersPaginationMode?: PaginationMode;
   invites: InviteRecord[];
+  isInvitesLoading?: boolean;
   invitesPagination?: PaginationMeta;
   invitesPaginationMode?: PaginationMode;
   settings: RegistrationSettings;
+  isSettingsLoading?: boolean;
   currentAdminUserId: string | null;
   currentAdmin: {
     user: SessionUser | null;
@@ -756,6 +767,15 @@ export const UserTable = ({
             )}
           </CardHeader>
           <CardContent>
+            {isUsersLoading ? (
+              <TableCardSkeleton
+                className="border-0 shadow-none"
+                columnCount={5}
+                rowCount={5}
+                testId="users-page-skeleton"
+              />
+            ) : (
+              <>
             {userFiltersEnabled &&
             (normalizedUserSearch.length > 0 || roleFilter !== "all") ? (
               <div
@@ -981,6 +1001,8 @@ export const UserTable = ({
                 setLocalUsersPage(page);
               }}
             />
+              </>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -1248,137 +1270,145 @@ export const UserTable = ({
               </div>
             </form>
 
-            <div className="rounded-2xl border border-border/70 bg-card">
-              <div className="px-4 py-3 text-xs font-medium text-muted-foreground">
-                共 {invites.length} 个邀请码
-              </div>
-              <div className="md:hidden">
-                <div className="divide-y divide-border">
-                  {visibleInvites.map((invite) => (
-                    <div key={invite.id} className="space-y-3 px-4 py-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1">
-                          <p className="truncate font-medium text-foreground">
-                            {invite.code}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Badge className="border border-border bg-background/60">
-                              {inviteKindLabel(invite)}
-                            </Badge>
-                            <Badge className="border border-border bg-background/60">
-                              {invite.role}
-                            </Badge>
-                            <Badge className="border border-border bg-background/60">
-                              {inviteStatusLabel(invite)}
-                            </Badge>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="min-h-11 shrink-0"
-                          onClick={() => onDeleteInvite(invite.id)}
-                          disabled={Boolean(invite.usedAt)}
-                        >
-                          删除
-                        </Button>
-                      </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>备注：{invite.note ?? "无"}</p>
-                        <p>创建于 {formatDateTime(invite.createdAt)}</p>
-                        <p>
-                          使用时间：
-                          {invite.usedAt
-                            ? formatDateTime(invite.usedAt)
-                            : "未使用"}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+            {isInvitesLoading ? (
+              <TableCardSkeleton
+                columnCount={8}
+                rowCount={5}
+                testId="invites-page-skeleton"
+              />
+            ) : (
+              <div className="rounded-2xl border border-border/70 bg-card">
+                <div className="px-4 py-3 text-xs font-medium text-muted-foreground">
+                  共 {invites.length} 个邀请码
                 </div>
-              </div>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeaderCell>邀请码</TableHeaderCell>
-                      <TableHeaderCell>类型</TableHeaderCell>
-                      <TableHeaderCell>角色</TableHeaderCell>
-                      <TableHeaderCell>备注</TableHeaderCell>
-                      <TableHeaderCell>状态</TableHeaderCell>
-                      <TableHeaderCell>创建时间</TableHeaderCell>
-                      <TableHeaderCell>使用时间</TableHeaderCell>
-                      <TableHeaderCell className="text-right">
-                        操作
-                      </TableHeaderCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
+                <div className="md:hidden">
+                  <div className="divide-y divide-border">
                     {visibleInvites.map((invite) => (
-                      <TableRow key={invite.id}>
-                        <TableCell className="font-medium text-foreground">
-                          {invite.code}
-                        </TableCell>
-                        <TableCell>{inviteKindLabel(invite)}</TableCell>
-                        <TableCell>{invite.role}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {invite.note ?? "无"}
-                        </TableCell>
-                        <TableCell>{inviteStatusLabel(invite)}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDateTime(invite.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {invite.usedAt
-                            ? formatDateTime(invite.usedAt)
-                            : "未使用"}
-                        </TableCell>
-                        <TableCell className="text-right">
+                      <div key={invite.id} className="space-y-3 px-4 py-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <p className="truncate font-medium text-foreground">
+                              {invite.code}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge className="border border-border bg-background/60">
+                                {inviteKindLabel(invite)}
+                              </Badge>
+                              <Badge className="border border-border bg-background/60">
+                                {invite.role}
+                              </Badge>
+                              <Badge className="border border-border bg-background/60">
+                                {inviteStatusLabel(invite)}
+                              </Badge>
+                            </div>
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="min-h-10"
+                            className="min-h-11 shrink-0"
                             onClick={() => onDeleteInvite(invite.id)}
                             disabled={Boolean(invite.usedAt)}
                           >
                             删除
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>备注：{invite.note ?? "无"}</p>
+                          <p>创建于 {formatDateTime(invite.createdAt)}</p>
+                          <p>
+                            使用时间：
+                            {invite.usedAt
+                              ? formatDateTime(invite.usedAt)
+                              : "未使用"}
+                          </p>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="px-4 pb-4">
-                <PaginationControls
-                  itemLabel="邀请码"
-                  page={effectiveInvitesPagination.page}
-                  totalPages={effectiveInvitesPagination.totalPages}
-                  totalItems={effectiveInvitesPagination.totalItems}
-                  visibleRangeStart={
-                    effectiveInvitesPagination.totalItems === 0
-                      ? 0
-                      : (effectiveInvitesPagination.page - 1) *
-                          effectiveInvitesPagination.pageSize +
-                        1
-                  }
-                  visibleRangeEnd={
-                    effectiveInvitesPagination.totalItems === 0
-                      ? 0
-                      : (effectiveInvitesPagination.page - 1) *
-                          effectiveInvitesPagination.pageSize +
-                        visibleInvites.length
-                  }
-                  onPageChange={(page) => {
-                    if (invitesAreServerPaginated) {
-                      onInvitesPageChange(page);
-                      return;
+                  </div>
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeaderCell>邀请码</TableHeaderCell>
+                        <TableHeaderCell>类型</TableHeaderCell>
+                        <TableHeaderCell>角色</TableHeaderCell>
+                        <TableHeaderCell>备注</TableHeaderCell>
+                        <TableHeaderCell>状态</TableHeaderCell>
+                        <TableHeaderCell>创建时间</TableHeaderCell>
+                        <TableHeaderCell>使用时间</TableHeaderCell>
+                        <TableHeaderCell className="text-right">
+                          操作
+                        </TableHeaderCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {visibleInvites.map((invite) => (
+                        <TableRow key={invite.id}>
+                          <TableCell className="font-medium text-foreground">
+                            {invite.code}
+                          </TableCell>
+                          <TableCell>{inviteKindLabel(invite)}</TableCell>
+                          <TableCell>{invite.role}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {invite.note ?? "无"}
+                          </TableCell>
+                          <TableCell>{inviteStatusLabel(invite)}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {formatDateTime(invite.createdAt)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {invite.usedAt
+                              ? formatDateTime(invite.usedAt)
+                              : "未使用"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="min-h-10"
+                              onClick={() => onDeleteInvite(invite.id)}
+                              disabled={Boolean(invite.usedAt)}
+                            >
+                              删除
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="px-4 pb-4">
+                  <PaginationControls
+                    itemLabel="邀请码"
+                    page={effectiveInvitesPagination.page}
+                    totalPages={effectiveInvitesPagination.totalPages}
+                    totalItems={effectiveInvitesPagination.totalItems}
+                    visibleRangeStart={
+                      effectiveInvitesPagination.totalItems === 0
+                        ? 0
+                        : (effectiveInvitesPagination.page - 1) *
+                            effectiveInvitesPagination.pageSize +
+                          1
                     }
-                    setLocalInvitesPage(page);
-                  }}
-                />
+                    visibleRangeEnd={
+                      effectiveInvitesPagination.totalItems === 0
+                        ? 0
+                        : (effectiveInvitesPagination.page - 1) *
+                            effectiveInvitesPagination.pageSize +
+                          visibleInvites.length
+                    }
+                    onPageChange={(page) => {
+                      if (invitesAreServerPaginated) {
+                        onInvitesPageChange(page);
+                        return;
+                      }
+                      setLocalInvitesPage(page);
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -1404,31 +1434,38 @@ export const UserTable = ({
             </div>
           </CardHeader>
           <CardContent>
-            <form
-              className="space-y-6"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void handleSaveSettings();
-              }}
-            >
-              {settingsMessage ? (
-                <div
-                  className={`${feedbackCardClassName} flex items-center gap-3 text-foreground`}
-                >
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                  <p>{settingsMessage}</p>
-                </div>
-              ) : null}
-              {settingsError ? (
-                <div
-                  className={`${feedbackCardClassName} flex items-center gap-3 text-destructive`}
-                >
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <p>{settingsError}</p>
-                </div>
-              ) : null}
+            {isSettingsLoading ? (
+              <LoadingShellContainer data-testid="registration-settings-skeleton">
+                <FormCardSkeleton fieldCount={4} />
+                <FormCardSkeleton fieldCount={4} />
+                <FormCardSkeleton fieldCount={2} />
+              </LoadingShellContainer>
+            ) : (
+              <form
+                className="space-y-6"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSaveSettings();
+                }}
+              >
+                {settingsMessage ? (
+                  <div
+                    className={`${feedbackCardClassName} flex items-center gap-3 text-foreground`}
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                    <p>{settingsMessage}</p>
+                  </div>
+                ) : null}
+                {settingsError ? (
+                  <div
+                    className={`${feedbackCardClassName} flex items-center gap-3 text-destructive`}
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <p>{settingsError}</p>
+                  </div>
+                ) : null}
 
-              <div className="space-y-4">
+                <div className="space-y-4">
                 <div className={channelCardClassName}>
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-3">
@@ -1775,19 +1812,20 @@ export const UserTable = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="submit"
-                  className="min-h-11"
-                  disabled={isSavingSettings || !hasUnsavedSettings}
-                >
-                  {isSavingSettings ? "保存中…" : "保存注册设置"}
-                </Button>
-                <p className="text-sm text-muted-foreground">
-                  未填写的新密钥会保持现有配置，不会回显。
-                </p>
-              </div>
-            </form>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="submit"
+                    className="min-h-11"
+                    disabled={isSavingSettings || !hasUnsavedSettings}
+                  >
+                    {isSavingSettings ? "保存中…" : "保存注册设置"}
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    未填写的新密钥会保持现有配置，不会回显。
+                  </p>
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
       ) : null}

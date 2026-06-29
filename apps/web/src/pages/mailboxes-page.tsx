@@ -19,6 +19,10 @@ import {
   ErrorState,
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
+import {
+  FormCardSkeleton,
+  TableCardSkeleton,
+} from "@/components/shared/loading-shells";
 import { PageHeader } from "@/components/shared/page-header";
 import { ActionButton } from "@/components/ui/action-button";
 import { Badge } from "@/components/ui/badge";
@@ -238,6 +242,7 @@ type ExistingMailboxPromptState = {
 type MailboxesPageViewProps = {
   meta: ApiMeta | null;
   isMetaLoading?: boolean;
+  isListLoading?: boolean;
   createError?: {
     variant: ErrorStateVariant;
     title: string;
@@ -284,6 +289,7 @@ type MailboxesPageViewProps = {
 export const MailboxesPageView = ({
   meta,
   isMetaLoading = false,
+  isListLoading = false,
   createError = null,
   createSubmitError = null,
   listError = null,
@@ -402,18 +408,7 @@ export const MailboxesPageView = ({
           supportsUnlimitedTtl={meta.supportsUnlimitedMailboxTtl}
         />
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>创建邮箱</CardTitle>
-            <CardDescription>创建新的临时邮箱地址。</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EmptyState
-              title="正在加载邮箱规则"
-              description="正在读取可用域名和有效期设置。"
-            />
-          </CardContent>
-        </Card>
+        <FormCardSkeleton fieldCount={4} testId="mailbox-create-skeleton" />
       )}
 
       {editingTagsMailbox ? (
@@ -518,6 +513,12 @@ export const MailboxesPageView = ({
                   <Link to={appRoutes.workspace}>打开邮件工作台</Link>
                 </Button>
               }
+            />
+          ) : isListLoading ? (
+            <TableCardSkeleton
+              columnCount={6}
+              rowCount={5}
+              testId="mailbox-list-skeleton"
             />
           ) : filteredMailboxes.length > 0 ? (
             <MailboxList
@@ -840,6 +841,7 @@ export const MailboxesPage = () => {
     <MailboxesPageView
       meta={metaQuery.data ?? null}
       isMetaLoading={metaQuery.isLoading}
+      isListLoading={mailboxesQuery.isLoading && !hasMailboxesData}
       createError={
         metaQuery.error && !hasMetaData
           ? {

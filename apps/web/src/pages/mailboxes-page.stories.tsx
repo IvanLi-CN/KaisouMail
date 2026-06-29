@@ -188,6 +188,15 @@ export const LoadingMeta: Story = {
   },
 };
 
+export const LoadingList: Story = {
+  args: {
+    meta: demoMeta,
+    isListLoading: true,
+    mailboxes: [],
+    messageStatsByMailbox: new Map(),
+  },
+};
+
 export const CreateFlow: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);

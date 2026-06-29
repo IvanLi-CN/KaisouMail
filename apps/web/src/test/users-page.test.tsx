@@ -425,4 +425,79 @@ describe("users page view", () => {
       ),
     );
   });
+
+  it("shows a first-load users skeleton while the list is still loading", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="users"
+          users={[]}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          isUsersLoading
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("users-page-skeleton")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "用户", level: 2 })).toBeInTheDocument();
+  });
+
+  it("shows an invites skeleton while the invite list is still loading", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="invites"
+          users={demoAdminUsers}
+          invites={[]}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          isInvitesLoading
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("invites-page-skeleton")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "批量生成邀请码" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a registration skeleton while settings are still loading", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="registration"
+          users={demoAdminUsers}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          isSettingsLoading
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByTestId("registration-settings-skeleton"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "注册设置", level: 2 }),
+    ).toBeInTheDocument();
+  });
 });
