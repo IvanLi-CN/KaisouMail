@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "1.0.1",
+  "base_stable_version": "1.0.0",
+  "channel_label": "channel:stable",
+  "created_at": "2026-06-29T09:01:02Z",
+  "next_stable_version": "1.0.1",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "34a315b187c95fe82ec183edc97977a342176bfb",
+  "pr_number": 89,
+  "pr_title": "feat(web): add first-load skeleton shells",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v1.0.1",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v1.0.1",
+  "target_sha": "2ed2f72a8ae1fe020a75663a60c4431ddc18dd08",
+  "type_label": "type:patch"
+}
