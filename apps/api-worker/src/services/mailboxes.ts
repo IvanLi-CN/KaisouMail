@@ -929,7 +929,7 @@ const promoteCatchAllMailbox = async (
 ) => {
   const db = getDb(env);
   const domain = await resolveMailboxDomain(env, config, mailbox);
-  if (!domain || domain.status !== "active" || domain.deletedAt) {
+  if (domain?.status !== "active" || domain.deletedAt) {
     throw domainNoLongerAvailableError(
       mailbox.domainId ?? "legacy-domain",
       getFallbackRootDomain(mailbox),
@@ -1227,8 +1227,7 @@ export const createMailboxForUser = async (
     .limit(1);
   const currentDomain = currentDomainRows[0];
   if (
-    !currentDomain ||
-    currentDomain.status !== "active" ||
+    currentDomain?.status !== "active" ||
     currentDomain.deletedAt ||
     currentDomain.zoneId !== domain.zoneId
   ) {
