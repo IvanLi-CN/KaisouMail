@@ -364,6 +364,7 @@ PR: include
 
 ![Identity auth page with the Passkey tab selected](./assets/api-keys-page-passkey-tab.png)
 
+PR: include
 ![Identity auth tabs component with the API Keys tab selected](./assets/identity-auth-tabs-api-keys-story.png)
 
 ![Identity auth tabs component with the Passkey tab selected](./assets/identity-auth-tabs-passkey-story.png)
