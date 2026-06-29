@@ -75,3 +75,26 @@ export const InviteFlow: Story = {
     await expect(args.onCreateInvite).toHaveBeenCalled();
   },
 };
+
+export const UsersLoading: Story = {
+  args: {
+    section: "users",
+    users: [],
+    isUsersLoading: true,
+  },
+};
+
+export const InvitesLoading: Story = {
+  args: {
+    section: "invites",
+    invites: [],
+    isInvitesLoading: true,
+  },
+};
+
+export const RegistrationLoading: Story = {
+  args: {
+    section: "registration",
+    isSettingsLoading: true,
+  },
+};

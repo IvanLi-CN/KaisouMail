@@ -1143,7 +1143,7 @@ export const requireActiveDomainByRootDomain = async (
   rootDomain: string,
 ) => {
   const domain = await getDomainByRootDomain(env, rootDomain);
-  if (!domain || domain.status !== "active") {
+  if (domain?.status !== "active") {
     throw new ApiError(400, "Mailbox domain is not enabled", {
       rootDomain: normalizeRootDomain(rootDomain),
     });

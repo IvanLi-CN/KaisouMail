@@ -67,6 +67,8 @@ type ApiKeysPageViewProps = {
   onAccountDelete: () => void;
   onUnlinkExternalAccount: (externalAccountId: string) => void;
   onBindProvider: (provider: "github" | "linuxdo") => void;
+  isApiKeysLoading?: boolean;
+  isPasskeysLoading?: boolean;
   passkeyEmptyMessage?: string | null;
   passkeySupported: boolean;
   passkeyError?: string | null;
@@ -109,6 +111,8 @@ export const ApiKeysPageView = ({
   onAccountDelete,
   onUnlinkExternalAccount,
   onBindProvider,
+  isApiKeysLoading = false,
+  isPasskeysLoading = false,
   passkeyEmptyMessage,
   passkeySupported,
   passkeyError,
@@ -375,6 +379,7 @@ export const ApiKeysPageView = ({
                   passkeys={passkeys}
                   passkeySupported={passkeySupported}
                   emptyMessage={passkeyEmptyMessage}
+                  isLoading={isPasskeysLoading}
                   isPending={passkeyPending}
                   error={passkeyError}
                   onCreate={onCreatePasskey}
@@ -408,6 +413,7 @@ export const ApiKeysPageView = ({
                 <ApiKeyTable
                   apiKeys={apiKeys}
                   latestSecret={latestSecret}
+                  isLoading={isApiKeysLoading}
                   onCreate={onCreate}
                   onRevoke={onRevoke}
                 />
@@ -520,6 +526,8 @@ export const ApiKeysPage = () => {
           intent: "bind",
         });
       }}
+      isApiKeysLoading={apiKeysQuery.isLoading && !hasApiKeysData}
+      isPasskeysLoading={passkeysQuery.isLoading && !hasPasskeysData}
       passkeyEmptyMessage={passkeySupport.managementMessage}
       passkeySupported={passkeySupport.supported}
       passkeyError={

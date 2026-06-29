@@ -2133,6 +2133,25 @@ export const MessagePaneError: Story = {
   },
 };
 
+export const FirstLoadSkeletons: Story = {
+  args: {
+    createMailboxAction: buildCreateMailboxAction({ isOpen: false }),
+    visibleMailboxes: [],
+    totalMailboxCount: 0,
+    totalMessageCount: 0,
+    totalAggregatedMessageCount: 0,
+    mailboxMessageCounts: new Map(),
+    mailboxLatestVerificationCodes: new Map(),
+    messages: [],
+    selectedMessageId: null,
+    selectedMessage: null,
+    messageDetailHref: null,
+    isMailboxesLoading: true,
+    isMessagesLoading: true,
+    isMessageLoading: true,
+  },
+};
+
 export const ReaderNotFound: Story = {
   args: {
     createMailboxAction: buildCreateMailboxAction(),

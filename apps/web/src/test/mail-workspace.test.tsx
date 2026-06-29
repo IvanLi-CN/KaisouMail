@@ -255,6 +255,43 @@ describe("MailWorkspace", () => {
     ).toHaveTextContent("新建");
   });
 
+  it("shows pane skeletons during the first workspace load", () => {
+    render(
+      <MemoryRouter>
+        <MailWorkspace
+          {...baseProps}
+          createMailboxAction={{
+            ...baseProps.createMailboxAction,
+            isOpen: false,
+          }}
+          visibleMailboxes={[]}
+          totalMailboxCount={0}
+          totalMessageCount={0}
+          totalAggregatedMessageCount={0}
+          mailboxMessageCounts={new Map()}
+          mailboxLatestVerificationCodes={new Map()}
+          messages={[]}
+          selectedMessage={null}
+          selectedMessageId={null}
+          messageDetailHref={null}
+          isMailboxesLoading
+          isMessagesLoading
+          isMessageLoading
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByTestId("workspace-mailboxes-skeleton"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("workspace-messages-skeleton"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("workspace-message-detail-skeleton"),
+    ).toBeInTheDocument();
+  });
+
   it("uses semantic state hooks instead of stacked ring utilities across workspace rails", () => {
     render(
       <MemoryRouter>

@@ -43,6 +43,10 @@ import {
   ErrorState,
   type ErrorStateVariant,
 } from "@/components/shared/error-state";
+import {
+  WorkspaceDetailPaneSkeleton,
+  WorkspaceListPaneSkeleton,
+} from "@/components/shared/loading-shells";
 import { PageHeader } from "@/components/shared/page-header";
 import { VerificationCopyButton } from "@/components/shared/verification-copy-button";
 import { ActionButton } from "@/components/ui/action-button";
@@ -314,8 +318,6 @@ export const MailWorkspace = ({
     onResetError: noop,
     onSubmit: noop,
   };
-  const selectedMessageSummary =
-    messages.find((message) => message.id === selectedMessageId) ?? null;
   const [previewState, setPreviewState] = useState<MailboxCreatePreviewState>({
     mode: "segmented",
   });
@@ -600,11 +602,9 @@ export const MailWorkspace = ({
   );
 
   const renderMessagePaneContent = () => {
-    if (isMessageLoading && selectedMessageSummary) {
+    if (isMessageLoading && !selectedMessage) {
       return (
-        <div className="rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-          正在加载《{selectedMessageSummary.subject}》的正文…
-        </div>
+        <WorkspaceDetailPaneSkeleton testId="workspace-message-detail-skeleton" />
       );
     }
 
@@ -952,9 +952,10 @@ export const MailWorkspace = ({
               </button>
 
               {isMailboxesLoading ? (
-                <div className="mx-3 mt-2 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                  正在加载邮箱列表…
-                </div>
+                <WorkspaceListPaneSkeleton
+                  className="mt-2"
+                  testId="workspace-mailboxes-skeleton"
+                />
               ) : mailboxesError ? (
                 <div className="mx-3 mt-3 xl:min-h-0 xl:flex-1">
                   {isDesktopThreePane ? (
@@ -1428,9 +1429,7 @@ export const MailWorkspace = ({
 
             <div className="py-3 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col">
               {isMessagesLoading ? (
-                <div className="mx-3 rounded-xl border border-border bg-muted/10 px-3 py-6 text-center text-sm text-muted-foreground">
-                  正在加载邮件列表…
-                </div>
+                <WorkspaceListPaneSkeleton testId="workspace-messages-skeleton" />
               ) : messagesError ? (
                 <div className="mx-3 xl:min-h-0 xl:flex-1">
                   {isDesktopThreePane ? (

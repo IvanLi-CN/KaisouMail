@@ -32,6 +32,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = {};
 
+export const Loading: Story = {
+  args: {
+    message: null,
+    isLoading: true,
+  },
+};
+
 export const NotFound: Story = {
   args: {
     message: null,

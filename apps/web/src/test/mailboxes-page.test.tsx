@@ -66,6 +66,41 @@ describe("mailboxes page view", () => {
     expect(screen.queryByText("暂无邮箱")).not.toBeInTheDocument();
   });
 
+  it("shows a create skeleton while mailbox metadata is loading", () => {
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={null}
+          isMetaLoading
+          mailboxes={[]}
+          messageStatsByMailbox={new Map()}
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("mailbox-create-skeleton")).toBeInTheDocument();
+    expect(screen.queryByText("正在加载邮箱规则")).not.toBeInTheDocument();
+  });
+
+  it("shows a list skeleton during the first mailbox list load", () => {
+    render(
+      <MemoryRouter>
+        <MailboxesPageView
+          meta={demoMeta}
+          isListLoading
+          mailboxes={[]}
+          messageStatsByMailbox={new Map()}
+          onCreate={vi.fn()}
+          onDestroy={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("mailbox-list-skeleton")).toBeInTheDocument();
+  });
+
   it("uses a searchable tag filter selector without browser autocomplete", () => {
     const onTagFilterChange = vi.fn();
 

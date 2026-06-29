@@ -3,7 +3,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { demoMailboxes } from "@/mocks/data";
-import { MailboxDetailPage } from "@/pages/mailbox-detail-page";
+import {
+  MailboxDetailPage,
+  MailboxDetailPageView,
+} from "@/pages/mailbox-detail-page";
 
 const detailMailboxState = {
   mailbox: {
@@ -71,5 +74,23 @@ describe("MailboxDetailPage", () => {
     expect(
       screen.getAllByRole("button", { name: "销毁邮箱" })[0],
     ).toBeEnabled();
+  });
+
+  it("renders a structured loading skeleton on first load", () => {
+    render(
+      <MemoryRouter>
+        <MailboxDetailPageView
+          mailbox={null}
+          messageStatsByMailbox={new Map()}
+          isLoading
+          onDestroy={vi.fn()}
+          isRefreshing={false}
+          lastRefreshedAt={null}
+          workspaceHref="/workspace?mailbox=mbx_alpha"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("mailbox-detail-skeleton")).toBeInTheDocument();
   });
 });

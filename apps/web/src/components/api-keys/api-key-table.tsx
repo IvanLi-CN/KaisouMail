@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { TableCardSkeleton } from "@/components/shared/loading-shells";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,11 +51,13 @@ const compareApiKeysByRecentUse = (left: ApiKeyRecord, right: ApiKeyRecord) => {
 export const ApiKeyTable = ({
   apiKeys,
   latestSecret,
+  isLoading = false,
   onCreate,
   onRevoke,
 }: {
   apiKeys: ApiKeyRecord[];
   latestSecret?: string | null;
+  isLoading?: boolean;
   onCreate: (values: {
     name: string;
     scopes: string[];
@@ -136,160 +139,172 @@ export const ApiKeyTable = ({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>现有 API Keys</CardTitle>
-          <CardDescription>
-            已撤销的 Key 仍保留审计信息，但不能再次使用。
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3 md:hidden">
-            {paginatedApiKeys.map((apiKey) => (
-              <div
-                key={apiKey.id}
-                className="rounded-2xl border border-border/70 bg-card p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-1">
-                    <p className="font-medium text-foreground">{apiKey.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      创建于 {formatDateTime(apiKey.createdAt)}
-                    </p>
+      {isLoading ? (
+        <TableCardSkeleton
+          columnCount={5}
+          rowCount={5}
+          testId="api-key-table-skeleton"
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>现有 API Keys</CardTitle>
+            <CardDescription>
+              已撤销的 Key 仍保留审计信息，但不能再次使用。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 md:hidden">
+              {paginatedApiKeys.map((apiKey) => (
+                <div
+                  key={apiKey.id}
+                  className="rounded-2xl border border-border/70 bg-card p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium text-foreground">
+                        {apiKey.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        创建于 {formatDateTime(apiKey.createdAt)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="min-h-11 shrink-0"
+                      onClick={() => onRevoke(apiKey.id)}
+                      disabled={Boolean(apiKey.revokedAt)}
+                    >
+                      {apiKey.revokedAt ? "已撤销" : "撤销"}
+                    </Button>
                   </div>
+                  <dl className="mt-4 grid gap-3 text-sm">
+                    <div className="space-y-1">
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Prefix
+                      </dt>
+                      <dd className="break-all text-foreground">
+                        {apiKey.prefix}
+                      </dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        Scopes
+                      </dt>
+                      <dd className="text-foreground">
+                        {apiKey.scopes.join(", ")}
+                      </dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        最近使用
+                      </dt>
+                      <dd className="text-foreground">
+                        {formatDateTime(apiKey.lastUsedAt)}
+                      </dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-xs font-medium text-muted-foreground">
+                        状态
+                      </dt>
+                      <dd className="text-foreground">
+                        {renderStatusLabel(apiKey)}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell>名称</TableHeaderCell>
+                    <TableHeaderCell>Prefix</TableHeaderCell>
+                    <TableHeaderCell>Scopes</TableHeaderCell>
+                    <TableHeaderCell>最近使用</TableHeaderCell>
+                    <TableHeaderCell className="text-right">
+                      操作
+                    </TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedApiKeys.map((apiKey) => (
+                    <TableRow key={apiKey.id}>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">
+                            {apiKey.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            创建于 {formatDateTime(apiKey.createdAt)}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>{apiKey.prefix}</TableCell>
+                      <TableCell>{apiKey.scopes.join(", ")}</TableCell>
+                      <TableCell>{formatDateTime(apiKey.lastUsedAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="min-h-10"
+                          onClick={() => onRevoke(apiKey.id)}
+                          disabled={Boolean(apiKey.revokedAt)}
+                        >
+                          {apiKey.revokedAt ? "已撤销" : "撤销"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {totalPages > 1 ? (
+              <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                  显示 {visibleRangeStart}-{visibleRangeEnd} 项，共{" "}
+                  {sortedApiKeys.length} 项
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <span>
+                    第 {page} / {totalPages} 页
+                  </span>
                   <Button
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
-                    className="min-h-11 shrink-0"
-                    onClick={() => onRevoke(apiKey.id)}
-                    disabled={Boolean(apiKey.revokedAt)}
+                    className="min-h-11"
+                    onClick={() =>
+                      setPaginationState({
+                        page: page - 1,
+                        resetKey: paginationResetKey,
+                      })
+                    }
+                    disabled={page === 1}
                   >
-                    {apiKey.revokedAt ? "已撤销" : "撤销"}
+                    上一页
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11"
+                    onClick={() =>
+                      setPaginationState({
+                        page: page + 1,
+                        resetKey: paginationResetKey,
+                      })
+                    }
+                    disabled={page === totalPages}
+                  >
+                    下一页
                   </Button>
                 </div>
-                <dl className="mt-4 grid gap-3 text-sm">
-                  <div className="space-y-1">
-                    <dt className="text-xs font-medium text-muted-foreground">
-                      Prefix
-                    </dt>
-                    <dd className="break-all text-foreground">
-                      {apiKey.prefix}
-                    </dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-xs font-medium text-muted-foreground">
-                      Scopes
-                    </dt>
-                    <dd className="text-foreground">
-                      {apiKey.scopes.join(", ")}
-                    </dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-xs font-medium text-muted-foreground">
-                      最近使用
-                    </dt>
-                    <dd className="text-foreground">
-                      {formatDateTime(apiKey.lastUsedAt)}
-                    </dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-xs font-medium text-muted-foreground">
-                      状态
-                    </dt>
-                    <dd className="text-foreground">
-                      {renderStatusLabel(apiKey)}
-                    </dd>
-                  </div>
-                </dl>
               </div>
-            ))}
-          </div>
-          <div className="hidden md:block">
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableHeaderCell>名称</TableHeaderCell>
-                  <TableHeaderCell>Prefix</TableHeaderCell>
-                  <TableHeaderCell>Scopes</TableHeaderCell>
-                  <TableHeaderCell>最近使用</TableHeaderCell>
-                  <TableHeaderCell className="text-right">操作</TableHeaderCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedApiKeys.map((apiKey) => (
-                  <TableRow key={apiKey.id}>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <p className="font-medium text-foreground">
-                          {apiKey.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          创建于 {formatDateTime(apiKey.createdAt)}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{apiKey.prefix}</TableCell>
-                    <TableCell>{apiKey.scopes.join(", ")}</TableCell>
-                    <TableCell>{formatDateTime(apiKey.lastUsedAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="min-h-10"
-                        onClick={() => onRevoke(apiKey.id)}
-                        disabled={Boolean(apiKey.revokedAt)}
-                      >
-                        {apiKey.revokedAt ? "已撤销" : "撤销"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          {totalPages > 1 ? (
-            <div className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                显示 {visibleRangeStart}-{visibleRangeEnd} 项，共{" "}
-                {sortedApiKeys.length} 项
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <span>
-                  第 {page} / {totalPages} 页
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11"
-                  onClick={() =>
-                    setPaginationState({
-                      page: page - 1,
-                      resetKey: paginationResetKey,
-                    })
-                  }
-                  disabled={page === 1}
-                >
-                  上一页
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-11"
-                  onClick={() =>
-                    setPaginationState({
-                      page: page + 1,
-                      resetKey: paginationResetKey,
-                    })
-                  }
-                  disabled={page === totalPages}
-                >
-                  下一页
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

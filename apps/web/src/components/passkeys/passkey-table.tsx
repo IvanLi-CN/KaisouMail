@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
+import { TableCardSkeleton } from "@/components/shared/loading-shells";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -40,6 +40,7 @@ export const PasskeyTable = ({
   passkeys,
   passkeySupported,
   emptyMessage,
+  isLoading = false,
   onCreate,
   onRevoke,
   isPending,
@@ -48,6 +49,7 @@ export const PasskeyTable = ({
   passkeys: PasskeyRecord[];
   passkeySupported: boolean;
   emptyMessage?: string | null;
+  isLoading?: boolean;
   onCreate: (name: string) => Promise<unknown> | undefined;
   onRevoke: (passkeyId: string) => void;
   isPending?: boolean;
@@ -102,148 +104,157 @@ export const PasskeyTable = ({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>已注册 Passkeys</CardTitle>
-          <CardDescription>
-            已撤销记录会保留审计信息，但不能继续用于登录。
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {passkeys.length > 0 ? (
-            <>
-              <div className="space-y-3 md:hidden">
-                {passkeys.map((passkey) => (
-                  <div
-                    key={passkey.id}
-                    className="rounded-2xl border border-border/70 bg-card p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <p className="font-medium text-foreground">
-                          {passkey.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          创建于 {formatDateTime(passkey.createdAt)}
-                        </p>
+      {isLoading ? (
+        <TableCardSkeleton
+          columnCount={5}
+          rowCount={4}
+          testId="passkey-table-skeleton"
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>已注册 Passkeys</CardTitle>
+            <CardDescription>
+              已撤销记录会保留审计信息，但不能继续用于登录。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {passkeys.length > 0 ? (
+              <>
+                <div className="space-y-3 md:hidden">
+                  {passkeys.map((passkey) => (
+                    <div
+                      key={passkey.id}
+                      className="rounded-2xl border border-border/70 bg-card p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 space-y-1">
+                          <p className="font-medium text-foreground">
+                            {passkey.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            创建于 {formatDateTime(passkey.createdAt)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="min-h-11 shrink-0"
+                          onClick={() => onRevoke(passkey.id)}
+                          disabled={Boolean(passkey.revokedAt)}
+                        >
+                          {passkey.revokedAt ? "已撤销" : "撤销"}
+                        </Button>
                       </div>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="min-h-11 shrink-0"
-                        onClick={() => onRevoke(passkey.id)}
-                        disabled={Boolean(passkey.revokedAt)}
-                      >
-                        {passkey.revokedAt ? "已撤销" : "撤销"}
-                      </Button>
+                      <dl className="mt-4 grid gap-3 text-sm">
+                        <div className="space-y-1">
+                          <dt className="text-xs font-medium text-muted-foreground">
+                            设备类型
+                          </dt>
+                          <dd className="text-foreground">
+                            {toDeviceTypeLabel(passkey.deviceType)}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs font-medium text-muted-foreground">
+                            传输与备份
+                          </dt>
+                          <dd className="text-foreground">
+                            {passkey.backedUp ? "已备份" : "未备份"} ·{" "}
+                            {passkey.transports.join(", ") || "未知传输方式"}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs font-medium text-muted-foreground">
+                            最近使用
+                          </dt>
+                          <dd className="text-foreground">
+                            {formatDateTime(passkey.lastUsedAt)}
+                          </dd>
+                        </div>
+                        <div className="space-y-1">
+                          <dt className="text-xs font-medium text-muted-foreground">
+                            状态
+                          </dt>
+                          <dd className="text-foreground">
+                            {passkey.revokedAt
+                              ? `已撤销 · ${formatDateTime(passkey.revokedAt)}`
+                              : "可用"}
+                          </dd>
+                        </div>
+                      </dl>
                     </div>
-                    <dl className="mt-4 grid gap-3 text-sm">
-                      <div className="space-y-1">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          设备类型
-                        </dt>
-                        <dd className="text-foreground">
-                          {toDeviceTypeLabel(passkey.deviceType)}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          传输与备份
-                        </dt>
-                        <dd className="text-foreground">
-                          {passkey.backedUp ? "已备份" : "未备份"} ·{" "}
-                          {passkey.transports.join(", ") || "未知传输方式"}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          最近使用
-                        </dt>
-                        <dd className="text-foreground">
-                          {formatDateTime(passkey.lastUsedAt)}
-                        </dd>
-                      </div>
-                      <div className="space-y-1">
-                        <dt className="text-xs font-medium text-muted-foreground">
-                          状态
-                        </dt>
-                        <dd className="text-foreground">
-                          {passkey.revokedAt
-                            ? `已撤销 · ${formatDateTime(passkey.revokedAt)}`
-                            : "可用"}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                ))}
-              </div>
-              <div className="hidden md:block">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeaderCell>名称</TableHeaderCell>
-                      <TableHeaderCell>设备类型</TableHeaderCell>
-                      <TableHeaderCell>最近使用</TableHeaderCell>
-                      <TableHeaderCell>状态</TableHeaderCell>
-                      <TableHeaderCell className="text-right">
-                        操作
-                      </TableHeaderCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {passkeys.map((passkey) => (
-                      <TableRow key={passkey.id}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-foreground">
-                              {passkey.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              创建于 {formatDateTime(passkey.createdAt)}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p>{toDeviceTypeLabel(passkey.deviceType)}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {passkey.backedUp ? "已备份" : "未备份"} ·{" "}
-                              {passkey.transports.join(", ") || "未知传输方式"}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {formatDateTime(passkey.lastUsedAt)}
-                        </TableCell>
-                        <TableCell>
-                          {passkey.revokedAt
-                            ? `已撤销 · ${formatDateTime(passkey.revokedAt)}`
-                            : "可用"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="min-h-10"
-                            onClick={() => onRevoke(passkey.id)}
-                            disabled={Boolean(passkey.revokedAt)}
-                          >
-                            {passkey.revokedAt ? "已撤销" : "撤销"}
-                          </Button>
-                        </TableCell>
+                  ))}
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeaderCell>名称</TableHeaderCell>
+                        <TableHeaderCell>设备类型</TableHeaderCell>
+                        <TableHeaderCell>最近使用</TableHeaderCell>
+                        <TableHeaderCell>状态</TableHeaderCell>
+                        <TableHeaderCell className="text-right">
+                          操作
+                        </TableHeaderCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {passkeys.map((passkey) => (
+                        <TableRow key={passkey.id}>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium text-foreground">
+                                {passkey.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                创建于 {formatDateTime(passkey.createdAt)}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p>{toDeviceTypeLabel(passkey.deviceType)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {passkey.backedUp ? "已备份" : "未备份"} ·{" "}
+                                {passkey.transports.join(", ") ||
+                                  "未知传输方式"}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {formatDateTime(passkey.lastUsedAt)}
+                          </TableCell>
+                          <TableCell>
+                            {passkey.revokedAt
+                              ? `已撤销 · ${formatDateTime(passkey.revokedAt)}`
+                              : "可用"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="min-h-10"
+                              onClick={() => onRevoke(passkey.id)}
+                              disabled={Boolean(passkey.revokedAt)}
+                            >
+                              {passkey.revokedAt ? "已撤销" : "撤销"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-card/50 p-6 text-center text-sm text-muted-foreground">
+                {emptyMessage ?? "当前还没有注册任何 passkey。"}
               </div>
-            </>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/70 bg-card/50 p-6 text-center text-sm text-muted-foreground">
-              {emptyMessage ?? "当前还没有注册任何 passkey。"}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

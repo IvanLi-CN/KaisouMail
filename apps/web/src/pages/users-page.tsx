@@ -51,6 +51,9 @@ type UsersPageViewProps = {
     typeof UserTable
   >[0]["pendingTransferVerification"];
   onConsumePendingTransferVerification?: () => void;
+  isUsersLoading?: boolean;
+  isInvitesLoading?: boolean;
+  isSettingsLoading?: boolean;
   error?: {
     variant: ErrorStateVariant;
     title: string;
@@ -119,6 +122,9 @@ export const UsersPageView = ({
   currentAdmin,
   pendingTransferVerification,
   onConsumePendingTransferVerification,
+  isUsersLoading = false,
+  isInvitesLoading = false,
+  isSettingsLoading = false,
   error = null,
   onRetry,
   onCreateInvite,
@@ -213,6 +219,9 @@ export const UsersPageView = ({
               onConsumePendingTransferVerification={
                 onConsumePendingTransferVerification
               }
+              isUsersLoading={isUsersLoading}
+              isInvitesLoading={isInvitesLoading}
+              isSettingsLoading={isSettingsLoading}
               onCreateInvite={onCreateInvite}
               onDeleteInvite={onDeleteInvite}
               onUpdateSettings={onUpdateSettings}
@@ -278,6 +287,11 @@ export const UsersPage = () => {
     usersQuery.data !== undefined &&
     invitesQuery.data !== undefined &&
     settingsQuery.data !== undefined;
+  const isUsersLoading = usersQuery.isLoading && usersQuery.data === undefined;
+  const isInvitesLoading =
+    invitesQuery.isLoading && invitesQuery.data === undefined;
+  const isSettingsLoading =
+    settingsQuery.isLoading && settingsQuery.data === undefined;
 
   if (sessionQuery.data?.user.role !== "admin") {
     return (
@@ -419,6 +433,9 @@ export const UsersPage = () => {
       }}
       pendingTransferVerification={pendingTransferVerification}
       onConsumePendingTransferVerification={consumePendingTransferVerification}
+      isUsersLoading={isUsersLoading}
+      isInvitesLoading={isInvitesLoading}
+      isSettingsLoading={isSettingsLoading}
       onCreateInvite={async (values) => {
         await createInviteMutation.mutateAsync(values);
       }}

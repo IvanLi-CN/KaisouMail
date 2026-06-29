@@ -815,13 +815,19 @@ export const WorkspacePage = () => {
         }
         isMailboxesLoading={
           isTrashView
-            ? expiredMailboxesQuery.isLoading
-            : mailboxesQuery.isLoading
+            ? expiredMailboxesQuery.isLoading && !hasExpiredMailboxesData
+            : mailboxesQuery.isLoading && !hasMailboxesData
         }
         isMessagesLoading={
-          selectedMailbox ? messagesQuery.isLoading : allMessagesQuery.isLoading
+          selectedMailbox
+            ? messagesQuery.isLoading && messagesQuery.data === undefined
+            : allMessagesQuery.isLoading && allMessagesQuery.data === undefined
         }
-        isMessageLoading={messageDetailQuery.isLoading}
+        isMessageLoading={
+          selectedMessageIsVisible &&
+          messageDetailQuery.isLoading &&
+          !hasMessageDetailData
+        }
         mailboxManagementHref="/mailboxes"
         messageDetailHref={
           selectedMessageIsVisible && selectedMessageId

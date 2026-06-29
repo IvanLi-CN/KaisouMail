@@ -123,6 +123,10 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Message detail does not interval-poll because stored message bodies are treated as immutable after ingest; it refreshes on manual action plus normal focus/reconnect catch-up
 - Hidden-tab and offline polling are disabled; window focus regain and reconnect trigger a single catch-up refetch through the active query layer
 - All message-related pages expose a compact manual refresh control with loading feedback and a latest-refresh timestamp
+- First-load remote data surfaces must distinguish `loading`, `empty`, and `error` explicitly: when no data has been resolved yet, the page should render a structural skeleton instead of a blank table, misleading empty state, or one-line loading copy
+- This first-load skeleton contract applies to `/api-keys`, `/domains`, `/users`, `/mailboxes`, `/workspace`, `/mailboxes/:mailboxId`, and `/messages/:messageId`
+- Split layouts keep independently usable controls visible while dependent content loads: create forms remain available, while list/detail panes skeletonize locally; controls that still depend on runtime metadata stay disabled or placeholder-backed until that metadata resolves
+- Once a list, pane, or detail already has resolved data, later refetches must preserve the visible content and use lightweight refresh feedback rather than reverting the entire surface back to skeletons
 
 ### Users
 - `/users`
@@ -142,6 +146,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - Workspace mailbox and message rails use virtualization for dense operational datasets while keeping the fixed action/header surfaces readable
 - Desktop pane-local scrolling uses themed self-rendered rails so all three panes keep a consistent scrollbar appearance across browsers
 - Mailbox management surface is intentionally list-first and minimal; email reading flows jump back into the workspace
+- First-load loading shells stay local to the affected surface: table pages use row-shaped skeletons, workspace rails use pane-local list skeletons, and mailbox/message detail routes use structured detail-card skeletons instead of plain text placeholders
 - Domains management includes a dedicated apex-only bind form, explicit apex NS guidance plus local unsupported-subdomain intercepts, generic catalog enablement for discovered zones, legacy guidance for historical subdomain records, retry feedback that distinguishes still-pending NS activation from successful recovery, and a confirmation popover for destructive delete
 - Refresh controls stay compact and header-aligned on wide layouts, while narrow viewports may wrap the action row without truncating the primary operations or introducing a noisy live-status badge system
 - Buttons, badges, and similar compact UI labels must stay on a single line
@@ -163,6 +168,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-06-29: Added first-load skeleton loading contracts for the confirmed list/detail surfaces, keeping create forms visible where possible and preserving resolved content during later refetches.
 - 2026-05-18: Added mailbox creation provenance and tags, including API key attribution, create/ensure tag input, tag replacement, list filtering by repeated `tag`, normalized tag tables, and mailbox-management UI badges/filter/editing.
 - 2026-05-28: Disabled default browser/password-manager autofill hints across Web console inputs, covering mailbox tag/search controls and API key fallback login while keeping an explicit opt-in escape hatch for future fields.
 - 2026-05-08: Added row-scoped retry feedback on provisioning-error domains so retry immediately spins, active recovery shows a temporary success check, and still-pending or failed attempts open a direct popover with the Cloudflare reason and NS next step.
@@ -228,6 +234,9 @@ PR: include
 
 ![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
+PR: include
+![Identity auth first-load skeleton state for API Keys and Passkeys](./assets/identity-loading.png)
+
 ![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
 
 ### App Shell
@@ -245,6 +254,9 @@ PR: include
 ![Authenticated AppShell footer metadata](./assets/app-shell-footer-responsive.png)
 
 ### Workspace
+
+PR: include
+![Workspace first-load skeleton state across mailbox rail, message list, and reader pane](./assets/workspace-loading.png)
 
 ![Workspace on mobile with a single-column reading order](./assets/workspace-mobile-single-column-responsive.png)
 
@@ -291,6 +303,8 @@ PR: include
 
 ### Mailboxes
 
+![Mailboxes list first-load skeleton state with the create card preserved](./assets/mailboxes-loading-list.png)
+
 ![Mailboxes repeated create flow selects the existing mailbox and offers TTL extension](./assets/mailboxes-existing-mailbox-conflict.png)
 
 ![Mailboxes management with tag filter, provenance badges, and tag editing](./assets/mailboxes-tags-management.png)
@@ -326,6 +340,9 @@ PR: include
 ![Mailboxes inventory routing state badges for per-address rules, domain-level delivery, Catch All, and removed inactive rules](./assets/mailboxes-rule-badges.png)
 
 ### Domains
+
+PR: include
+![Domains first-load skeleton state for bind and catalog regions](./assets/domains-loading.png)
 
 PR: include
 ![Domains page overview with apex-only direct-bind guidance and generic catalog hints](./assets/domains-apex-bind-overview.png)
@@ -376,7 +393,14 @@ PR: include
 
 ### Mailbox Detail
 
+PR: include
+![Mailbox detail first-load skeleton state](./assets/mailbox-detail-loading.png)
+
 ![Mailbox detail page](./assets/mailbox-detail.png)
+
+### Message Detail
+
+![Message detail first-load skeleton state](./assets/message-detail-loading.png)
 
 ### Identity Auth
 

@@ -234,6 +234,31 @@ const DomainActionFeedbackHarness = ({
 };
 
 describe("domains page view", () => {
+  it("shows skeleton shells during the first domain catalog load", () => {
+    render(
+      <MemoryRouter>
+        <DomainsPageView
+          domains={[]}
+          isLoading
+          isDomainBindingEnabled
+          isDomainLifecycleEnabled
+          docsLinks={docsLinks}
+          onBind={vi.fn()}
+          onEnable={vi.fn()}
+          onEnableCatchAll={vi.fn()}
+          onDisableCatchAll={vi.fn()}
+          onDisable={vi.fn()}
+          onDelete={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("domains-page-skeleton")).toBeInTheDocument();
+    expect(screen.getByTestId("domain-bind-skeleton")).toBeInTheDocument();
+    expect(screen.getByTestId("domain-table-skeleton")).toBeInTheDocument();
+  });
+
   it("renders a non-blocking Cloudflare cooldown banner with manual retry", () => {
     const onReload = vi.fn();
 

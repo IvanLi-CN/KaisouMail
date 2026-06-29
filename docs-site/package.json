@@ -7,7 +7,7 @@
     "dev": "rspress dev --host 127.0.0.1 --port ${DOCS_PORT:-56007}",
     "build": "rspress build",
     "preview": "rspress preview --host 127.0.0.1 --port ${DOCS_PORT:-56007}",
-    "check": "biome check components docs rspress.config.ts package.json tsconfig.json",
+    "check": "node ../node_modules/@biomejs/biome/bin/biome check components docs rspress.config.ts package.json tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
