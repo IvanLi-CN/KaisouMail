@@ -146,6 +146,7 @@ describe("identity service", () => {
           },
         }),
       }),
+      insert: vi.fn(),
     });
 
     await updateRegistrationSettings({} as never, baseConfig, {
@@ -192,6 +193,62 @@ describe("identity service", () => {
         baseConfig,
       ).linuxdoOauthBaseUrl,
     ).toBe("https://stored-linuxdo.example.test");
+  });
+
+  it("does not persist runtime-only LinuxDO OAuth issuer overrides", async () => {
+    const persistedUpdates: unknown[] = [];
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                linuxdoOauthBaseUrl: "https://stored-linuxdo.example.test",
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => ({
+          where: async () => {
+            persistedUpdates.push(values);
+          },
+        }),
+      }),
+      insert: vi.fn(),
+    });
+
+    await updateRegistrationSettings(
+      {} as never,
+      {
+        ...baseConfig,
+        LINUXDO_OAUTH_BASE_URL: "https://runtime-linuxdo.example.test",
+      },
+      {
+        githubMode: "open",
+        githubDailyLimit: 8,
+        githubClientId: "stored-github-client-id",
+        githubClientSecret: "",
+        clearGithubClientSecret: false,
+        githubOauthScopes: "read:user",
+        linuxdoMode: "open",
+        linuxdoDailyLimit: 4,
+        linuxdoClientId: "stored-linuxdo-client-id",
+        linuxdoClientSecret: "",
+        clearLinuxdoClientSecret: false,
+        linuxdoOauthBaseUrl: "https://runtime-linuxdo.example.test",
+        passkeyMode: "invite-only",
+        deletedUserMailboxRetentionDays: 9,
+      },
+    );
+
+    expect(persistedUpdates[0]).toEqual(
+      expect.objectContaining({
+        linuxdoOauthBaseUrl: "https://stored-linuxdo.example.test",
+      }),
+    );
   });
 
   it("keeps secret fields blank in the admin-facing registration settings payload", async () => {

@@ -278,7 +278,7 @@ export const updateRegistrationSettings = async (
         : input.linuxdoClientSecret.trim() ||
           existing.linuxdoClientSecret.trim(),
       linuxdoOauthBaseUrl:
-        input.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
+        existing.linuxdoOauthBaseUrl.trim() || "https://connect.linux.do",
       updatedAt,
     })
     .where(eq(registrationSettings.id, SETTINGS_ROW_ID));
