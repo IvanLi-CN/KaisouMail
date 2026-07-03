@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "1.1.0",
+  "base_stable_version": "1.0.2",
+  "channel_label": "channel:stable",
+  "created_at": "2026-07-03T19:14:18Z",
+  "next_stable_version": "1.1.0",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "370c831f2657fedfdc0ef2fd86cd156aa34cb46b",
+  "pr_number": 91,
+  "pr_title": "feat: document OAuth callback setup",
+  "release_bump": "minor",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v1.1.0",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v1.1.0",
+  "target_sha": "60fbc5159473ff21a6fb382bd73904d7368757bc",
+  "type_label": "type:minor"
+}
