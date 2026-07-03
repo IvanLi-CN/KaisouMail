@@ -141,8 +141,8 @@ export const resolveStoredOauthConfig = (
   linuxdoClientSecret:
     settings.linuxdoClientSecret.trim() || (config.LINUXDO_CLIENT_SECRET ?? ""),
   linuxdoOauthBaseUrl:
-    settings.linuxdoOauthBaseUrl.trim() ||
     config.LINUXDO_OAUTH_BASE_URL ||
+    settings.linuxdoOauthBaseUrl.trim() ||
     "https://connect.linux.do",
 });
 
