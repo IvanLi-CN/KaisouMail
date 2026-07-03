@@ -58,6 +58,7 @@
 
 如果 `VITE_DOCS_SITE_ORIGIN` 不填，控制台仍能用站内速查页，但不会显示公开站入口。
 `VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式；一方浏览器流量默认统一走同源 `/api`。
+GitHub / LinuxDO 的 callback、client id 与 secret 配置见 [OAuth 配置说明](/zh/oauth-configuration)。
 deploy workflow 会先渲染一份生成态的 API Worker 配置，再把 GitHub repository secret `CLOUDFLARE_ACCOUNT_ID` 注入 Worker 运行时变量。只把这个值放进 GitHub Actions job 环境还不够，`/api/meta` 和 `/domains` 的直绑入口不会因此自动开启。
 
 ## Pages 同源 `/api` 代理

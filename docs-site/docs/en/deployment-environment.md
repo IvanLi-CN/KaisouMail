@@ -58,6 +58,7 @@ Do not treat these as long-term configuration for new instances.
 
 If `VITE_DOCS_SITE_ORIGIN` is empty, the in-app quick reference still works, but public docs links are hidden.
 `VITE_API_BASE_URL` is no longer the production browser API locator. First-party browser traffic defaults to same-origin `/api`.
+For GitHub / LinuxDO callback, client id, and secret setup, see [OAuth Configuration](/oauth-configuration).
 The deploy workflow renders a generated API Worker config and injects the GitHub repository secret `CLOUDFLARE_ACCOUNT_ID` into the Worker runtime variables before deploy. Exporting `CLOUDFLARE_ACCOUNT_ID` only to the GitHub Actions job environment is not sufficient for `/api/meta` or the `/domains` direct-binding UI gate.
 
 ## Pages same-origin `/api` proxy

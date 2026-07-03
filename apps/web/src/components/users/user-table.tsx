@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   Fingerprint,
   Github,
   KeyRound,
@@ -15,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
+import { CopyTextButton } from "@/components/shared/copy-text-button";
 import {
   FormCardSkeleton,
   LoadingShellContainer,
@@ -58,6 +60,11 @@ import type {
   SessionUser,
 } from "@/lib/contracts";
 import { formatDateTime } from "@/lib/format";
+import {
+  buildOAuthCallbackUrl,
+  type OAuthProvider,
+} from "@/lib/oauth-callbacks";
+import type { PublicDocsLinks } from "@/lib/public-docs";
 import { cn } from "@/lib/utils";
 
 const createInviteSchema = z.object({
@@ -150,7 +157,7 @@ const roleBadgeClassName = (role: AdminUserRecord["role"]) =>
     : "border-border bg-muted/20 text-foreground";
 
 const channelCardClassName =
-  "space-y-4 rounded-2xl border border-border/70 bg-card p-4";
+  "space-y-4 border-t border-border/70 pt-5 first:border-t-0 first:pt-0";
 
 const feedbackCardClassName =
   "rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm";
@@ -256,6 +263,33 @@ const ChannelCardTitle = ({
   </div>
 );
 
+const providerCallbackLabel = (provider: OAuthProvider) =>
+  provider === "github" ? "GitHub 回调地址" : "LinuxDO 回调地址";
+
+const OAuthCallbackUrlField = ({ provider }: { provider: OAuthProvider }) => {
+  const callbackUrl = buildOAuthCallbackUrl(provider);
+  const label = providerCallbackLabel(provider);
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">OAuth 回调地址</p>
+        <p className="text-xs leading-5 text-muted-foreground">
+          在{" "}
+          {provider === "github" ? "GitHub OAuth App" : "LinuxDO OAuth Client"}{" "}
+          里填写这个 callback URL。
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-background/70 px-3 py-2 sm:flex-row sm:items-center">
+        <code className="min-w-0 flex-1 break-all font-mono text-xs leading-5 text-foreground">
+          {callbackUrl}
+        </code>
+        <CopyTextButton value={callbackUrl} label={label} />
+      </div>
+    </div>
+  );
+};
+
 const modeLabel = (mode: RegistrationSettingsValues["githubMode"]) => {
   switch (mode) {
     case "off":
@@ -298,6 +332,7 @@ export const UserTable = ({
   onInvitesPageChange = () => undefined,
   usersPaginationMode = "local",
   invitesPaginationMode = "local",
+  docsLinks = null,
 }: {
   section?: SystemSection;
   users: AdminUserRecord[];
@@ -333,6 +368,7 @@ export const UserTable = ({
   }) => Promise<void> | void;
   onUsersPageChange?: (page: number) => void;
   onInvitesPageChange?: (page: number) => void;
+  docsLinks?: PublicDocsLinks | null;
 }) => {
   const inviteForm = useForm<CreateInviteValues>({
     defaultValues: { note: "", count: 10 },
@@ -1424,11 +1460,30 @@ export const UserTable = ({
       {section === "registration" ? (
         <Card>
           <CardHeader className="space-y-3">
-            <div className="space-y-1">
-              <CardTitle>注册设置</CardTitle>
-              <CardDescription>
-                先看每个注册入口的当前状态，再按需展开配置。
-              </CardDescription>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle>注册设置</CardTitle>
+                <CardDescription>
+                  先看每个注册入口的当前状态，再按需展开配置。
+                </CardDescription>
+              </div>
+              {docsLinks ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10 shrink-0"
+                >
+                  <a
+                    href={docsLinks.oauthConfiguration}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    OAuth 配置说明
+                  </a>
+                </Button>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge className="border border-border bg-background/70 text-foreground">
@@ -1514,6 +1569,7 @@ export const UserTable = ({
                     </div>
                     {expandedProvider === "github" ? (
                       <div className="space-y-4 border-t border-border/70 pt-4">
+                        <OAuthCallbackUrlField provider="github" />
                         <div className="space-y-2">
                           <Label htmlFor="github-mode">模式</Label>
                           <Select
@@ -1655,6 +1711,7 @@ export const UserTable = ({
                     </div>
                     {expandedProvider === "linuxdo" ? (
                       <div className="space-y-4 border-t border-border/70 pt-4">
+                        <OAuthCallbackUrlField provider="linuxdo" />
                         <div className="space-y-2">
                           <Label htmlFor="linuxdo-mode">模式</Label>
                           <Select
@@ -1734,21 +1791,6 @@ export const UserTable = ({
                               清空已存密钥
                             </Button>
                           </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="linuxdo-oauth-base-url">
-                            OAuth 入口 URL
-                          </Label>
-                          <Input
-                            id="linuxdo-oauth-base-url"
-                            value={settingsDraft.linuxdoOauthBaseUrl}
-                            onChange={(event) =>
-                              setSettingsDraft((current) => ({
-                                ...current,
-                                linuxdoOauthBaseUrl: event.target.value,
-                              }))
-                            }
-                          />
                         </div>
                       </div>
                     ) : null}

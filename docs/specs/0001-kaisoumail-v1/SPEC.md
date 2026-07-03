@@ -420,6 +420,12 @@ PR: include
 PR: include
 ![Desktop admin users console with user list, invite codes, and registration policy controls](./assets/users-admin-console-desktop.png)
 
+PR: include
+![Registration settings showing the GitHub OAuth callback URL with a copy action and public configuration docs link](./assets/registration-oauth-github.png)
+
+PR: include
+![Registration settings showing the LinuxDO OAuth callback URL without exposing the LinuxDO OAuth service endpoint as an editable field](./assets/registration-oauth-linuxdo.png)
+
 ![Identity auth page with the API Keys tab selected](./assets/api-keys-page-docs-entry.png)
 
 ![Identity auth page with the Passkey tab selected](./assets/api-keys-page-passkey-tab.png)

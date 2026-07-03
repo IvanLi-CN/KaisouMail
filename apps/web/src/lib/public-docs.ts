@@ -4,6 +4,7 @@ export type PublicDocsLinks = {
   docsHome: string;
   storybook: string;
   tokenPermissions: string;
+  oauthConfiguration: string;
   domainCatalogEnablement: string;
   projectDomainBinding: string;
   faq: string;
@@ -23,6 +24,7 @@ export const buildPublicDocsLinks = (
     docsHome: `${zhDocsOrigin}/`,
     storybook: `${zhDocsOrigin}/storybook.html`,
     tokenPermissions: `${zhDocsOrigin}/cloudflare-token-permissions`,
+    oauthConfiguration: `${zhDocsOrigin}/oauth-configuration`,
     domainCatalogEnablement: `${zhDocsOrigin}/domain-catalog-enablement`,
     projectDomainBinding: `${zhDocsOrigin}/project-domain-binding`,
     faq: `${zhDocsOrigin}/faq`,

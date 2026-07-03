@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api";
+import { buildPublicDocsLinks } from "@/lib/public-docs";
 import {
   demoAdminUsers,
   demoInvites,
@@ -79,6 +80,12 @@ const getTransferAdminButton = () => {
   }
   return button;
 };
+
+const docsLinks = buildPublicDocsLinks("https://docs.example.test");
+
+if (!docsLinks) {
+  throw new Error("Expected docs links fixture");
+}
 
 describe("users page view", () => {
   it("renders a recoverable error state", () => {
@@ -424,6 +431,118 @@ describe("users page view", () => {
         }),
       ),
     );
+  });
+
+  it("shows OAuth callback URLs and a docs link in registration settings", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="registration"
+          users={demoAdminUsers}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          docsLinks={docsLinks}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const origin = window.location.origin;
+
+    expect(
+      screen.getByText(`${origin}/api/auth/github/callback`),
+    ).toBeInTheDocument();
+
+    const expandButtons = screen.getAllByRole("button", {
+      name: "展开配置",
+    });
+    const linuxdoExpandButton = expandButtons[0];
+    if (!linuxdoExpandButton) {
+      throw new Error("Expected LinuxDO expand button");
+    }
+    fireEvent.click(linuxdoExpandButton);
+
+    expect(
+      screen.getByText(`${origin}/api/auth/linuxdo/callback`),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("OAuth 入口 URL")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("https://connect.linux.do"),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "OAuth 配置说明" }),
+    ).toHaveAttribute(
+      "href",
+      "https://docs.example.test/zh/oauth-configuration",
+    );
+  });
+
+  it("copies the GitHub OAuth callback URL", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="registration"
+          users={demoAdminUsers}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "复制 GitHub 回调地址" }),
+    );
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.origin}/api/auth/github/callback`,
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "已复制 GitHub 回调地址" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the OAuth docs link when public docs are unavailable", () => {
+    render(
+      <MemoryRouter>
+        <UsersPageView
+          section="registration"
+          users={demoAdminUsers}
+          invites={demoInvites}
+          settings={demoRegistrationSettings}
+          currentAdminUserId={demoSessionUser.id}
+          currentAdmin={demoCurrentAdmin}
+          docsLinks={null}
+          onCreateInvite={vi.fn()}
+          onDeleteInvite={vi.fn()}
+          onUpdateSettings={vi.fn()}
+          onTransferAdmin={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "OAuth 配置说明" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a first-load users skeleton while the list is still loading", () => {
