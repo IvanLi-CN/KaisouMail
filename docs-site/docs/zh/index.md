@@ -4,16 +4,18 @@
 
 1. 先按 [Cloudflare Token 权限](/zh/cloudflare-token-permissions) 配好 runtime / deploy token。
 2. 再按 [部署与环境变量](/zh/deployment-environment) 配好 Worker、Pages 和运行时变量。
-3. 先看 [域名接入总览](/zh/domain-onboarding)，确认应该走哪条接入路径。
-4. 如果你要**先在 Cloudflare 手动接入域名**，看 [手动在 Cloudflare 上绑定并在项目中启用域名](/zh/domain-catalog-enablement)。
-5. 如果你要**直接在 `/domains` 里绑定新域名**，看 [在项目中直接绑定新域名](/zh/project-domain-binding)。
-6. 需要接口示例时，先看 [API 参考](/zh/api-reference)，再去控制台内 `/api-keys/docs` 看当前实例的速查页。
+3. 如果要启用 GitHub / LinuxDO 登录注册，按 [OAuth 配置说明](/zh/oauth-configuration) 填好 callback、client id 和 secret。
+4. 先看 [域名接入总览](/zh/domain-onboarding)，确认应该走哪条接入路径。
+5. 如果你要**先在 Cloudflare 手动接入域名**，看 [手动在 Cloudflare 上绑定并在项目中启用域名](/zh/domain-catalog-enablement)。
+6. 如果你要**直接在 `/domains` 里绑定新域名**，看 [在项目中直接绑定新域名](/zh/project-domain-binding)。
+7. 需要接口示例时，先看 [API 参考](/zh/api-reference)，再去控制台内 `/api-keys/docs` 看当前实例的速查页。
 
 ## 文档目录
 
 - [快速开始](/zh/quick-start)
 - [部署与环境变量](/zh/deployment-environment)
 - [Cloudflare Token 权限](/zh/cloudflare-token-permissions)
+- [OAuth 配置说明](/zh/oauth-configuration)
 - [域名接入总览](/zh/domain-onboarding)
 - [手动在 Cloudflare 上绑定并在项目中启用域名](/zh/domain-catalog-enablement)
 - [在项目中直接绑定新域名](/zh/project-domain-binding)

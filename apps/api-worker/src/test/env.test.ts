@@ -45,6 +45,19 @@ describe("runtime config parsing", () => {
     expect(config.CLOUDFLARE_RUNTIME_API_TOKEN).toBeUndefined();
   });
 
+  it("keeps LinuxDO OAuth issuer optional unless explicitly configured", () => {
+    expect(
+      parseRuntimeConfig(baseEnv as never).LINUXDO_OAUTH_BASE_URL,
+    ).toBeUndefined();
+
+    expect(
+      parseRuntimeConfig({
+        ...baseEnv,
+        LINUXDO_OAUTH_BASE_URL: "https://linuxdo-oauth.example.test",
+      } as never).LINUXDO_OAUTH_BASE_URL,
+    ).toBe("https://linuxdo-oauth.example.test");
+  });
+
   it("accepts legacy bootstrap env vars as optional compatibility inputs", () => {
     const result = safeParseRuntimeConfig({
       ...baseEnv,

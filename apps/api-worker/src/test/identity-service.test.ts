@@ -16,6 +16,7 @@ import {
   registerViaExternalProvider,
   registerViaPasskeyInvite,
   resolveExternalRegistrationRequirement,
+  resolveStoredOauthConfig,
   updateRegistrationSettings,
 } from "../services/identity";
 
@@ -34,17 +35,17 @@ const baseConfig = {
 
 const currentSettingsRow = {
   id: 1,
-  githubMode: "open",
+  githubMode: "open" as const,
   githubDailyLimit: 5,
   githubClientId: "stored-github-client-id",
   githubClientSecret: "",
   githubOauthScopes: "read:user user:email",
-  linuxdoMode: "invite-only",
+  linuxdoMode: "invite-only" as const,
   linuxdoDailyLimit: 3,
   linuxdoClientId: "stored-linuxdo-client-id",
   linuxdoClientSecret: "",
   linuxdoOauthBaseUrl: "https://connect.linux.do",
-  passkeyMode: "invite-only",
+  passkeyMode: "invite-only" as const,
   deletedUserMailboxRetentionDays: 7,
   updatedAt: "2026-04-05T16:00:00.000Z",
 };
@@ -145,6 +146,7 @@ describe("identity service", () => {
           },
         }),
       }),
+      insert: vi.fn(),
     });
 
     await updateRegistrationSettings({} as never, baseConfig, {
@@ -172,6 +174,81 @@ describe("identity service", () => {
     );
     expect(persistedUpdates[0]).not.toHaveProperty("clearGithubClientSecret");
     expect(persistedUpdates[0]).not.toHaveProperty("clearLinuxdoClientSecret");
+  });
+
+  it("lets runtime LinuxDO OAuth base URL override the stored default", () => {
+    expect(
+      resolveStoredOauthConfig(currentSettingsRow, {
+        ...baseConfig,
+        LINUXDO_OAUTH_BASE_URL: "https://linuxdo-oauth.example.test",
+      }).linuxdoOauthBaseUrl,
+    ).toBe("https://linuxdo-oauth.example.test");
+
+    expect(
+      resolveStoredOauthConfig(
+        {
+          ...currentSettingsRow,
+          linuxdoOauthBaseUrl: "https://stored-linuxdo.example.test",
+        },
+        baseConfig,
+      ).linuxdoOauthBaseUrl,
+    ).toBe("https://stored-linuxdo.example.test");
+  });
+
+  it("does not persist runtime-only LinuxDO OAuth issuer overrides", async () => {
+    const persistedUpdates: unknown[] = [];
+    getDb.mockReturnValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                ...currentSettingsRow,
+                linuxdoOauthBaseUrl: "https://stored-linuxdo.example.test",
+              },
+            ],
+          }),
+        }),
+      }),
+      update: () => ({
+        set: (values: unknown) => ({
+          where: async () => {
+            persistedUpdates.push(values);
+          },
+        }),
+      }),
+      insert: vi.fn(),
+    });
+
+    await updateRegistrationSettings(
+      {} as never,
+      {
+        ...baseConfig,
+        LINUXDO_OAUTH_BASE_URL: "https://runtime-linuxdo.example.test",
+      },
+      {
+        githubMode: "open",
+        githubDailyLimit: 8,
+        githubClientId: "stored-github-client-id",
+        githubClientSecret: "",
+        clearGithubClientSecret: false,
+        githubOauthScopes: "read:user",
+        linuxdoMode: "open",
+        linuxdoDailyLimit: 4,
+        linuxdoClientId: "stored-linuxdo-client-id",
+        linuxdoClientSecret: "",
+        clearLinuxdoClientSecret: false,
+        linuxdoOauthBaseUrl: "https://runtime-linuxdo.example.test",
+        passkeyMode: "invite-only",
+        deletedUserMailboxRetentionDays: 9,
+      },
+    );
+
+    expect(persistedUpdates[0]).toEqual(
+      expect.objectContaining({
+        linuxdoOauthBaseUrl: "https://stored-linuxdo.example.test",
+      }),
+    );
   });
 
   it("keeps secret fields blank in the admin-facing registration settings payload", async () => {

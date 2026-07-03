@@ -222,8 +222,7 @@ const normalizeRuntimeConfig = (
     GITHUB_OAUTH_SCOPES: config.GITHUB_OAUTH_SCOPES.split(/[,\s]+/)
       .map((scope) => scope.trim())
       .filter(Boolean),
-    LINUXDO_OAUTH_BASE_URL:
-      config.LINUXDO_OAUTH_BASE_URL ?? "https://connect.linux.do",
+    LINUXDO_OAUTH_BASE_URL: config.LINUXDO_OAUTH_BASE_URL,
     WEB_APP_ORIGIN: webAppOrigins[0],
     WEB_APP_ORIGINS: webAppOrigins,
   };

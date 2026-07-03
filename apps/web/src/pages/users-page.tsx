@@ -23,6 +23,7 @@ import {
 } from "@/hooks/use-users";
 import { apiClient } from "@/lib/api";
 import { getErrorDetails } from "@/lib/error-utils";
+import { type PublicDocsLinks, publicDocsLinks } from "@/lib/public-docs";
 import { appRoutes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ type UsersPageViewProps = {
   onTransferAdmin: Parameters<typeof UserTable>[0]["onTransferAdmin"];
   onUsersPageChange?: Parameters<typeof UserTable>[0]["onUsersPageChange"];
   onInvitesPageChange?: Parameters<typeof UserTable>[0]["onInvitesPageChange"];
+  docsLinks?: PublicDocsLinks | null;
 };
 
 const systemSections = [
@@ -133,6 +135,7 @@ export const UsersPageView = ({
   onTransferAdmin,
   onUsersPageChange = () => undefined,
   onInvitesPageChange = () => undefined,
+  docsLinks = publicDocsLinks,
 }: UsersPageViewProps) => {
   const activeSection =
     systemSections.find((item) => item.id === section) ?? systemSections[0];
@@ -228,6 +231,7 @@ export const UsersPageView = ({
               onTransferAdmin={onTransferAdmin}
               onUsersPageChange={onUsersPageChange}
               onInvitesPageChange={onInvitesPageChange}
+              docsLinks={docsLinks}
             />
           </section>
         </div>

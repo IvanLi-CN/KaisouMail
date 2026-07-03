@@ -68,6 +68,11 @@ export default defineConfig({
             activeMatch: "^/cloudflare-token-permissions(?:$|/|\\.html$)",
           },
           {
+            text: "OAuth",
+            link: "/oauth-configuration",
+            activeMatch: "^/oauth-configuration(?:$|/|\\.html$)",
+          },
+          {
             text: "Storybook",
             link: "/storybook.html",
             activeMatch: "^/storybook(?:\\.html)?$",
@@ -97,6 +102,10 @@ export default defineConfig({
                 {
                   text: "Token Permissions",
                   link: "/cloudflare-token-permissions",
+                },
+                {
+                  text: "OAuth Configuration",
+                  link: "/oauth-configuration",
                 },
               ],
             },
@@ -155,6 +164,11 @@ export default defineConfig({
             activeMatch: "^/zh/cloudflare-token-permissions(?:$|/|\\.html$)",
           },
           {
+            text: "OAuth",
+            link: "/zh/oauth-configuration",
+            activeMatch: "^/zh/oauth-configuration(?:$|/|\\.html$)",
+          },
+          {
             text: "Storybook",
             link: "/zh/storybook.html",
             activeMatch: "^/zh/storybook(?:\\.html)?$",
@@ -182,6 +196,7 @@ export default defineConfig({
                   text: "Token 权限",
                   link: "/zh/cloudflare-token-permissions",
                 },
+                { text: "OAuth 配置", link: "/zh/oauth-configuration" },
               ],
             },
             {
