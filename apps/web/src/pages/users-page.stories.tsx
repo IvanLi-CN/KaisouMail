@@ -91,6 +91,9 @@ export const RegistrationOAuthSettings: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
+      canvas.getByRole("button", { name: "保存注册设置" }),
+    ).toBeDisabled();
+    await expect(
       canvas.getByRole("link", { name: "OAuth 配置说明" }),
     ).toHaveAttribute(
       "href",
@@ -99,6 +102,29 @@ export const RegistrationOAuthSettings: Story = {
     await expect(
       canvas.getByText(/\/api\/auth\/github\/callback$/),
     ).toBeInTheDocument();
+  },
+};
+
+export const RegistrationSettingsUnsaved: Story = {
+  args: {
+    section: "registration",
+    docsLinks,
+    onUpdateSettings: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const saveButton = canvas.getByRole("button", {
+      name: "保存注册设置",
+    });
+    await expect(saveButton).toBeDisabled();
+
+    await userEvent.selectOptions(canvas.getByLabelText("模式"), "invite-only");
+
+    await expect(canvas.getByText("有未保存更改")).toBeInTheDocument();
+    await expect(saveButton).toBeEnabled();
+
+    await userEvent.click(saveButton);
+    await expect(args.onUpdateSettings).toHaveBeenCalled();
   },
 };
 
