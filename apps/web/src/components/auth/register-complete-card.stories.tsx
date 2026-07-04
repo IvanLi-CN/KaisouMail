@@ -8,6 +8,9 @@ const meta = {
   title: "Auth/RegisterCompleteCard",
   component: RegisterCompleteCard,
   tags: ["autodocs"],
+  parameters: {
+    disableMemoryRouter: true,
+  },
   decorators: [
     (Story) => (
       <MemoryRouter>
@@ -44,6 +47,22 @@ export const ExternalProvider: Story = {
     await userEvent.type(canvas.getByLabelText("昵称"), "Ivan Owner");
     await userEvent.click(canvas.getByRole("button", { name: "创建账号" }));
     await expect(args.onSubmit).toHaveBeenCalled();
+  },
+};
+
+export const EmptyNickname: Story = {
+  args: {
+    registration: {
+      token: "pending_empty_nickname",
+      method: "github",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteRequired: false,
+      invitePrevalidated: false,
+      canComplete: true,
+      suggestedNickname: null,
+      error: null,
+    },
   },
 };
 

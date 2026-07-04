@@ -91,7 +91,7 @@ export const RegisterCompleteCard = ({
           <Label htmlFor="complete-nickname">昵称</Label>
           <Input
             id="complete-nickname"
-            placeholder="例如 Ivan Owner"
+            placeholder="输入显示昵称"
             autoComplete="nickname"
             {...form.register("nickname")}
           />
