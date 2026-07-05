@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Fingerprint, UserPlus } from "lucide-react";
+import { CheckCircle2, Fingerprint, UserPlus } from "lucide-react";
 import type { MouseEvent } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -15,7 +16,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PendingRegistration } from "@/lib/contracts";
+import type { RegistrationFormError } from "@/lib/registration-errors";
 import { appRoutes } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 const completeRegistrationSchema = z.object({
   nickname: z.string().trim().min(1, "请输入昵称"),
@@ -37,7 +40,7 @@ export const RegisterCompleteCard = ({
   onSubmit,
 }: {
   registration: PendingRegistration;
-  error?: string | null;
+  error?: RegistrationFormError | null;
   isPending?: boolean;
   onSubmit: (values: CompleteRegistrationValues) => Promise<void> | void;
 }) => {
@@ -51,6 +54,40 @@ export const RegisterCompleteCard = ({
       passkeyName: "Primary Passkey",
     },
   });
+  const {
+    clearErrors,
+    formState: { errors },
+    handleSubmit,
+    register,
+    setError,
+  } = form;
+
+  useEffect(() => {
+    clearErrors();
+    if (!error) return;
+
+    const firstField = (
+      ["inviteCode", "nickname", "passkeyName"] as const
+    ).find((field) => error.fields?.[field]);
+    for (const field of ["inviteCode", "nickname", "passkeyName"] as const) {
+      const message = error.fields?.[field];
+      if (!message) continue;
+      setError(
+        field,
+        { type: "server", message },
+        { shouldFocus: field === firstField },
+      );
+    }
+    if (error.form) {
+      setError("root.server", { type: "server", message: error.form });
+    }
+  }, [clearErrors, error, setError]);
+
+  const inviteCodeError = errors.inviteCode?.message;
+  const nicknameError = errors.nickname?.message;
+  const passkeyNameError = errors.passkeyName?.message;
+  const formError = errors.root?.server?.message ?? registration.error;
+
   const preventSoftDisabledAction = (
     event: MouseEvent<HTMLButtonElement>,
     softDisabled: boolean,
@@ -64,59 +101,163 @@ export const RegisterCompleteCard = ({
     event.currentTarget.focus();
     return true;
   };
+  const submitForm = handleSubmit((values) => {
+    if (
+      registration.inviteRequired &&
+      !registration.invitePrevalidated &&
+      !values.inviteCode?.trim()
+    ) {
+      setError(
+        "inviteCode",
+        { type: "manual", message: "请输入邀请码。" },
+        { shouldFocus: true },
+      );
+      return;
+    }
+
+    return onSubmit(values);
+  });
 
   return (
     <Card className="mx-auto w-full max-w-[520px] border-border/70 bg-card/95 p-4 shadow-none sm:p-6">
-      <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl">完成注册</CardTitle>
+      <CardHeader className="space-y-5">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-primary">注册进行中</p>
+          <CardTitle className="text-2xl">继续完成注册</CardTitle>
+          <p className="text-sm leading-6 text-muted-foreground">
+            身份验证已完成，补充账号资料后即可进入控制台。
+          </p>
+        </div>
+
+        <ol
+          className="grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] items-start gap-2 text-sm"
+          aria-label="注册进度"
+        >
+          <li className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2
+                aria-hidden="true"
+                className="h-7 w-7 text-primary"
+              />
+              <p className="text-base font-semibold leading-6 text-foreground">
+                已通过 {methodLabel(registration.method)} 验证
+              </p>
+            </div>
+            <p className="pl-9 text-xs leading-5 text-muted-foreground">
+              身份来源已确认
+            </p>
+          </li>
+          <li aria-hidden="true" className="mt-3.5 h-px bg-border" />
+          <li className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-primary/50 bg-primary/10 text-sm font-semibold text-primary"
+              >
+                2
+              </span>
+              <p className="text-base font-semibold leading-6 text-foreground">
+                填写账号资料
+              </p>
+            </div>
+            <p className="pl-9 text-xs leading-5 text-muted-foreground">
+              设置昵称并完成账号创建
+            </p>
+          </li>
+        </ol>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="rounded-2xl border border-border/70 bg-background/45 px-4 py-3 text-sm text-muted-foreground">
-          {methodLabel(registration.method)}
-        </div>
+        <section className="space-y-4" aria-labelledby="account-details-title">
+          <p id="account-details-title" className="text-sm font-medium">
+            账号资料
+          </p>
 
-        {registration.inviteRequired && !registration.invitePrevalidated ? (
+          {registration.inviteRequired && !registration.invitePrevalidated ? (
+            <div className="space-y-2">
+              <Label htmlFor="complete-invite-code">邀请码</Label>
+              <Input
+                id="complete-invite-code"
+                placeholder="km_xxx"
+                autoComplete="off"
+                aria-describedby={
+                  inviteCodeError ? "complete-invite-code-error" : undefined
+                }
+                aria-invalid={Boolean(inviteCodeError)}
+                className={cn(
+                  inviteCodeError ? "border-destructive" : undefined,
+                )}
+                {...register("inviteCode")}
+              />
+              {inviteCodeError ? (
+                <p
+                  className="text-sm text-destructive"
+                  id="complete-invite-code-error"
+                  role="alert"
+                >
+                  {inviteCodeError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="space-y-2">
-            <Label htmlFor="complete-invite-code">邀请码</Label>
+            <Label htmlFor="complete-nickname">昵称</Label>
             <Input
-              id="complete-invite-code"
-              placeholder="km_xxx"
-              autoComplete="off"
-              {...form.register("inviteCode")}
+              id="complete-nickname"
+              placeholder="例如 Ivan Owner"
+              autoComplete="nickname"
+              aria-describedby={
+                nicknameError ? "complete-nickname-error" : undefined
+              }
+              aria-invalid={Boolean(nicknameError)}
+              className={cn(nicknameError ? "border-destructive" : undefined)}
+              {...register("nickname")}
             />
+            {nicknameError ? (
+              <p
+                className="text-sm text-destructive"
+                id="complete-nickname-error"
+                role="alert"
+              >
+                {nicknameError}
+              </p>
+            ) : null}
           </div>
+
+          {isPasskey ? (
+            <div className="space-y-2">
+              <Label htmlFor="complete-passkey-name">设备名称</Label>
+              <Input
+                id="complete-passkey-name"
+                placeholder="Primary Passkey"
+                autoComplete="off"
+                aria-describedby={
+                  passkeyNameError ? "complete-passkey-name-error" : undefined
+                }
+                aria-invalid={Boolean(passkeyNameError)}
+                className={cn(
+                  passkeyNameError ? "border-destructive" : undefined,
+                )}
+                {...register("passkeyName")}
+              />
+              {passkeyNameError ? (
+                <p
+                  className="text-sm text-destructive"
+                  id="complete-passkey-name-error"
+                  role="alert"
+                >
+                  {passkeyNameError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
+        {formError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {formError}
+          </p>
         ) : null}
-
-        <div className="space-y-2">
-          <Label htmlFor="complete-nickname">昵称</Label>
-          <Input
-            id="complete-nickname"
-            placeholder="例如 Ivan Owner"
-            autoComplete="nickname"
-            {...form.register("nickname")}
-          />
-        </div>
-
-        {isPasskey ? (
-          <div className="space-y-2">
-            <Label htmlFor="complete-passkey-name">设备名称</Label>
-            <Input
-              id="complete-passkey-name"
-              placeholder="Primary Passkey"
-              autoComplete="off"
-              {...form.register("passkeyName")}
-            />
-          </div>
-        ) : null}
-
-        <p className="min-h-5 text-sm text-destructive" role="alert">
-          {form.formState.errors.inviteCode?.message ??
-            form.formState.errors.nickname?.message ??
-            form.formState.errors.passkeyName?.message ??
-            error ??
-            registration.error ??
-            " "}
-        </p>
 
         <AuthActionButton
           type="button"
@@ -125,8 +266,8 @@ export const RegisterCompleteCard = ({
             isPending
               ? "提交中…"
               : isPasskey
-                ? "使用 Passkey 创建账号"
-                : "创建账号"
+                ? "完成注册并保存 Passkey"
+                : "完成注册并创建账号"
           }
           size="lg"
           aria-disabled={submitSoftDisabled || undefined}
@@ -135,7 +276,7 @@ export const RegisterCompleteCard = ({
               return;
             }
 
-            void form.handleSubmit((values) => onSubmit(values))(event);
+            void submitForm(event);
           }}
         />
       </CardContent>

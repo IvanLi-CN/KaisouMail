@@ -1,5 +1,13 @@
 # KaisouMail V1 History
 
+## 2026-07-05
+
+- Reworked registration-completion error handling after raw `"Invite required"`
+  copy leaked into the Chinese UI and appeared detached from the invite field.
+- Kept the existing API envelope unchanged and localized/classified completion
+  errors in the Web client so invite-code problems can focus and describe the
+  exact input, while broader registration failures still use form-level copy.
+
 ## 2026-06-22
 
 - Began the identity-model refactor from `email + name + admin direct-create`

@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-28
+Last: 2026-07-05
 
 ## Objective
 
@@ -13,6 +13,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/login`
 - `/register`
 - Login and registration are independent browser surfaces: `/login` is strictly for sign-in via Passkey, third-party providers, or API key fallback, while `/register` is reserved for invite/open signup flows and Passkey-first account creation
+- `/register/complete` keeps completion errors aligned to the field that can fix them: invite failures render under the invite code input in Chinese with an error input state, while expired registration state and provider/passkey failures remain form-level guidance
 
 ### Workspace
 - `/workspace`
@@ -163,6 +164,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 
 ## Change log
 
+- 2026-07-05: Fixed registration completion errors so invite failures no longer surface raw English API strings and instead bind to the invite-code field with Chinese copy, input error state, accessibility wiring, Storybook coverage, and refreshed visual evidence.
 - 2026-05-18: Added mailbox creation provenance and tags, including API key attribution, create/ensure tag input, tag replacement, list filtering by repeated `tag`, normalized tag tables, and mailbox-management UI badges/filter/editing.
 - 2026-05-28: Disabled default browser/password-manager autofill hints across Web console inputs, covering mailbox tag/search controls and API key fallback login while keeping an explicit opt-in escape hatch for future fields.
 - 2026-05-08: Added row-scoped retry feedback on provisioning-error domains so retry immediately spins, active recovery shows a temporary success check, and still-pending or failed attempts open a direct popover with the Cloudflare reason and NS next step.
@@ -229,6 +231,8 @@ PR: include
 ![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
 ![Identity auth passkey tab with registration disabled on an untrusted origin while existing passkeys remain visible](./assets/passkey-tab-untrusted-origin.png)
+
+![Registration completion invite-code error rendered under the invite field in Chinese](./assets/register-complete-invite-required-error.png)
 
 ### App Shell
 
