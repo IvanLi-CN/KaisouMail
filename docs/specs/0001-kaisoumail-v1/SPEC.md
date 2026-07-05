@@ -427,6 +427,9 @@ PR: include
 PR: include
 ![Registration settings showing the LinuxDO OAuth callback URL without exposing the LinuxDO OAuth service endpoint as an editable field](./assets/registration-oauth-linuxdo.png)
 
+PR: include
+![Registration settings page without an extra enclosing card and with the save action promoted into the section header](./assets/registration-settings-layout.png)
+
 ![Identity auth page with the API Keys tab selected](./assets/api-keys-page-docs-entry.png)
 
 ![Identity auth page with the Passkey tab selected](./assets/api-keys-page-passkey-tab.png)

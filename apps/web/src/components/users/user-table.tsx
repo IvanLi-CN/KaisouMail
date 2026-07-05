@@ -8,6 +8,7 @@ import {
   Fingerprint,
   Github,
   KeyRound,
+  Save,
   Search,
   ShieldCheck,
 } from "lucide-react";
@@ -1458,45 +1459,68 @@ export const UserTable = ({
       ) : null}
 
       {section === "registration" ? (
-        <Card>
-          <CardHeader className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle>注册设置</CardTitle>
-                <CardDescription>
-                  先看每个注册入口的当前状态，再按需展开配置。
-                </CardDescription>
-              </div>
-              {docsLinks ? (
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="min-h-10 shrink-0"
-                >
-                  <a
-                    href={docsLinks.oauthConfiguration}
-                    target="_blank"
-                    rel="noreferrer"
+        <section className="space-y-5">
+          <form
+            className="space-y-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSaveSettings();
+            }}
+          >
+            <div className="space-y-4 border-b border-border/70 pb-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-1.5">
+                  <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                    注册设置
+                  </h2>
+                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                    先看每个注册入口的当前状态，再按需展开配置。
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+                  {docsLinks ? (
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="min-h-10 shrink-0"
+                    >
+                      <a
+                        href={docsLinks.oauthConfiguration}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        OAuth 配置说明
+                      </a>
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    size="lg"
+                    className="min-h-11 shrink-0 px-5"
+                    disabled={isSavingSettings || !hasUnsavedSettings}
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    OAuth 配置说明
-                  </a>
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge className="border border-border bg-background/70 text-foreground">
-                更新于 {formatDateTime(settings.updatedAt)}
-              </Badge>
-              {hasUnsavedSettings ? (
-                <Badge className="border border-primary/40 bg-primary/10 text-primary">
-                  有未保存更改
+                    {isSavingSettings ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    {isSavingSettings ? "保存中…" : "保存注册设置"}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge className="border border-border bg-background/70 text-foreground">
+                  更新于 {formatDateTime(settings.updatedAt)}
                 </Badge>
-              ) : null}
+                {hasUnsavedSettings ? (
+                  <Badge className="border border-primary/40 bg-primary/10 text-primary">
+                    有未保存更改
+                  </Badge>
+                ) : null}
+              </div>
             </div>
-          </CardHeader>
-          <CardContent>
             {isSettingsLoading ? (
               <LoadingShellContainer data-testid="registration-settings-skeleton">
                 <FormCardSkeleton fieldCount={4} />
@@ -1504,13 +1528,7 @@ export const UserTable = ({
                 <FormCardSkeleton fieldCount={2} />
               </LoadingShellContainer>
             ) : (
-              <form
-                className="space-y-6"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleSaveSettings();
-                }}
-              >
+              <>
                 {settingsMessage ? (
                   <div
                     className={`${feedbackCardClassName} flex items-center gap-3 text-foreground`}
@@ -1528,7 +1546,7 @@ export const UserTable = ({
                   </div>
                 ) : null}
 
-                <div className="space-y-4">
+                <div className="space-y-1">
                   <div className={channelCardClassName}>
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-3">
@@ -1872,22 +1890,15 @@ export const UserTable = ({
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="submit"
-                    className="min-h-11"
-                    disabled={isSavingSettings || !hasUnsavedSettings}
-                  >
-                    {isSavingSettings ? "保存中…" : "保存注册设置"}
-                  </Button>
-                  <p className="text-sm text-muted-foreground">
+                <div className="border-t border-border/70 pt-5">
+                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                     未填写的新密钥会保持现有配置，不会回显。
                   </p>
                 </div>
-              </form>
+              </>
             )}
-          </CardContent>
-        </Card>
+          </form>
+        </section>
       ) : null}
     </div>
   );

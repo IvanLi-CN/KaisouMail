@@ -137,9 +137,6 @@ export const UsersPageView = ({
   onInvitesPageChange = () => undefined,
   docsLinks = publicDocsLinks,
 }: UsersPageViewProps) => {
-  const activeSection =
-    systemSections.find((item) => item.id === section) ?? systemSections[0];
-
   return (
     <div className="space-y-6">
       <PageHeader title="系统" description="系统设置。" />
@@ -199,14 +196,6 @@ export const UsersPageView = ({
           </aside>
 
           <section className="space-y-4">
-            <div className="space-y-1 px-1">
-              <p className="text-lg font-semibold text-foreground">
-                {activeSection.label}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {activeSection.description}
-              </p>
-            </div>
             <UserTable
               section={section}
               users={users}
