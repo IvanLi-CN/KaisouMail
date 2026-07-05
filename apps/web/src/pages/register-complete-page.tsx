@@ -6,9 +6,14 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import type { CompleteRegistrationValues } from "@/components/auth/register-complete-card";
 import { RegisterCompleteCard } from "@/components/auth/register-complete-card";
 import { useSessionQuery } from "@/hooks/use-session";
-import { apiClient } from "@/lib/api";
+import { ApiClientError, apiClient } from "@/lib/api";
 import type { PendingRegistration } from "@/lib/contracts";
 import { getPasskeyErrorMessage } from "@/lib/passkeys";
+import {
+  getRegistrationCompletionError,
+  getRegistrationStatusMessage,
+  type RegistrationFormError,
+} from "@/lib/registration-errors";
 
 const fallbackRegistration = (
   token: string,
@@ -25,12 +30,31 @@ const fallbackRegistration = (
   error,
 });
 
+export const toRegisterCompleteSubmitError = (
+  method: PendingRegistration["method"],
+  reason: unknown,
+): RegistrationFormError => {
+  if (method !== "passkey") {
+    return getRegistrationCompletionError(reason);
+  }
+
+  if (reason instanceof ApiClientError) {
+    return getRegistrationCompletionError(reason);
+  }
+
+  return {
+    form: getPasskeyErrorMessage(reason, "Passkey 注册失败，请稍后重试。"),
+  };
+};
+
 export const RegisterCompletePage = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const sessionQuery = useSessionQuery();
   const token = searchParams.get("token") ?? "";
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<RegistrationFormError | null>(
+    null,
+  );
 
   const pendingQuery = useQuery({
     queryKey: ["auth", "registration", token],
@@ -72,9 +96,7 @@ export const RegisterCompletePage = () => {
     fallbackRegistration(
       token,
       pendingQuery.isError
-        ? pendingQuery.error instanceof Error
-          ? pendingQuery.error.message
-          : "注册状态已失效"
+        ? getRegistrationStatusMessage(pendingQuery.error)
         : "正在加载注册状态…",
     )) as PendingRegistration;
   if (!token) {
@@ -104,11 +126,7 @@ export const RegisterCompletePage = () => {
             });
           } catch (reason) {
             setSubmitError(
-              displayRegistration.method === "passkey"
-                ? getPasskeyErrorMessage(reason, "Passkey 注册失败")
-                : reason instanceof Error
-                  ? reason.message
-                  : "注册失败",
+              toRegisterCompleteSubmitError(displayRegistration.method, reason),
             );
           }
         }}

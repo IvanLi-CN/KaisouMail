@@ -8,6 +8,10 @@
 - Keep API keys and passkeys as separate auth resources.
 - Split the browser auth surface into `/login` and `/register` so sign-in and
   account creation no longer compete inside one card.
+- Keep `/register/complete` submit failures field-aware: invite-code failures
+  are mapped to Chinese field messages with `aria-invalid` /
+  `aria-describedby`, while registration-state and provider/passkey failures
+  remain form-level guidance.
 
 ## Admin Console
 
