@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { MemoryRouter } from "react-router-dom";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { LoginCard } from "@/components/auth/login-card";
@@ -9,13 +8,6 @@ const meta = {
   title: "Auth/LoginCard",
   component: LoginCard,
   tags: ["autodocs"],
-  decorators: [
-    (Story) => (
-      <MemoryRouter>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
   args: {
     onPasskeySubmit: fn(),
     onProviderLogin: fn(),
@@ -51,6 +43,18 @@ export const Default: Story = {
 export const PasskeyUnsupported: Story = {
   args: {
     passkeySupported: false,
+  },
+};
+
+export const PasskeyPending: Story = {
+  args: {
+    isPasskeyPending: true,
+  },
+};
+
+export const ProviderPending: Story = {
+  args: {
+    isProviderPending: true,
   },
 };
 

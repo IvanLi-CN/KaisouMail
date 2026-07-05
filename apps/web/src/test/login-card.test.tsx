@@ -37,6 +37,85 @@ describe("LoginCard", () => {
     });
   });
 
+  it("shows feedback immediately after passkey click", async () => {
+    let resolvePasskeySubmit: () => void = () => {};
+    const onPasskeySubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePasskeySubmit = resolve;
+        }),
+    );
+
+    renderLoginCard(
+      <LoginCard onPasskeySubmit={onPasskeySubmit} passkeySupported />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "使用 Passkey 登录" }));
+
+    const button = await screen.findByRole("button", {
+      name: "正在唤起 Passkey…",
+    });
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toHaveAttribute("data-auth-state", "loading");
+
+    resolvePasskeySubmit();
+  });
+
+  it("ignores rapid repeated passkey clicks", async () => {
+    let resolvePasskeySubmit: () => void = () => {};
+    const onPasskeySubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePasskeySubmit = resolve;
+        }),
+    );
+
+    renderLoginCard(
+      <LoginCard onPasskeySubmit={onPasskeySubmit} passkeySupported />,
+    );
+
+    const button = screen.getByRole("button", { name: "使用 Passkey 登录" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(onPasskeySubmit).toHaveBeenCalledTimes(1);
+    });
+
+    resolvePasskeySubmit();
+  });
+
+  it("shows provider login feedback and ignores repeated clicks", async () => {
+    let resolveProviderLogin: () => void = () => {};
+    const onProviderLogin = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveProviderLogin = resolve;
+        }),
+    );
+
+    renderLoginCard(
+      <LoginCard
+        onProviderLogin={onProviderLogin}
+        passkeySupported
+        providers={demoAuthProviders}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "使用 GitHub 登录" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    const pendingButton = await screen.findByRole("button", {
+      name: "正在跳转 GitHub…",
+    });
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(pendingButton).toHaveAttribute("data-auth-state", "loading");
+    expect(onProviderLogin).toHaveBeenCalledTimes(1);
+
+    resolveProviderLogin();
+  });
+
   it("shows passkey support reason in a tooltip and blocks the action with soft-disabled state", async () => {
     const onPasskeySubmit = vi.fn();
 

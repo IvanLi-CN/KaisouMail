@@ -1,5 +1,6 @@
 import { Fingerprint, Github, KeyRound } from "lucide-react";
 import type { MouseEvent } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthActionButton } from "@/components/auth/auth-action-button";
 import { LinuxDoIcon } from "@/components/icons/linuxdo-icon";
@@ -13,6 +14,8 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import type { AuthProviderStatus } from "@/lib/contracts";
 import { appRoutes } from "@/lib/routes";
+
+type LoginAction = "passkey" | `provider:${"github" | "linuxdo"}`;
 
 const providerLabel = (provider: "github" | "linuxdo") =>
   provider === "github" ? "GitHub" : "LinuxDO";
@@ -29,7 +32,7 @@ export const LoginCard = ({
   providers,
 }: {
   onPasskeySubmit?: () => Promise<void> | void;
-  onProviderLogin?: (provider: "github" | "linuxdo") => void;
+  onProviderLogin?: (provider: "github" | "linuxdo") => Promise<void> | void;
   isPasskeyPending?: boolean;
   isProviderPending?: boolean;
   passkeyError?: string | null;
@@ -39,6 +42,8 @@ export const LoginCard = ({
   providers?: AuthProviderStatus[];
 }) => {
   const navigate = useNavigate();
+  const [activeAction, setActiveAction] = useState<LoginAction | null>(null);
+  const activeActionRef = useRef<LoginAction | null>(null);
   const providerEntries =
     providers?.filter(
       (
@@ -46,12 +51,25 @@ export const LoginCard = ({
       ): provider is AuthProviderStatus & { provider: "github" | "linuxdo" } =>
         provider.provider !== "passkey" && provider.loginEnabled,
     ) ?? [];
-  const passkeySoftDisabled = Boolean(!passkeySupported || isPasskeyPending);
+  const isPasskeyBusy = Boolean(isPasskeyPending || activeAction === "passkey");
+  const isAnyProviderBusy = Boolean(
+    isProviderPending || activeAction?.startsWith("provider:"),
+  );
+  const isAuthBusy = isPasskeyBusy || isAnyProviderBusy;
+  const passkeySoftDisabled = Boolean(!passkeySupported || isAuthBusy);
   const passkeyTooltip = !passkeySupported
     ? (passkeySupportMessage ??
       passkeyButtonLabel ??
       "当前浏览器或上下文不支持 WebAuthn。")
     : null;
+
+  const finishActiveAction = (action: LoginAction) => {
+    if (activeActionRef.current === action) {
+      activeActionRef.current = null;
+    }
+    setActiveAction((current) => (current === action ? null : current));
+  };
+
   const preventSoftDisabledAction = (
     event: MouseEvent<HTMLButtonElement>,
     softDisabled: boolean,
@@ -65,20 +83,64 @@ export const LoginCard = ({
     event.currentTarget.focus();
     return true;
   };
+
+  const handlePasskeySubmit = async (event: MouseEvent<HTMLButtonElement>) => {
+    if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
+      return;
+    }
+    if (!onPasskeySubmit || activeActionRef.current !== null || isAuthBusy) {
+      return;
+    }
+
+    activeActionRef.current = "passkey";
+    setActiveAction("passkey");
+    try {
+      await onPasskeySubmit();
+    } finally {
+      finishActiveAction("passkey");
+    }
+  };
+
+  const handleProviderLogin = async (
+    event: MouseEvent<HTMLButtonElement>,
+    provider: "github" | "linuxdo",
+    softDisabled: boolean,
+  ) => {
+    if (preventSoftDisabledAction(event, softDisabled)) {
+      return;
+    }
+
+    const action = `provider:${provider}` as const;
+    if (!onProviderLogin || activeActionRef.current !== null || isAuthBusy) {
+      return;
+    }
+
+    activeActionRef.current = action;
+    setActiveAction(action);
+    try {
+      await onProviderLogin(provider);
+    } finally {
+      finishActiveAction(action);
+    }
+  };
+
   const passkeyButton = (
     <AuthActionButton
       id="passkey-signin"
       type="button"
       icon={Fingerprint}
-      label={isPasskeyPending ? "Passkey 登录中…" : "使用 Passkey 登录"}
+      label={isPasskeyBusy ? "正在唤起 Passkey…" : "使用 Passkey 登录"}
       size="lg"
+      className={
+        isPasskeyBusy
+          ? "border-primary/70 bg-primary/20 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.22)] disabled:opacity-100"
+          : undefined
+      }
+      aria-busy={isPasskeyBusy}
       aria-disabled={passkeySoftDisabled || undefined}
+      data-auth-state={isPasskeyBusy ? "loading" : "idle"}
       onClick={(event) => {
-        if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
-          return;
-        }
-
-        void onPasskeySubmit?.();
+        void handlePasskeySubmit(event);
       }}
     />
   );
@@ -113,38 +175,56 @@ export const LoginCard = ({
                 </p>
               ) : null}
             </div>
-            {providerEntries.map((provider) => (
-              <AuthActionButton
-                key={provider.provider}
-                type="button"
-                icon={provider.provider === "github" ? Github : LinuxDoIcon}
-                label={`使用 ${providerLabel(provider.provider)} 登录`}
-                variant="outline"
-                size="lg"
-                aria-disabled={
-                  !provider.configured || isProviderPending || undefined
-                }
-                onClick={(event) => {
-                  if (
-                    preventSoftDisabledAction(
-                      event,
-                      Boolean(!provider.configured || isProviderPending),
-                    )
-                  ) {
-                    return;
-                  }
+            {providerEntries.map((provider) => {
+              const action = `provider:${provider.provider}` as const;
+              const isProviderBusy = Boolean(
+                isProviderPending || activeAction === action,
+              );
+              const providerSoftDisabled = Boolean(
+                !provider.configured || isAuthBusy,
+              );
 
-                  onProviderLogin?.(provider.provider);
-                }}
-              />
-            ))}
+              return (
+                <AuthActionButton
+                  key={provider.provider}
+                  type="button"
+                  icon={provider.provider === "github" ? Github : LinuxDoIcon}
+                  label={
+                    isProviderBusy
+                      ? `正在跳转 ${providerLabel(provider.provider)}…`
+                      : `使用 ${providerLabel(provider.provider)} 登录`
+                  }
+                  variant="outline"
+                  size="lg"
+                  className={
+                    isProviderBusy
+                      ? "border-primary/70 bg-primary/20 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.22)] disabled:opacity-100"
+                      : undefined
+                  }
+                  aria-busy={isProviderBusy}
+                  aria-disabled={providerSoftDisabled || undefined}
+                  data-auth-state={isProviderBusy ? "loading" : "idle"}
+                  onClick={(event) => {
+                    void handleProviderLogin(
+                      event,
+                      provider.provider,
+                      providerSoftDisabled,
+                    );
+                  }}
+                />
+              );
+            })}
             <AuthActionButton
               type="button"
               icon={KeyRound}
               label="使用 API Key 登录"
               variant="outline"
               size="lg"
-              onClick={() => {
+              aria-disabled={isAuthBusy || undefined}
+              onClick={(event) => {
+                if (preventSoftDisabledAction(event, isAuthBusy)) {
+                  return;
+                }
                 navigate(appRoutes.loginApiKey);
               }}
             />
