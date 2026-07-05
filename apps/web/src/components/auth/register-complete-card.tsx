@@ -16,7 +16,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { PendingRegistration } from "@/lib/contracts";
-import type { RegistrationFormError } from "@/lib/registration-errors";
+import type {
+  RegistrationErrorField,
+  RegistrationFormError,
+} from "@/lib/registration-errors";
 import { appRoutes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +48,8 @@ export const RegisterCompleteCard = ({
   onSubmit: (values: CompleteRegistrationValues) => Promise<void> | void;
 }) => {
   const isPasskey = registration.method === "passkey";
+  const showInviteInput =
+    registration.inviteRequired && !registration.invitePrevalidated;
   const submitSoftDisabled = Boolean(isPending || !registration.canComplete);
   const form = useForm<CompleteRegistrationValues>({
     resolver: zodResolver(completeRegistrationSchema),
@@ -66,10 +71,13 @@ export const RegisterCompleteCard = ({
     clearErrors();
     if (!error) return;
 
-    const firstField = (
-      ["inviteCode", "nickname", "passkeyName"] as const
-    ).find((field) => error.fields?.[field]);
-    for (const field of ["inviteCode", "nickname", "passkeyName"] as const) {
+    const visibleFields: RegistrationErrorField[] = [
+      ...(showInviteInput ? (["inviteCode"] as RegistrationErrorField[]) : []),
+      "nickname",
+      ...(isPasskey ? (["passkeyName"] as RegistrationErrorField[]) : []),
+    ];
+    const firstField = visibleFields.find((field) => error.fields?.[field]);
+    for (const field of visibleFields) {
       const message = error.fields?.[field];
       if (!message) continue;
       setError(
@@ -81,12 +89,17 @@ export const RegisterCompleteCard = ({
     if (error.form) {
       setError("root.server", { type: "server", message: error.form });
     }
-  }, [clearErrors, error, setError]);
+  }, [clearErrors, error, isPasskey, setError, showInviteInput]);
 
   const inviteCodeError = errors.inviteCode?.message;
   const nicknameError = errors.nickname?.message;
   const passkeyNameError = errors.passkeyName?.message;
-  const formError = errors.root?.server?.message ?? registration.error;
+  const hiddenFieldError =
+    (!showInviteInput ? error?.fields?.inviteCode : null) ??
+    (!isPasskey ? error?.fields?.passkeyName : null) ??
+    null;
+  const formError =
+    errors.root?.server?.message ?? hiddenFieldError ?? registration.error;
 
   const preventSoftDisabledAction = (
     event: MouseEvent<HTMLButtonElement>,
@@ -172,7 +185,7 @@ export const RegisterCompleteCard = ({
             账号资料
           </p>
 
-          {registration.inviteRequired && !registration.invitePrevalidated ? (
+          {showInviteInput ? (
             <div className="space-y-2">
               <Label htmlFor="complete-invite-code">邀请码</Label>
               <Input

@@ -78,4 +78,19 @@ describe("RegisterCompleteCard", () => {
       "邀请码无效，请检查后重试。",
     );
   });
+
+  it("keeps hidden invite field errors visible as form errors", async () => {
+    renderRegisterCompleteCard(
+      <RegisterCompleteCard
+        registration={{ ...githubRegistration, invitePrevalidated: true }}
+        error={{ fields: { inviteCode: "这个邀请码已被使用。" } }}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("邀请码")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "这个邀请码已被使用。",
+    );
+  });
 });
