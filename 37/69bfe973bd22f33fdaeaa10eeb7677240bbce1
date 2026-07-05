@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "1.1.2",
+  "base_stable_version": "1.1.1",
+  "channel_label": "channel:stable",
+  "created_at": "2026-07-05T04:29:47Z",
+  "next_stable_version": "1.1.2",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "55d56ea18483c066b3029767f6cb65fcd16f14a6",
+  "pr_number": 93,
+  "pr_title": "fix(web): show login click feedback",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v1.1.2",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v1.1.2",
+  "target_sha": "3769bfe973bd22f33fdaeaa10eeb7677240bbce1",
+  "type_label": "type:patch"
+}
