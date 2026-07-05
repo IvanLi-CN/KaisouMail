@@ -6,7 +6,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import type { CompleteRegistrationValues } from "@/components/auth/register-complete-card";
 import { RegisterCompleteCard } from "@/components/auth/register-complete-card";
 import { useSessionQuery } from "@/hooks/use-session";
-import { apiClient } from "@/lib/api";
+import { ApiClientError, apiClient } from "@/lib/api";
 import type { PendingRegistration } from "@/lib/contracts";
 import { getPasskeyErrorMessage } from "@/lib/passkeys";
 import {
@@ -29,6 +29,23 @@ const fallbackRegistration = (
   suggestedNickname: null,
   error,
 });
+
+export const toRegisterCompleteSubmitError = (
+  method: PendingRegistration["method"],
+  reason: unknown,
+): RegistrationFormError => {
+  if (method !== "passkey") {
+    return getRegistrationCompletionError(reason);
+  }
+
+  if (reason instanceof ApiClientError) {
+    return getRegistrationCompletionError(reason);
+  }
+
+  return {
+    form: getPasskeyErrorMessage(reason, "Passkey 注册失败，请稍后重试。"),
+  };
+};
 
 export const RegisterCompletePage = () => {
   const [searchParams] = useSearchParams();
@@ -109,11 +126,7 @@ export const RegisterCompletePage = () => {
             });
           } catch (reason) {
             setSubmitError(
-              displayRegistration.method === "passkey"
-                ? getRegistrationCompletionError(
-                    getPasskeyErrorMessage(reason, "Passkey 注册失败"),
-                  )
-                : getRegistrationCompletionError(reason),
+              toRegisterCompleteSubmitError(displayRegistration.method, reason),
             );
           }
         }}
