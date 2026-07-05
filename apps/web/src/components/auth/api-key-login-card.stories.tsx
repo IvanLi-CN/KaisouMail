@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { MemoryRouter } from "react-router-dom";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import { ApiKeyLoginCard } from "@/components/auth/api-key-login-card";
@@ -8,13 +7,6 @@ const meta = {
   title: "Auth/ApiKeyLoginCard",
   component: ApiKeyLoginCard,
   tags: ["autodocs"],
-  decorators: [
-    (Story) => (
-      <MemoryRouter>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
   args: {
     onSubmit: fn(),
     isPending: false,
@@ -43,5 +35,11 @@ export const Default: Story = {
 export const ErrorState: Story = {
   args: {
     error: "Invalid API key",
+  },
+};
+
+export const Pending: Story = {
+  args: {
+    isPending: true,
   },
 };
