@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { RegisterCard } from "@/components/auth/register-card";
 import { usePasskeySupport } from "@/hooks/use-passkeys";
 import { useSessionQuery } from "@/hooks/use-session";
 import { apiClient } from "@/lib/api";
+import { handOffAuthNavigation } from "@/lib/auth-feedback";
 
 export const RegisterPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const sessionQuery = useSessionQuery();
   const passkeySupport = usePasskeySupport();
   const searchParams = new URLSearchParams(location.search);
@@ -36,7 +38,6 @@ export const RegisterPage = () => {
         providers={providersQuery.data ?? []}
         passkeySupported={passkeySupport.supported}
         passkeySupportMessage={passkeySupport.message}
-        isPending={providersQuery.isFetching}
         error={registerError}
         onProviderRegister={async (provider, values) => {
           setRegisterError(null);
@@ -45,7 +46,9 @@ export const RegisterPage = () => {
               inviteCode: values.inviteCode,
               returnTo: redirectTarget,
             });
-            window.location.href = result.startUrl;
+            return handOffAuthNavigation(() => {
+              window.location.assign(result.startUrl);
+            });
           } catch (reason) {
             setRegisterError(
               reason instanceof Error ? reason.message : "注册入口暂时不可用",
@@ -58,7 +61,11 @@ export const RegisterPage = () => {
             const result = await apiClient.startPasskeyRegistration({
               inviteCode: values.inviteCode,
             });
-            window.location.href = `/register/complete?token=${encodeURIComponent(result.registration.token)}`;
+            return handOffAuthNavigation(() => {
+              navigate(
+                `/register/complete?token=${encodeURIComponent(result.registration.token)}`,
+              );
+            });
           } catch (reason) {
             setRegisterError(
               reason instanceof Error

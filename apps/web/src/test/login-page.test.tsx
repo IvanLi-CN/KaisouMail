@@ -3,15 +3,13 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AUTH_NAVIGATION_DWELL_MS } from "@/lib/auth-feedback";
-import { RegisterPage } from "@/pages/register-page";
+import { LoginPage } from "@/pages/login-page";
 
-const apiMockState = vi.hoisted(() => ({
-  startPasskeyRegistration: vi.fn(async () => ({
-    registration: { token: "km_register_pending_token" },
-  })),
-  startProviderRegistration: vi.fn(async () => ({
-    startUrl: "https://github.example.test/register/start?intent=register",
-  })),
+const loginPageMockState = vi.hoisted(() => ({
+  getProviderStartUrl: vi.fn(
+    () => "https://github.example.test/login/start?intent=login",
+  ),
+  mutateAsync: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-session", () => ({
@@ -24,6 +22,11 @@ vi.mock("@/hooks/use-passkeys", () => ({
   usePasskeySupport: () => ({
     supported: true,
     message: null,
+    buttonLabel: "使用 Passkey 登录",
+  }),
+  usePasskeyLoginMutation: () => ({
+    isPending: false,
+    mutateAsync: loginPageMockState.mutateAsync,
   }),
 }));
 
@@ -33,6 +36,7 @@ vi.mock("@/lib/api", async () => {
     ...actual,
     apiClient: {
       ...actual.apiClient,
+      getProviderStartUrl: loginPageMockState.getProviderStartUrl,
       listAuthProviders: vi.fn(async () => [
         {
           provider: "github",
@@ -44,7 +48,7 @@ vi.mock("@/lib/api", async () => {
           dailyRemaining: 5,
         },
         {
-          provider: "passkey",
+          provider: "linuxdo",
           configured: true,
           loginEnabled: true,
           registrationMode: "open",
@@ -53,13 +57,11 @@ vi.mock("@/lib/api", async () => {
           dailyRemaining: 5,
         },
       ]),
-      startProviderRegistration: apiMockState.startProviderRegistration,
-      startPasskeyRegistration: apiMockState.startPasskeyRegistration,
     },
   };
 });
 
-const renderRegisterPage = () => {
+const renderLoginPage = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -69,56 +71,28 @@ const renderRegisterPage = () => {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/register"]}>
+      <MemoryRouter initialEntries={["/login"]}>
         <Routes>
-          <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/register/complete"
-            element={<p>Register Complete Route</p>}
-          />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login/api-key" element={<p>API Key Route</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
 };
 
-describe("RegisterPage", () => {
+describe("LoginPage", () => {
   afterEach(() => {
     vi.clearAllTimers();
     vi.clearAllMocks();
     vi.useRealTimers();
   });
 
-  it("starts provider registration with the workspace redirect target", async () => {
-    renderRegisterPage();
+  it("keeps provider feedback visible before the external login handoff starts", async () => {
+    renderLoginPage();
 
     const githubButton = await screen.findByRole("button", {
-      name: "使用 GitHub 继续",
-    });
-    vi.useFakeTimers();
-    fireEvent.click(githubButton);
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(apiMockState.startProviderRegistration).toHaveBeenCalledWith(
-      "github",
-      {
-        inviteCode: "",
-        returnTo: "/workspace",
-      },
-    );
-  });
-
-  it("keeps provider feedback visible before the external registration handoff starts", async () => {
-    renderRegisterPage();
-
-    fireEvent.change(await screen.findByLabelText("邀请码（如需）"), {
-      target: { value: "km_pending_register" },
-    });
-    const githubButton = await screen.findByRole("button", {
-      name: "使用 GitHub 继续",
+      name: "使用 GitHub 登录",
     });
     vi.useFakeTimers();
     fireEvent.click(githubButton);
@@ -131,58 +105,46 @@ describe("RegisterPage", () => {
       name: "正在跳转 GitHub…",
     });
     expect(pendingButton).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByLabelText("邀请码（如需）")).toHaveValue(
-      "km_pending_register",
-    );
+    expect(loginPageMockState.getProviderStartUrl).not.toHaveBeenCalled();
 
     await act(async () => {
       vi.advanceTimersByTime(AUTH_NAVIGATION_DWELL_MS - 1);
     });
 
     expect(pendingButton).toBeInTheDocument();
-    expect(
-      screen.queryByText("Register Complete Route"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("API Key Route")).not.toBeInTheDocument();
   });
 
-  it("shows passkey pending feedback before routing to register completion", async () => {
-    renderRegisterPage();
+  it("shows api key pending feedback before routing to the api key page", async () => {
+    renderLoginPage();
 
-    fireEvent.change(await screen.findByLabelText("邀请码（如需）"), {
-      target: { value: "km_passkey_wait" },
-    });
-    const passkeyButton = await screen.findByRole("button", {
-      name: "使用 Passkey 继续",
+    const apiKeyButton = await screen.findByRole("button", {
+      name: "使用 API Key 登录",
     });
     vi.useFakeTimers();
-    fireEvent.click(passkeyButton);
+    fireEvent.click(apiKeyButton);
 
     await act(async () => {
       await Promise.resolve();
     });
 
     const pendingButton = screen.getByRole("button", {
-      name: "正在准备 Passkey…",
+      name: "正在前往 API Key 登录…",
     });
     expect(pendingButton).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByLabelText("邀请码（如需）")).toHaveValue(
-      "km_passkey_wait",
-    );
 
     await act(async () => {
       vi.advanceTimersByTime(AUTH_NAVIGATION_DWELL_MS - 1);
     });
 
     expect(pendingButton).toBeInTheDocument();
-    expect(
-      screen.queryByText("Register Complete Route"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("API Key Route")).not.toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(1);
       await Promise.resolve();
     });
 
-    expect(screen.getByText("Register Complete Route")).toBeInTheDocument();
+    expect(screen.getByText("API Key Route")).toBeInTheDocument();
   });
 });

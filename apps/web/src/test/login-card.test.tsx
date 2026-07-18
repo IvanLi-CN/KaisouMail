@@ -26,6 +26,7 @@ describe("LoginCard", () => {
       <LoginCard
         onPasskeySubmit={onPasskeySubmit}
         onProviderLogin={vi.fn()}
+        onApiKeyLogin={vi.fn()}
         passkeySupported
       />,
     );
@@ -123,6 +124,7 @@ describe("LoginCard", () => {
       <LoginCard
         onPasskeySubmit={onPasskeySubmit}
         onProviderLogin={vi.fn()}
+        onApiKeyLogin={vi.fn()}
         passkeySupported={false}
         passkeySupportMessage="当前页面来源未加入 WEB_APP_ORIGIN / WEB_APP_ORIGINS；请切换到受信控制台域名后再使用 Passkey。"
         providers={demoAuthProviders}
@@ -142,5 +144,80 @@ describe("LoginCard", () => {
     });
 
     expect(onPasskeySubmit).not.toHaveBeenCalled();
+  });
+
+  it("keeps other login methods visually idle while ignoring cross-clicks during provider handoff", async () => {
+    let resolveProviderLogin: () => void = () => {};
+    const onProviderLogin = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveProviderLogin = resolve;
+        }),
+    );
+    const onApiKeyLogin = vi.fn();
+
+    renderLoginCard(
+      <LoginCard
+        onProviderLogin={onProviderLogin}
+        onApiKeyLogin={onApiKeyLogin}
+        passkeySupported
+        providers={demoAuthProviders}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "使用 GitHub 登录" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 LinuxDO 登录" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 API Key 登录" }));
+
+    const pendingButton = await screen.findByRole("button", {
+      name: "正在跳转 GitHub…",
+    });
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(onProviderLogin).toHaveBeenCalledTimes(1);
+    expect(onApiKeyLogin).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "使用 LinuxDO 登录" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", { name: "使用 API Key 登录" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+
+    resolveProviderLogin();
+  });
+
+  it("shows api key handoff feedback and ignores later cross-clicks", async () => {
+    let resolveApiKeyLogin: () => void = () => {};
+    const onApiKeyLogin = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveApiKeyLogin = resolve;
+        }),
+    );
+    const onProviderLogin = vi.fn();
+
+    renderLoginCard(
+      <LoginCard
+        onProviderLogin={onProviderLogin}
+        onApiKeyLogin={onApiKeyLogin}
+        passkeySupported
+        providers={demoAuthProviders}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "使用 API Key 登录" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 GitHub 登录" }));
+
+    const pendingButton = await screen.findByRole("button", {
+      name: "正在前往 API Key 登录…",
+    });
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(pendingButton).toHaveAttribute("data-auth-state", "loading");
+    expect(onApiKeyLogin).toHaveBeenCalledTimes(1);
+    expect(onProviderLogin).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "使用 GitHub 登录" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+
+    resolveApiKeyLogin();
   });
 });
