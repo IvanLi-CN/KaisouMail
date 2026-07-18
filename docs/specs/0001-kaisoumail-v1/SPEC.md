@@ -1,7 +1,7 @@
 # KaisouMail V1 Spec
 
 Status: 已完成
-Last: 2026-04-28
+Last: 2026-07-18
 
 ## Objective
 
@@ -13,6 +13,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - `/login`
 - `/register`
 - Login and registration are independent browser surfaces: `/login` is strictly for sign-in via Passkey, third-party providers, or API key fallback, while `/register` is reserved for invite/open signup flows and Passkey-first account creation
+- Clicking any auth CTA must immediately arm only the selected action: the active button swaps to a spinner/loading label, repeated clicks on that same action are ignored, later clicks on other auth methods are ignored without visually disabling them, and external or route-changing handoffs stay visible for roughly `200ms` before leaving the current surface
 
 ### Workspace
 - `/workspace`
@@ -197,6 +198,7 @@ Deliver a Cloudflare-based temporary mailbox control plane with a compact, tool-
 - 2026-04-10: Added subject-first / body-fallback verification-code recognition with Workers AI fallback, surfaced inline workspace copy actions in the mailbox and message rails, and refreshed workspace visual evidence for the new copy affordances.
 - 2026-04-10: Replaced the mailbox TTL number input with a logarithmic `1 hour .. 1 year + long-term` slider plus double-click inline duration editing, split runtime semantics into `rootDomain omitted => random` and `expiresInMinutes omitted => default / null => long-term`, and updated API/runtime surfaces so long-term mailboxes are exposed as `expiresAt = null`.
 - 2026-04-10: Replaced the selected-mailbox workspace heading with a read-only address input that auto-selects on focus, added a dedicated copy action with local success/failure feedback, and refreshed the workspace visual evidence for the new operator-facing copy surface.
+- 2026-07-18: Tightened `/login` and `/register` auth CTA feedback so provider, Passkey, and API key handoffs now lock only the clicked button, keep other methods visually idle, and hold route/external navigation long enough for the pending state to be seen before the surface changes.
 - 2026-04-09: Reworked `/domains` bind-error copy into structured actionable guidance with direct links to the public project-direct binding guide, replaced the standalone troubleshooting page with two cross-linked operator docs for manual Cloudflare onboarding vs. project-side direct binding, and refreshed the related domains/docs visual evidence.
 - 2026-04-09: Fixed the production Pages deploy step to run from `apps/web` instead of passing `apps/web/wrangler.jsonc` via `--config`, because Wrangler Pages deploy rejects custom config paths; the same-origin Pages smoke gate now depends only on valid `CF_PAGES_SMOKE_ORIGINS` data rather than a broken deploy command.
 - 2026-04-09: Tightened the `/domains` layout so Cloudflare status badges keep visible inline spacing and the bind form button stays aligned with the root-domain input even when validation or submit errors are visible, then refreshed the domains visual evidence.
@@ -232,6 +234,9 @@ Evidence is persisted with this spec and refreshed whenever the rendered control
 
 PR: include
 ![KaisouMail login page with the branded lockup and single-card sign-in surface](./assets/login-page-kaisoumail.png)
+
+PR: include
+![Login page with the GitHub auth CTA held in a visible pending state before third-party handoff](./assets/login-page-provider-pending.png)
 
 ![Login card with passkey-first sign-in and API key fallback](./assets/login-card-kaisoumail.png)
 
@@ -410,6 +415,9 @@ PR: include
 
 PR: include
 ![Desktop register page with separated third-party signup flows and passkey invite registration](./assets/register-page-identity-rebuild-desktop.png)
+
+PR: include
+![Register page with the Passkey auth CTA held in a visible pending state before completion handoff](./assets/register-page-passkey-pending.png)
 
 ![Desktop API Key login page with the aligned login CTA button icon treatment](./assets/login-api-key-page-desktop.png)
 

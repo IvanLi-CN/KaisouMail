@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginCard } from "@/components/auth/login-card";
 import {
@@ -9,10 +9,13 @@ import {
 } from "@/hooks/use-passkeys";
 import { useSessionQuery } from "@/hooks/use-session";
 import { apiClient } from "@/lib/api";
+import { handOffAuthNavigation } from "@/lib/auth-feedback";
 import { getPasskeyErrorMessage } from "@/lib/passkeys";
+import { appRoutes } from "@/lib/routes";
 
 export const LoginPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const sessionQuery = useSessionQuery();
   const passkeyLoginMutation = usePasskeyLoginMutation();
   const passkeySupport = usePasskeySupport();
@@ -51,7 +54,6 @@ export const LoginPage = () => {
       <LoginCard
         providers={providersQuery.data ?? []}
         isPasskeyPending={passkeyLoginMutation.isPending}
-        isProviderPending={providersQuery.isFetching}
         passkeyError={passkeyError}
         passkeyButtonLabel={passkeySupport.buttonLabel}
         passkeySupported={passkeySupport.supported}
@@ -64,12 +66,21 @@ export const LoginPage = () => {
             setPasskeyError(getPasskeyErrorMessage(reason, "Passkey 登录失败"));
           }
         }}
-        onProviderLogin={(provider) => {
-          window.location.href = apiClient.getProviderStartUrl(provider, {
-            intent: "login",
-            returnTo: providerIntentReturnTo,
+        onProviderLogin={async (provider) => {
+          return handOffAuthNavigation(() => {
+            window.location.assign(
+              apiClient.getProviderStartUrl(provider, {
+                intent: "login",
+                returnTo: providerIntentReturnTo,
+              }),
+            );
           });
         }}
+        onApiKeyLogin={() =>
+          handOffAuthNavigation(() => {
+            navigate(appRoutes.loginApiKey);
+          })
+        }
       />
     </AuthShell>
   );

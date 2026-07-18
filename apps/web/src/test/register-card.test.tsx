@@ -84,4 +84,90 @@ describe("RegisterCard", () => {
 
     expect(onPasskeyStart).not.toHaveBeenCalled();
   });
+
+  it("keeps other registration methods visually idle while ignoring cross-clicks during provider handoff", async () => {
+    let resolveProviderRegister: () => void = () => {};
+    const onProviderRegister = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveProviderRegister = resolve;
+        }),
+    );
+    const onPasskeyStart = vi.fn();
+
+    renderRegisterCard(
+      <RegisterCard
+        onProviderRegister={onProviderRegister}
+        onPasskeyStart={onPasskeyStart}
+        passkeySupported
+        providers={demoAuthProviders}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("邀请码（如需）"), {
+      target: { value: "km_demo_invite_2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "使用 GitHub 继续" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 LinuxDO 继续" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 Passkey 继续" }));
+
+    const pendingButton = await screen.findByRole("button", {
+      name: "正在跳转 GitHub…",
+    });
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(onProviderRegister).toHaveBeenCalledTimes(1);
+    expect(onPasskeyStart).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("邀请码（如需）")).toHaveValue(
+      "km_demo_invite_2",
+    );
+    expect(
+      screen.getByRole("button", { name: "使用 LinuxDO 继续" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("button", { name: "使用 Passkey 继续" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+
+    resolveProviderRegister();
+  });
+
+  it("shows passkey handoff feedback and ignores provider cross-clicks", async () => {
+    let resolvePasskeyStart: () => void = () => {};
+    const onPasskeyStart = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePasskeyStart = resolve;
+        }),
+    );
+    const onProviderRegister = vi.fn();
+
+    renderRegisterCard(
+      <RegisterCard
+        onProviderRegister={onProviderRegister}
+        onPasskeyStart={onPasskeyStart}
+        passkeySupported
+        providers={demoAuthProviders}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("邀请码（如需）"), {
+      target: { value: "km_passkey_invite" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "使用 Passkey 继续" }));
+    fireEvent.click(screen.getByRole("button", { name: "使用 GitHub 继续" }));
+
+    const pendingButton = await screen.findByRole("button", {
+      name: "正在准备 Passkey…",
+    });
+    expect(pendingButton).toHaveAttribute("aria-busy", "true");
+    expect(onPasskeyStart).toHaveBeenCalledTimes(1);
+    expect(onProviderRegister).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("邀请码（如需）")).toHaveValue(
+      "km_passkey_invite",
+    );
+    expect(
+      screen.getByRole("button", { name: "使用 GitHub 继续" }),
+    ).not.toHaveAttribute("aria-disabled", "true");
+
+    resolvePasskeyStart();
+  });
 });

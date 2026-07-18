@@ -4,6 +4,8 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import { LoginCard } from "@/components/auth/login-card";
 import { demoAuthProviders } from "@/mocks/data";
 
+const neverSettled = () => new Promise<void>(() => undefined);
+
 const meta = {
   title: "Auth/LoginCard",
   component: LoginCard,
@@ -11,6 +13,7 @@ const meta = {
   args: {
     onPasskeySubmit: fn(),
     onProviderLogin: fn(),
+    onApiKeyLogin: fn(),
     passkeyError: null,
     passkeySupported: true,
     passkeyButtonLabel: "使用 Passkey 登录",
@@ -37,6 +40,10 @@ export const Default: Story = {
     await expect(
       canvas.getByRole("button", { name: "使用 API Key 登录" }),
     ).toBeInTheDocument();
+    await userEvent.click(
+      canvas.getByRole("button", { name: "使用 API Key 登录" }),
+    );
+    await expect(args.onApiKeyLogin).toHaveBeenCalled();
   },
 };
 
@@ -53,8 +60,40 @@ export const PasskeyPending: Story = {
 };
 
 export const ProviderPending: Story = {
-  args: {
-    isProviderPending: true,
+  render: () => (
+    <LoginCard
+      onProviderLogin={() => neverSettled()}
+      passkeySupported
+      providers={demoAuthProviders}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "使用 GitHub 登录" }),
+    );
+    await expect(
+      canvas.getByRole("button", { name: "正在跳转 GitHub…" }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const ApiKeyPending: Story = {
+  render: () => (
+    <LoginCard
+      onApiKeyLogin={() => neverSettled()}
+      passkeySupported
+      providers={demoAuthProviders}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "使用 API Key 登录" }),
+    );
+    await expect(
+      canvas.getByRole("button", { name: "正在前往 API Key 登录…" }),
+    ).toBeInTheDocument();
   },
 };
 

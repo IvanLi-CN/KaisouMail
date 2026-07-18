@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Fingerprint, Github } from "lucide-react";
 import type { MouseEvent } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -24,6 +25,7 @@ const registerIntentSchema = z.object({
 });
 
 type RegisterIntentValues = z.infer<typeof registerIntentSchema>;
+type RegisterAction = "passkey" | `provider:${"github" | "linuxdo"}`;
 
 const providerLabel = (provider: "github" | "linuxdo" | "passkey") =>
   provider === "github"
@@ -32,10 +34,12 @@ const providerLabel = (provider: "github" | "linuxdo" | "passkey") =>
       ? "LinuxDO"
       : "Passkey";
 
+const authActionPendingClassName =
+  "border-primary/70 bg-primary/20 text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.22)] disabled:opacity-100";
+
 export const RegisterCard = ({
   onProviderRegister,
   onPasskeyStart,
-  isPending,
   error,
   passkeySupported,
   passkeySupportMessage,
@@ -46,12 +50,13 @@ export const RegisterCard = ({
     values: RegisterIntentValues,
   ) => Promise<void> | void;
   onPasskeyStart?: (values: RegisterIntentValues) => Promise<void> | void;
-  isPending?: boolean;
   error?: string | null;
   passkeySupported?: boolean;
   passkeySupportMessage?: string | null;
   providers?: AuthProviderStatus[];
 }) => {
+  const [activeAction, setActiveAction] = useState<RegisterAction | null>(null);
+  const activeActionRef = useRef<RegisterAction | null>(null);
   const form = useForm<RegisterIntentValues>({
     resolver: zodResolver(registerIntentSchema),
     defaultValues: { inviteCode: "" },
@@ -76,6 +81,7 @@ export const RegisterCard = ({
     form.handleSubmit((values) => onProviderRegister?.(provider, values));
 
   const submitPasskey = form.handleSubmit((values) => onPasskeyStart?.(values));
+  const isPasskeyBusy = activeAction === "passkey";
   const preventSoftDisabledAction = (
     event: MouseEvent<HTMLButtonElement>,
     softDisabled: boolean,
@@ -89,7 +95,51 @@ export const RegisterCard = ({
     event.currentTarget.focus();
     return true;
   };
-  const passkeySoftDisabled = Boolean(!passkeySupported || isPending);
+  const finishActiveAction = (action: RegisterAction) => {
+    if (activeActionRef.current === action) {
+      activeActionRef.current = null;
+    }
+    setActiveAction((current) => (current === action ? null : current));
+  };
+  const handlePasskeyStart = async (event: MouseEvent<HTMLButtonElement>) => {
+    const passkeySoftDisabled = Boolean(!passkeySupported || isPasskeyBusy);
+
+    if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
+      return;
+    }
+    if (!onPasskeyStart || activeActionRef.current !== null) {
+      return;
+    }
+
+    activeActionRef.current = "passkey";
+    setActiveAction("passkey");
+    try {
+      await submitPasskey();
+    } finally {
+      finishActiveAction("passkey");
+    }
+  };
+  const handleProviderRegister = async (
+    event: MouseEvent<HTMLButtonElement>,
+    provider: "github" | "linuxdo",
+    softDisabled: boolean,
+  ) => {
+    if (preventSoftDisabledAction(event, softDisabled)) {
+      return;
+    }
+    if (!onProviderRegister || activeActionRef.current !== null) {
+      return;
+    }
+
+    const action = `provider:${provider}` as const;
+    activeActionRef.current = action;
+    setActiveAction(action);
+    try {
+      await submitWithProvider(provider)();
+    } finally {
+      finishActiveAction(action);
+    }
+  };
   const passkeyTooltip = !passkeySupported
     ? (passkeySupportMessage ?? "当前浏览器或上下文不支持 WebAuthn。")
     : null;
@@ -98,14 +148,16 @@ export const RegisterCard = ({
       type="button"
       icon={Fingerprint}
       label={`使用 ${providerLabel("passkey")} 继续`}
+      isLoading={isPasskeyBusy}
+      loadingLabel="正在准备 Passkey…"
       variant="outline"
-      aria-disabled={passkeySoftDisabled || undefined}
+      className={isPasskeyBusy ? authActionPendingClassName : undefined}
+      disabled={isPasskeyBusy}
+      aria-busy={isPasskeyBusy}
+      aria-disabled={passkeyTooltip ? true : undefined}
+      data-auth-state={isPasskeyBusy ? "loading" : "idle"}
       onClick={(event) => {
-        if (preventSoftDisabledAction(event, passkeySoftDisabled)) {
-          return;
-        }
-
-        void submitPasskey();
+        void handlePasskeyStart(event);
       }}
     />
   );
@@ -140,28 +192,39 @@ export const RegisterCard = ({
                 provider: "github" | "linuxdo";
               } => provider.provider !== "passkey",
             )
-            .map((provider) => (
-              <AuthActionButton
-                key={provider.provider}
-                type="button"
-                icon={provider.provider === "github" ? Github : LinuxDoIcon}
-                label={`使用 ${providerLabel(provider.provider)} 继续`}
-                variant="outline"
-                aria-disabled={!provider.configured || isPending || undefined}
-                onClick={(event) => {
-                  if (
-                    preventSoftDisabledAction(
-                      event,
-                      Boolean(!provider.configured || isPending),
-                    )
-                  ) {
-                    return;
-                  }
+            .map((provider) => {
+              const action = `provider:${provider.provider}` as const;
+              const isProviderBusy = activeAction === action;
+              const providerSoftDisabled = Boolean(
+                !provider.configured || isProviderBusy,
+              );
 
-                  void submitWithProvider(provider.provider)();
-                }}
-              />
-            ))}
+              return (
+                <AuthActionButton
+                  key={provider.provider}
+                  type="button"
+                  icon={provider.provider === "github" ? Github : LinuxDoIcon}
+                  label={`使用 ${providerLabel(provider.provider)} 继续`}
+                  isLoading={isProviderBusy}
+                  loadingLabel={`正在跳转 ${providerLabel(provider.provider)}…`}
+                  variant="outline"
+                  className={
+                    isProviderBusy ? authActionPendingClassName : undefined
+                  }
+                  disabled={isProviderBusy}
+                  aria-busy={isProviderBusy}
+                  aria-disabled={!provider.configured || undefined}
+                  data-auth-state={isProviderBusy ? "loading" : "idle"}
+                  onClick={(event) => {
+                    void handleProviderRegister(
+                      event,
+                      provider.provider,
+                      providerSoftDisabled,
+                    );
+                  }}
+                />
+              );
+            })}
           {providerEntries.some(
             (provider) => provider.provider === "passkey",
           ) ? (

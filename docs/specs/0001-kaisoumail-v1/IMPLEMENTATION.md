@@ -8,6 +8,10 @@
 - Keep API keys and passkeys as separate auth resources.
 - Split the browser auth surface into `/login` and `/register` so sign-in and
   account creation no longer compete inside one card.
+- Keep browser auth feedback action-scoped: only the clicked login/register
+  method enters a visible spinner/loading state, while provider and route
+  handoffs wait `200ms` before navigation so the user can see that the click
+  succeeded.
 
 ## Admin Console
 
