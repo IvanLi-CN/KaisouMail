@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "1.1.5",
+  "base_stable_version": "1.1.4",
+  "channel_label": "channel:stable",
+  "created_at": "2026-07-18T11:00:41Z",
+  "next_stable_version": "1.1.5",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "0484b77b9e781c6044739e06273d9b63230b6cfc",
+  "pr_number": 97,
+  "pr_title": "feat(auth): clarify auth handoff feedback",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v1.1.5",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v1.1.5",
+  "target_sha": "5a0e57c11b8531d494cf1c8d75191db0c8ef8959",
+  "type_label": "type:patch"
+}
