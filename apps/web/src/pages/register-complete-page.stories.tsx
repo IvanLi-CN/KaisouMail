@@ -68,6 +68,6 @@ export const Overview: Story = {
     await expect(
       canvas.getByRole("heading", { name: "完成注册" }),
     ).toBeInTheDocument();
-    await expect(canvas.getByLabelText("昵称")).toBeInTheDocument();
+    await expect(canvas.getByLabelText("昵称")).toHaveValue("Ivan Owner");
   },
 };

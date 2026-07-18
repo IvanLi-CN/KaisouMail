@@ -4,6 +4,8 @@ import type { RuntimeConfig } from "../env";
 import {
   buildProviderStartUrl,
   completeProviderCallback,
+  issuePendingRegistrationToken,
+  resolvePendingRegistration,
 } from "../services/oauth";
 
 const {
@@ -173,6 +175,52 @@ describe("oauth service", () => {
       id: "usr_existing",
       username: "existing",
     });
+  });
+
+  it("prefers provider nickname for pending registration suggestions and falls back to username", async () => {
+    const nicknameToken = await issuePendingRegistrationToken(baseConfig, {
+      method: "github",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteCode: null,
+      profile: {
+        provider: "github",
+        providerUserId: "gh_123",
+        providerUsername: "octo",
+        providerNickname: "Octo Cat",
+        avatarUrl: null,
+        profileUrl: null,
+      },
+    });
+    const nicknameRegistration = await resolvePendingRegistration(
+      {} as never,
+      baseConfig,
+      nicknameToken,
+    );
+
+    expect(nicknameRegistration.suggestedNickname).toBe("Octo Cat");
+
+    const usernameToken = await issuePendingRegistrationToken(baseConfig, {
+      method: "github",
+      sourceIntent: "register",
+      redirectTo: "/workspace",
+      inviteCode: null,
+      profile: {
+        provider: "github",
+        providerUserId: "gh_124",
+        providerUsername: "octo",
+        providerNickname: null,
+        avatarUrl: null,
+        profileUrl: null,
+      },
+    });
+    const usernameRegistration = await resolvePendingRegistration(
+      {} as never,
+      baseConfig,
+      usernameToken,
+    );
+
+    expect(usernameRegistration.suggestedNickname).toBe("octo");
   });
 
   it("does not consume an invite when a bound user logs in through the login intent", async () => {

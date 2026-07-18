@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Fingerprint, UserPlus } from "lucide-react";
-import type { MouseEvent } from "react";
+import { type MouseEvent, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -51,6 +51,30 @@ export const RegisterCompleteCard = ({
       passkeyName: "Primary Passkey",
     },
   });
+
+  useEffect(() => {
+    const suggestedNickname = registration.suggestedNickname?.trim() ?? "";
+    if (!suggestedNickname) {
+      return;
+    }
+
+    const nicknameFieldState = form.getFieldState("nickname");
+    const currentNickname = form.getValues("nickname").trim();
+    if (
+      nicknameFieldState.isDirty ||
+      nicknameFieldState.isTouched ||
+      currentNickname.length > 0
+    ) {
+      return;
+    }
+
+    form.setValue("nickname", suggestedNickname, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    });
+  }, [form, registration.suggestedNickname]);
+
   const preventSoftDisabledAction = (
     event: MouseEvent<HTMLButtonElement>,
     softDisabled: boolean,
