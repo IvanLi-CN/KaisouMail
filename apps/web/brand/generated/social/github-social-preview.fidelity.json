@@ -1,0 +1,11 @@
+{
+  "approved_design": "github-social-preview-design-source.png",
+  "approved_design_sha256": "622d8894193b94ecb9980cc1248ef6423ea5d33f8c20912136bc95fefe8fd0dd",
+  "final_asset": "github-social-preview.png",
+  "final_asset_sha256": "a6dcce7982bbb9d28176a7c990b6b31ec5c361ccf12b6653051ad09339e06a5a",
+  "normalized_size": "1280x640",
+  "resampling": "LANCZOS",
+  "changed_pixels": 0,
+  "total_pixels": 819200,
+  "pixel_match": 1.0
+}
