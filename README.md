@@ -1,6 +1,6 @@
 # KaisouMail
 
-Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, and a React + shadcn/ui control plane.
+Cloudflare temporary email platform built with Email Routing, Workers, Workers AI, D1, R2, and a React + shadcn/ui control plane.
 
 ## Docs & Storybook
 
@@ -27,6 +27,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 - Incoming mail storage in R2 with parsed metadata in D1
 - Message list filtering by multiple mailbox addresses plus `after` / `since` cursor aliases
 - Message detail view with headers, text/html bodies, recipients, attachments, and raw `.eml` download
+- Verification-code extraction with deterministic rules first, then Cloudflare Workers AI for ambiguous OTP / captcha-style messages
 - React + shadcn/ui control plane for mailboxes, messages, API keys, and users
 - GitHub Actions for PR/main CI, Worker deploy, Pages deploy, and PR-label-driven releases
 
@@ -34,6 +35,7 @@ Cloudflare temporary email platform built with Email Routing, Workers, D1, R2, a
 
 - Bun workspaces
 - Cloudflare Workers + Hono
+- Cloudflare Workers AI for verification-code extraction fallback
 - Drizzle ORM + drizzle-kit + `drizzle-orm/zod`
 - D1 + R2
 - React + Vite + TanStack Query + React Hook Form + shadcn/ui + Storybook
@@ -105,6 +107,10 @@ The Worker expects these bindings and variables:
 - `DB`: D1 database
 - `MAIL_BUCKET`: R2 bucket
 
+### Optional bindings
+
+- `AI`: Workers AI binding for ambiguous verification-code extraction
+
 ### Required secrets
 
 - `SESSION_SECRET`
@@ -138,6 +144,7 @@ The Worker expects these bindings and variables:
 - `CF_ROUTE_RULESET_TAG`
 - `WEB_APP_ORIGIN` (legacy primary control-plane origin for direct API compatibility)
 - `WEB_APP_ORIGINS` (comma-separated trusted control-plane origins when multiple production aliases stay live)
+- `WORKERS_AI_MODEL` (defaults to `@cf/meta/llama-3.1-8b-instruct-fast`)
 
 ### Legacy bootstrap vars
 

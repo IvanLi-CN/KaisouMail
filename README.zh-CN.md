@@ -1,6 +1,6 @@
 # KaisouMail
 
-基于 Cloudflare Email Routing、Workers、D1、R2 的临时邮箱平台，带有 React + shadcn/ui 控制台。
+基于 Cloudflare Email Routing、Workers、Workers AI、D1、R2 的临时邮箱平台，带有 React + shadcn/ui 控制台。
 
 ## 文档与 Storybook
 
@@ -22,6 +22,7 @@
 - 开启 Catch-all 的域名必须使用 wildcard 子域 DNS，并复用 apex 现有的 Email Routing MX/SPF 模板，而不是在代码里硬编码 Cloudflare 目标值
 - `GET /api/meta` 暴露 active 域名、TTL 和地址规则
 - 邮件原始内容入 R2，结构化索引入 D1
+- 验证码提取先走确定性规则，遇到歧义 OTP / captcha 类邮件时回退到 Cloudflare Workers AI
 - 域名目录支持启用、停用、重试接入
 
 ## 仓库结构
@@ -125,6 +126,7 @@ Worker 侧重点变量：
 - `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `50`；它只是每轮候选扫描窗口，不是 Cloudflare 配额）
 - `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE`（默认 `48`；限制每分钟 dispatcher 最多租约并入队多少个孤儿 host）
 - `EMAIL_ROUTING_MANAGEMENT_ENABLED`
+- `WORKERS_AI_MODEL`（默认 `@cf/meta/llama-3.1-8b-instruct-fast`）
 - `GITHUB_CLIENT_ID`
 - `GITHUB_CLIENT_SECRET`
 - `GITHUB_OAUTH_SCOPES`
