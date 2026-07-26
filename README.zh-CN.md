@@ -1,207 +1,89 @@
 # KaisouMail
 
-基于 Cloudflare Email Routing、Workers、Workers AI、D1、R2 的临时邮箱平台，带有 React + shadcn/ui 控制台。
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
-## 文档与 Storybook
+[![CI Main](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/ci-main.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/ci-main.yml)
+[![CI PR](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/ci-pr.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/ci-pr.yml)
+[![Docs Pages](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/docs-pages.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/docs-pages.yml)
+[![Deploy](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/deploy-main.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/deploy-main.yml)
+[![Release](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/release.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/release.yml)
+[![Label Gate](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/label-gate.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/label-gate.yml)
+[![Notify Failed Release](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/notify-release-failure.yml/badge.svg)](https://github.com/IvanLi-CN/KaisouMail/actions/workflows/notify-release-failure.yml)
+[![Latest Release](https://img.shields.io/github/v/release/IvanLi-CN/KaisouMail?display_name=tag)](https://github.com/IvanLi-CN/KaisouMail/releases/latest)
+[![MIT License](https://img.shields.io/github/license/IvanLi-CN/KaisouMail)](./LICENSE)
 
-- 公开文档站：[ivanli-cn.github.io/KaisouMail/zh/](https://ivanli-cn.github.io/KaisouMail/zh/)
-- 公开 Storybook：[ivanli-cn.github.io/KaisouMail/zh/storybook.html](https://ivanli-cn.github.io/KaisouMail/zh/storybook.html)
-- 英文 README：[README.md](./README.md)
-- 控制台内速查页：`/api-keys/docs`
+Cloudflare 自托管临时邮箱平台。KaisouMail 提供一个 Cloudflare 原生控制面，用来管理一次性邮箱、域名接入、邮件存储和验证码提取。
 
-## 核心能力
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./apps/web/brand/generated/social/github-social-preview.png">
+  <img src="./apps/web/brand/generated/social/github-social-preview-light.png" alt="KaisouMail social preview">
+</picture>
 
-- 无邮箱、无密码的多用户身份体系，使用 `username + nickname`、API Key、Passkey 与第三方绑定
-- GitHub、LinuxDO、邀请码 Passkey 首登，以及空库首个管理员 bootstrap invite
-- 管理员邀请码、渠道注册开关、开放注册每日配额
-- 基于 D1 的多邮箱域名管理与 Cloudflare zone 实时发现
-- `/domains/bind` 支持直接绑定新域名到 Cloudflare，并仅对项目直绑域名开放删除
-- 直绑入口仅支持 apex：例如直接绑定 `example.com`；如果要 `user@mail.example.com` 这类地址，请绑定 apex 后在邮箱层使用 `subdomain=mail`
-- 随机或指定邮箱创建，支持多级子域；对外 API 以 `mailDomain` 为首选字段，`rootDomain` 保留兼容别名
-- 定时清理现在会额外渐进回收孤儿子域的 Email Routing DNS，避免历史 MX/SPF 记录长期堆积
-- 开启 Catch-all 的域名必须使用 wildcard 子域 DNS，并复用 apex 现有的 Email Routing MX/SPF 模板，而不是在代码里硬编码 Cloudflare 目标值
-- `GET /api/meta` 暴露 active 域名、TTL 和地址规则
-- 邮件原始内容入 R2，结构化索引入 D1
-- 验证码提取先走确定性规则，遇到歧义 OTP / captcha 类邮件时回退到 Cloudflare Workers AI
-- 域名目录支持启用、停用、重试接入
+## 从这里开始
 
-## 仓库结构
+- 看文档站：[KaisouMail Docs](https://ivanli-cn.github.io/KaisouMail/zh/)
+- 部署你自己的实例：[部署与环境变量](https://ivanli-cn.github.io/KaisouMail/zh/deployment-environment)
 
-- `apps/api-worker`：API Worker、收信 Worker、清理任务、Drizzle schema、Wrangler 配置
-- `apps/web`：登录后的控制台、同源 `/api` Pages Function 代理、Storybook、Playwright smoke
-- `docs-site`：公开 Rspress 文档站，最终发布到 GitHub Pages
-- `packages/shared`：共享 schema、常量、版本信息
+## 你可以做什么
 
-## 常用脚本
+- 在多个 Cloudflare 域名上管理一次性邮箱。
+- 将原始邮件存入 R2，把结构化消息元数据存入 D1。
+- 通过 Cloudflare Pages 和 Workers 运行同源的 React 控制面。
+- 从 Cloudflare 域名目录接入域名，或直接在 `/domains` 里绑定新的 apex 根域名。
+- 验证码提取先走确定性规则，遇到歧义消息时再回退到 Workers AI。
+- 通过公开文档、Storybook 预览和 GitHub 流程维持可操作的自托管工作流。
 
-```bash
-bun run check
-bun run typecheck
-bun run test
-bun run build
-bun run build-storybook
-bun run build-docs-site
-```
+## Demo 快速开始
 
-## 本地开发
+下面的命令会以 mock data 启动 React 控制面，不需要 Worker、Cloudflare 账户或邮箱域名。
 
 ```bash
 bun install
 bun run version:write
-cp apps/api-worker/.dev.vars.example apps/api-worker/.dev.vars
-cp apps/web/.env.example apps/web/.env
+VITE_DEMO_MODE=true bun run --cwd apps/web dev
 ```
 
-启动：
+完整的本地双服务、Cloudflare token 配置和生产部署步骤，请看后面的文档入口。
 
-```bash
-WORKER_PORT=8787 bun run --cwd apps/api-worker dev
-PORT=4173 bun run --cwd apps/web dev
-DOCS_PORT=56007 bun run --cwd docs-site dev
-STORYBOOK_PORT=6006 bun run --cwd apps/web storybook
-```
+## 架构
 
-`apps/web` 里的浏览器请求现在默认走同源 `/api`。本地 dev / preview 会把 `/api` 代理到 `VITE_API_BASE_URL`，未设置时回退到 `http://127.0.0.1:8787`。
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/readme-assets/kaisoumail-architecture.png">
+  <img src="./docs/readme-assets/kaisoumail-architecture-light.png" alt="KaisouMail architecture">
+</picture>
 
-## Cloudflare API Token 权限
+- 入站邮件先进入 Email Routing，再流向 Email Worker。
+- Email Worker 会把元数据写入 D1 Metadata，把邮件正文写入 R2 Message Storage；当验证码提取存在歧义时，还可以调用 Workers AI。
+- 运维侧通过同源 Pages Proxy 使用 React Control Plane。
+- Pages Proxy 会把 `/api` 请求转发给 API Worker，由它读写同一份基于 D1/R2 的项目状态。
 
-正式环境推荐配置：
+## 文档与部署
 
-| 面向 | 优先读取 | 回退读取 | 用途 |
-| --- | --- | --- | --- |
-| API Worker 运行时 | `CLOUDFLARE_RUNTIME_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | 域名目录 + Email Routing 管理 |
-| 部署流水线 | `CLOUDFLARE_DEPLOY_API_TOKEN` | `CLOUDFLARE_API_TOKEN` | D1 migrate + Worker deploy + Pages deploy |
+- [快速开始](https://ivanli-cn.github.io/KaisouMail/zh/quick-start)
+- [部署与环境变量](https://ivanli-cn.github.io/KaisouMail/zh/deployment-environment)
+- [Cloudflare Token 权限](https://ivanli-cn.github.io/KaisouMail/zh/cloudflare-token-permissions)
+- [域名接入总览](https://ivanli-cn.github.io/KaisouMail/zh/domain-onboarding)
+- [API 参考](https://ivanli-cn.github.io/KaisouMail/zh/api-reference)
+- [Storybook 预览](https://ivanli-cn.github.io/KaisouMail/zh/storybook.html)
 
-| 用途 | 存放位置 | 密钥名 | 应填什么 |
-| --- | --- | --- | --- |
-| 运行时域名管理 | Cloudflare `kaisoumail-api` Worker secret | `CLOUDFLARE_RUNTIME_API_TOKEN` | runtime token |
-| 部署流水线 | GitHub Actions repository secret | `CLOUDFLARE_DEPLOY_API_TOKEN` | deploy token |
+## 海报
 
-### Runtime token 最小权限
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./apps/web/brand/generated/social/poster-4x5.png">
+  <img src="./apps/web/brand/generated/social/poster-4x5-light.png" alt="KaisouMail poster" width="480" />
+</picture>
 
-- `Zone: Zone: Edit`
-- `Zone: Email Routing Rules: Edit`
-- `Zone: Zone Settings: Edit`
+## 贡献
 
-scope 必须覆盖所有要接入、绑定、启用或删除的 KaisouMail zones。
-在 Cloudflare 自定义 token UI 里，`Zone: Zone: Edit` 已经覆盖 list/read，不需要再单独加一条 `Zone: Zone: Read`。
+请看 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
-其中最容易漏的是 `Zone: Zone Settings: Edit`。如果域名目录里某个 zone 明明可见，却在启用时变成 `provisioning_error / Authentication error`，优先检查这项权限和 token 的 zone 覆盖范围。
+- 小修复和文档更新可以直接提 Pull Request。
+- 较大的功能、架构调整或 breaking change，请先开 Issue 再推进。
 
-### Deploy token 最小权限
+## 安全
 
-部署流程还需要：
+请看 [SECURITY.md](./SECURITY.md)。漏洞请通过 [GitHub Security Advisories](https://github.com/IvanLi-CN/KaisouMail/security/advisories/new) 私密提交。
 
-- `Account: D1: Edit`
-- `Account: Workers Scripts: Edit`
-- `Account: Workers R2 Storage: Edit`
-- `Account: Cloudflare Pages: Edit`
-- `Zone: Workers Routes: Edit`
+## 许可证
 
-### 只在快速试用时允许共用
-
-如果你只是单人试用、自建环境、临时验证或低风险内部演示，可以在 Worker secret 和 GitHub repository secret 里都放同一个 `CLOUDFLARE_API_TOKEN`，但它必须满足并集权限：
-
-- `Zone: Zone: Edit`
-- `Zone: Email Routing Rules: Edit`
-- `Zone: Zone Settings: Edit`
-- `Account: D1: Edit`
-- `Account: Workers Scripts: Edit`
-- `Account: Workers R2 Storage: Edit`
-- `Account: Cloudflare Pages: Edit`
-- `Zone: Workers Routes: Edit`
-
-共享 token 只建议用于最快上手、临时验证和低风险单人环境。
-
-## 环境变量
-
-Worker 侧重点变量：
-
-- `CLOUDFLARE_ACCOUNT_ID`（运行时变量；`/domains` 的 apex 直绑必需）
-- `SESSION_SECRET`
-- `BOOTSTRAP_ADMIN_INVITE_CODE`（仅在空库部署需要引导首个管理员时使用）
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_RUNTIME_API_TOKEN`
-- `EMAIL_WORKER_NAME`
-- `SUBDOMAIN_CLEANUP_BATCH_SIZE`（`0` 关闭孤儿子域 DNS 清理；默认 `50`；它只是每轮候选扫描窗口，不是 Cloudflare 配额）
-- `SUBDOMAIN_CLEANUP_DISPATCH_BATCH_SIZE`（默认 `48`；限制每分钟 dispatcher 最多租约并入队多少个孤儿 host）
-- `EMAIL_ROUTING_MANAGEMENT_ENABLED`
-- `WORKERS_AI_MODEL`（默认 `@cf/meta/llama-3.1-8b-instruct-fast`）
-- `GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
-- `GITHUB_OAUTH_SCOPES`
-- `LINUXDO_CLIENT_ID`
-- `LINUXDO_CLIENT_SECRET`
-- `LINUXDO_OAUTH_BASE_URL`
-- `WEB_APP_ORIGIN`（历史单来源兼容用的主控制台域名）
-- `WEB_APP_ORIGINS`（需要同时保留多个生产控制台域名时使用的逗号分隔 allowlist）
-
-Web 侧重点变量：
-
-- `VITE_API_BASE_URL`
-- `VITE_DEMO_MODE`
-- `VITE_DOCS_SITE_ORIGIN`
-
-`VITE_DOCS_SITE_ORIGIN` 用于控制台内部跳转到公开文档站和公开 Storybook。
-一方浏览器流量现在统一走同源 `/api`，由 `apps/web/wrangler.jsonc` 里声明的 Pages Function + `API` Service Binding 转发。这个仓库跟随当前线上配置，把 Pages 项目名固定为 `kaisoumail`，并让代理绑定到现有的 `kaisoumail-api` 服务；对于 `.pages.dev` 预览域名，请求会在代理层直接 fail-closed，避免误打到线上控制面。`api.cfm...` / `api.km...` 这样的直连 API 域名继续保留给兼容调用、自动化脚本和直接 API 消费者使用；`WEB_APP_ORIGINS` 需要继续覆盖所有线上控制台域名，这样这些直连 API 域名仍会拿到正确的 CORS allowlist。
-`VITE_API_BASE_URL` 不再是生产浏览器的 API 定位方式，只保留给本地开发、测试、显式的非浏览器 override，以及 deploy workflow 的 canonical 直连 API smoke。deploy workflow 另外使用 `CF_PAGES_SMOKE_ORIGINS`，在 Pages 发布完成后逐个验证每个控制台域名的同源 `/api/version` 都指向当前 release；如果变量里有格式错误的域名项，workflow 现在会直接失败而不是静默跳过。
-deploy workflow 还会把 GitHub secret `CLOUDFLARE_ACCOUNT_ID` 注入到 API Worker 的运行时配置里；只把它放进 GitHub Actions job 环境是不够的，否则 `/api/meta` 会继续返回 `cloudflareDomainBindingEnabled=false`。
-如果 `EMAIL_ROUTING_MANAGEMENT_ENABLED=false`，应用仍可在 demo / 本地模式运行，但不会改动 Cloudflare 资源，孤儿子域 DNS 清理也会一起停用。
-Catch-all 必须具备 wildcard 子域 DNS。开启 Catch-all 会把域名对账到 `subdomainDnsMode=wildcard`；如果 `*.rootDomain` 已存在冲突 MX/TXT，或 Cloudflare 拒绝写入，开启会失败并把最近一次错误写入 `wildcardDnsLastError` 供运维排查。
-
-## Wildcard 子域 DNS
-
-- `POST /api/domains/:id/catch-all/enable` 会先清理项目创建的 exact Email Routing `MX` / `TXT` host，再把该域名对账成 `subdomainDnsMode=wildcard`，并通过 Cloudflare 通用 DNS 记录 API 把 apex 的 Email Routing 模板复制到 `*.rootDomain`。
-- 历史 DNS 记录和历史 `subdomains` 行不作为 Catch-all 开启的真相源；开启路径只允许 wildcard 基线成功落地。
-- 如果 wildcard DNS 与现有非匹配的 `*.rootDomain` MX/TXT 记录冲突，开启 Catch-all 会失败，不会回退到 explicit 子域 DNS。
-- 回退方式很简单：直接关闭该域名的 Catch-all；域名会退回 `explicit`，不依赖人工逐条修 DNS。
-- 推荐 canary：先挑一个低风险 active 域名开启 Catch-all，给一个全新的深层子域地址发真实邮件，确认收信与入库成功，并确认 Cloudflare 没有为该 hostname 新增 exact `MX` / `TXT` 记录。
-
-## 发布工作流门禁
-
-- 主发布 workflow 会先捕获 D1 恢复锚点，并额外捕获当前 100% 稳定的 API Worker 基线版本；随后自动 apply 远端 D1 migration、上传一个不接生产流量的 API Worker 候选版本，把它以 0% 流量加入当前 active deployment，并通过 canonical API 域名 + `Cloudflare-Workers-Version-Overrides` 定向 smoke 校验 `/health` 与 `/api/version`；只有 shadow smoke 通过后才 promote 到 100% 生产流量
-- Promote 成功后 workflow 会先对正式 API 域名跑一次 production smoke；只有这一步通过后才显式应用 API Worker 的 routes / domains / cron triggers，并在 trigger 应用后对 `VITE_API_BASE_URL` 与 `apps/api-worker/wrangler.jsonc` 里声明的每个 API URL 再跑一次 post-trigger smoke。随后 workflow 会部署 Pages，并按 `CF_PAGES_SMOKE_ORIGINS` 逐个校验每个控制台域名的同源 `/api/version` 是否已经指向当前 release。trigger 应用失败、post-trigger smoke 失败，或 Pages 同源 smoke 失败都会直接停下并要求人工核查；只有相对上一版 release 保持 schema-stable 且当前部署不涉及 D1 schema 变更的发布，production smoke 失败时才会自动回滚 API Worker，不自动 restore D1
-- `CI Main / CI PR` 会阻止明显破坏性的 migration 进入默认自动链路，Deploy 在 apply 前也会按远端 pending migration 实际集合再校验一次；默认发布路径只接受 expand-only / forward-compatible 迁移，兼容代码最多保留一个发布周期，破坏性清理放到后续 cleanup release
-- 因为要保留可回滚目标，首次生产 API 发布仍需要手动 bootstrap；异常事故的 D1 恢复走 `workflow_dispatch -> operation=restore-d1`
-
-## 发布面
-
-- Cloudflare Pages：登录后的控制台
-- Cloudflare Workers：API 与收信 Worker
-- GitHub Pages：公开文档站 + Storybook 组合站点
-
-## 部署检查清单
-
-1. 创建或复用 `CF_PAGES_PROJECT_NAME` 指向的 Cloudflare Pages 项目
-2. 给 Pages 绑定一个或多个控制台域名（例如 `cfm.example.com`、`km.example.com`），同时给 API Worker 绑定对应的 API 自定义域（例如 `api.cfm.example.com`、`api.km.example.com`）
-3. 配置 Worker runtime secret `SESSION_SECRET`；若希望空库部署可用一次性邀请码引导首个管理员，再补 `BOOTSTRAP_ADMIN_INVITE_CODE`
-4. 把 `EMAIL_WORKER_NAME` 指向收信 Worker 脚本
-5. 配置 GitHub secret：`CLOUDFLARE_DEPLOY_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`（或临时回退到共享 `CLOUDFLARE_API_TOKEN`），并确认 deploy/shared token 包含 `Account: Workers R2 Storage: Edit`；workflow 会在发布前把 `CLOUDFLARE_ACCOUNT_ID` 注入 API Worker 运行时配置，缺失时直接失败，而不是发布一个直绑入口被隐藏的版本
-6. 配置 GitHub vars：`CF_PAGES_PROJECT_NAME=<你的 Pages 项目>`、`VITE_API_BASE_URL=<你的 canonical 直连 API 域名，用于 deploy smoke>`、`CF_PAGES_SMOKE_ORIGINS=<逗号分隔的控制台域名列表，用于 Pages 发布后的同源 /api/version smoke>`
-7. 配置 `WEB_APP_ORIGINS=<逗号分隔的控制台域名列表>`，如需兼容旧的单来源直连 API 配置，再保留 `WEB_APP_ORIGIN=<主控制台域名>`
-8. 如果是从历史单域实例升级，首次部署时保留 `MAIL_DOMAIN` + `CLOUDFLARE_ZONE_ID`，让 bootstrap 回填初始 `domains` 记录
-9. 第一次生产 API 发布仍需手动 bootstrap；之后保持至少一个 100% stable 的 API 版本，workflow 才能把候选版本以 0% 流量加入 active deployment，经由 canonical API 域名 + `Cloudflare-Workers-Version-Overrides` 完成 shadow smoke，再安全 promote 或回滚
-10. 只有在本地 `.env` / 预览 override 里才设置 `VITE_API_BASE_URL`，用于把 `apps/web` 的 `/api` 代理到默认本地 Worker 之外的目标
-11. 推送到 `main` 触发 deploy workflow
-12. 需要恢复 D1 时，使用 `Actions -> Deploy -> Run workflow -> operation=restore-d1` 并提供 timestamp 或 bookmark（Cloudflare D1 Time Travel 当前默认保留 30 天恢复窗口）
-13. 推送文档或 Storybook 变更到 `main` 刷新 GitHub Pages 公开站点
-
-## 域名拓扑示例
-
-- 控制台别名：
-  - `https://cfm.example.com`
-  - `https://km.example.com`
-- API 别名：
-  - `https://api.cfm.example.com`
-  - `https://api.km.example.com`
-- 应用内管理的邮箱域名：
-  - `707979.xyz`
-  - `mail.example.net`
-- 若你只是想得到 `user@mail.customer.com` 这类地址，请改为绑定 apex `customer.com`，再在创建邮箱时把 `subdomain` 设成 `mail`。
-
-## Cloudflare 限额说明
-
-- Email Routing 单封邮件上限是 25 MiB
-- D1 只存结构化索引，原始/解析后的正文仍放在 R2
-- 过期邮箱清理会按批次执行，避免超过 Worker 单次执行预算
-- Cloudflare REST API 目前按 token 提供 `5 分钟 1200 次请求` 的全局限额，所以孤儿子域 DNS 清理改成了“每分钟 dispatcher + queue consumer”两段式：dispatcher 只负责认领并入队仍然带 `zoneId` 的孤儿 host，queue consumer 每批最多处理 `4` 个 host，这样同 zone 的 Email Routing unlock 可以在批内去重；如果域名在消费前丢失 `zoneId`，这条队列任务会被安全丢弃；cleanup kill switch（`EMAIL_ROUTING_MANAGEMENT_ENABLED=false` 或 `SUBDOMAIN_CLEANUP_BATCH_SIZE=0`）会立刻同时停止新派发和已经入队的 host 任务；D1 驱动的全局请求闸门只对**子域 cleanup 流量**严格放行 **每秒 4 个 Cloudflare 请求**，`429` 只会把当前 host 延迟到下一分钟重试而不会写行级回退，认证失败会短暂暂停新派发，而 `SUBDOMAIN_CLEANUP_BATCH_SIZE=50` 仍然只是候选扫描窗口
+[MIT](./LICENSE)

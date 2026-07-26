@@ -1,0 +1,12 @@
+{
+  "variant": "light",
+  "approved_design": "github-social-preview-light-design-source.png",
+  "approved_design_sha256": "ffb4dde34398067012bb0f8516701c1713c0439bec665ce3403df66590f44629",
+  "final_asset": "github-social-preview-light.png",
+  "final_asset_sha256": "8ac76887dcb86948e27eebfb9042bf5a5af758713931d42b90af23448ce6b90c",
+  "normalized_size": "1280x640",
+  "resampling": "LANCZOS",
+  "changed_pixels": 0,
+  "total_pixels": 819200,
+  "pixel_match": 1.0
+}
