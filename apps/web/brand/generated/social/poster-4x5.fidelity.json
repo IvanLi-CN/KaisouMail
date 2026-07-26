@@ -1,0 +1,14 @@
+{
+  "approved_design": "poster-4x5-design-source.png",
+  "approved_design_sha256": "b286567f2e5b932fc820ce8d14e6c93f23c9a58412ad0154b2db08f6a5d08b4e",
+  "final_asset": "poster-4x5.png",
+  "final_asset_sha256": "a09325535a974a97999cb96c2d051993e8a45a87e5db240135c6dcfb15ce9f22",
+  "source_size": "1024x1536",
+  "final_size": "2160x2700",
+  "foreground_box": "180,0,1800x2700",
+  "resampling": "LANCZOS",
+  "foreground_changed_pixels": 0,
+  "foreground_total_pixels": 4860000,
+  "foreground_pixel_match": 1.0,
+  "background_fill": "same-source blurred extension"
+}
