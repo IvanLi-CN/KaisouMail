@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "1.1.6",
+  "base_stable_version": "1.1.5",
+  "channel_label": "channel:stable",
+  "created_at": "2026-07-26T12:44:54Z",
+  "next_stable_version": "1.1.6",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "e0f9033e7ab115d1459ad431eb6b892f7206876b",
+  "pr_number": 99,
+  "pr_title": "feat(brand): add KaisouMail social preview and poster assets",
+  "release_bump": "patch",
+  "release_channel": "stable",
+  "release_enabled": true,
+  "release_prerelease": false,
+  "release_tag": "v1.1.6",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "v1.1.6",
+  "target_sha": "ec34cfcd1cd529f39b1d73db80c1dcd0a2a9fff7",
+  "type_label": "type:patch"
+}
