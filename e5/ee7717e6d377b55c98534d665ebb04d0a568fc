@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "",
+  "base_stable_version": "",
+  "channel_label": "channel:stable",
+  "created_at": "2026-07-27T02:54:04Z",
+  "next_stable_version": "",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "23690a2fc39adc479cdc2c2f08b468576d7714dd",
+  "pr_number": 100,
+  "pr_title": "docs: refresh README and add light theme assets",
+  "release_bump": "docs",
+  "release_channel": "stable",
+  "release_enabled": false,
+  "release_prerelease": false,
+  "release_tag": "",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "",
+  "target_sha": "e5ee7717e6d377b55c98534d665ebb04d0a568fc",
+  "type_label": "type:docs"
+}
