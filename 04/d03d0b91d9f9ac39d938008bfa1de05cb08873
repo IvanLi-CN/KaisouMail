@@ -1,0 +1,21 @@
+{
+  "app_effective_version": "",
+  "base_stable_version": "",
+  "channel_label": "channel:stable",
+  "created_at": "2026-08-16T12:29:02Z",
+  "next_stable_version": "",
+  "notes_ref": "refs/notes/release-snapshots",
+  "pr_head_sha": "6b83300a3b66300799a92e303242d127e4ab2790",
+  "pr_number": 101,
+  "pr_title": "fix(ci): isolate PR metadata workflow runs safely",
+  "release_bump": "docs",
+  "release_channel": "stable",
+  "release_enabled": false,
+  "release_prerelease": false,
+  "release_tag": "",
+  "schema_version": 1,
+  "snapshot_source": "ci-main",
+  "tags_csv": "",
+  "target_sha": "04d03d0b91d9f9ac39d938008bfa1de05cb08873",
+  "type_label": "type:docs"
+}
