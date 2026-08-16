@@ -15,7 +15,7 @@ on:
       - edited
 
 concurrency:
-  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  group: ci-pr-${{ github.event_name == 'pull_request' && github.event.action == 'edited' && format('metadata-{0}-{1}', github.event.pull_request.number, github.run_id) || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -62,6 +62,7 @@ jobs:
           bash .github/scripts/test-resolve-pages-smoke-origins.sh
           bash .github/scripts/test-pages-deploy-command.sh
           bash .github/scripts/test-release-snapshot.sh
+          bash .github/scripts/test-workflow-concurrency.sh
 
       - name: Lint and format check
         run: bun run check
