@@ -162,6 +162,10 @@ jobs:
                   extra_details = f'resolved requested commit sha from {resolved_from} logs'
               elif run_event == 'workflow_dispatch':
                   extra_details = 'manual release dispatch'
+              elif resolved_sha:
+                  extra_details = 'target sha resolution used workflow_run head sha'
+              else:
+                  extra_details = 'target sha resolution unavailable; workflow_run head sha was empty'
           except Exception as exc:  # noqa: BLE001
               if run_event == 'workflow_dispatch':
                   extra_details = f'manual release dispatch; target sha resolution fell back to workflow_run head sha ({type(exc).__name__})'

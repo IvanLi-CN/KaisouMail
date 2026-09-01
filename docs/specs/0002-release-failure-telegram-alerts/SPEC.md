@@ -24,4 +24,4 @@ This topic covers `.github/workflows/notify-release-failure.yml`, the read-only 
 
 ## Related ADRs
 
-None
+- [ADR 0002: Oidrune Release Notification Boundary](../../adr/0002-oidrune-release-notification-boundary.md)

@@ -59,5 +59,6 @@ assert(workflow_text.include?("Release Meta"), "Release Meta log resolution is m
 assert(workflow_text.include?("Release Publish"), "Release Publish log resolution is missing")
 assert(workflow_text.include?("RELEASE_REQUESTED_SHA"), "requested release target observation is missing")
 assert(workflow_text.include?("RELEASE_TARGET_SHA"), "Release target observation is missing")
+assert(workflow_text.include?("target sha resolution used workflow_run head sha"), "fallback resolution details are missing")
 puts "notify release failure workflow contract tests passed"
 RUBY
