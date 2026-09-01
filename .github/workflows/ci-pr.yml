@@ -63,6 +63,7 @@ jobs:
           bash .github/scripts/test-pages-deploy-command.sh
           bash .github/scripts/test-release-snapshot.sh
           bash .github/scripts/test-workflow-concurrency.sh
+          bash .github/scripts/test-notify-release-failure-workflow.sh
 
       - name: Lint and format check
         run: bun run check
